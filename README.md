@@ -1,5 +1,7 @@
 # Almavorn
 
-Стек: Rust, Ratatui, Crossterm, egui, eframe, egui_ratatui.
+[English](README.md) | [Русский](README.ru.md)
 
-Релизы: TUI-only и GUITUI.
+Stack: Rust, Ratatui, Crossterm, egui, eframe, egui_ratatui.
+
+Releases: TUI-only and GUITUI.
