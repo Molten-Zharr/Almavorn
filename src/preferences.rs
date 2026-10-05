@@ -69,6 +69,8 @@ impl Corners {
 #[serde(default)]
 pub struct Appearance {
     pub palette_ids: [String; 2],
+    #[serde(default)]
+    pub preset_ids: [Option<String>; 2],
     pub font: FontFace,
     pub font_size: u16,
     pub borders: BorderWeight,
@@ -78,6 +80,7 @@ impl Default for Appearance {
     fn default() -> Self {
         Self {
             palette_ids: [BRAND_PALETTE.into(), BRAND_PALETTE.into()],
+            preset_ids: [Some(BRAND_PALETTE.into()), Some(BRAND_PALETTE.into())],
             font: FontFace::default(),
             font_size: 16,
             borders: BorderWeight::Single,
@@ -282,7 +285,7 @@ pub fn default_palettes() -> Vec<NamedPalette> {
     vec![molten, amber, violet, light]
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThemeStyle {
     pub palette_id: String,
     pub font: FontFace,
@@ -406,11 +409,32 @@ impl Settings {
         }
     }
     pub fn apply_style(&mut self, style: ThemeStyle) {
+        self.appearance.preset_ids[self.mode.index()] = None;
         self.appearance.palette_ids[self.mode.index()] = style.palette_id;
         self.appearance.font = style.font;
         self.appearance.font_size = style.font_size;
         self.appearance.borders = style.borders;
         self.appearance.corners = style.corners;
+    }
+    pub fn current_preset(&self) -> Option<&ThemePreset> {
+        let style = self.current_style();
+        let selected = self.appearance.preset_ids[self.mode.index()].as_deref();
+        self.presets
+            .iter()
+            .find(|preset| Some(preset.id.as_str()) == selected && preset.style == style)
+            .or_else(|| self.presets.iter().find(|preset| preset.style == style))
+    }
+    pub fn apply_preset(&mut self, id: &str) -> Result<()> {
+        let preset = self
+            .presets
+            .iter()
+            .find(|preset| preset.id == id)
+            .context("Preset no longer exists")?;
+        let style = preset.style.clone();
+        let id = preset.id.clone();
+        self.apply_style(style);
+        self.appearance.preset_ids[self.mode.index()] = Some(id);
+        Ok(())
     }
     pub fn migrate_legacy_appearance(&mut self) {
         // Preserve customized legacy colors; the brand preset stays first in the catalog.
@@ -486,6 +510,40 @@ impl Settings {
                 "Font size must be 10-32 pixels"
             );
         }
+        for appearance in std::iter::once(&self.appearance).chain(
+            self.profiles
+                .iter()
+                .map(|profile| &profile.preferences.appearance),
+        ) {
+            ensure!(
+                appearance
+                    .preset_ids
+                    .iter()
+                    .flatten()
+                    .all(|id| preset_ids.contains(id)),
+                "Settings refer to a missing theme preset"
+            );
+        }
+        Ok(())
+    }
+    pub fn remove_preset(&mut self, id: &str) -> Result<()> {
+        ensure!(self.presets.len() > 1, "Keep at least one theme preset");
+        ensure!(
+            self.presets.iter().any(|preset| preset.id == id),
+            "Preset no longer exists"
+        );
+        for appearance in std::iter::once(&mut self.appearance).chain(
+            self.profiles
+                .iter_mut()
+                .map(|profile| &mut profile.preferences.appearance),
+        ) {
+            for selected in &mut appearance.preset_ids {
+                if selected.as_deref() == Some(id) {
+                    *selected = None;
+                }
+            }
+        }
+        self.presets.retain(|preset| preset.id != id);
         Ok(())
     }
     pub fn remove_palette(&mut self, id: &str) -> Result<()> {

@@ -15,6 +15,7 @@ mod workspace;
 pub use browser::{Browser, BrowserEntry};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
 pub use options::Options;
+pub(crate) use settings::SettingControl;
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Sort, Target};
 

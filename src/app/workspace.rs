@@ -123,6 +123,14 @@ impl App {
                 );
                 self.target(super::Target::Seek(area), false)?;
             }
+            Some(Gesture::Volume(index, area)) => {
+                let (index, area) = (*index, *area);
+                self.pointer = Position::new(
+                    point.x.clamp(area.x, area.right().saturating_sub(1)),
+                    area.y,
+                );
+                self.target(super::Target::SettingsVolume(index, area), false)?;
+            }
             None => {}
         }
         Ok(())

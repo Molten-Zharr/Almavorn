@@ -113,6 +113,7 @@ impl App {
                 )?;
                 let id = self.settings.fresh_id("preset");
                 let style = self.settings.current_style();
+                self.settings.appearance.preset_ids[self.settings.mode.index()] = Some(id.clone());
                 self.settings.presets.push(ThemePreset { id, name, style });
                 self.settings_view.preset = self.settings.presets.len() - 1;
             }
@@ -218,10 +219,7 @@ impl App {
                 )
             }
             SettingsPage::Themes => {
-                let p = &self.settings.presets[self
-                    .settings_view
-                    .preset
-                    .min(self.settings.presets.len() - 1)];
+                let p = &self.settings.presets[self.selected_settings_preset_index()];
                 (
                     SettingsCatalog::Preset,
                     p.id.clone(),
@@ -253,15 +251,7 @@ impl App {
                     .min(self.settings.palettes.len() - 1);
             }
             SettingsCatalog::Preset => {
-                ensure!(
-                    self.settings.presets.len() > 1,
-                    "Keep at least one theme preset"
-                );
-                ensure!(
-                    self.settings.presets.iter().any(|p| p.id == id),
-                    "Preset no longer exists"
-                );
-                self.settings.presets.retain(|p| p.id != id);
+                self.settings.remove_preset(id)?;
                 self.settings_view.preset = self
                     .settings_view
                     .preset

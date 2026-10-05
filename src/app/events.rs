@@ -41,7 +41,10 @@ impl App {
 
     fn handle_inner(&mut self, input: Input) -> Result<()> {
         match input {
-            Input::Move { x, y } => self.pointer = Position::new(x, y),
+            Input::Move { x, y } => {
+                self.pointer = Position::new(x, y);
+                self.hover_settings();
+            }
             Input::Click { x, y, double } => {
                 self.pointer = Position::new(x, y);
                 if self.dialog.is_none() {
@@ -61,13 +64,22 @@ impl App {
                 self.cancel_workspace_drag();
             }
             Input::Scroll { x, y, delta } => {
+                let delta = delta.signum();
+                if delta == 0 {
+                    return Ok(());
+                }
                 if matches!(self.dialog, Some(Dialog::Settings { .. })) {
-                    self.settings_view.focus =
-                        if self.settings_view.menu_area.contains(Position::new(x, y)) {
-                            super::SettingsFocus::Menu
-                        } else {
-                            super::SettingsFocus::Parameters
-                        };
+                    let position = Position::new(x, y);
+                    self.settings_view.focus = if self.settings_view.menu_area.contains(position) {
+                        super::SettingsFocus::Menu
+                    } else if self.settings_view.subtab_area.contains(position) {
+                        super::SettingsFocus::Subtabs
+                    } else if self.settings_view.parameters_area.contains(position) {
+                        super::SettingsFocus::Parameters
+                    } else {
+                        return Ok(());
+                    };
+                    self.pointer = Position::new(u16::MAX, u16::MAX);
                 }
                 if self.dialog.is_some() {
                     self.scroll_dialog(delta);
@@ -91,7 +103,28 @@ impl App {
                         .extend(text.chars().filter(|c| !c.is_control()).take(remaining));
                 }
             }
-            Input::Key(key) => self.key(key)?,
+            Input::SecondaryClick { x, y } => {
+                self.pointer = Position::new(x, y);
+                if self.dialog.as_ref().is_some_and(Dialog::is_settings) {
+                    let target = self
+                        .hits
+                        .iter()
+                        .rev()
+                        .find(|hit| hit.enabled && hit.area.contains(self.pointer))
+                        .map(|hit| hit.target.clone());
+                    if let Some(target) = target {
+                        self.reverse_target(target)?;
+                    }
+                }
+            }
+            Input::Key(key) => {
+                let was_settings = self.dialog.as_ref().is_some_and(Dialog::is_settings);
+                let result = self.key(key);
+                if was_settings || self.dialog.as_ref().is_some_and(Dialog::is_settings) {
+                    self.pointer = Position::new(u16::MAX, u16::MAX);
+                }
+                result?;
+            }
         }
         Ok(())
     }
@@ -382,10 +415,26 @@ impl App {
                 self.select_setting(index);
                 if double {
                     self.settings_help(index);
+                } else {
+                    self.adjust_setting(index, 1)?;
                 }
             }
             Target::SettingAdjust(index, direction) => self.adjust_setting(index, direction)?,
             Target::SettingsPage(page) => self.open_settings_page(page),
+            Target::SettingsTab(page) => self.select_settings_tab(page),
+            Target::SettingsVolume(index, area) => {
+                if area.width > 0 {
+                    if self.workspace.gesture.is_none() {
+                        self.workspace.gesture =
+                            Some(crate::workspace::Gesture::Volume(index, area));
+                    }
+                    self.select_setting(index);
+                    let point = self.last_pointer_x(area);
+                    self.set_settings_volume(
+                        f32::from(point) / f32::from(area.width.saturating_sub(1).max(1)),
+                    )?;
+                }
+            }
             Target::SettingHelp(index) => self.settings_help(index),
             Target::BindingModifier(index) => {
                 if matches!(self.dialog, Some(Dialog::CaptureBinding { .. }))
@@ -405,6 +454,31 @@ impl App {
                     })?;
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn reverse_target(&mut self, target: Target) -> Result<()> {
+        match target {
+            Target::Setting(index)
+            | Target::SettingSelect(index)
+            | Target::SettingsVolume(index, _) => self.adjust_setting(index, -1)?,
+            Target::SettingAdjust(index, direction) => self.adjust_setting(index, -direction)?,
+            Target::SettingsPage(_) => {
+                self.pointer = Position::new(u16::MAX, u16::MAX);
+                self.settings_view.focus = super::SettingsFocus::Menu;
+                self.settings_scroll(-1);
+            }
+            Target::SettingsTab(_) => {
+                self.pointer = Position::new(u16::MAX, u16::MAX);
+                self.settings_view.focus = super::SettingsFocus::Subtabs;
+                self.settings_scroll(-1);
+            }
+            Target::DialogScroll(delta) => self.scroll_dialog(-delta),
+            Target::CloseDialog => {
+                self.close_dialog();
+            }
+            _ => {}
         }
         Ok(())
     }

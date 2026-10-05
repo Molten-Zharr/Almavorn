@@ -36,14 +36,25 @@ Both interfaces share application state and Ratatui rendering:
 
 Open Settings from the application menu. Sections appear on the left,
 parameters and descriptions on the right, and keyboard hints and buttons
-at the bottom. Pages cover general settings, profiles, themes, palettes,
-typography and geometry, and shortcuts. Open a full parameter description
+at the bottom. Sections cover general settings, profiles, themes, and shortcuts.
+Themes contain three tabs: Presets, Palettes, and Font and geometry.
+Open a full parameter description
 with `F1`, the `?` button, or a double click on its row.
 
-- `Tab` moves focus between the menu and parameters; `↑`/`↓` select a row,
+- `Tab` moves focus between sections, theme tabs, and parameters; `Shift+Tab`
+  moves backwards. `↑`/`↓` select a row,
   `←`/`→` change a value, `Enter` runs an action, and `Esc` goes back.
 - Use the mouse to select pages and rows, change values with buttons,
   scroll lists, and enter text through the on-screen keyboard.
+  Sections, tabs, parameter rows, buttons, and breadcrumbs highlight when hovered.
+  Moving the pointer over a section, tab, or parameter makes it current without
+  changing its value. Keyboard or wheel navigation keeps control until the
+  pointer moves again, so only the current item is highlighted in each panel.
+  Left-click adjustable values to increase or advance; right-click to decrease
+  or go backwards. The wheel moves one item per event in the panel under the pointer.
+  Click or drag the volume scale; its percentage appears underneath.
+  Click breadcrumbs to return to the application, general settings, profiles,
+  or the Themes section.
 - In catalogs, `Ins` creates a copy, `F3` renames, and `Del` requests deletion.
   On the palettes page, `Ctrl+I` imports and `Ctrl+E` exports JSON.
 
@@ -60,6 +71,10 @@ descriptions in [`assets/brand/PALETTE.md`](assets/brand/PALETTE.md).
 Classic Amber, Classic Violet, and Light are also available. Order and Chaos
 can use different palettes. Presets capture the palette, font, size, borders,
 and corners; create, update, rename, and delete them from the themes page.
+Choosing a preset applies and saves it immediately, without a separate Apply
+button. The displayed preset follows the current mode and profile, including
+after a restart. Modified appearance that does not match a saved preset is
+shown as Custom.
 Existing configuration colors migrate into Legacy palettes.
 
 Choose Fira Code Bold, Fira Code, or DejaVu Sans Mono at 10–32 pixels, with

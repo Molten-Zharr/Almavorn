@@ -283,10 +283,32 @@ pub fn default_bindings() -> Vec<Binding> {
 pub enum Input {
     Key(KeyPress),
     Text(String),
-    Move { x: u16, y: u16 },
-    Click { x: u16, y: u16, double: bool },
-    Drag { x: u16, y: u16 },
-    Release { x: u16, y: u16 },
+    /// Actual pointer movement or leaving the view; do not emit on idle redraws.
+    Move {
+        x: u16,
+        y: u16,
+    },
+    Click {
+        x: u16,
+        y: u16,
+        double: bool,
+    },
+    SecondaryClick {
+        x: u16,
+        y: u16,
+    },
+    Drag {
+        x: u16,
+        y: u16,
+    },
+    Release {
+        x: u16,
+        y: u16,
+    },
     CancelPointer,
-    Scroll { x: u16, y: u16, delta: i16 },
+    Scroll {
+        x: u16,
+        y: u16,
+        delta: i16,
+    },
 }

@@ -118,8 +118,11 @@ fn run() -> Result<()> {
                     MouseEventKind::Up(event::MouseButton::Left) => {
                         app.handle(Input::Release { x, y })
                     }
-                    MouseEventKind::ScrollUp => app.handle(Input::Scroll { x, y, delta: -3 }),
-                    MouseEventKind::ScrollDown => app.handle(Input::Scroll { x, y, delta: 3 }),
+                    MouseEventKind::Down(event::MouseButton::Right) => {
+                        app.handle(Input::SecondaryClick { x, y })
+                    }
+                    MouseEventKind::ScrollUp => app.handle(Input::Scroll { x, y, delta: -1 }),
+                    MouseEventKind::ScrollDown => app.handle(Input::Scroll { x, y, delta: 1 }),
                     _ => {}
                 }
             }

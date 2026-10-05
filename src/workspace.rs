@@ -213,6 +213,7 @@ pub enum Gesture {
     Move { panel: Panel, origin: Position },
     Resize { split: SplitArea, before: Dock },
     Seek(Rect),
+    Volume(usize, Rect),
 }
 
 pub struct Workspace {
