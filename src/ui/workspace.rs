@@ -41,7 +41,7 @@ fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
         }
         let row = rows.last_mut().expect("Toolbar row");
         row.0.push((Dock::Panel(Panel::ALL[index]), rect.width));
-        row.2 = row.2.max(rect.height.saturating_add(u16::from(compact)));
+        row.2 = row.2.max(rect.height);
     }
     let toolbar = join(
         Axis::Vertical,
@@ -215,7 +215,6 @@ fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) 
             }
             if let Some(group) = group(groups, *panel) {
                 return button_rows(app, width.saturating_sub(2), &group.entries)
-                    * if compact { 1 } else { 3 }
                     + if compact { 1 } else { 2 };
             }
             match panel {
@@ -235,9 +234,9 @@ fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) 
                 }
                 Panel::Player => {
                     if compact {
-                        3
+                        5
                     } else {
-                        4
+                        6
                     }
                 }
                 _ => 3,
@@ -535,7 +534,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             continue;
         }
         if let Some(group) = group(&groups, panel) {
-            toolbar::contents(frame, app, inner, group, compact, palette);
+            toolbar::contents(frame, app, inner, group, palette);
         } else {
             match panel {
                 Panel::Playlists => library::playlists(frame, app, inner, palette),

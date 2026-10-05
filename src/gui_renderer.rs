@@ -167,8 +167,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         let rect = egui::Rect::from_min_size(
             min,
             egui::vec2(f32::from(hit.area.width) * scale.x, scale.y),
-        )
-        .shrink(1.0);
+        );
         let [r, g, b] = palette.color(if !hit.enabled {
             "folder_path"
         } else if app.hovered(hit.area) {

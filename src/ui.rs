@@ -130,13 +130,26 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .wrap(Wrap { trim: false }),
         Rect::new(parts[2].x, parts[2].y, parts[2].width, 2),
     );
-    frame.render_widget(
-        Paragraph::new(app.text(
+    let hint = if matches!(
+        app.workspace.focus,
+        crate::workspace::Panel::Player
+            | crate::workspace::Panel::Playback
+            | crate::workspace::Panel::Volume
+    ) {
+        app.text(
+            "↑↓ volume 1% · ←→ seek · Tab panel · Space pause · F1 help · Q quit",
+            "↑↓ громкость 1% · ←→ перемотка · Tab панель · Space пауза · F1 помощь · Q выход",
+        )
+    } else {
+        app.text(
             "↑↓ navigate · Tab panel · Enter play · Space pause · F1 help · Q quit",
             "↑↓ выбор · Tab панель · Enter играть · Space пауза · F1 помощь · Q выход",
-        ))
-        .style(Style::default().fg(palette.muted))
-        .wrap(Wrap { trim: false }),
+        )
+    };
+    frame.render_widget(
+        Paragraph::new(hint)
+            .style(Style::default().fg(palette.muted))
+            .wrap(Wrap { trim: false }),
         Rect::new(
             parts[2].x,
             parts[2].y + 2,

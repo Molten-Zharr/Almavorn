@@ -71,7 +71,7 @@ pub(super) fn button(
         content.push(Span::styled(" · ", style.fg(palette.muted)));
     }
     content.push(Span::styled(label, style));
-    let border_style = style.fg(if !enabled {
+    let border_style = style.bg(palette.background).fg(if !enabled {
         palette.muted
     } else if app.hovered(area) {
         palette.accent
@@ -79,25 +79,37 @@ pub(super) fn button(
         palette.inactive_panel_border
     });
     if area.height >= 3 {
+        let outer = Block::default()
+            .borders(Borders::ALL)
+            .style(palette.text())
+            .border_type(match palette.corners {
+                Corners::Rounded => BorderType::Rounded,
+                Corners::Square => BorderType::Plain,
+            })
+            .border_style(border_style);
+        let inner = outer.inner(area);
+        frame.render_widget(outer, area);
         frame.render_widget(
             Paragraph::new(Line::from(content))
                 .alignment(Alignment::Center)
-                .style(style)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(match palette.corners {
-                            Corners::Rounded => BorderType::Rounded,
-                            Corners::Square => BorderType::Plain,
-                        })
-                        .border_style(border_style),
-                ),
-            area,
+                .style(style),
+            inner,
         );
     } else {
-        content.insert(0, Span::styled("│", border_style));
-        content.push(Span::styled("│", border_style));
-        frame.render_widget(Paragraph::new(Line::from(content)).style(style), area);
+        frame.render_widget(Block::default().style(palette.text()), area);
+        let inner = Rect::new(
+            area.x.saturating_add(1),
+            area.y,
+            area.width.saturating_sub(2),
+            area.height,
+        );
+        frame.render_widget(Paragraph::new(Line::from(content)).style(style), inner);
+        for x in [area.x, area.right().saturating_sub(1)] {
+            frame.render_widget(
+                Paragraph::new("│").style(border_style),
+                Rect::new(x, area.y, 1, area.height),
+            );
+        }
     }
     app.hits.push(Hit {
         area,

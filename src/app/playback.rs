@@ -22,6 +22,19 @@ pub(super) struct PlaybackJob {
 }
 
 impl App {
+    pub(super) fn adjust_volume(&mut self, step: i16) -> Result<()> {
+        let percent = (self.settings.volume * 100.0).round() as i16;
+        let volume = (percent + step).clamp(0, 100) as f32 / 100.0;
+        if self.settings.volume == volume {
+            return Ok(());
+        }
+        self.settings.volume = volume;
+        if let Some(audio) = &self.audio {
+            audio.volume(volume);
+        }
+        self.save_settings()
+    }
+
     pub fn position_ms(&self) -> u64 {
         if self.current.is_none() {
             return 0;

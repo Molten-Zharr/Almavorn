@@ -52,7 +52,7 @@ pub(super) fn browser_dialog(
                 browser.directory.parent().is_some(),
             ),
             (
-                app.text("Open", "Открыть").into(),
+                app.text("Select / open", "Выбрать / открыть").into(),
                 Target::BrowserOpen,
                 !browser.entries.is_empty(),
             ),

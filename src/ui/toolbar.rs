@@ -122,7 +122,7 @@ pub(super) fn commands(app: &App) -> Vec<Group> {
 pub(super) fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> (Vec<Rect>, u16) {
     let mut rects = Vec::with_capacity(groups.len());
     let (mut x, mut y, mut row_height) = (0u16, 0u16, 0u16);
-    let border = if compact { 0 } else { 2 };
+    let border = 2;
     for group in groups {
         let preferred = group
             .entries
@@ -137,12 +137,10 @@ pub(super) fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> 
             .max(group.title.chars().count() as u16 + 2)
             .min(width);
         let rows = button_rows(app, group_width.saturating_sub(border), &group.entries);
-        let height = rows.saturating_mul(if compact { 1 } else { 3 }) + if compact { 1 } else { 2 };
+        let height = rows + if compact { 1 } else { 2 };
         if x > 0 && x.saturating_add(group_width) > width {
             x = 0;
-            y = y
-                .saturating_add(row_height)
-                .saturating_add(u16::from(!compact));
+            y = y.saturating_add(row_height);
             row_height = 0;
         }
         rects.push(Rect::new(x, y, group_width, height));
@@ -157,11 +155,10 @@ pub(super) fn contents(
     app: &mut App,
     inner: Rect,
     group: &Group,
-    compact: bool,
     palette: Palette,
 ) {
     let (mut x, mut y) = (inner.x, inner.y);
-    let key_height = if compact { 1 } else { 3 };
+    let key_height = 1;
     for (label, target, enabled) in &group.entries {
         let width = button_width(app, label, target).min(inner.width);
         if x > inner.x && x.saturating_add(width) > inner.right() {

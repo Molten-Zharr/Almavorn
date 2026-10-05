@@ -160,13 +160,7 @@ impl App {
             Next => self.next(1, true)?,
             Previous => self.next(-1, true)?,
             VolumeUp | VolumeDown => {
-                self.settings.volume = (self.settings.volume
-                    + if action == VolumeUp { 0.05 } else { -0.05 })
-                .clamp(0.0, 1.0);
-                if let Some(audio) = &self.audio {
-                    audio.volume(self.settings.volume);
-                }
-                self.save_settings()?;
+                self.adjust_volume(if action == VolumeUp { 5 } else { -5 })?;
             }
             SeekForward | SeekBackward => {
                 if let Some(audio) = &self.audio {

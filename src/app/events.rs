@@ -207,6 +207,19 @@ impl App {
             }
             return Ok(());
         }
+        if matches!(
+            self.workspace.focus,
+            crate::workspace::Panel::Player
+                | crate::workspace::Panel::Playback
+                | crate::workspace::Panel::Volume
+        ) && !key.ctrl
+            && !key.alt
+            && !key.shift
+            && matches!(key.key, Key::Up | Key::Down)
+        {
+            self.adjust_volume(if key.key == Key::Up { 1 } else { -1 })?;
+            return Ok(());
+        }
         if let Some(action) = self
             .settings
             .bindings

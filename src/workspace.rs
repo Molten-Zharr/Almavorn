@@ -67,6 +67,35 @@ pub enum Dock {
 }
 
 impl Dock {
+    fn only_buttons(&self) -> bool {
+        match self {
+            Self::Panel(panel) => {
+                !matches!(panel, Panel::Playlists | Panel::Tracks | Panel::Player)
+            }
+            Self::Split { first, second, .. } => first.only_buttons() && second.only_buttons(),
+        }
+    }
+
+    fn compact_buttons(&mut self) {
+        if let Self::Split {
+            axis,
+            ratio,
+            first,
+            second,
+        } = self
+        {
+            if *axis == Axis::Vertical {
+                if first.only_buttons() && !second.only_buttons() {
+                    *ratio = (u32::from(*ratio) * 3 / 5).clamp(1, 999) as u16;
+                } else if !first.only_buttons() && second.only_buttons() {
+                    *ratio =
+                        1000 - (u32::from(1000u16.saturating_sub(*ratio)) * 3 / 5).max(1) as u16;
+                }
+            }
+            first.compact_buttons();
+            second.compact_buttons();
+        }
+    }
     pub fn split(axis: Axis, ratio: u16, first: Self, second: Self) -> Self {
         Self::Split {
             axis,
@@ -152,12 +181,26 @@ impl Dock {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WorkspaceLayout {
+    // Older saved layouts have no version; newly created layouts are already compact.
+    #[serde(default)]
+    pub version: u8,
     pub root: Option<Dock>,
     pub hidden: Vec<Panel>,
     pub collapsed: Vec<Panel>,
+}
+
+impl Default for WorkspaceLayout {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            root: None,
+            hidden: Vec::new(),
+            collapsed: Vec::new(),
+        }
+    }
 }
 
 impl WorkspaceLayout {
@@ -172,6 +215,12 @@ impl WorkspaceLayout {
             {
                 self.root = None;
             }
+        }
+        if self.version == 0 {
+            if let Some(root) = &mut self.root {
+                root.compact_buttons();
+            }
+            self.version = 1;
         }
         self.hidden
             .sort_by_key(|panel| Panel::ALL.iter().position(|value| value == panel));

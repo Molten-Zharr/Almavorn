@@ -53,16 +53,34 @@ pub(super) fn controls(app: &App) -> Vec<Group> {
 
 pub(super) fn preferred_height(app: &App, width: u16) -> u16 {
     let groups = controls(app);
-    let controls_height = groups
-        .iter()
-        .map(|group| super::widgets::button_rows(app, width.saturating_sub(2), &group.entries) + 2)
-        .sum::<u16>();
-    controls_height.saturating_add(4)
+    let min_width = |group: &Group| {
+        group
+            .entries
+            .iter()
+            .map(|(label, target, _)| {
+                super::widgets::button_width(app, label, target).saturating_add(2)
+            })
+            .max()
+            .unwrap_or(20)
+            .max(20)
+            .max(group.title.chars().count() as u16 + 13)
+    };
+    let [left, right] = [min_width(&groups[0]), min_width(&groups[1])];
+    let height = |group: &Group, width: u16| {
+        super::widgets::button_rows(app, width.saturating_sub(2), &group.entries) + 2
+    };
+    let controls_height = if left.saturating_add(right) > width {
+        height(&groups[0], width).saturating_add(height(&groups[1], width))
+    } else {
+        let cut = ((u32::from(width) * 650 / 1000) as u16).clamp(left, width - right);
+        height(&groups[0], cut).max(height(&groups[1], width - cut))
+    };
+    controls_height.saturating_add(6)
 }
 
 pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     let inner = area;
-    if inner.height < 2 {
+    if inner.height < 4 {
         return;
     }
     let title = app
@@ -77,7 +95,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         Paragraph::new(clean(&title)).style(palette.text().fg(palette.accent)),
         Rect::new(inner.x, inner.y, inner.width, 1),
     );
-    let y = inner.y + 1;
+    let y = inner.y + 2;
     let duration = app.current.as_ref().map_or(0, |track| track.duration_ms);
     let position = app.position_ms();
     let ratio = if duration > 0 {
