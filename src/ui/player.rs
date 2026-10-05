@@ -59,7 +59,7 @@ pub(super) fn content_height(app: &App, width: u16, controls: &Group) -> u16 {
     let rows = if controls.entries.is_empty() {
         0
     } else {
-        super::widgets::button_rows(app, width, &controls.entries)
+        super::toolbar::rows(app, width, controls)
     };
     rows.saturating_add(4)
 }

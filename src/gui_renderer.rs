@@ -41,10 +41,10 @@ impl ImageCache {
         if full {
             let image = backend.to_egui_image();
             if let Some(texture) = &mut backend.text_handle {
-                texture.set(image, egui::TextureOptions::LINEAR);
+                texture.set(image, egui::TextureOptions::NEAREST);
             } else {
                 backend.text_handle =
-                    Some(ctx.load_texture("almavorn", image, egui::TextureOptions::LINEAR));
+                    Some(ctx.load_texture("almavorn", image, egui::TextureOptions::NEAREST));
             }
             self.buffer = Some(backend.soft_backend.buffer.clone());
         } else {
@@ -97,7 +97,7 @@ impl ImageCache {
                     .set_partial(
                         [left, top],
                         egui::ColorImage::new([width, height], pixels),
-                        egui::TextureOptions::LINEAR,
+                        egui::TextureOptions::NEAREST,
                     );
             }
         }
@@ -167,7 +167,8 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         let rect = egui::Rect::from_min_size(
             min,
             egui::vec2(f32::from(hit.area.width) * scale.x, scale.y),
-        );
+        )
+        .shrink(1.0 / ui.painter().pixels_per_point());
         let [r, g, b] = palette.color(if !hit.enabled {
             "folder_path"
         } else if app.hovered(hit.area) {
@@ -198,7 +199,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         egui::Color32::from_rgb(color[0], color[1], color[2])
     };
     for cap in &app.keycaps {
-        let rect = egui::Rect::from_min_size(
+        let cell_rect = egui::Rect::from_min_size(
             image.min
                 + egui::vec2(
                     f32::from(cap.area.x) * scale.x,
@@ -208,8 +209,12 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
                 f32::from(cap.area.width) * scale.x,
                 f32::from(cap.area.height) * scale.y,
             ),
-        )
-        .shrink(1.0);
+        );
+        // The GUI key covers the terminal key, including its edge glyphs.
+        let [r, g, b] = palette.color("background");
+        ui.painter()
+            .rect_filled(cell_rect, 0, egui::Color32::from_rgb(r, g, b));
+        let rect = cell_rect.shrink(1.0);
         let bevel = (rect.height() * 0.13).max(2.0);
         let face = egui::Rect::from_min_max(
             rect.min + egui::vec2(bevel, bevel),

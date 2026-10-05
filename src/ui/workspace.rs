@@ -2,7 +2,7 @@ use super::{
     library, player,
     theme::Palette,
     toolbar::{self, Group},
-    widgets::{block, button_rows, button_width},
+    widgets::{block, button_width},
 };
 use crate::{
     app::{App, Hit, Target},
@@ -201,7 +201,7 @@ fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) 
                     return player::content_height(app, width.saturating_sub(2), group)
                         + if compact { 1 } else { 2 };
                 }
-                return button_rows(app, width.saturating_sub(2), &group.entries)
+                return toolbar::rows(app, width.saturating_sub(2), group)
                     + if compact { 1 } else { 2 };
             }
             match panel {

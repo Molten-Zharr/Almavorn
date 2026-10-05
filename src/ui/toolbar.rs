@@ -1,6 +1,6 @@
 use super::{
     theme::Palette,
-    widgets::{button, button_rows, button_width},
+    widgets::{button, button_width},
 };
 use crate::{
     app::{App, Target},
@@ -27,6 +27,30 @@ impl Group {
             control.is_none_or(|control| !app.settings.workspace.hidden_controls.contains(&control))
         });
     }
+}
+
+fn columns(app: &App, width: u16, group: &Group) -> usize {
+    let maximum = group
+        .entries
+        .iter()
+        .map(|(label, target, _)| button_width(app, label, target))
+        .max()
+        .unwrap_or(1);
+    let preferred = match group.panel {
+        Panel::Application => 2,
+        Panel::Add => 3,
+        Panel::PlaylistActions => 3,
+        Panel::Player => 6,
+        _ => 3,
+    };
+    usize::from(width.saturating_add(1) / maximum.saturating_add(1))
+        .max(1)
+        .min(preferred)
+        .min(group.entries.len().max(1))
+}
+
+pub(super) fn rows(app: &App, width: u16, group: &Group) -> u16 {
+    group.entries.len().div_ceil(columns(app, width, group)) as u16
 }
 
 type Command = (Action, &'static str, &'static str);
@@ -190,7 +214,7 @@ pub(super) fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> 
         } else {
             preferred.max(minima[index]).min(available)
         };
-        let rows = button_rows(app, group_width.saturating_sub(border), &group.entries);
+        let rows = rows(app, group_width.saturating_sub(border), group);
         let height = rows + if compact { 1 } else { 2 };
         if x > 0 && x.saturating_add(group_width) > width {
             x = 0;
@@ -211,26 +235,22 @@ pub(super) fn contents(
     group: &Group,
     palette: Palette,
 ) {
-    let (mut x, mut y) = (inner.x, inner.y);
-    let key_height = 1;
-    for (label, target, enabled) in &group.entries {
-        let width = button_width(app, label, target).min(inner.width);
-        if x > inner.x && x.saturating_add(width) > inner.right() {
-            x = inner.x;
-            y = y.saturating_add(key_height);
-        }
-        if y.saturating_add(key_height) > inner.bottom() {
+    let count = columns(app, inner.width, group);
+    let width = inner.width.saturating_sub(count.saturating_sub(1) as u16) / count as u16;
+    for (index, (label, target, enabled)) in group.entries.iter().enumerate() {
+        let x = inner.x + (index % count) as u16 * (width + 1);
+        let y = inner.y + (index / count) as u16;
+        if y >= inner.bottom() {
             break;
         }
         button(
             frame,
             app,
-            Rect::new(x, y, width, key_height),
+            Rect::new(x, y, width, 1),
             label,
             target.clone(),
             *enabled,
             palette,
         );
-        x = x.saturating_add(width).saturating_add(1);
     }
 }

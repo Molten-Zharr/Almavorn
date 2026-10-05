@@ -4,7 +4,7 @@ use almavorn::{
     ui,
 };
 use anyhow::Result;
-use eframe::egui;
+use eframe::egui::{self, emath::GuiRounding};
 use egui_ratatui::RataguiBackend;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
@@ -84,7 +84,13 @@ fn run() -> Result<()> {
                 }
                 // Only real pointer events may take selection back from keys or the wheel.
                 // Process them before painting so hover selection is visible this frame.
-                let image_rect = egui::Rect::from_min_size(ui.next_widget_position(), available);
+                let image_rect = egui::Rect::from_min_size(
+                    ui.next_widget_position().round_to_pixels(pixels_per_point),
+                    egui::vec2(
+                        (backend.char_width * usize::from(columns)) as f32,
+                        (backend.char_height * usize::from(rows)) as f32,
+                    ) / pixels_per_point,
+                );
                 if let Some(movement) = pointer_movement(&ctx, image_rect, columns, rows) {
                     app.handle(movement);
                 }
@@ -102,23 +108,33 @@ fn run() -> Result<()> {
                     .as_ref()
                     .expect("Terminal texture exists")
                     .id();
-                let response = ui.add(
-                    egui::Image::new((texture_id, image_size))
-                        .fit_to_exact_size(available)
-                        .maintain_aspect_ratio(false)
-                        .sense(egui::Sense::click_and_drag()),
+                let (canvas, response) =
+                    ui.allocate_exact_size(available, egui::Sense::click_and_drag());
+                let image_rect = egui::Rect::from_min_size(
+                    canvas.min.round_to_pixels(pixels_per_point),
+                    image_size / pixels_per_point,
+                );
+                let [r, g, b] = app.settings.current_palette().color("background");
+                // Keep physical font pixels 1:1. Only the sub-cell remainder is background.
+                ui.painter()
+                    .rect_filled(canvas, 0, egui::Color32::from_rgb(r, g, b));
+                ui.painter().image(
+                    texture_id,
+                    image_rect,
+                    egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
                 );
                 response.request_focus();
                 let dimensions = terminal.backend().soft_backend.size().ok();
                 let Some(dimensions) = dimensions else {
                     return;
                 };
-                gui_renderer::paint_keycaps(ui, response.rect, &app, dimensions);
+                gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
                 if let Some(point) = ctx.input(|input| input.pointer.hover_pos()) {
-                    let x = ((point.x - response.rect.min.x) / response.rect.width()
+                    let x = ((point.x - image_rect.min.x) / image_rect.width()
                         * f32::from(dimensions.width))
                     .floor() as u16;
-                    let y = ((point.y - response.rect.min.y) / response.rect.height()
+                    let y = ((point.y - image_rect.min.y) / image_rect.height()
                         * f32::from(dimensions.height))
                     .floor() as u16;
                     let target = app.target_at(ratatui::layout::Position::new(x, y));
@@ -136,17 +152,17 @@ fn run() -> Result<()> {
                     ui.ctx().set_cursor_icon(cursor);
                 }
                 let to_cell = |point: egui::Pos2| -> Option<(u16, u16)> {
-                    if !response.rect.contains(point)
-                        || response.rect.width() <= 0.0
-                        || response.rect.height() <= 0.0
+                    if !image_rect.contains(point)
+                        || image_rect.width() <= 0.0
+                        || image_rect.height() <= 0.0
                     {
                         return None;
                     }
                     Some((
-                        ((point.x - response.rect.min.x) / response.rect.width()
+                        ((point.x - image_rect.min.x) / image_rect.width()
                             * dimensions.width as f32)
                             .floor() as u16,
-                        ((point.y - response.rect.min.y) / response.rect.height()
+                        ((point.y - image_rect.min.y) / image_rect.height()
                             * dimensions.height as f32)
                             .floor() as u16,
                     ))
@@ -230,8 +246,8 @@ fn run() -> Result<()> {
                             pressed: false,
                             ..
                         } => {
-                            let point = pos
-                                .clamp(response.rect.min, response.rect.max - egui::vec2(0.1, 0.1));
+                            let point =
+                                pos.clamp(image_rect.min, image_rect.max - egui::vec2(0.1, 0.1));
                             if let Some((x, y)) = to_cell(point) {
                                 app.handle(Input::Release { x, y });
                             }

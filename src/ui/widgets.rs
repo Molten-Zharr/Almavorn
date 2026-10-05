@@ -103,7 +103,12 @@ pub(super) fn button(
             area.width.saturating_sub(2),
             area.height,
         );
-        frame.render_widget(Paragraph::new(Line::from(content)).style(style), inner);
+        frame.render_widget(
+            Paragraph::new(Line::from(content))
+                .style(style)
+                .alignment(Alignment::Center),
+            inner,
+        );
         for x in [area.x, area.right().saturating_sub(1)] {
             frame.render_widget(
                 Paragraph::new("│").style(border_style),
@@ -149,20 +154,6 @@ pub(super) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
             .map_or(0, |key| Span::raw(key).width() + 3)
         + 2)
     .min(usize::from(u16::MAX)) as u16
-}
-
-pub(super) fn button_rows(app: &App, width: u16, entries: &[(String, Target, bool)]) -> u16 {
-    let mut rows = 1u16;
-    let mut used = 0u16;
-    for (label, target, _) in entries {
-        let length = button_width(app, label, target).min(width);
-        if used > 0 && used.saturating_add(length) > width {
-            rows = rows.saturating_add(1);
-            used = 0;
-        }
-        used = used.saturating_add(length).saturating_add(1);
-    }
-    rows
 }
 
 pub(super) fn buttons(
