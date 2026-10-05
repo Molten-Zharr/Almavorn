@@ -36,6 +36,7 @@ pub(super) fn text_dialog(
             "Удалить плейлист · подтверждение",
         ),
         TextPurpose::Accent => app.text("Accent color · RRGGBB", "Цвет акцента · RRGGBB"),
+        TextPurpose::Settings(edit) => edit.title(app.settings.language),
     };
     let inner = modal(frame, area, title.into(), 27, palette);
     let hint = if let TextPurpose::DeletePlaylist(_, name) = &dialog.purpose {
@@ -91,10 +92,16 @@ pub(super) fn text_dialog(
             "фывапролджэ",
             "ячсмитьбю",
             "1234567890",
-            "ё _-().",
+            "ё _-()./:\\#",
         ]
     } else {
-        vec!["qwertyuiop", "asdfghjkl", "zxcvbnm", "1234567890", " _-()."]
+        vec![
+            "qwertyuiop",
+            "asdfghjkl",
+            "zxcvbnm",
+            "1234567890",
+            " _-()./:\\#",
+        ]
     };
     for (row, letters) in keyboard.iter().enumerate() {
         let y = field.bottom() + 1 + row as u16;

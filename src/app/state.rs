@@ -1,5 +1,6 @@
+use super::SettingsPage;
 use crate::{
-    input::Action,
+    input::{Action, Key},
     model::{Language, Mode},
 };
 use ratatui::layout::Rect;
@@ -63,6 +64,12 @@ pub enum Target {
     TransferRow(usize),
     DialogScroll(i16),
     Setting(usize),
+    SettingsPage(SettingsPage),
+    SettingSelect(usize),
+    SettingAdjust(usize, i64),
+    SettingHelp(usize),
+    BindingModifier(usize),
+    BindingKey(Key),
 }
 
 pub struct Hit {

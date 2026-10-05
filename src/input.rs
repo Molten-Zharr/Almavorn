@@ -21,6 +21,31 @@ pub enum Key {
     F(u8),
 }
 
+impl Key {
+    pub(crate) fn shortcut_choices() -> impl Iterator<Item = Self> {
+        "abcdefghijklmnopqrstuvwxyz0123456789+-=,./;[]\\'`"
+            .chars()
+            .map(Self::Char)
+            .chain((1..=12).map(Self::F))
+            .chain([
+                Self::Char(' '),
+                Self::Enter,
+                Self::Backspace,
+                Self::Insert,
+                Self::Delete,
+                Self::Tab,
+                Self::Up,
+                Self::Down,
+                Self::Left,
+                Self::Right,
+                Self::Home,
+                Self::End,
+                Self::PageUp,
+                Self::PageDown,
+            ])
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyPress {
     pub key: Key,
@@ -111,6 +136,41 @@ pub enum Action {
 }
 
 impl Action {
+    pub fn description(self, language: Language) -> &'static str {
+        match self {
+            Self::Quit => language.text("Close the application and finish saving settings.", "Закрыть приложение и завершить сохранение настроек."),
+            Self::Help => language.text("Open the guide and shortcut list.", "Открыть руководство и список сочетаний."),
+            Self::Settings => language.text("Open the settings pages.", "Открыть страницы настроек."),
+            Self::TogglePlay => language.text("Play the selected track or pause/resume playback.", "Играть выбранную композицию либо поставить воспроизведение на паузу или продолжить."),
+            Self::Stop => language.text("Stop playback and clear the current track.", "Остановить воспроизведение и убрать текущую композицию."),
+            Self::Next => language.text("Play the next track in the queue.", "Играть следующую композицию в очереди."),
+            Self::Previous => language.text("Play the previous track in the queue.", "Играть предыдущую композицию в очереди."),
+            Self::VolumeUp => language.text("Increase playback volume by 5%.", "Увеличить громкость на 5%."),
+            Self::VolumeDown => language.text("Decrease playback volume by 5%.", "Уменьшить громкость на 5%."),
+            Self::SeekForward => language.text("Seek forward by five seconds if the file supports it.", "Перемотать вперёд на пять секунд, если файл поддерживает перемотку."),
+            Self::SeekBackward => language.text("Seek backward by five seconds if the file supports it.", "Перемотать назад на пять секунд, если файл поддерживает перемотку."),
+            Self::SwitchMode => language.text("Switch between Order and Chaos playlists.", "Переключить плейлисты Порядка и Хаоса."),
+            Self::ToggleEdit => language.text("Unlock or protect changes to Order playlists.", "Разрешить либо запретить изменение плейлистов Порядка."),
+            Self::ToggleDesk => language.text("Route imported files to the desk or selected playlist.", "Направлять добавляемые файлы на стол либо в выбранный плейлист."),
+            Self::AddFiles => language.text("Select music files to import.", "Выбрать музыкальные файлы для добавления."),
+            Self::AddFolder => language.text("Select a folder and import its music.", "Выбрать папку и добавить её музыку."),
+            Self::AddNew => language.text("Scan current tracks' folders for files not yet imported.", "Проверить папки текущих композиций на ещё не добавленные файлы."),
+            Self::NewPlaylist => language.text("Create an empty playlist in the current mode.", "Создать пустой плейлист в текущем режиме."),
+            Self::Rename => language.text("Rename the playlist or the local track title.", "Переименовать плейлист либо название композиции в базе."),
+            Self::Delete => language.text("Confirm removal of a playlist or track entry; keep source files.", "Подтвердить удаление плейлиста либо композиции из списка; сохранить исходные файлы."),
+            Self::MoveUp => language.text("Move the selection one position earlier in stored order.", "Переместить выбранный элемент на одну позицию выше в сохранённом порядке."),
+            Self::MoveDown => language.text("Move the selection one position later in stored order.", "Переместить выбранный элемент на одну позицию ниже в сохранённом порядке."),
+            Self::Transfer => language.text("Copy selected tracks to another editable playlist.", "Копировать отмеченные композиции в другой доступный для правки плейлист."),
+            Self::Search => language.text("Filter tracks by title, artist, album or path.", "Отфильтровать композиции по названию, исполнителю, альбому либо пути."),
+            Self::Sort => language.text("Change visible sorting; keep saved track positions.", "Изменить сортировку на экране, сохранив порядок композиций в базе."),
+            Self::Undo => language.text("Undo a library change in Chaos or the sorting desk.", "Отменить правку библиотеки в Хаосе либо на сортировочном столе."),
+            Self::Redo => language.text("Repeat a library change that was undone.", "Повторить отменённую правку библиотеки."),
+            Self::Metadata => language.text("Show saved metadata and original imported tags.", "Показать сохранённые сведения и исходные импортированные теги."),
+            Self::Mark => language.text("Toggle the selected track's copy checkbox.", "Изменить отметку выбранной композиции для копирования."),
+            Self::PlaylistPanel => language.text("Move the playlist panel around the library.", "Изменить расположение панели плейлистов."),
+            Self::PlayerPanel => language.text("Move playback controls around the library.", "Изменить расположение панели проигрывателя."),
+        }
+    }
     pub fn name(self, language: Language) -> &'static str {
         match self {
             Self::Quit => language.text("Quit", "Выход"),

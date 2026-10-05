@@ -1,6 +1,7 @@
 mod dialogs;
 mod library;
 mod player;
+mod settings;
 mod theme;
 mod widgets;
 
@@ -28,6 +29,21 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     let palette = Palette::new(app);
     app.hits.clear();
+    if app
+        .dialog
+        .as_ref()
+        .is_some_and(crate::app::Dialog::is_settings)
+    {
+        settings::render_settings(frame, app, palette);
+        if !matches!(app.dialog, Some(crate::app::Dialog::Settings { .. }))
+            && let Some(mut dialog) = app.dialog.take()
+        {
+            app.hits.clear();
+            render_dialog(frame, app, &mut dialog, palette);
+            app.dialog = Some(dialog);
+        }
+        return;
+    }
     frame.render_widget(
         Block::default().style(Style::default().bg(palette.background)),
         area,

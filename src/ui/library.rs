@@ -64,7 +64,10 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
                 if selected { ">" } else { " " }
             ))
             .style(if selected {
-                palette.text().bg(palette.selection).fg(palette.accent)
+                palette
+                    .text()
+                    .bg(palette.sidebar_selection)
+                    .fg(palette.background)
             } else {
                 palette.text()
             }),
@@ -93,7 +96,13 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             format!(" · {}", app.query)
         }
     );
-    let outer = block(title, palette, app.focus == Focus::Tracks);
+    let outer = block(title, palette, app.focus == Focus::Tracks).border_style(
+        ratatui::style::Style::default().fg(if app.focus == Focus::Tracks {
+            palette.accent
+        } else {
+            palette.inactive_file_border
+        }),
+    );
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
     if inner.height < 2 {
@@ -135,7 +144,10 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
                 duration_text(entry.track.duration_ms),
             ])
             .style(if selected {
-                palette.text().bg(palette.selection).fg(palette.accent)
+                palette
+                    .text()
+                    .bg(palette.selection)
+                    .fg(palette.selection_text)
             } else {
                 palette.text()
             })

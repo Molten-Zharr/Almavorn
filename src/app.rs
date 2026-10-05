@@ -8,11 +8,13 @@ mod import;
 mod library;
 mod options;
 mod playback;
+mod settings;
 mod state;
 
 pub use browser::{Browser, BrowserEntry};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
 pub use options::Options;
+pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Sort, Target};
 
 use self::{
@@ -38,6 +40,8 @@ pub struct App {
     pub store: Store,
     runtime: Option<Runtime>,
     pub settings: Settings,
+    pub(crate) settings_view: settings::SettingsView,
+    pub(crate) settings_file: Option<settings::SettingsFileJob>,
     pub playlists: Vec<Playlist>,
     pub selected_playlist: Option<i64>,
     pub selected_entry: Option<i64>,
@@ -108,6 +112,8 @@ impl App {
             store,
             runtime: Some(runtime),
             settings,
+            settings_view: settings::SettingsView::default(),
+            settings_file: None,
             playlists,
             selected_playlist,
             selected_entry,
@@ -188,6 +194,38 @@ impl App {
             "Use a six-digit color, for example E89E4A" => {
                 Some("Введите шесть цифр цвета, например E89E4A.")
             }
+            "Use a six-digit color, for example FF0000" => {
+                Some("Введите цвет из шести шестнадцатеричных цифр, например FF0000.")
+            }
+            "Font size must be 10-32 pixels" => {
+                Some("Размер шрифта должен быть от 10 до 32 пикселей.")
+            }
+            "Name must contain 1-80 printable characters" => {
+                Some("Имя должно содержать от 1 до 80 печатных символов.")
+            }
+            "This name is already used" => Some("Это имя уже используется. Выберите другое."),
+            "Wait for the palette file operation to finish" => {
+                Some("Дождитесь завершения импорта или экспорта палитры.")
+            }
+            "Enter a file path" => Some("Введите путь к файлу."),
+            "Cannot read palette JSON" => {
+                Some("Не удалось прочитать JSON палитры. Проверьте файл.")
+            }
+            "Unsupported palette format or version" => {
+                Some("Формат или версия палитры не поддерживаются.")
+            }
+            "Expected an Almavorn or Molten-Zharr palette" => {
+                Some("Ожидается палитра Almavorn или Molten-Zharr.")
+            }
+            "Palette file is larger than 1 MiB" => {
+                Some("Файл палитры должен быть не больше 1 МиБ.")
+            }
+            "Keep at least one item in this catalog" => {
+                Some("В этом списке должен остаться хотя бы один элемент.")
+            }
+            "Keep at least one profile" => Some("Должен остаться хотя бы один профиль."),
+            "Keep at least one palette" => Some("Должна остаться хотя бы одна палитра."),
+            "Keep at least one theme preset" => Some("Должен остаться хотя бы один пресет темы."),
             "Playlist changed concurrently; undo is no longer safe" => Some(
                 "Плейлист изменен другой задачей. Отмена могла бы затронуть более новые изменения.",
             ),
@@ -237,6 +275,7 @@ impl App {
     fn tick_inner(&mut self) -> Result<()> {
         self.tick_database()?;
         self.tick_settings()?;
+        self.tick_settings_files()?;
         self.poll_import()?;
         self.tick_library()?;
         if self.audio.as_mut().is_some_and(Audio::finished)

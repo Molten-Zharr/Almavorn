@@ -1,5 +1,6 @@
 use super::theme::Palette;
 use crate::app::{App, Hit, Target};
+use crate::preferences::{BorderWeight, Corners};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -10,12 +11,21 @@ use ratatui::{
 pub(super) fn block(title: String, palette: Palette, active: bool) -> Block<'static> {
     Block::default()
         .title(format!(" {title} "))
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .borders(if palette.borders == BorderWeight::None {
+            Borders::NONE
+        } else {
+            Borders::ALL
+        })
+        .border_type(match (palette.borders, palette.corners) {
+            (BorderWeight::Double, _) => BorderType::Double,
+            (BorderWeight::Thick, _) => BorderType::Thick,
+            (_, Corners::Rounded) => BorderType::Rounded,
+            _ => BorderType::Plain,
+        })
         .border_style(Style::default().fg(if active {
             palette.accent
         } else {
-            palette.muted
+            palette.inactive_panel_border
         }))
         .style(palette.text())
 }
@@ -35,13 +45,16 @@ pub(super) fn button(
     let mut style = if enabled {
         palette
             .text()
-            .fg(palette.accent)
+            .fg(palette.button_text)
             .add_modifier(Modifier::BOLD)
     } else {
         palette.text().fg(palette.muted)
     };
     if enabled && app.hovered(area) {
         style = style.bg(palette.selection);
+    }
+    if enabled && matches!(target, Target::Submit) {
+        style = style.bg(palette.confirm_background);
     }
     frame.render_widget(Paragraph::new(format!("[{label}] ")).style(style), area);
     app.hits.push(Hit {

@@ -1,4 +1,7 @@
-use crate::app::App;
+use crate::{
+    app::App,
+    preferences::{BorderWeight, Corners},
+};
 use ratatui::style::{Color, Style};
 
 #[derive(Clone, Copy)]
@@ -10,36 +13,48 @@ pub(super) struct Palette {
     pub(super) accent: Color,
     pub(super) selection: Color,
     pub(super) error: Color,
+    pub(super) button_text: Color,
+    pub(super) sidebar_title: Color,
+    pub(super) sidebar_selection: Color,
+    pub(super) inactive_file_border: Color,
+    pub(super) inactive_panel_border: Color,
+    pub(super) folder_icon: Color,
+    pub(super) folder_path: Color,
+    pub(super) selection_text: Color,
+    pub(super) confirm_background: Color,
+    pub(super) help_heading: Color,
+    pub(super) separator: Color,
+    pub(super) borders: BorderWeight,
+    pub(super) corners: Corners,
 }
-
 impl Palette {
     pub(super) fn new(app: &App) -> Self {
-        let theme = &app.settings.themes[app.settings.mode.index()];
-        let [r, g, b] = theme.accent;
-        if theme.light {
-            Self {
-                background: Color::Rgb(239, 242, 246),
-                panel: Color::Rgb(250, 251, 253),
-                text: Color::Rgb(31, 39, 49),
-                muted: Color::Rgb(85, 99, 116),
-                accent: Color::Rgb(
-                    r.saturating_sub(80),
-                    g.saturating_sub(80),
-                    b.saturating_sub(80),
-                ),
-                selection: Color::Rgb(212, 225, 239),
-                error: Color::Rgb(174, 37, 57),
-            }
-        } else {
-            Self {
-                background: Color::Rgb(18, 22, 29),
-                panel: Color::Rgb(25, 31, 41),
-                text: Color::Rgb(223, 228, 238),
-                muted: Color::Rgb(138, 153, 175),
-                accent: Color::Rgb(r, g, b),
-                selection: Color::Rgb(49, 61, 78),
-                error: Color::Rgb(255, 119, 135),
-            }
+        let palette = app.settings.current_palette();
+        let color = |key| {
+            let [r, g, b] = palette.color(key);
+            Color::Rgb(r, g, b)
+        };
+        Self {
+            background: color("background"),
+            panel: color("background"),
+            text: color("text"),
+            muted: color("folder_path"),
+            accent: color("active"),
+            selection: color("selected_file_background"),
+            error: color("error"),
+            button_text: color("button_text"),
+            sidebar_title: color("sidebar_title"),
+            sidebar_selection: color("selection_accent"),
+            inactive_file_border: color("inactive_file_border"),
+            inactive_panel_border: color("inactive_panel_border"),
+            folder_icon: color("folder_icon"),
+            folder_path: color("folder_path"),
+            selection_text: color("selection_accent"),
+            confirm_background: color("confirm_background"),
+            help_heading: color("help_heading"),
+            separator: color("separator"),
+            borders: app.settings.appearance.borders,
+            corners: app.settings.appearance.corners,
         }
     }
     pub(super) fn text(self) -> Style {

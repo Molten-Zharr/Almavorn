@@ -3,5 +3,6 @@ pub mod audio;
 pub mod input;
 pub mod media;
 pub mod model;
+pub mod preferences;
 pub mod store;
 pub mod ui;

@@ -82,8 +82,24 @@ impl Store {
             })
             .optional()?;
         match json {
-            Some(json) => serde_json::from_str(&json).context("Saved settings are damaged"),
-            None => Ok(Settings::default()),
+            Some(json) => {
+                let value: serde_json::Value =
+                    serde_json::from_str(&json).context("Saved settings are damaged")?;
+                let legacy = value.get("appearance").is_none();
+                let mut settings: Settings =
+                    serde_json::from_value(value).context("Saved settings are damaged")?;
+                if legacy {
+                    settings.migrate_legacy_appearance();
+                }
+                settings.initialize_profiles();
+                settings.validate_catalogs()?;
+                Ok(settings)
+            }
+            None => {
+                let mut settings = Settings::default();
+                settings.initialize_profiles();
+                Ok(settings)
+            }
         }
     }
 

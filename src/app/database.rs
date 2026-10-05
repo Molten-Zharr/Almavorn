@@ -47,6 +47,7 @@ impl App {
     }
 
     pub(super) fn save_settings(&mut self) -> Result<()> {
+        self.settings.sync_active_profile();
         self.pending_settings = Some(self.settings.clone());
         self.settings_failed = false;
         self.start_settings()

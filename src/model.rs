@@ -141,6 +141,12 @@ pub struct Settings {
     pub player_placement: Placement,
     pub themes: [Theme; 2],
     pub bindings: Vec<crate::input::Binding>,
+    pub appearance: crate::preferences::Appearance,
+    pub palettes: Vec<crate::preferences::NamedPalette>,
+    pub presets: Vec<crate::preferences::ThemePreset>,
+    pub profiles: Vec<crate::preferences::SettingsProfile>,
+    pub active_profile: String,
+    pub next_settings_id: u64,
 }
 
 impl Default for Settings {
@@ -163,6 +169,12 @@ impl Default for Settings {
                 },
             ],
             bindings: crate::input::default_bindings(),
+            appearance: Default::default(),
+            palettes: crate::preferences::default_palettes(),
+            presets: crate::preferences::default_presets(),
+            profiles: Vec::new(),
+            active_profile: String::new(),
+            next_settings_id: 1,
         }
     }
 }

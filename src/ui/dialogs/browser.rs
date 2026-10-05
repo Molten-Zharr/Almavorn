@@ -37,7 +37,7 @@ pub(super) fn browser_dialog(
     );
     frame.render_widget(
         Paragraph::new(browser.directory.display().to_string())
-            .style(palette.text().fg(palette.muted))
+            .style(palette.text().fg(palette.folder_path))
             .wrap(Wrap { trim: false }),
         Rect::new(inner.x, inner.y, inner.width, 2),
     );
@@ -104,7 +104,12 @@ pub(super) fn browser_dialog(
                 if entry.directory { "/" } else { "" }
             ))
             .style(if browser.selected == index {
-                palette.text().bg(palette.selection)
+                palette
+                    .text()
+                    .bg(palette.selection)
+                    .fg(palette.selection_text)
+            } else if entry.directory {
+                palette.text().fg(palette.folder_icon)
             } else {
                 palette.text()
             }),

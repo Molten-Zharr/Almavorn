@@ -8,12 +8,7 @@ use eframe::egui;
 use egui_ratatui::RataguiBackend;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
-use soft_ratatui::{
-    EmbeddedGraphics, SoftBackend,
-    embedded_graphics_unicodefonts::{
-        mono_8x13_atlas, mono_8x13_bold_atlas, mono_8x13_italic_atlas,
-    },
-};
+mod gui_fonts;
 use std::time::{Duration, Instant};
 
 fn main() {
@@ -31,13 +26,11 @@ fn run() -> Result<()> {
     if !options.files.is_empty() {
         app.start_import(options.files)?;
     }
-    let backend = SoftBackend::<EmbeddedGraphics>::new(
-        120,
-        50,
-        mono_8x13_atlas(),
-        Some(mono_8x13_bold_atlas()),
-        Some(mono_8x13_italic_atlas()),
+    let mut font_settings = (
+        app.settings.appearance.font,
+        app.settings.appearance.font_size,
     );
+    let backend = gui_fonts::backend(font_settings.0, font_settings.1, 120, 50);
     let mut terminal = Terminal::new(RataguiBackend::new("almavorn", backend))?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -54,6 +47,35 @@ fn run() -> Result<()> {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show_inside(root, |ui| {
+                let requested_font = (
+                    app.settings.appearance.font,
+                    app.settings.appearance.font_size,
+                );
+                if requested_font != font_settings {
+                    let dimensions = terminal
+                        .backend()
+                        .soft_backend
+                        .size()
+                        .unwrap_or(ratatui::layout::Size::new(120, 50));
+                    terminal.backend_mut().soft_backend = gui_fonts::backend(
+                        requested_font.0,
+                        requested_font.1,
+                        dimensions.width,
+                        dimensions.height,
+                    );
+                    let _ = terminal.clear();
+                    font_settings = requested_font;
+                }
+                // Resize before drawing: rendered hit areas and mouse coordinates must use the same grid.
+                let available = ui.available_size();
+                let backend = &mut terminal.backend_mut().soft_backend;
+                let columns =
+                    (available.x / backend.char_width.max(1) as f32).clamp(1.0, 512.0) as u16;
+                let rows =
+                    (available.y / backend.char_height.max(1) as f32).clamp(1.0, 256.0) as u16;
+                if backend.size().ok() != Some(ratatui::layout::Size::new(columns, rows)) {
+                    backend.resize(columns, rows);
+                }
                 if let Err(error) = terminal.draw(|frame| ui::render(&mut app, frame)) {
                     app.notice = format!(
                         "{}: {error}",
@@ -61,7 +83,23 @@ fn run() -> Result<()> {
                     );
                     app.notice_error = true;
                 }
-                let response = ui.add(terminal.backend_mut());
+                let backend = terminal.backend_mut();
+                let image = backend.to_egui_image();
+                let image_size = egui::vec2(image.size[0] as f32, image.size[1] as f32);
+                if let Some(texture) = &mut backend.text_handle {
+                    texture.set(image, egui::TextureOptions::NEAREST);
+                } else {
+                    backend.text_handle =
+                        Some(ctx.load_texture("almavorn", image, egui::TextureOptions::NEAREST));
+                }
+                let texture_id = backend
+                    .text_handle
+                    .as_ref()
+                    .expect("Terminal texture exists")
+                    .id();
+                let response = ui.add(
+                    egui::Image::new((texture_id, image_size)).sense(egui::Sense::click_and_drag()),
+                );
                 response.request_focus();
                 let dimensions = terminal.backend().soft_backend.size().ok();
                 let Some(dimensions) = dimensions else {

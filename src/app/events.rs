@@ -38,6 +38,14 @@ impl App {
                 }
             }
             Input::Scroll { x, y, delta } => {
+                if matches!(self.dialog, Some(Dialog::Settings { .. })) {
+                    self.settings_view.focus =
+                        if self.settings_view.menu_area.contains(Position::new(x, y)) {
+                            super::SettingsFocus::Menu
+                        } else {
+                            super::SettingsFocus::Parameters
+                        };
+                }
                 if self.dialog.is_some() {
                     self.scroll_dialog(delta);
                 } else if self.playlist_area.contains(Position::new(x, y)) {
@@ -67,11 +75,14 @@ impl App {
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
         if key.key == Key::Escape {
-            if self.dialog.take().is_none() {
+            if !self.close_dialog() {
                 self.query.clear();
                 self.refresh()?;
             }
             return Ok(());
+        }
+        if matches!(self.dialog, Some(Dialog::Settings { .. })) {
+            return self.settings_key(key);
         }
         if let Some(Dialog::CaptureBinding { index }) = self.dialog.as_ref() {
             let index = *index;
@@ -82,6 +93,8 @@ impl App {
                     Key::Tab
                         | Key::Up
                         | Key::Down
+                        | Key::Left
+                        | Key::Right
                         | Key::Home
                         | Key::End
                         | Key::PageUp
@@ -101,9 +114,10 @@ impl App {
             );
             self.settings.bindings[index].key = key;
             self.save_settings()?;
-            self.dialog = Some(Dialog::Settings {
-                selected: 6 + index,
-            });
+            self.settings_view.page = super::SettingsPage::Shortcuts;
+            self.settings_view.selected = 1 + index;
+            self.settings_view.focus = super::SettingsFocus::Parameters;
+            self.show_settings();
             return Ok(());
         }
         if self.dialog.is_some() {
@@ -225,7 +239,9 @@ impl App {
                     }
                 }
             }
-            Target::CloseDialog => self.dialog = None,
+            Target::CloseDialog => {
+                self.close_dialog();
+            }
             Target::Submit => self.submit()?,
             Target::Text(c) => {
                 if let Some(Dialog::Text(dialog)) = &mut self.dialog {
@@ -305,6 +321,33 @@ impl App {
             }
             Target::DialogScroll(delta) => self.scroll_dialog(delta),
             Target::Setting(index) => self.setting(index)?,
+            Target::SettingSelect(index) => {
+                self.select_setting(index);
+                if double {
+                    self.settings_help(index);
+                }
+            }
+            Target::SettingAdjust(index, direction) => self.adjust_setting(index, direction)?,
+            Target::SettingsPage(page) => self.open_settings_page(page),
+            Target::SettingHelp(index) => self.settings_help(index),
+            Target::BindingModifier(index) => {
+                if matches!(self.dialog, Some(Dialog::CaptureBinding { .. }))
+                    && let Some(value) = self.settings_view.binding_modifiers.get_mut(index)
+                {
+                    *value = !*value;
+                }
+            }
+            Target::BindingKey(key) => {
+                if matches!(self.dialog, Some(Dialog::CaptureBinding { .. })) {
+                    let [ctrl, alt, shift] = self.settings_view.binding_modifiers;
+                    self.key(KeyPress {
+                        key,
+                        ctrl,
+                        alt,
+                        shift,
+                    })?;
+                }
+            }
         }
         Ok(())
     }

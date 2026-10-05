@@ -149,7 +149,7 @@ impl App {
         match action {
             Quit => self.quit = true,
             Help => self.dialog = Some(Dialog::Help { offset: 0 }),
-            Settings => self.dialog = Some(Dialog::Settings { selected: 0 }),
+            Settings => self.open_settings_page(super::SettingsPage::General),
             TogglePlay => {
                 if self.current.is_some() {
                     if let Some(audio) = &self.audio {

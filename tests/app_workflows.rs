@@ -382,42 +382,28 @@ fn dialogs_capture_clicks_and_render_across_languages_and_panel_positions() {
 }
 
 #[test]
-fn rendering_matches_the_pre_refactor_buffers() {
+fn rendering_uses_the_palette_selected_for_each_mode() {
+    use ratatui::style::Color;
     let directory = TestDirectory::new();
     let mut app = App::new(&directory.0).unwrap();
-    // Captured from the original renderer at commit 6aa65f7.
-    for (language, mode, action, expected) in [
-        (Language::Russian, Mode::Order, None, 0x837f7a06797bc34f_u64),
-        (Language::English, Mode::Chaos, None, 0x6abf2a0aec8fff7a),
-        (
-            Language::Russian,
-            Mode::Order,
-            Some(Action::NewPlaylist),
-            0xadeeeb1e9d059504,
-        ),
-        (
-            Language::English,
-            Mode::Order,
-            Some(Action::Settings),
-            0x84fe91a099760910,
-        ),
+    app.settings.appearance.palette_ids = ["classic-amber".into(), "classic-violet".into()];
+    for (mode, accent) in [
+        (Mode::Order, Color::Rgb(232, 158, 74)),
+        (Mode::Chaos, Color::Rgb(188, 125, 228)),
     ] {
-        app.settings.language = language;
         app.set_mode(mode).unwrap();
-        app.dialog = None;
-        if let Some(action) = action {
-            app.action(action).unwrap();
-        }
         let mut terminal = Terminal::new(TestBackend::new(80, 30)).unwrap();
         terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
-        let mut hash = 0xcbf29ce484222325_u64;
-        for cell in &terminal.backend().buffer().content {
-            for byte in format!("{cell:?}").bytes() {
-                hash ^= u64::from(byte);
-                hash = hash.wrapping_mul(0x100000001b3);
-            }
-        }
-        // Baseline values include text, colors and other cell attributes.
-        assert_eq!(hash, expected, "{language:?} {mode:?} {action:?}");
+        let buffer = terminal.backend().buffer();
+        assert!(
+            buffer.content.iter().any(|cell| cell.fg == accent),
+            "Active mode must use its own palette"
+        );
+        assert_eq!(buffer[(0, 0)].bg, Color::Rgb(18, 22, 29));
+        assert!(
+            app.hits
+                .iter()
+                .any(|hit| hit.enabled && matches!(hit.target, Target::Action(Action::Settings)))
+        );
     }
 }

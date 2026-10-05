@@ -1,14 +1,15 @@
+mod bindings;
 mod browser;
 mod text;
 
-use self::{browser::browser_dialog, text::text_dialog};
+use self::{bindings::binding_dialog, browser::browser_dialog, text::text_dialog};
 use super::{
     theme::Palette,
-    widgets::{buttons, dialog_footer, modal, visible_offset},
+    widgets::{button, buttons, dialog_footer, modal, visible_offset},
 };
 use crate::{
     app::{App, Dialog, Hit, Target},
-    model::{Language, duration_text},
+    model::duration_text,
 };
 use ratatui::{
     Frame,
@@ -23,7 +24,35 @@ pub(super) fn render_dialog(
     palette: Palette,
 ) {
     let mut area = frame.area();
-    area.height = area.height.saturating_sub(3);
+    area.height = area
+        .height
+        .saturating_sub(if dialog.is_settings() { 6 } else { 3 });
+    if dialog.is_settings() && (area.width < 24 || area.height < 12) {
+        frame.render_widget(
+            Paragraph::new(app.text(
+                "Enlarge the window to edit this setting. Esc: back",
+                "Увеличьте окно для редактирования. Esc: назад",
+            ))
+            .style(palette.text())
+            .wrap(Wrap { trim: false }),
+            Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1)),
+        );
+        button(
+            frame,
+            app,
+            Rect::new(
+                area.x,
+                area.bottom().saturating_sub(1),
+                area.width,
+                area.height.min(1),
+            ),
+            app.text("Back", "Назад"),
+            Target::CloseDialog,
+            true,
+            palette,
+        );
+        return;
+    }
     match dialog {
         Dialog::Text(dialog) => text_dialog(frame, app, dialog, area, palette),
         Dialog::Browser(browser) => browser_dialog(frame, app, browser, area, palette),
@@ -136,83 +165,60 @@ pub(super) fn render_dialog(
                 palette,
             );
         }
-        Dialog::Settings { selected } => {
+        Dialog::Settings { .. } => super::settings::render_settings(frame, app, palette),
+        Dialog::ConfirmSettings { catalog, name, .. } => {
             let inner = modal(
                 frame,
                 area,
-                app.text("Settings · current mode", "Настройки · текущий режим")
+                app.text("Delete settings item?", "Удалить элемент настроек?")
                     .into(),
-                40,
+                14,
                 palette,
             );
-            let theme = &app.settings.themes[app.settings.mode.index()];
-            let mut rows = vec![
-                format!(
-                    "{}: {}",
-                    app.text("Language", "Язык"),
-                    if app.settings.language == Language::English {
-                        "English"
-                    } else {
-                        "Русский"
-                    }
-                ),
-                format!(
-                    "{}: {}",
-                    app.text("Theme", "Тема"),
+            let explanation = match catalog {
+                crate::app::SettingsCatalog::Profile => app.text("The profile will be removed. If active, another profile is activated. Your music library is kept.", "Профиль будет удалён. Если он активен, включится другой. Музыкальная библиотека сохраняется."),
+                crate::app::SettingsCatalog::Palette => app.text("The palette will be removed. Its themes and profiles use the first remaining palette.", "Палитра будет удалена. Использующие её темы и профили перейдут на первую оставшуюся палитру."),
+                crate::app::SettingsCatalog::Preset => app.text("The preset will be removed. Your current appearance is kept.", "Пресет будет удалён. Текущее оформление сохраняется."),
+            };
+            frame.render_widget(
+                Paragraph::new(format!(
+                    "{name}\n\n{explanation}\n\n{}",
                     app.text(
-                        if theme.light { "Light" } else { "Dark" },
-                        if theme.light {
-                            "Светлая"
-                        } else {
-                            "Темная"
-                        }
+                        "Enter: delete - Esc: cancel",
+                        "Enter: удалить - Esc: отмена"
                     )
+                ))
+                .style(palette.text())
+                .wrap(Wrap { trim: false }),
+                Rect::new(
+                    inner.x,
+                    inner.y,
+                    inner.width,
+                    inner.height.saturating_sub(2),
                 ),
-                format!(
-                    "{}: #{:02X}{:02X}{:02X}",
-                    app.text("Accent", "Акцент"),
-                    theme.accent[0],
-                    theme.accent[1],
-                    theme.accent[2]
-                ),
-                format!(
-                    "{}: {}",
-                    app.text("Playlists panel", "Панель плейлистов"),
-                    app.settings.playlist_placement.name(app.settings.language)
-                ),
-                format!(
-                    "{}: {}",
-                    app.text("Player panel", "Панель проигрывателя"),
-                    app.settings.player_placement.name(app.settings.language)
-                ),
-                app.text("Reset shortcuts", "Сбросить горячие клавиши")
-                    .into(),
-            ];
-            rows.extend(app.settings.bindings.iter().map(|binding| {
-                format!(
-                    "{} · {}",
-                    binding.key.label(),
-                    binding.action.name(app.settings.language)
-                )
-            }));
-            let capacity = inner.height.saturating_sub(3) as usize;
-            let offset = visible_offset(0, *selected, capacity, rows.len());
-            for (row, label) in rows.iter().enumerate().skip(offset).take(capacity) {
-                let rect = Rect::new(inner.x, inner.y + (row - offset) as u16, inner.width, 1);
-                frame.render_widget(
-                    Paragraph::new(label.clone()).style(if row == *selected {
-                        palette.text().bg(palette.selection)
-                    } else {
-                        palette.text()
-                    }),
-                    rect,
-                );
-                app.hits.push(Hit {
-                    area: rect,
-                    target: Target::Setting(row),
-                    enabled: true,
-                });
-            }
+            );
+            buttons(
+                frame,
+                app,
+                Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2),
+                vec![
+                    (app.text("Delete", "Удалить").into(), Target::Submit, true),
+                    (
+                        app.text("Cancel", "Отмена").into(),
+                        Target::CloseDialog,
+                        true,
+                    ),
+                ],
+                palette,
+            );
+        }
+        Dialog::SettingsHelp {
+            title,
+            description,
+            offset,
+        } => {
+            let inner = modal(frame, area, title.clone(), 22, palette);
+            frame.render_widget(Paragraph::new(format!("{description}\n\n{}", app.text("Tab: switch panel. Arrows: select/change. Enter: edit/apply. Esc: return to settings.", "Tab: сменить панель. Стрелки: выбор и значение. Enter: изменить/применить. Esc: вернуться в настройки."))).style(palette.text()).wrap(Wrap {trim:false}).scroll(((*offset).min(u16::MAX as usize) as u16, 0)), Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)));
             dialog_footer(frame, app, inner, palette);
         }
         Dialog::Help { offset } => {
@@ -300,31 +306,7 @@ pub(super) fn render_dialog(
             dialog_footer(frame, app, inner, palette);
         }
         Dialog::CaptureBinding { index } => {
-            let name = app
-                .settings
-                .bindings
-                .get(*index)
-                .map(|binding| binding.action.name(app.settings.language))
-                .unwrap_or("");
-            let inner = modal(
-                frame,
-                area,
-                app.text("Set shortcut", "Назначить сочетание").into(),
-                10,
-                palette,
-            );
-            frame.render_widget(Paragraph::new(format!("{name}\n\n{}",app.text("Press a new shortcut. Esc cancels. Existing shortcuts and navigation keys are protected.","Нажмите новое сочетание. Esc — отмена. Занятые сочетания и клавиши навигации защищены."))).style(palette.text()).wrap(Wrap{trim:false}),inner);
-            buttons(
-                frame,
-                app,
-                Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
-                vec![(
-                    app.text("Cancel", "Отмена").into(),
-                    Target::CloseDialog,
-                    true,
-                )],
-                palette,
-            );
+            binding_dialog(frame, app, *index, area, palette);
         }
     }
 }

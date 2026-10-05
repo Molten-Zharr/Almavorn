@@ -1,4 +1,4 @@
-use super::{App, Browser, bounded, database::DatabaseOutcome};
+use super::{App, Browser, SettingsCatalog, SettingsEdit, bounded, database::DatabaseOutcome};
 use crate::model::{Language, Playlist, Track};
 use anyhow::{Context, Result};
 
@@ -10,6 +10,7 @@ pub enum TextPurpose {
     Search,
     DeletePlaylist(i64, String),
     Accent,
+    Settings(SettingsEdit),
 }
 
 #[derive(Clone)]
@@ -40,6 +41,16 @@ pub enum Dialog {
     Settings {
         selected: usize,
     },
+    ConfirmSettings {
+        catalog: SettingsCatalog,
+        id: String,
+        name: String,
+    },
+    SettingsHelp {
+        title: String,
+        description: String,
+        offset: usize,
+    },
     Metadata {
         track: Track,
         offset: usize,
@@ -47,6 +58,22 @@ pub enum Dialog {
     CaptureBinding {
         index: usize,
     },
+}
+
+impl Dialog {
+    pub(crate) fn is_settings(&self) -> bool {
+        matches!(
+            self,
+            Self::Settings { .. }
+                | Self::Text(TextDialog {
+                    purpose: TextPurpose::Settings(_),
+                    ..
+                })
+                | Self::ConfirmSettings { .. }
+                | Self::SettingsHelp { .. }
+                | Self::CaptureBinding { .. }
+        )
+    }
 }
 
 impl App {
@@ -63,19 +90,28 @@ impl App {
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
         let transfer_length = self.transfer_destinations().len();
-        let settings_length = 6 + self.settings.bindings.len();
+        if matches!(self.dialog, Some(Dialog::Settings { .. })) {
+            self.settings_scroll(i64::from(direction));
+            return;
+        }
         match &mut self.dialog {
             Some(Dialog::Browser(browser)) => {
                 browser.selected =
                     bounded(browser.selected, direction as i64, browser.entries.len())
             }
+            Some(Dialog::CaptureBinding { .. }) => {
+                self.settings_view.binding_offset = bounded(
+                    self.settings_view.binding_offset,
+                    i64::from(direction) * 8,
+                    crate::input::Key::shortcut_choices().count(),
+                );
+            }
             Some(Dialog::Transfer { selected, .. }) => {
                 *selected = bounded(*selected, direction as i64, transfer_length)
             }
-            Some(Dialog::Settings { selected }) => {
-                *selected = bounded(*selected, direction as i64, settings_length)
-            }
-            Some(Dialog::Help { offset }) | Some(Dialog::Metadata { offset, .. }) => {
+            Some(Dialog::Help { offset })
+            | Some(Dialog::Metadata { offset, .. })
+            | Some(Dialog::SettingsHelp { offset, .. }) => {
                 *offset = bounded(*offset, direction as i64, 1000)
             }
             _ => {}
@@ -148,6 +184,9 @@ impl App {
                             self.save_settings()
                         })
                     }
+                    TextPurpose::Settings(edit) => {
+                        self.finish_settings_edit(edit.clone(), &dialog.text)
+                    }
                 };
                 if let Err(error) = result {
                     self.dialog = Some(Dialog::Text(dialog));
@@ -201,44 +240,14 @@ impl App {
                 self.browser_open()?;
             }
             Some(Dialog::Settings { selected }) => self.setting(selected)?,
+            Some(Dialog::ConfirmSettings { catalog, id, name }) => {
+                if let Err(error) = self.delete_settings_item(catalog, &id) {
+                    self.dialog = Some(Dialog::ConfirmSettings { catalog, id, name });
+                    return Err(error);
+                }
+            }
             _ => {}
         }
-        Ok(())
-    }
-
-    pub(super) fn setting(&mut self, index: usize) -> Result<()> {
-        match index {
-            0 => {
-                self.settings.language = if self.settings.language == Language::Russian {
-                    Language::English
-                } else {
-                    Language::Russian
-                }
-            }
-            1 => {
-                let theme = &mut self.settings.themes[self.settings.mode.index()];
-                theme.light = !theme.light;
-            }
-            2 => {
-                let accent = self.settings.themes[self.settings.mode.index()].accent;
-                self.text_dialog(
-                    TextPurpose::Accent,
-                    format!("{:02X}{:02X}{:02X}", accent[0], accent[1], accent[2]),
-                );
-                return Ok(());
-            }
-            3 => self.settings.playlist_placement = self.settings.playlist_placement.next(),
-            4 => self.settings.player_placement = self.settings.player_placement.next(),
-            5 => self.settings.bindings = crate::input::default_bindings(),
-            _ => {
-                if index - 6 < self.settings.bindings.len() {
-                    self.dialog = Some(Dialog::CaptureBinding { index: index - 6 });
-                }
-                return Ok(());
-            }
-        }
-        self.save_settings()?;
-        self.dialog = Some(Dialog::Settings { selected: index });
         Ok(())
     }
 }
