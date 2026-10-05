@@ -30,6 +30,8 @@ anyhow = "1"
 dirs = "6"
 lofty = "0.25.4"
 rodio = { version = "0.22.2", default-features = false, features = ["playback", "symphonia-all"] }
+duckdb = { version = "~1.10506.0", default-features = false, features = ["bundled"] }
+# SQLite is used only to migrate and lock existing libraries; music data is stored in DuckDB.
 rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

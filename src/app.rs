@@ -2,7 +2,7 @@ use crate::{
     audio::Audio,
     input::{Action, Input, Key, KeyPress},
     media,
-    model::{Entry, ImportedTrack, Language, Mode, Playlist, PlaylistKind, Settings, Track},
+    model::{Entry, Language, Mode, Playlist, PlaylistKind, Settings, Track},
     store::{Change, Store},
 };
 use anyhow::{Context, Result, ensure};
@@ -15,7 +15,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc::{Receiver, TryRecvError},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -180,14 +180,13 @@ pub struct Hit {
 }
 
 struct ImportOutcome {
-    tracks: Vec<ImportedTrack>,
+    change: Result<Change>,
     errors: Vec<String>,
     skipped: usize,
 }
 struct ImportJob {
     receiver: Receiver<ImportOutcome>,
     target: i64,
-    unlocked: bool,
     cancel: Arc<AtomicBool>,
     progress: Arc<AtomicUsize>,
 }
@@ -218,8 +217,6 @@ pub struct App {
     audio: Option<Audio>,
     import: Option<ImportJob>,
     histories: HashMap<&'static str, (Vec<Change>, Vec<Change>)>,
-    data_version: i64,
-    refreshed: Instant,
     pointer: Position,
 }
 
@@ -242,7 +239,6 @@ impl App {
             .iter()
             .find(|playlist| playlist.mode == settings.mode)
             .map(|playlist| playlist.id);
-        let data_version = store.data_version()?;
         let selected_entry = playlists
             .iter()
             .find(|playlist| Some(playlist.id) == selected_playlist)
@@ -280,8 +276,6 @@ impl App {
             audio: None,
             import: None,
             histories: HashMap::new(),
-            data_version,
-            refreshed: Instant::now(),
             pointer: Position::default(),
         })
     }
@@ -517,7 +511,7 @@ impl App {
             None
         }
     }
-    fn save_settings(&self) -> Result<()> {
+    fn save_settings(&mut self) -> Result<()> {
         self.store.save_settings(&self.settings)
     }
     fn message(&mut self, text: String) {
@@ -556,9 +550,12 @@ impl App {
             "Use a six-digit color, for example E89E4A" => {
                 Some("Введите шесть цифр цвета, например E89E4A.")
             }
-            "Playlist changed in another window; undo is no longer safe" => {
-                Some("Плейлист изменен в другом окне. Отмена могла бы затронуть чужие изменения.")
-            }
+            "Playlist changed concurrently; undo is no longer safe" => Some(
+                "Плейлист изменен другой задачей. Отмена могла бы затронуть более новые изменения.",
+            ),
+            "Library changed concurrently; no changes were saved. Repeat the action" => Some(
+                "Библиотека изменена другой задачей. Изменения не сохранены. Повторите действие.",
+            ),
             "Audio output unavailable" => {
                 Some("Устройство вывода звука недоступно. Проверьте подключение и настройки звука.")
             }
@@ -568,7 +565,7 @@ impl App {
             _ => None,
         };
         let reason = if self.settings.language == Language::Russian {
-            if original.contains("UNIQUE constraint failed: playlists") {
+            if original.contains("Duplicate key") && original.contains("name_fold:") {
                 "Плейлист с таким именем уже существует.".to_owned()
             } else {
                 russian.unwrap_or(&original).to_owned()
@@ -610,7 +607,20 @@ impl App {
         if change.scope != "order" && change.before != change.after {
             let history = self.histories.entry(change.scope).or_default();
             history.1.clear();
-            history.0.push(change);
+            // A background import may commit before its result reaches the interface.
+            // Never append an older change after a newer edit in the same scope.
+            if self.store.snapshot(change.scope)? == change.after {
+                if history
+                    .0
+                    .last()
+                    .is_some_and(|previous| previous.after != change.before)
+                {
+                    history.0.clear();
+                }
+                history.0.push(change);
+            } else {
+                history.0.clear();
+            }
             if history.0.len() > 100 {
                 history.0.remove(0);
             }
@@ -628,9 +638,7 @@ impl App {
         match outcome {
             Some(Ok(outcome)) => {
                 let job = self.import.take().expect("import is present");
-                let change = self
-                    .store
-                    .add_tracks(job.target, &outcome.tracks, job.unlocked)?;
+                let change = outcome.change?;
                 let added = change
                     .after
                     .playlists
@@ -683,22 +691,6 @@ impl App {
         {
             self.current = None;
             return Err(error);
-        }
-        if self.refreshed.elapsed() >= Duration::from_millis(700) {
-            self.refreshed = Instant::now();
-            let version = self.store.data_version()?;
-            if version != self.data_version {
-                self.data_version = version;
-                self.histories.clear();
-                self.refresh()?;
-                self.message(
-                    self.text(
-                        "Library refreshed from another window",
-                        "Библиотека обновлена из другого окна",
-                    )
-                    .into(),
-                );
-            }
         }
         Ok(())
     }
@@ -1509,16 +1501,16 @@ impl App {
             .map(|entry| entry.track.path.clone())
             .collect();
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let mut worker_store = self.store.try_clone()?;
+        let unlocked = self.editing;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let progress = Arc::new(AtomicUsize::new(0));
         let worker_progress = progress.clone();
         std::thread::spawn(move || {
-            let mut outcome = ImportOutcome {
-                tracks: Vec::new(),
-                errors: Vec::new(),
-                skipped: 0,
-            };
+            let mut tracks = Vec::new();
+            let mut errors = Vec::new();
+            let mut skipped = 0;
             let mut candidates = Vec::new();
             for path in paths {
                 if worker_cancel.load(Ordering::Relaxed) {
@@ -1528,9 +1520,9 @@ impl App {
                     match media::audio_files(&path) {
                         Ok(files) => candidates.extend(files),
                         Err(error) => {
-                            outcome.skipped += 1;
-                            if outcome.errors.len() < 5 {
-                                outcome.errors.push(format!("{}: {error}", path.display()));
+                            skipped += 1;
+                            if errors.len() < 5 {
+                                errors.push(format!("{}: {error}", path.display()));
                             }
                         }
                     }
@@ -1548,32 +1540,39 @@ impl App {
                     .ok()
                     .is_some_and(|path| seen.contains(&path))
                 {
-                    outcome.skipped += 1;
+                    skipped += 1;
                     continue;
                 }
                 match media::read_track(&path) {
                     Ok(track) => {
                         if seen.insert(track.path.clone()) {
-                            outcome.tracks.push(track);
+                            tracks.push(track);
                         } else {
-                            outcome.skipped += 1;
+                            skipped += 1;
                         }
                     }
                     Err(error) => {
-                        outcome.skipped += 1;
-                        if outcome.errors.len() < 5 {
-                            outcome.errors.push(error.to_string());
+                        skipped += 1;
+                        if errors.len() < 5 {
+                            errors.push(error.to_string());
                         }
                     }
                 }
                 worker_progress.fetch_add(1, Ordering::Relaxed);
             }
-            let _ = sender.send(outcome);
+            if worker_cancel.load(Ordering::Relaxed) {
+                return;
+            }
+            let change = worker_store.add_tracks(target, &tracks, unlocked);
+            let _ = sender.send(ImportOutcome {
+                change,
+                errors,
+                skipped,
+            });
         });
         self.import = Some(ImportJob {
             receiver,
             target,
-            unlocked: self.editing,
             cancel,
             progress,
         });
