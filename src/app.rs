@@ -3,7 +3,7 @@ use crate::{
     input::{Action, Input, Key, KeyPress},
     media,
     model::{Entry, Language, Mode, Playlist, PlaylistKind, Settings, Track},
-    store::{Change, Store},
+    store::{Change, Snapshot, Store},
 };
 use anyhow::{Context, Result, ensure};
 use ratatui::layout::{Position, Rect};
@@ -13,10 +13,30 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        mpsc::{Receiver, TryRecvError},
     },
     time::Duration,
 };
+use tokio::{
+    runtime::{Builder, Runtime},
+    sync::oneshot,
+};
+
+type Background<T> = oneshot::Receiver<Result<T>>;
+
+fn background<T: Send + 'static>(
+    runtime: &Runtime,
+    operation: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Background<T> {
+    let (sender, receiver) = oneshot::channel();
+    runtime.spawn(async move {
+        let result = tokio::task::spawn_blocking(operation)
+            .await
+            .context("Background operation failed")
+            .and_then(|result| result);
+        let _ = sender.send(result);
+    });
+    receiver
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -65,6 +85,7 @@ pub enum TextPurpose {
     Accent,
 }
 
+#[derive(Clone)]
 pub struct TextDialog {
     pub purpose: TextPurpose,
     pub text: String,
@@ -73,10 +94,12 @@ pub struct TextDialog {
     pub selected_all: bool,
 }
 
+#[derive(Clone)]
 pub struct BrowserEntry {
     pub path: PathBuf,
     pub directory: bool,
 }
+#[derive(Clone)]
 pub struct Browser {
     pub directory: PathBuf,
     pub entries: Vec<BrowserEntry>,
@@ -122,6 +145,7 @@ impl Browser {
     }
 }
 
+#[derive(Clone)]
 pub enum Dialog {
     Text(TextDialog),
     Browser(Browser),
@@ -180,19 +204,38 @@ pub struct Hit {
 }
 
 struct ImportOutcome {
-    change: Result<Change>,
+    change: Change,
     errors: Vec<String>,
     skipped: usize,
 }
 struct ImportJob {
-    receiver: Receiver<ImportOutcome>,
+    receiver: Background<ImportOutcome>,
     target: i64,
     cancel: Arc<AtomicBool>,
     progress: Arc<AtomicUsize>,
 }
 
+enum DatabaseOutcome {
+    Changed(Change),
+    Created(Change),
+    Renamed,
+    Restored { change: Change, redo: bool },
+}
+struct DatabaseJob {
+    receiver: Background<DatabaseOutcome>,
+    recovery: Option<Dialog>,
+    undo: Option<(Change, bool)>,
+    selection: Option<i64>,
+    mode: Mode,
+}
+struct LibraryJob {
+    receiver: Background<Vec<Playlist>>,
+    revision: u64,
+}
+
 pub struct App {
     pub store: Store,
+    runtime: Option<Runtime>,
     pub settings: Settings,
     pub playlists: Vec<Playlist>,
     pub selected_playlist: Option<i64>,
@@ -216,12 +259,26 @@ pub struct App {
     queue_index: usize,
     audio: Option<Audio>,
     import: Option<ImportJob>,
+    database: Option<DatabaseJob>,
+    library: Option<LibraryJob>,
+    library_revision: u64,
+    pending_selection: Option<(i64, Mode)>,
+    settings_job: Option<Background<()>>,
+    pending_settings: Option<Settings>,
+    settings_failed: bool,
     histories: HashMap<&'static str, (Vec<Change>, Vec<Change>)>,
     pointer: Position,
 }
 
 impl App {
     pub fn new(directory: &Path) -> Result<Self> {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(2)
+            .max_blocking_threads(4)
+            .thread_name("almavorn-worker")
+            .enable_all()
+            .build()
+            .context("Cannot start background workers")?;
         let store = Store::open(directory)?;
         let mut settings = store.settings()?;
         settings.volume = settings.volume.clamp(0.0, 1.0);
@@ -245,8 +302,10 @@ impl App {
             .and_then(|playlist| playlist.entries.first())
             .map(|entry| entry.id);
         let language = settings.language;
+        let library_revision = store.revision();
         Ok(Self {
             store,
+            runtime: Some(runtime),
             settings,
             playlists,
             selected_playlist,
@@ -275,6 +334,13 @@ impl App {
             queue_index: 0,
             audio: None,
             import: None,
+            database: None,
+            library: None,
+            library_revision,
+            pending_selection: None,
+            settings_job: None,
+            pending_settings: None,
+            settings_failed: false,
             histories: HashMap::new(),
             pointer: Position::default(),
         })
@@ -346,6 +412,12 @@ impl App {
             .find(|entry| Some(entry.id) == self.selected_entry)
     }
     pub fn busy(&self) -> bool {
+        self.import.is_some() || self.database_busy()
+    }
+    fn database_busy(&self) -> bool {
+        self.database.is_some() || self.library_revision != self.store.revision()
+    }
+    pub fn importing(&self) -> bool {
         self.import.is_some()
     }
     pub fn progress(&self) -> usize {
@@ -374,7 +446,7 @@ impl App {
 
     pub fn allowed(&self, action: Action) -> bool {
         use Action::*;
-        if self.busy()
+        if self.database_busy()
             && matches!(
                 action,
                 AddFiles
@@ -391,6 +463,14 @@ impl App {
                     | ToggleEdit
                     | ToggleDesk
                     | SwitchMode
+            )
+        {
+            return false;
+        }
+        if self.importing()
+            && matches!(
+                action,
+                AddFiles | AddFolder | AddNew | ToggleEdit | ToggleDesk | SwitchMode
             )
         {
             return false;
@@ -512,7 +592,47 @@ impl App {
         }
     }
     fn save_settings(&mut self) -> Result<()> {
-        self.store.save_settings(&self.settings)
+        self.pending_settings = Some(self.settings.clone());
+        self.settings_failed = false;
+        self.start_settings()
+    }
+    fn runtime(&self) -> &Runtime {
+        self.runtime
+            .as_ref()
+            .expect("runtime is alive while the interface runs")
+    }
+    fn start_settings(&mut self) -> Result<()> {
+        if !self.settings_failed
+            && self.settings_job.is_none()
+            && let Some(settings) = &self.pending_settings
+        {
+            let mut store = self.store.try_clone()?;
+            let settings = settings.clone();
+            self.settings_job = Some(background(self.runtime(), move || {
+                store.save_settings(&settings)
+            }));
+            self.pending_settings = None;
+        }
+        Ok(())
+    }
+    fn start_database(
+        &mut self,
+        recovery: Option<Dialog>,
+        operation: impl FnOnce(&mut Store) -> Result<DatabaseOutcome> + Send + 'static,
+    ) -> Result<()> {
+        ensure!(
+            !self.database_busy(),
+            "Wait for the current library operation to finish"
+        );
+        let mut store = self.store.try_clone()?;
+        self.database = Some(DatabaseJob {
+            receiver: background(self.runtime(), move || operation(&mut store)),
+            recovery,
+            undo: None,
+            selection: self.selected_playlist,
+            mode: self.settings.mode,
+        });
+        Ok(())
     }
     fn message(&mut self, text: String) {
         self.notice = text;
@@ -556,6 +676,15 @@ impl App {
             "Library changed concurrently; no changes were saved. Repeat the action" => Some(
                 "Библиотека изменена другой задачей. Изменения не сохранены. Повторите действие.",
             ),
+            "Wait for the current library operation to finish" => {
+                Some("Дождитесь завершения текущей операции с библиотекой.")
+            }
+            "Background operation failed" => {
+                Some("Фоновая операция завершилась с ошибкой. Повторите действие.")
+            }
+            "Background operation was interrupted" => {
+                Some("Фоновая операция прервана. Повторите действие.")
+            }
             "Audio output unavailable" => {
                 Some("Устройство вывода звука недоступно. Проверьте подключение и настройки звука.")
             }
@@ -581,7 +710,6 @@ impl App {
         self.notice_error = true;
     }
     fn refresh(&mut self) -> Result<()> {
-        self.playlists = self.store.playlists()?;
         if !self
             .visible_playlists()
             .iter()
@@ -607,25 +735,166 @@ impl App {
         if change.scope != "order" && change.before != change.after {
             let history = self.histories.entry(change.scope).or_default();
             history.1.clear();
-            // A background import may commit before its result reaches the interface.
-            // Never append an older change after a newer edit in the same scope.
-            if self.store.snapshot(change.scope)? == change.after {
-                if history
-                    .0
-                    .last()
-                    .is_some_and(|previous| previous.after != change.before)
-                {
-                    history.0.clear();
-                }
-                history.0.push(change);
-            } else {
+            // Results can arrive in a different order from commits. Keep only a connected history.
+            if history
+                .0
+                .last()
+                .is_some_and(|previous| previous.after != change.before)
+            {
                 history.0.clear();
             }
+            history.0.push(change);
             if history.0.len() > 100 {
                 history.0.remove(0);
             }
         }
-        self.refresh()
+        Ok(())
+    }
+    fn validate_history(&mut self) {
+        for (scope, (undo, redo)) in &mut self.histories {
+            let expected = undo
+                .last()
+                .map(|change| &change.after)
+                .or_else(|| redo.last().map(|change| &change.before));
+            if expected
+                .is_some_and(|expected| *expected != Snapshot::from_library(&self.playlists, scope))
+            {
+                undo.clear();
+                redo.clear();
+            }
+        }
+    }
+    fn tick_database(&mut self) -> Result<()> {
+        let result = self.database.as_mut().map(|job| job.receiver.try_recv());
+        let result = match result {
+            Some(Ok(result)) => result,
+            Some(Err(oneshot::error::TryRecvError::Closed)) => {
+                Err(anyhow::anyhow!("Background operation was interrupted"))
+            }
+            _ => return Ok(()),
+        };
+        let job = self.database.take().expect("database operation is present");
+        match result {
+            Ok(DatabaseOutcome::Changed(change)) => self.remember(change)?,
+            Ok(DatabaseOutcome::Created(change)) => {
+                let new = change
+                    .after
+                    .playlists
+                    .iter()
+                    .find(|playlist| {
+                        !change
+                            .before
+                            .playlists
+                            .iter()
+                            .any(|previous| previous.id == playlist.id)
+                    })
+                    .map(|playlist| playlist.id);
+                self.remember(change)?;
+                if self.selected_playlist == job.selection && self.settings.mode == job.mode {
+                    self.pending_selection = new.map(|id| (id, job.mode));
+                }
+            }
+            Ok(DatabaseOutcome::Renamed) => {}
+            Ok(DatabaseOutcome::Restored { change, redo }) => {
+                let history = self.histories.entry(change.scope).or_default();
+                if redo {
+                    history.0.push(change);
+                } else {
+                    history.1.push(change);
+                }
+            }
+            Err(error) => {
+                if let Some((change, redo)) = job.undo {
+                    let history = self.histories.entry(change.scope).or_default();
+                    if redo {
+                        history.1.push(change);
+                    } else {
+                        history.0.push(change);
+                    }
+                }
+                if let Some(dialog) = job.recovery {
+                    self.dialog = Some(dialog);
+                }
+                if self.import.is_none() {
+                    self.validate_history();
+                }
+                return Err(error);
+            }
+        }
+        self.message(self.text("Library updated", "Библиотека обновлена").into());
+        if self.library_revision == self.store.revision() && self.import.is_none() {
+            self.validate_history();
+        }
+        Ok(())
+    }
+    fn tick_library(&mut self) -> Result<()> {
+        // A read can finish before the corresponding command result arrives.
+        // Apply its deferred selection even when no additional reload is required.
+        if self.library_revision == self.store.revision()
+            && let Some((id, mode)) = self.pending_selection.take()
+            && self.settings.mode == mode
+        {
+            self.selected_playlist = Some(id);
+            self.focus = Focus::Tracks;
+            self.refresh()?;
+        }
+        let result = self.library.as_mut().map(|job| job.receiver.try_recv());
+        match result {
+            Some(Ok(result)) => {
+                let job = self.library.take().expect("library read is present");
+                let playlists = result?;
+                if job.revision == self.store.revision() {
+                    self.playlists = playlists;
+                    self.library_revision = job.revision;
+                    if let Some((id, mode)) = self.pending_selection.take()
+                        && self.settings.mode == mode
+                    {
+                        self.selected_playlist = Some(id);
+                        self.focus = Focus::Tracks;
+                    }
+                    self.refresh()?;
+                    if self.database.is_none() && self.import.is_none() {
+                        self.validate_history();
+                    }
+                }
+            }
+            Some(Err(oneshot::error::TryRecvError::Closed)) => {
+                self.library = None;
+                anyhow::bail!("Background operation was interrupted");
+            }
+            _ => {}
+        }
+        if self.library.is_none() && self.library_revision != self.store.revision() {
+            let store = self.store.try_clone()?;
+            self.library = Some(LibraryJob {
+                revision: store.revision(),
+                receiver: background(self.runtime(), move || store.playlists()),
+            });
+        }
+        Ok(())
+    }
+    fn tick_settings(&mut self) -> Result<()> {
+        let result = self.settings_job.as_mut().map(|job| job.try_recv());
+        match result {
+            Some(Ok(result)) => {
+                self.settings_job = None;
+                if let Err(error) = result {
+                    self.pending_settings
+                        .get_or_insert_with(|| self.settings.clone());
+                    self.settings_failed = true;
+                    return Err(error);
+                }
+            }
+            Some(Err(oneshot::error::TryRecvError::Closed)) => {
+                self.settings_job = None;
+                self.pending_settings
+                    .get_or_insert_with(|| self.settings.clone());
+                self.settings_failed = true;
+                anyhow::bail!("Background operation was interrupted");
+            }
+            _ => {}
+        }
+        self.start_settings()
     }
 
     pub fn tick(&mut self) {
@@ -634,11 +903,26 @@ impl App {
         }
     }
     fn tick_inner(&mut self) -> Result<()> {
-        let outcome = self.import.as_ref().map(|job| job.receiver.try_recv());
+        self.tick_database()?;
+        self.tick_settings()?;
+        let outcome = self.import.as_mut().map(|job| job.receiver.try_recv());
         match outcome {
             Some(Ok(outcome)) => {
                 let job = self.import.take().expect("import is present");
-                let change = outcome.change?;
+                let outcome = outcome?;
+                let change = outcome.change;
+                let mode = change
+                    .after
+                    .playlists
+                    .iter()
+                    .find(|playlist| playlist.id == job.target)
+                    .map(|playlist| {
+                        if playlist.mode == "chaos" {
+                            Mode::Chaos
+                        } else {
+                            Mode::Order
+                        }
+                    });
                 let added = change
                     .after
                     .playlists
@@ -654,16 +938,12 @@ impl App {
                             .sum(),
                     );
                 self.remember(change)?;
-                if let Some(playlist) = self
-                    .playlists
-                    .iter()
-                    .find(|playlist| playlist.id == job.target)
+                if self.pending_selection.is_none()
+                    && let Some(mode) = mode
                 {
-                    self.settings.mode = playlist.mode;
+                    self.settings.mode = mode;
+                    self.pending_selection = Some((job.target, mode));
                 }
-                self.selected_playlist = Some(job.target);
-                self.focus = Focus::Tracks;
-                self.refresh()?;
                 self.save_settings()?;
                 let mut message = format!(
                     "{}: {added}. {}: {}",
@@ -679,13 +959,17 @@ impl App {
                 }
                 self.message(message);
                 self.notice_error = !outcome.errors.is_empty();
+                if self.library_revision == self.store.revision() && self.database.is_none() {
+                    self.validate_history();
+                }
             }
-            Some(Err(TryRecvError::Disconnected)) => {
+            Some(Err(oneshot::error::TryRecvError::Closed)) => {
                 self.import = None;
                 anyhow::bail!("Music import was interrupted");
             }
             _ => {}
         }
+        self.tick_library()?;
         if self.audio.as_mut().is_some_and(Audio::finished)
             && let Err(error) = self.next(1, false)
         {
@@ -1049,16 +1333,22 @@ impl App {
             MoveUp | MoveDown => {
                 let direction = if action == MoveUp { -1 } else { 1 };
                 if let Some(playlist) = self.selected_playlist {
-                    let change = if self.focus == Focus::Playlists {
-                        self.store
-                            .move_playlist(playlist, direction, self.editing)?
-                    } else if let Some(entry) = self.selected_entry {
-                        self.store
-                            .move_entry(playlist, entry, direction, self.editing)?
-                    } else {
-                        return Ok(());
-                    };
-                    self.remember(change)?;
+                    let focus = self.focus;
+                    let entry = self.selected_entry;
+                    let unlocked = self.editing;
+                    self.start_database(None, move |store| {
+                        let change = if focus == Focus::Playlists {
+                            store.move_playlist(playlist, direction, unlocked)?
+                        } else {
+                            store.move_entry(
+                                playlist,
+                                entry.context("Select a track first")?,
+                                direction,
+                                unlocked,
+                            )?
+                        };
+                        Ok(DatabaseOutcome::Changed(change))
+                    })?;
                 }
             }
             Transfer => {
@@ -1090,25 +1380,34 @@ impl App {
                         }
                     });
                     if let Some(change) = change {
-                        let result = if action == Undo {
-                            self.store.restore(scope, &change.after, &change.before)
-                        } else {
-                            self.store.restore(scope, &change.before, &change.after)
-                        };
-                        let history = self.histories.entry(scope).or_default();
-                        if result.is_ok() {
-                            if action == Undo {
-                                history.1.push(change);
+                        let redo = action == Redo;
+                        let recovery = change.clone();
+                        let result = self.start_database(None, move |store| {
+                            let (expected, replacement) = if redo {
+                                (&change.before, &change.after)
                             } else {
-                                history.0.push(change);
+                                (&change.after, &change.before)
+                            };
+                            store.restore(scope, expected, replacement)?;
+                            Ok(DatabaseOutcome::Restored { change, redo })
+                        });
+                        match result {
+                            Ok(()) => {
+                                self.database
+                                    .as_mut()
+                                    .expect("database request is present")
+                                    .undo = Some((recovery, redo))
                             }
-                        } else if action == Undo {
-                            history.0.push(change);
-                        } else {
-                            history.1.push(change);
+                            Err(error) => {
+                                let history = self.histories.entry(scope).or_default();
+                                if redo {
+                                    history.1.push(recovery);
+                                } else {
+                                    history.0.push(recovery);
+                                }
+                                return Err(error);
+                            }
                         }
-                        result?;
-                        self.refresh()?;
                     }
                 }
             }
@@ -1348,46 +1647,42 @@ impl App {
     fn submit(&mut self) -> Result<()> {
         match self.dialog.take() {
             Some(Dialog::Text(dialog)) => {
+                let recovery = Some(Dialog::Text(dialog.clone()));
+                let text = dialog.text.clone();
+                let mode = self.settings.mode;
+                let unlocked = self.editing;
                 let result = match &dialog.purpose {
-                    TextPurpose::Create => self
-                        .store
-                        .create_playlist(&dialog.text, self.settings.mode)
-                        .and_then(|change| {
-                            let new = change
-                                .after
-                                .playlists
-                                .iter()
-                                .find(|playlist| {
-                                    !change
-                                        .before
-                                        .playlists
-                                        .iter()
-                                        .any(|previous| previous.id == playlist.id)
-                                })
-                                .map(|playlist| playlist.id);
-                            self.remember(change)?;
-                            if let Some(id) = new {
-                                self.select_playlist(id);
-                                self.focus = Focus::Tracks;
-                            }
-                            Ok(())
-                        }),
-                    TextPurpose::RenamePlaylist(id) => self
-                        .store
-                        .rename_playlist(*id, &dialog.text, self.editing)
-                        .and_then(|change| self.remember(change)),
-                    TextPurpose::RenameTrack(track, playlist) => self
-                        .store
-                        .rename_track(*track, &dialog.text, *playlist, self.editing)
-                        .and_then(|()| self.refresh()),
+                    TextPurpose::Create => self.start_database(recovery, move |store| {
+                        Ok(DatabaseOutcome::Created(
+                            store.create_playlist(&text, mode)?,
+                        ))
+                    }),
+                    TextPurpose::RenamePlaylist(id) => {
+                        let id = *id;
+                        self.start_database(recovery, move |store| {
+                            Ok(DatabaseOutcome::Changed(
+                                store.rename_playlist(id, &text, unlocked)?,
+                            ))
+                        })
+                    }
+                    TextPurpose::RenameTrack(track, playlist) => {
+                        let (track, playlist) = (*track, *playlist);
+                        self.start_database(recovery, move |store| {
+                            store.rename_track(track, &text, playlist, unlocked)?;
+                            Ok(DatabaseOutcome::Renamed)
+                        })
+                    }
                     TextPurpose::DeletePlaylist(id, expected) => {
                         if &dialog.text != expected {
                             self.dialog = Some(Dialog::Text(dialog));
                             anyhow::bail!("Enter the exact playlist name");
                         }
-                        self.store
-                            .delete_playlist(*id, &dialog.text, self.editing)
-                            .and_then(|change| self.remember(change))
+                        let id = *id;
+                        self.start_database(recovery, move |store| {
+                            Ok(DatabaseOutcome::Changed(
+                                store.delete_playlist(id, &text, unlocked)?,
+                            ))
+                        })
                     }
                     TextPurpose::Search => {
                         self.query = dialog.text.clone();
@@ -1416,29 +1711,42 @@ impl App {
                 playlist,
                 entry,
                 title,
-            }) => match self.store.remove_entry(playlist, entry, self.editing) {
-                Ok(change) => self.remember(change)?,
-                Err(error) => {
-                    self.dialog = Some(Dialog::RemoveEntry {
-                        playlist,
-                        entry,
-                        title,
-                    });
+            }) => {
+                let recovery = Dialog::RemoveEntry {
+                    playlist,
+                    entry,
+                    title,
+                };
+                let unlocked = self.editing;
+                if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
+                    Ok(DatabaseOutcome::Changed(
+                        store.remove_entry(playlist, entry, unlocked)?,
+                    ))
+                }) {
+                    self.dialog = Some(recovery);
                     return Err(error);
                 }
-            },
+            }
             Some(Dialog::Transfer { ids, selected }) => {
                 let destination = self
                     .transfer_destinations()
                     .get(selected)
                     .map(|playlist| playlist.id)
                     .context("No editable destination playlist. Enable Order editing if needed")?;
-                match self.store.copy_tracks(destination, &ids, self.editing) {
-                    Ok(change) => self.remember(change)?,
-                    Err(error) => {
-                        self.dialog = Some(Dialog::Transfer { ids, selected });
-                        return Err(error);
-                    }
+                let recovery = Dialog::Transfer {
+                    ids: ids.clone(),
+                    selected,
+                };
+                let unlocked = self.editing;
+                if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
+                    Ok(DatabaseOutcome::Changed(store.copy_tracks(
+                        destination,
+                        &ids,
+                        unlocked,
+                    )?))
+                }) {
+                    self.dialog = Some(recovery);
+                    return Err(error);
                 }
             }
             Some(Dialog::Browser(browser)) => {
@@ -1500,21 +1808,20 @@ impl App {
             .flat_map(|playlist| &playlist.entries)
             .map(|entry| entry.track.path.clone())
             .collect();
-        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         let mut worker_store = self.store.try_clone()?;
         let unlocked = self.editing;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let progress = Arc::new(AtomicUsize::new(0));
         let worker_progress = progress.clone();
-        std::thread::spawn(move || {
+        let receiver = background(self.runtime(), move || {
             let mut tracks = Vec::new();
             let mut errors = Vec::new();
             let mut skipped = 0;
             let mut candidates = Vec::new();
             for path in paths {
                 if worker_cancel.load(Ordering::Relaxed) {
-                    return;
+                    anyhow::bail!("Music import was interrupted");
                 }
                 if path.is_dir() {
                     match media::audio_files(&path) {
@@ -1533,7 +1840,7 @@ impl App {
             let mut seen = existing;
             for path in candidates {
                 if worker_cancel.load(Ordering::Relaxed) {
-                    return;
+                    anyhow::bail!("Music import was interrupted");
                 }
                 if path
                     .canonicalize()
@@ -1561,14 +1868,14 @@ impl App {
                 worker_progress.fetch_add(1, Ordering::Relaxed);
             }
             if worker_cancel.load(Ordering::Relaxed) {
-                return;
+                anyhow::bail!("Music import was interrupted");
             }
-            let change = worker_store.add_tracks(target, &tracks, unlocked);
-            let _ = sender.send(ImportOutcome {
+            let change = worker_store.add_tracks(target, &tracks, unlocked)?;
+            Ok(ImportOutcome {
                 change,
                 errors,
                 skipped,
-            });
+            })
         });
         self.import = Some(ImportJob {
             receiver,
@@ -1642,6 +1949,51 @@ impl Drop for App {
         if let Some(job) = &self.import {
             job.cancel.store(true, Ordering::Relaxed);
         }
+        let Some(runtime) = self.runtime.take() else {
+            return;
+        };
+        // Only shutdown waits for settings. Share a deadline with the worker shutdown
+        // because started blocking calls cannot be aborted, including settings writes.
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        let wait = |job: Background<()>| {
+            runtime
+                .block_on(async {
+                    tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), job).await
+                })
+                .context("Settings save did not finish before shutdown")
+                .map(|result| {
+                    result
+                        .context("Settings save was interrupted")
+                        .and_then(|result| result)
+                })
+        };
+        let mut result = Ok(());
+        let mut expired = false;
+        if let Some(job) = self.settings_job.take() {
+            match wait(job) {
+                Ok(saved) => {
+                    if saved.is_err() {
+                        self.pending_settings
+                            .get_or_insert_with(|| self.settings.clone());
+                    }
+                    result = saved;
+                }
+                Err(error) => {
+                    expired = true;
+                    result = Err(error);
+                }
+            }
+        }
+        if !expired && let Some(settings) = self.pending_settings.take() {
+            result = self.store.try_clone().and_then(|mut store| {
+                let job = background(&runtime, move || store.save_settings(&settings));
+                wait(job).and_then(|result| result)
+            });
+        }
+        if let Err(error) = result {
+            eprintln!("Almavorn: settings were not saved / настройки не сохранены: {error:#}");
+        }
+        runtime.shutdown_timeout(deadline.saturating_duration_since(std::time::Instant::now()));
     }
 }
 

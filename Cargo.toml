@@ -27,6 +27,7 @@ eframe = { version = "~0.34.0", default-features = false, features = ["default_f
 egui_ratatui = { version = "2.2.0", optional = true }
 soft_ratatui = { version = "~0.2.0", optional = true }
 anyhow = "1"
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "time"] }
 dirs = "6"
 lofty = "0.25.4"
 rodio = { version = "0.22.2", default-features = false, features = ["playback", "symphonia-all"] }

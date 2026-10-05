@@ -310,12 +310,17 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     };
     playlists(frame, app, list, palette);
     tracks_table(frame, app, tracks, palette);
-    let notice = if app.busy() {
+    let notice = if app.notice_error {
+        app.notice.clone()
+    } else if app.importing() {
         format!(
             "{}: {}",
             app.text("Reading files", "Чтение файлов"),
             app.progress()
         )
+    } else if app.busy() {
+        app.text("Updating library…", "Обновление библиотеки…")
+            .to_owned()
     } else {
         app.notice.clone()
     };

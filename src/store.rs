@@ -4,7 +4,10 @@ use duckdb::{Connection, OptionalExt, params};
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -30,6 +33,7 @@ pub struct Snapshot {
     pub playlists: Vec<SavedPlaylist>,
 }
 
+#[derive(Clone)]
 pub struct Change {
     pub scope: &'static str,
     pub before: Snapshot,
@@ -40,6 +44,7 @@ pub struct Store {
     connection: Connection,
     // Keep an old binary from writing to SQLite during and after migration while this app runs.
     legacy_lock: Option<Arc<Mutex<rusqlite::Connection>>>,
+    revision: Arc<AtomicU64>,
     pub path: PathBuf,
 }
 
@@ -55,6 +60,7 @@ impl Store {
         Ok(Self {
             connection,
             legacy_lock,
+            revision: Arc::new(AtomicU64::new(0)),
             path,
         })
     }
@@ -63,6 +69,7 @@ impl Store {
         Ok(Self {
             connection: self.connection.try_clone()?,
             legacy_lock: self.legacy_lock.clone(),
+            revision: self.revision.clone(),
             path: self.path.clone(),
         })
     }
@@ -78,6 +85,10 @@ impl Store {
             Some(json) => serde_json::from_str(&json).context("Saved settings are damaged"),
             None => Ok(Settings::default()),
         }
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Acquire)
     }
 
     pub fn save_settings(&mut self, settings: &Settings) -> Result<()> {
@@ -137,7 +148,7 @@ impl Store {
     where
         F: Fn(&Connection) -> Result<()>,
     {
-        self.write(|transaction| {
+        let change = self.write(|transaction| {
             let scope = if let Some(id) = playlist_id {
                 let playlist = read_playlists(transaction)?
                     .into_iter()
@@ -166,7 +177,9 @@ impl Store {
                 before,
                 after,
             })
-        })
+        })?;
+        self.revision.fetch_add(1, Ordering::Release);
+        Ok(change)
     }
 
     pub fn create_playlist(&mut self, name: &str, mode: Mode) -> Result<Change> {
@@ -332,7 +345,9 @@ impl Store {
             )?;
             transaction.execute("UPDATE tracks SET title=?1 WHERE id=?2", params![title, id])?;
             Ok(())
-        })
+        })?;
+        self.revision.fetch_add(1, Ordering::Release);
+        Ok(())
     }
 
     pub fn restore(
@@ -395,7 +410,9 @@ impl Store {
                 }
             }
             Ok(())
-        })
+        })?;
+        self.revision.fetch_add(1, Ordering::Release);
+        Ok(())
     }
 }
 
@@ -691,36 +708,42 @@ fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
 }
 
 fn snapshot(connection: &Connection, scope: &str) -> Result<Snapshot> {
-    let playlists = read_playlists(connection)?
-        .into_iter()
-        .filter(|playlist| {
-            if scope == "desk" {
-                playlist.kind == PlaylistKind::SortingDesk
-            } else {
-                playlist.mode.key() == scope && playlist.kind == PlaylistKind::Normal
-            }
-        })
-        .map(|playlist| SavedPlaylist {
-            id: playlist.id,
-            name: playlist.name,
-            mode: playlist.mode.key().to_owned(),
-            kind: if playlist.kind == PlaylistKind::SortingDesk {
-                "desk"
-            } else {
-                "normal"
-            }
-            .to_owned(),
-            position: playlist.position,
-            entries: playlist
-                .entries
-                .into_iter()
-                .map(|entry| SavedEntry {
-                    id: entry.id,
-                    track_id: entry.track.id,
-                    position: entry.position,
-                })
-                .collect(),
-        })
-        .collect();
-    Ok(Snapshot { playlists })
+    Ok(Snapshot::from_library(&read_playlists(connection)?, scope))
+}
+
+impl Snapshot {
+    pub fn from_library(library: &[Playlist], scope: &str) -> Self {
+        let playlists = library
+            .iter()
+            .filter(|playlist| {
+                if scope == "desk" {
+                    playlist.kind == PlaylistKind::SortingDesk
+                } else {
+                    playlist.mode.key() == scope && playlist.kind == PlaylistKind::Normal
+                }
+            })
+            .map(|playlist| SavedPlaylist {
+                id: playlist.id,
+                name: playlist.name.clone(),
+                mode: playlist.mode.key().to_owned(),
+                kind: if playlist.kind == PlaylistKind::SortingDesk {
+                    "desk"
+                } else {
+                    "normal"
+                }
+                .to_owned(),
+                position: playlist.position,
+                entries: playlist
+                    .entries
+                    .iter()
+                    .map(|entry| SavedEntry {
+                        id: entry.id,
+                        track_id: entry.track.id,
+                        position: entry.position,
+                    })
+                    .collect(),
+            })
+            .collect();
+        Self { playlists }
+    }
 }
