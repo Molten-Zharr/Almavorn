@@ -2,7 +2,7 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-Стек: Rust, Ratatui, Tokio, Rodio, DuckDB, Crossterm, egui, eframe, egui_ratatui.
+Стек: Rust, Ratatui, Tokio, Rodio, SQLite, Crossterm, egui, eframe, egui_ratatui.
 
 Релизы: TUI-only и GUITUI.
 
@@ -13,8 +13,13 @@ cargo run --release
 cargo run --release --no-default-features --features tui --bin almavorn-tui
 ```
 
-Сборка скачивает официальную готовую библиотеку DuckDB и размещает её рядом
-с исполняемыми файлами.
+SQLite собирается и встраивается в исполняемые файлы через rusqlite.
+Библиотека DuckDB для работы приложения не нужна. Активная база — `almavorn.sqlite`.
+При первом запуске существующая `almavorn.duckdb` переносится через установленную
+DuckDB CLI; если файл DuckDB отсутствует, переносится `almavorn.sqlite3`. Оба исходных файла
+сохраняются. Если перенос DuckDB не удался, приложение останавливается и не
+открывает более старую библиотеку. DuckDB CLI нужна только для однократного
+переноса. Версия приложения с DuckDB сохранена в ветке `archive/duckdb`.
 
 Оба интерфейса используют общие состояние приложения и отрисовку Ratatui:
 
@@ -24,7 +29,7 @@ cargo run --release --no-default-features --features tui --bin almavorn-tui
   воспроизведение, диалоги и параметры запуска.
 - `src/ui.rs` — компоновка основного экрана.
 - `src/ui/` — панели библиотеки и проигрывателя, темы, общие элементы и диалоги.
-- `src/store.rs` — хранение в DuckDB и миграция существующей базы SQLite.
+- `src/store.rs` — хранение в SQLite с WAL, последовательными фоновыми записями и переносом старых баз.
 - `src/preferences.rs` — профили, палитры, пресеты тем и формат обмена палитрами.
 
 ## Настройки

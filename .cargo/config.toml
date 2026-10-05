@@ -1,3 +1,0 @@
-[env]
-# Use the official prebuilt DuckDB matching the pinned Rust dependency.
-DUCKDB_DOWNLOAD_LIB = { value = "1", force = true }

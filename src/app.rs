@@ -204,6 +204,12 @@ impl App {
                 Some("Имя должно содержать от 1 до 80 печатных символов.")
             }
             "This name is already used" => Some("Это имя уже используется. Выберите другое."),
+            "Playlist with this name already exists" => {
+                Some("Плейлист с таким именем уже существует.")
+            }
+            "Database writer failed" => {
+                Some("Не удалось выполнить запись в библиотеку. Перезапустите плеер.")
+            }
             "Wait for the palette file operation to finish" => {
                 Some("Дождитесь завершения импорта или экспорта палитры.")
             }

@@ -1,8 +1,11 @@
 use crate::model::{Entry, ImportedTrack, Mode, Playlist, PlaylistKind, Settings, Track};
 use anyhow::{Context, Result, bail, ensure};
-use duckdb::{Connection, OptionalExt, params};
+use rusqlite::{
+    Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 use serde::{Deserialize, Serialize};
 use std::{
+    cell::OnceCell,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
@@ -10,6 +13,8 @@ use std::{
     },
     time::Duration,
 };
+
+mod migration;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedEntry {
@@ -41,9 +46,8 @@ pub struct Change {
 }
 
 pub struct Store {
-    connection: Connection,
-    // Keep an old binary from writing to SQLite during and after migration while this app runs.
-    legacy_lock: Option<Arc<Mutex<rusqlite::Connection>>>,
+    connection: OnceCell<Connection>,
+    writer: Arc<Mutex<()>>,
     revision: Arc<AtomicU64>,
     pub path: PathBuf,
 }
@@ -51,15 +55,11 @@ pub struct Store {
 impl Store {
     pub fn open(directory: &Path) -> Result<Self> {
         std::fs::create_dir_all(directory).context("Cannot create data directory")?;
-        let path = directory.join("almavorn.duckdb");
-        let mut connection = Connection::open(&path).context(
-            "Cannot open DuckDB music database. Close another Almavorn instance using this library. / Не удалось открыть DuckDB. Закройте другой экземпляр Almavorn с этой библиотекой.",
-        )?;
-        let legacy_lock = initialize(&mut connection, &directory.join("almavorn.sqlite3"))?
-            .map(|connection| Arc::new(Mutex::new(connection)));
+        let path = directory.join("almavorn.sqlite");
+        let connection = migration::open(directory, &path)?;
         Ok(Self {
-            connection,
-            legacy_lock,
+            connection: OnceCell::from(connection),
+            writer: Arc::new(Mutex::new(())),
             revision: Arc::new(AtomicU64::new(0)),
             path,
         })
@@ -67,16 +67,27 @@ impl Store {
 
     pub fn try_clone(&self) -> Result<Self> {
         Ok(Self {
-            connection: self.connection.try_clone()?,
-            legacy_lock: self.legacy_lock.clone(),
+            // Opening a connection performs I/O. Delay it until the background job
+            // uses this handle, so scheduling work never blocks the interface.
+            connection: OnceCell::new(),
+            writer: self.writer.clone(),
             revision: self.revision.clone(),
             path: self.path.clone(),
         })
     }
 
+    fn connection(&self) -> Result<&Connection> {
+        if self.connection.get().is_none() {
+            self.connection
+                .set(connect(&self.path)?)
+                .map_err(|_| anyhow::anyhow!("Database connection was already initialized"))?;
+        }
+        Ok(self.connection.get().expect("connection is initialized"))
+    }
+
     pub fn settings(&self) -> Result<Settings> {
         let json: Option<String> = self
-            .connection
+            .connection()?
             .query_row("SELECT value FROM settings WHERE key='app'", [], |row| {
                 row.get(0)
             })
@@ -116,42 +127,46 @@ impl Store {
     }
 
     pub fn playlists(&self) -> Result<Vec<Playlist>> {
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.connection()?.unchecked_transaction()?;
         let playlists = read_playlists(&transaction)?;
         transaction.commit()?;
         Ok(playlists)
     }
 
     pub fn snapshot(&self, scope: &str) -> Result<Snapshot> {
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction = self.connection()?.unchecked_transaction()?;
         let snapshot = snapshot(&transaction, scope)?;
         transaction.commit()?;
         Ok(snapshot)
     }
 
     fn write<T>(&mut self, operation: impl Fn(&Connection) -> Result<T>) -> Result<T> {
-        for attempt in 0..4 {
-            let transaction = self.connection.transaction()?;
-            let result = operation(&transaction).and_then(|value| {
-                transaction.commit()?;
-                Ok(value)
-            });
-            match result {
-                Ok(value) => {
-                    return Ok(value);
-                }
-                Err(error) if attempt < 3 && transaction_conflict(&error) => {
-                    std::thread::sleep(Duration::from_millis(10 * (attempt + 1)));
-                }
-                Err(error) if transaction_conflict(&error) => {
-                    return Err(error.context(
-                        "Library changed concurrently; no changes were saved. Repeat the action",
-                    ));
-                }
-                Err(error) => return Err(error),
+        let writer = self.writer.clone();
+        let _guard = writer
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Database writer failed"))?;
+        let result = (|| {
+            let transaction =
+                Transaction::new_unchecked(self.connection()?, TransactionBehavior::Immediate)?;
+            let value = operation(&transaction)?;
+            transaction.commit()?;
+            Ok(value)
+        })();
+        result.map_err(|error: anyhow::Error| {
+            if transaction_conflict(&error) {
+                error.context(
+                    "Library changed concurrently; no changes were saved. Repeat the action",
+                )
+            } else if error.chain().any(|cause| {
+                cause
+                    .to_string()
+                    .contains("UNIQUE constraint failed: playlists.mode, playlists.name_fold")
+            }) {
+                error.context("Playlist with this name already exists")
+            } else {
+                error
             }
-        }
-        unreachable!("the final transaction attempt always returns")
+        })
     }
 
     fn mutate<F>(
@@ -174,7 +189,8 @@ impl Store {
                     playlist.can_edit(unlocked),
                     "Enable Order editing before changing this playlist"
                 );
-                // Changes to one playlist conflict, while independent playlists can be written concurrently.
+                // The writer owns the transaction until commit; protected-state
+                // checks and the corresponding changes observe the same snapshot.
                 transaction
                     .execute("UPDATE playlists SET revision=revision+1 WHERE id=?1", [id])?;
                 if playlist.kind == PlaylistKind::SortingDesk {
@@ -432,190 +448,20 @@ impl Store {
     }
 }
 
-fn initialize(
-    connection: &mut Connection,
-    legacy_path: &Path,
-) -> Result<Option<rusqlite::Connection>> {
-    use rusqlite::{Connection as SqliteConnection, OpenFlags, OptionalExtension};
-
-    let transaction = connection.transaction()?;
-    transaction.execute_batch(
-        "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-         CREATE TABLE IF NOT EXISTS almavorn_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
-    )?;
-    // No SQL changes are made to SQLite. An empty exclusive transaction prevents an old
-    // process from changing the source, and remains alive until the last Store is dropped.
-    let legacy = if legacy_path.try_exists()? {
-        let legacy = SqliteConnection::open_with_flags(
-            legacy_path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-        )
-        .context("Cannot lock the previous SQLite library; original data was preserved")?;
-        legacy.busy_timeout(Duration::from_secs(3))?;
-        legacy.execute_batch("BEGIN EXCLUSIVE").context(
-            "Close the old Almavorn instance before migrating this library. / Перед переносом библиотеки закройте старый экземпляр Almavorn.",
-        )?;
-        Some(legacy)
-    } else {
-        None
-    };
-    let version: Option<String> = transaction
-        .query_row(
-            "SELECT value FROM almavorn_metadata WHERE key='schema_version'",
-            [],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if let Some(version) = version {
-        ensure!(
-            version.parse::<u32>()? == 1,
-            "Database was created by another version of Almavorn"
-        );
-        transaction.commit()?;
-        return Ok(legacy);
-    }
-    let tables: i64 = transaction.query_row(
-        "SELECT COUNT(*) FROM duckdb_tables() WHERE schema_name='main' AND NOT internal AND NOT temporary AND table_name NOT IN ('settings','almavorn_metadata')", [], |row| row.get(0),
-    )?;
-    ensure!(
-        tables == 0,
-        "DuckDB database has no recognized Almavorn schema; existing data was preserved"
-    );
-
-    let mut starts = [1_i64; 3];
-    if let Some(legacy) = &legacy {
-        let version: i64 = legacy.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        ensure!(
-            version == 1,
-            "Unsupported SQLite library version; original database was preserved"
-        );
-        let broken: Option<String> = legacy
-            .query_row("PRAGMA foreign_key_check", [], |row| row.get(0))
-            .optional()?;
-        ensure!(
-            broken.is_none(),
-            "SQLite library contains broken references; original database was preserved"
-        );
-        for (index, table) in ["tracks", "playlists", "entries"].into_iter().enumerate() {
-            let maximum: i64 = legacy.query_row(
-                &format!("SELECT COALESCE(MAX(id),0) FROM {table}"),
-                [],
-                |row| row.get(0),
-            )?;
-            let sequence: Option<i64> = legacy
-                .query_row(
-                    "SELECT seq FROM sqlite_sequence WHERE name=?1",
-                    [table],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            starts[index] = maximum
-                .max(sequence.unwrap_or(0))
-                .checked_add(1)
-                .context("Library identifiers are exhausted")?;
-        }
-    }
-    transaction.execute_batch(&format!(
-        "CREATE SEQUENCE tracks_ids START {};
-         CREATE SEQUENCE playlists_ids START {};
-         CREATE SEQUENCE entries_ids START {};
-         CREATE TABLE tracks (
-            id BIGINT PRIMARY KEY DEFAULT nextval('tracks_ids'), path TEXT NOT NULL UNIQUE,
-            title TEXT NOT NULL, artist TEXT NOT NULL, album TEXT NOT NULL,
-            duration_ms BIGINT NOT NULL CHECK(duration_ms >= 0), tags TEXT NOT NULL,
-            revision BIGINT NOT NULL DEFAULT 0
-         );
-         CREATE TABLE playlists (
-            id BIGINT PRIMARY KEY DEFAULT nextval('playlists_ids'), name TEXT NOT NULL,
-            name_fold TEXT NOT NULL, mode TEXT NOT NULL CHECK(mode IN ('order','chaos')),
-            kind TEXT NOT NULL CHECK(kind IN ('normal','desk')), position BIGINT NOT NULL,
-            revision BIGINT NOT NULL DEFAULT 0, desk BOOLEAN UNIQUE,
-            UNIQUE(mode,name_fold),
-            CHECK ((kind='desk' AND mode='order' AND position=-1 AND desk IS TRUE)
-                OR (kind='normal' AND position>=0 AND desk IS NULL))
-         );
-         CREATE TABLE entries (
-            id BIGINT PRIMARY KEY DEFAULT nextval('entries_ids'),
-            playlist_id BIGINT NOT NULL, track_id BIGINT NOT NULL REFERENCES tracks(id),
-            position BIGINT NOT NULL CHECK(position>=0),
-            UNIQUE(playlist_id,position), UNIQUE(playlist_id,track_id)
-         );
-         CREATE INDEX entries_track ON entries(track_id);
-         CREATE TABLE playlist_ordering (mode TEXT PRIMARY KEY, revision BIGINT NOT NULL);
-         INSERT INTO playlist_ordering VALUES ('order',0),('chaos',0);",
-        starts[0], starts[1], starts[2],
-    ))?;
-    // DuckDB has no ON DELETE CASCADE or deferred foreign-key checks. Playlist ownership
-    // is enforced by mutate/restore; touching the parent prevents concurrent deletion/import races.
-    if let Some(legacy) = &legacy {
-        migrate_sqlite(legacy, &transaction)?;
-    } else {
-        transaction.execute_batch("INSERT INTO playlists(name,name_fold,mode,kind,position,desk) VALUES ('Sorting desk','sorting desk','order','desk',-1,true)")?;
-    }
-    let desks: i64 = transaction.query_row(
-        "SELECT COUNT(*) FROM playlists WHERE kind='desk'",
-        [],
-        |row| row.get(0),
-    )?;
-    ensure!(desks == 1, "Library must contain exactly one sorting desk");
-    transaction.execute(
-        "INSERT INTO almavorn_metadata VALUES ('schema_version','1')",
-        [],
-    )?;
-    transaction.commit()?;
-    Ok(legacy)
-}
-
-fn migrate_sqlite(source: &rusqlite::Connection, destination: &Connection) -> Result<()> {
-    let mut statement = source
-        .prepare("SELECT id,path,title,artist,album,duration_ms,tags FROM tracks ORDER BY id")?;
-    let mut rows = statement.query([])?;
-    while let Some(row) = rows.next()? {
-        destination.execute("INSERT INTO tracks(id,path,title,artist,album,duration_ms,tags) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![
-            row.get::<_,i64>(0)?, row.get::<_,String>(1)?, row.get::<_,String>(2)?,
-            row.get::<_,String>(3)?, row.get::<_,String>(4)?, row.get::<_,i64>(5)?, row.get::<_,String>(6)?,
-        ])?;
-    }
-    let mut statement =
-        source.prepare("SELECT id,name,name_fold,mode,kind,position FROM playlists ORDER BY id")?;
-    let mut rows = statement.query([])?;
-    while let Some(row) = rows.next()? {
-        let kind: String = row.get(4)?;
-        destination.execute("INSERT INTO playlists(id,name,name_fold,mode,kind,position,desk) VALUES (?1,?2,?3,?4,?5,?6,?7)", params![
-            row.get::<_,i64>(0)?, row.get::<_,String>(1)?, row.get::<_,String>(2)?,
-            row.get::<_,String>(3)?, kind, row.get::<_,i64>(5)?, (kind == "desk").then_some(true),
-        ])?;
-    }
-    let mut statement =
-        source.prepare("SELECT id,playlist_id,track_id,position FROM entries ORDER BY id")?;
-    let mut rows = statement.query([])?;
-    while let Some(row) = rows.next()? {
-        destination.execute(
-            "INSERT INTO entries(id,playlist_id,track_id,position) VALUES (?1,?2,?3,?4)",
-            params![
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, i64>(3)?,
-            ],
-        )?;
-    }
-    let mut statement = source.prepare("SELECT key,value FROM settings ORDER BY key")?;
-    let mut rows = statement.query([])?;
-    while let Some(row) = rows.next()? {
-        let key: String = row.get(0)?;
-        let value: String = row.get(1)?;
-        if key == "app" {
-            serde_json::from_str::<Settings>(&value)
-                .context("Saved SQLite settings are damaged; original database was preserved")?;
-        }
-        destination.execute("INSERT INTO settings VALUES (?1,?2)", params![key, value])?;
-    }
-    Ok(())
+fn connect(path: &Path) -> Result<Connection> {
+    let connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .context("Cannot open SQLite music database")?;
+    connection.busy_timeout(Duration::from_secs(3))?;
+    connection.pragma_update(None, "foreign_keys", "ON")?;
+    connection.pragma_update(None, "synchronous", "FULL")?;
+    Ok(connection)
 }
 
 fn lock_ordering(connection: &Connection, mode: &str) -> Result<()> {
-    // Only topology changes in the same mode serialize; imports and independent playlist writes do not.
+    // Retain the ordering revision while all writes are serialized by the writer.
     ensure!(
         connection.execute(
             "UPDATE playlist_ordering SET revision=revision+1 WHERE mode=?1",
@@ -628,11 +474,11 @@ fn lock_ordering(connection: &Connection, mode: &str) -> Result<()> {
 
 fn transaction_conflict(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
-        cause.downcast_ref::<duckdb::Error>().is_some_and(|cause| {
-            let message = cause.to_string();
-            message.contains("Transaction conflict:")
-                || message.contains("TransactionContext Error: Conflict")
-        })
+        matches!(
+            cause.downcast_ref::<rusqlite::Error>(),
+            Some(rusqlite::Error::SqliteFailure(code, _))
+                if matches!(code.code, rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+        )
     })
 }
 
@@ -710,7 +556,7 @@ fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
                     },
                 })
             })?
-            .collect::<duckdb::Result<Vec<_>>>()?;
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         playlists.push(Playlist {
             id,
             name,

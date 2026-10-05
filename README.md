@@ -2,7 +2,7 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-Stack: Rust, Ratatui, Tokio, Rodio, DuckDB, Crossterm, egui, eframe, egui_ratatui.
+Stack: Rust, Ratatui, Tokio, Rodio, SQLite, Crossterm, egui, eframe, egui_ratatui.
 
 Releases: TUI-only and GUITUI.
 
@@ -13,8 +13,13 @@ cargo run --release
 cargo run --release --no-default-features --features tui --bin almavorn-tui
 ```
 
-The build downloads the official prebuilt DuckDB library and places it next to
-the executables.
+SQLite is compiled and embedded in the executables through rusqlite. No
+DuckDB runtime library is required. The active database is `almavorn.sqlite`.
+On first launch, an existing `almavorn.duckdb` is imported using an installed
+DuckDB CLI; otherwise `almavorn.sqlite3` is imported if present. Both original
+files are preserved. If DuckDB import fails, the application stops without
+falling back to an older library. DuckDB CLI is only needed for this one-time
+import. The DuckDB application is preserved in the `archive/duckdb` branch.
 
 Both interfaces share application state and Ratatui rendering:
 
@@ -24,7 +29,7 @@ Both interfaces share application state and Ratatui rendering:
   playback, dialogs, and command-line options.
 - `src/ui.rs`: main-screen layout.
 - `src/ui/`: library and player panels, themes, shared widgets, and dialogs.
-- `src/store.rs`: DuckDB storage and migration from an existing SQLite database.
+- `src/store.rs`: SQLite storage with WAL, serialized background writes, and legacy migration.
 - `src/preferences.rs`: profiles, palettes, theme presets, and palette exchange.
 
 ## Settings
