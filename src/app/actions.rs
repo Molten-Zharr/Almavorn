@@ -354,12 +354,15 @@ impl App {
             }
             PlaylistPanel => {
                 self.settings.playlist_placement = self.settings.playlist_placement.next();
+                self.settings.workspace.root = None;
                 self.save_settings()?;
             }
             PlayerPanel => {
                 self.settings.player_placement = self.settings.player_placement.next();
+                self.settings.workspace.root = None;
                 self.save_settings()?;
             }
+            Panels => self.dialog = Some(Dialog::Panels { selected: 0 }),
         }
         Ok(())
     }

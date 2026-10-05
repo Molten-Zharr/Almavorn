@@ -16,6 +16,23 @@ impl App {
         area.contains(self.pointer)
     }
 
+    pub fn target_at(&self, point: Position) -> Option<&Target> {
+        self.hits
+            .iter()
+            .enumerate()
+            .filter(|(_, hit)| hit.enabled && hit.area.contains(point))
+            .max_by_key(|(index, hit)| {
+                (
+                    matches!(
+                        hit.target,
+                        Target::PanelMove(_) | Target::PanelCollapse(_) | Target::PanelClose(_)
+                    ),
+                    *index,
+                )
+            })
+            .map(|(_, hit)| &hit.target)
+    }
+
     pub fn handle(&mut self, input: Input) {
         if let Err(error) = self.handle_inner(input) {
             self.failure(error);
@@ -27,15 +44,21 @@ impl App {
             Input::Move { x, y } => self.pointer = Position::new(x, y),
             Input::Click { x, y, double } => {
                 self.pointer = Position::new(x, y);
-                let hit = self
-                    .hits
-                    .iter()
-                    .rev()
-                    .find(|hit| hit.enabled && hit.area.contains(Position::new(x, y)))
-                    .map(|hit| hit.target.clone());
+                if self.dialog.is_none() {
+                    self.focus_point(self.pointer);
+                }
+                let hit = self.target_at(self.pointer).cloned();
                 if let Some(target) = hit {
                     self.target(target, double)?;
                 }
+            }
+            Input::Drag { x, y } => {
+                self.pointer = Position::new(x, y);
+                self.drag_workspace(self.pointer)?;
+            }
+            Input::Release { x, y } => self.release_workspace(Position::new(x, y))?,
+            Input::CancelPointer => {
+                self.cancel_workspace_drag();
             }
             Input::Scroll { x, y, delta } => {
                 if matches!(self.dialog, Some(Dialog::Settings { .. })) {
@@ -75,6 +98,9 @@ impl App {
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
         if key.key == Key::Escape {
+            if self.cancel_workspace_drag() {
+                return Ok(());
+            }
             if !self.close_dialog() {
                 self.query.clear();
                 self.refresh()?;
@@ -188,17 +214,16 @@ impl App {
             .find(|binding| binding.key == normalized)
             .map(|binding| binding.action)
         {
+            if self.workspace_key(key)? {
+                return Ok(());
+            }
             self.action(action)?;
             return Ok(());
         }
+        if self.workspace_key(key)? {
+            return Ok(());
+        }
         match key.key {
-            Key::Tab => {
-                self.focus = if self.focus == Focus::Tracks {
-                    Focus::Playlists
-                } else {
-                    Focus::Tracks
-                }
-            }
             Key::Up => self.navigate(-1),
             Key::Down => self.navigate(1),
             Key::PageUp => self.navigate(-10),
@@ -207,7 +232,7 @@ impl App {
             Key::End => self.navigate(i64::MAX),
             Key::Enter => {
                 if self.focus == Focus::Playlists {
-                    self.focus = Focus::Tracks;
+                    self.focus_panel(crate::workspace::Panel::Tracks);
                 } else {
                     self.play_selected()?;
                 }
@@ -217,8 +242,30 @@ impl App {
         Ok(())
     }
 
-    fn target(&mut self, target: Target, double: bool) -> Result<()> {
+    pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
         match target {
+            Target::PanelFocus(panel) => self.focus_panel(panel),
+            Target::PanelMove(panel) => {
+                self.focus_panel(panel);
+                self.workspace.gesture = Some(crate::workspace::Gesture::Move {
+                    panel,
+                    origin: self.pointer,
+                });
+            }
+            Target::PanelCollapse(panel) => self.toggle_panel(panel)?,
+            Target::PanelClose(panel) => self.close_panel(panel)?,
+            Target::PanelVisibility(panel) => self.show_panel(panel)?,
+            Target::PanelResize(index) => {
+                if let (Some(split), Some(root)) =
+                    (self.workspace.splits.get(index), &self.workspace.root)
+                {
+                    self.workspace.gesture = Some(crate::workspace::Gesture::Resize {
+                        split: split.clone(),
+                        before: root.clone(),
+                    });
+                }
+            }
+            Target::ResetWorkspace => self.reset_workspace()?,
             Target::Action(action) => self.action(action)?,
             Target::Mode(mode) => self.set_mode(mode)?,
             Target::Playlist(id) => {
@@ -240,6 +287,9 @@ impl App {
                 }
             }
             Target::Seek(area) => {
+                if self.workspace.gesture.is_none() {
+                    self.workspace.gesture = Some(crate::workspace::Gesture::Seek(area));
+                }
                 if let (Some(audio), Some(current)) = (&self.audio, &self.current) {
                     let duration = current.duration_ms;
                     if duration > 0 && area.width > 0 {

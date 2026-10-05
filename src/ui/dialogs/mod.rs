@@ -54,6 +54,60 @@ pub(super) fn render_dialog(
         return;
     }
     match dialog {
+        Dialog::Panels { selected } => {
+            let inner = modal(
+                frame,
+                area,
+                app.text("Workspace blocks", "Блоки приложения").into(),
+                20,
+                palette,
+            );
+            let capacity = inner.height.saturating_sub(5) as usize;
+            let offset = visible_offset(
+                0,
+                *selected,
+                capacity,
+                crate::workspace::Panel::ALL.len() + 1,
+            );
+            for index in offset..(offset + capacity).min(crate::workspace::Panel::ALL.len() + 1) {
+                let (label, target) = if let Some(panel) = crate::workspace::Panel::ALL.get(index) {
+                    (
+                        format!(
+                            "[{}] {}",
+                            if app.settings.workspace.hidden.contains(panel) {
+                                ' '
+                            } else {
+                                'x'
+                            },
+                            panel.name(app.settings.language)
+                        ),
+                        Target::PanelVisibility(*panel),
+                    )
+                } else {
+                    (
+                        app.text("Restore default layout", "Вернуть исходную раскладку")
+                            .into(),
+                        Target::ResetWorkspace,
+                    )
+                };
+                let rect = Rect::new(inner.x, inner.y + (index - offset) as u16, inner.width, 1);
+                frame.render_widget(
+                    Paragraph::new(label).style(if index == *selected {
+                        palette.text().bg(palette.selection)
+                    } else {
+                        palette.text()
+                    }),
+                    rect,
+                );
+                app.hits.push(Hit {
+                    area: rect,
+                    target,
+                    enabled: true,
+                });
+            }
+            frame.render_widget(Paragraph::new(app.text("Enter / click: show or hide. Closing a block keeps your music.\nTab: focus; Ctrl+Alt+arrows: move; Ctrl+Shift+arrows: resize.\nCtrl+Alt+Space: collapse; Ctrl+Alt+Delete: close.", "Enter / клик: показать или скрыть. Музыка сохраняется.\nTab: фокус; Ctrl+Alt+стрелки: переместить; Ctrl+Shift+стрелки: размер.\nCtrl+Alt+Space: свернуть; Ctrl+Alt+Delete: закрыть.")).style(palette.text().fg(palette.muted)).wrap(Wrap { trim: false }), Rect::new(inner.x, inner.bottom().saturating_sub(5), inner.width, 3));
+            dialog_footer(frame, app, inner, palette);
+        }
         Dialog::Text(dialog) => text_dialog(frame, app, dialog, area, palette),
         Dialog::Browser(browser) => browser_dialog(frame, app, browser, area, palette),
         Dialog::RemoveEntry { title, .. } => {
@@ -231,6 +285,8 @@ pub(super) fn render_dialog(
                 palette,
             );
             let mut lines=vec![app.text("Mouse: click to select; double-click a track to play; scroll lists.","Мышь: клик — выбор; двойной клик по композиции — играть; колесо — прокрутка.").to_owned(),app.text("Use track checkboxes to select several tracks for copying.","Чекбоксы композиций отмечают несколько файлов для копирования.").into(),app.text("Keyboard: arrows select, Tab changes panel, Enter plays or confirms, Esc closes.","Клавиатура: стрелки — выбор, Tab — панель, Enter — играть или подтвердить, Esc — закрыть.").into(),String::new(),app.text("Order playlists are protected. Enable Edit to rename, remove, reorder or add directly.","Плейлисты Порядка защищены. Включите Правку для переименования, удаления, перемещения и прямого добавления.").into(),app.text("The sorting desk is always editable. Its checkbox routes every addition there.","Сортировочный стол всегда доступен для правки. Его чекбокс направляет туда все добавляемые файлы.").into(),app.text("Chaos and the desk support undo/redo in this session. Concurrent edits in the same scope may reset history. Only one app process can open this library for writing.","Хаос и стол поддерживают отмену/повтор в этой сессии. Одновременная правка тех же списков может очистить историю. Библиотеку для записи открывает только один процесс приложения.").into(),app.text("Sorting and searching change the view, never stored positions or source tags.","Сортировка и поиск меняют вид, а не сохраненные позиции или теги исходных файлов.").into(),app.text("Add new scans the folders of the current tracks; duplicates are skipped.","Добавить новые проверяет папки текущих композиций; повторные файлы пропускаются.").into(),format!("{}: {}",app.text("Database","База"),app.store.path.display()),String::new()];
+            lines.push(app.text("Blocks: drag [↕] or a title; drop at an edge to dock, in the center to swap. Hold a shared border to resize. [-]/[+] collapses; [x] hides. Restore via Ctrl+B. Layout is saved in the active profile.", "Блоки: тяните [↕] или заголовок; край другого блока — разместить рядом, центр — поменять местами. Зажмите общую границу для размера. [-]/[+] сворачивает; [x] скрывает. Вернуть через Ctrl+B. Раскладка сохраняется в активный профиль.").into());
+            lines.push(app.text("Tab/Shift+Tab: focus block. Ctrl+Alt+arrows: swap with a neighbor. Ctrl+Shift+arrows: resize. Ctrl+Alt+Space: collapse/expand. Ctrl+Alt+Delete: hide. Esc: cancel dragging.", "Tab/Shift+Tab: фокус блока. Ctrl+Alt+стрелки: обмен с соседом. Ctrl+Shift+стрелки: размер. Ctrl+Alt+Space: свернуть/развернуть. Ctrl+Alt+Delete: скрыть. Esc: отменить перетаскивание.").into());
             lines.extend(app.settings.bindings.iter().map(|binding| {
                 format!(
                     "{} — {}",

@@ -133,6 +133,7 @@ pub enum Action {
     Mark,
     PlaylistPanel,
     PlayerPanel,
+    Panels,
 }
 
 impl Action {
@@ -169,6 +170,7 @@ impl Action {
             Self::Mark => language.text("Toggle the selected track's copy checkbox.", "Изменить отметку выбранной композиции для копирования."),
             Self::PlaylistPanel => language.text("Move the playlist panel around the library.", "Изменить расположение панели плейлистов."),
             Self::PlayerPanel => language.text("Move playback controls around the library.", "Изменить расположение панели проигрывателя."),
+            Self::Panels => language.text("Show or restore workspace blocks and reset their layout.", "Показать или вернуть блоки и сбросить их расположение."),
         }
     }
     pub fn name(self, language: Language) -> &'static str {
@@ -208,6 +210,7 @@ impl Action {
                 language.text("Move playlists panel", "Переместить панель плейлистов")
             }
             Self::PlayerPanel => language.text("Move player panel", "Переместить проигрыватель"),
+            Self::Panels => language.text("Workspace blocks", "Блоки приложения"),
         }
     }
 }
@@ -261,6 +264,7 @@ pub fn default_bindings() -> Vec<Binding> {
         (Redo, Key::Char('y'), true, false),
         (PlaylistPanel, Key::Char('l'), true, false),
         (PlayerPanel, Key::Char('p'), true, false),
+        (Panels, Key::Char('b'), true, false),
     ] {
         bindings.push(Binding {
             action,
@@ -281,5 +285,8 @@ pub enum Input {
     Text(String),
     Move { x: u16, y: u16 },
     Click { x: u16, y: u16, double: bool },
+    Drag { x: u16, y: u16 },
+    Release { x: u16, y: u16 },
+    CancelPointer,
     Scroll { x: u16, y: u16, delta: i16 },
 }

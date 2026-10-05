@@ -1,8 +1,4 @@
-use super::{
-    theme::Palette,
-    toolbar::{self, Group},
-    widgets::{block, clean},
-};
+use super::{theme::Palette, toolbar::Group, widgets::clean};
 use crate::{
     app::{App, Hit, Target},
     input::Action,
@@ -15,7 +11,7 @@ use ratatui::{
     widgets::{Gauge, Paragraph},
 };
 
-fn controls(app: &App) -> Vec<Group> {
+pub(super) fn controls(app: &App) -> Vec<Group> {
     let playback = [
         (Action::Previous, "<<", "<<"),
         (
@@ -56,14 +52,17 @@ fn controls(app: &App) -> Vec<Group> {
 }
 
 pub(super) fn preferred_height(app: &App, width: u16) -> u16 {
-    toolbar::height(app, &controls(app), width.saturating_sub(2), true).saturating_add(4)
+    let groups = controls(app);
+    let controls_height = groups
+        .iter()
+        .map(|group| super::widgets::button_rows(app, width.saturating_sub(2), &group.entries) + 2)
+        .sum::<u16>();
+    controls_height.saturating_add(4)
 }
 
 pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    let outer = block(app.text("Player", "Проигрыватель").into(), palette, false);
-    let inner = outer.inner(area);
-    frame.render_widget(outer, area);
-    if inner.height < 3 {
+    let inner = area;
+    if inner.height < 2 {
         return;
     }
     let title = app
@@ -78,17 +77,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         Paragraph::new(clean(&title)).style(palette.text().fg(palette.accent)),
         Rect::new(inner.x, inner.y, inner.width, 1),
     );
-    let groups = controls(app);
-    let used = toolbar::height(app, &groups, inner.width, true).min(inner.height.saturating_sub(2));
-    toolbar::render(
-        frame,
-        app,
-        Rect::new(inner.x, inner.y + 1, inner.width, used),
-        groups,
-        true,
-        palette,
-    );
-    let y = (inner.y + 1 + used).min(inner.bottom().saturating_sub(1));
+    let y = inner.y + 1;
     let duration = app.current.as_ref().map_or(0, |track| track.duration_ms);
     let position = app.position_ms();
     let ratio = if duration > 0 {

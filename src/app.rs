@@ -10,6 +10,7 @@ mod options;
 mod playback;
 mod settings;
 mod state;
+mod workspace;
 
 pub use browser::{Browser, BrowserEntry};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
@@ -51,6 +52,7 @@ pub struct App {
     pub selected_entry: Option<i64>,
     pub marked: HashSet<i64>,
     pub focus: Focus,
+    pub workspace: crate::workspace::Workspace,
     pub sort: Sort,
     pub query: String,
     pub dialog: Option<Dialog>,
@@ -94,6 +96,7 @@ impl App {
         let store = Store::open(directory)?;
         let mut settings = store.settings()?;
         settings.volume = settings.volume.clamp(0.0, 1.0);
+        settings.workspace.normalize();
         for binding in crate::input::default_bindings() {
             if !settings
                 .bindings
@@ -130,6 +133,7 @@ impl App {
             selected_entry,
             marked: HashSet::new(),
             focus: Focus::Tracks,
+            workspace: Default::default(),
             sort: Sort::Position,
             query: String::new(),
             dialog: None,

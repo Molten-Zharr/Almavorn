@@ -139,6 +139,7 @@ pub struct Settings {
     pub sorting_desk: bool,
     pub playlist_placement: Placement,
     pub player_placement: Placement,
+    pub workspace: crate::workspace::WorkspaceLayout,
     pub themes: [Theme; 2],
     pub bindings: Vec<crate::input::Binding>,
     pub appearance: crate::preferences::Appearance,
@@ -158,6 +159,7 @@ impl Default for Settings {
             sorting_desk: true,
             playlist_placement: Placement::Left,
             player_placement: Placement::Bottom,
+            workspace: Default::default(),
             themes: [
                 Theme {
                     accent: [232, 158, 74],

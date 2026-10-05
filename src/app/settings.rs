@@ -380,6 +380,7 @@ impl App {
             }
             SettingControl::Desk => self.settings.sorting_desk = !self.settings.sorting_desk,
             SettingControl::PlaylistPlacement => {
+                self.settings.workspace.root = None;
                 self.settings.playlist_placement = cycle(
                     self.settings.playlist_placement,
                     &[
@@ -392,6 +393,7 @@ impl App {
                 )
             }
             SettingControl::PlayerPlacement => {
+                self.settings.workspace.root = None;
                 self.settings.player_placement = cycle(
                     self.settings.player_placement,
                     &[

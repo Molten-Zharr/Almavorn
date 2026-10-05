@@ -1,9 +1,9 @@
 use super::{
     theme::Palette,
-    widgets::{block, clean, visible_offset},
+    widgets::{clean, visible_offset},
 };
 use crate::{
-    app::{App, Focus, Hit, Target},
+    app::{App, Hit, Target},
     model::duration_text,
 };
 use ratatui::{
@@ -14,13 +14,7 @@ use ratatui::{
 
 pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     app.playlist_area = area;
-    let outer = block(
-        app.text("Playlists", "Плейлисты").into(),
-        palette,
-        app.focus == Focus::Playlists,
-    );
-    let inner = outer.inner(area);
-    frame.render_widget(outer, area);
+    let inner = area;
     let items: Vec<(i64, String, usize)> = app
         .visible_playlists()
         .iter()
@@ -83,6 +77,10 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
 
 pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     app.tracks_area = area;
+    let inner = area;
+    if inner.height < 2 {
+        return;
+    }
     let name = app
         .playlist()
         .map(|playlist| playlist.display_name(app.settings.language))
@@ -96,18 +94,11 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             format!(" · {}", app.query)
         }
     );
-    let outer = block(title, palette, app.focus == Focus::Tracks).border_style(
-        ratatui::style::Style::default().fg(if app.focus == Focus::Tracks {
-            palette.accent
-        } else {
-            palette.inactive_file_border
-        }),
+    frame.render_widget(
+        Paragraph::new(title).style(palette.text().fg(palette.muted)),
+        Rect::new(inner.x, inner.y, inner.width, 1),
     );
-    let inner = outer.inner(area);
-    frame.render_widget(outer, area);
-    if inner.height < 2 {
-        return;
-    }
+    let inner = Rect::new(inner.x, inner.y + 1, inner.width, inner.height - 1);
     let capacity = inner.height.saturating_sub(1) as usize;
     let entries = app.rows();
     let selected = entries

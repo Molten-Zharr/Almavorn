@@ -123,6 +123,27 @@ fn run() -> Result<()> {
                     return;
                 };
                 gui_renderer::paint_keycaps(ui, response.rect, &app, dimensions);
+                if let Some(point) = ctx.input(|input| input.pointer.hover_pos()) {
+                    let x = ((point.x - response.rect.min.x) / response.rect.width()
+                        * f32::from(dimensions.width))
+                    .floor() as u16;
+                    let y = ((point.y - response.rect.min.y) / response.rect.height()
+                        * f32::from(dimensions.height))
+                    .floor() as u16;
+                    let target = app.target_at(ratatui::layout::Position::new(x, y));
+                    let cursor = match target {
+                        Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
+                        Some(Target::PanelResize(index)) => match app.workspace.splits[*index].axis
+                        {
+                            almavorn::workspace::Axis::Horizontal => {
+                                egui::CursorIcon::ResizeHorizontal
+                            }
+                            almavorn::workspace::Axis::Vertical => egui::CursorIcon::ResizeVertical,
+                        },
+                        _ => egui::CursorIcon::Default,
+                    };
+                    ui.ctx().set_cursor_icon(cursor);
+                }
                 let to_cell = |point: egui::Pos2| -> Option<(u16, u16)> {
                     if !response.rect.contains(point)
                         || response.rect.width() <= 0.0
@@ -200,16 +221,20 @@ fn run() -> Result<()> {
                         egui::Event::PointerMoved(pos) => {
                             if let Some((x, y)) = to_cell(pos)
                                 && down
-                                && app.hits.iter().any(|hit| {
-                                    matches!(hit.target, Target::Seek(_))
-                                        && hit.area.contains(ratatui::layout::Position::new(x, y))
-                                })
                             {
-                                app.handle(Input::Click {
-                                    x,
-                                    y,
-                                    double: false,
-                                });
+                                app.handle(Input::Drag { x, y });
+                            }
+                        }
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed: false,
+                            ..
+                        } => {
+                            let point = pos
+                                .clamp(response.rect.min, response.rect.max - egui::vec2(0.1, 0.1));
+                            if let Some((x, y)) = to_cell(point) {
+                                app.handle(Input::Release { x, y });
                             }
                         }
                         egui::Event::MouseWheel { delta, .. } => {
@@ -224,6 +249,13 @@ fn run() -> Result<()> {
                             }
                         }
                         _ => {}
+                    }
+                }
+                if app.workspace.gesture.is_some() && !down {
+                    if let Some((x, y)) = pointer.and_then(to_cell) {
+                        app.handle(Input::Release { x, y });
+                    } else {
+                        app.handle(Input::CancelPointer);
                     }
                 }
                 if !dropped.is_empty()

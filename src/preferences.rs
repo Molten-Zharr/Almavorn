@@ -320,6 +320,8 @@ pub struct ProfilePreferences {
     pub sorting_desk: bool,
     pub playlist_placement: Placement,
     pub player_placement: Placement,
+    #[serde(default)]
+    pub workspace: crate::workspace::WorkspaceLayout,
     pub themes: [Theme; 2],
     pub bindings: Vec<Binding>,
     pub appearance: Appearance,
@@ -338,6 +340,7 @@ impl Settings {
             sorting_desk: self.sorting_desk,
             playlist_placement: self.playlist_placement,
             player_placement: self.player_placement,
+            workspace: self.workspace.clone(),
             themes: self.themes.clone(),
             bindings: self.bindings.clone(),
             appearance: self.appearance.clone(),
@@ -349,6 +352,8 @@ impl Settings {
         self.sorting_desk = preferences.sorting_desk;
         self.playlist_placement = preferences.playlist_placement;
         self.player_placement = preferences.player_placement;
+        self.workspace = preferences.workspace;
+        self.workspace.normalize();
         self.themes = preferences.themes;
         self.bindings = preferences.bindings;
         self.appearance = preferences.appearance;

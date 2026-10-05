@@ -44,6 +44,13 @@ impl Sort {
 
 #[derive(Clone)]
 pub enum Target {
+    PanelFocus(crate::workspace::Panel),
+    PanelMove(crate::workspace::Panel),
+    PanelCollapse(crate::workspace::Panel),
+    PanelClose(crate::workspace::Panel),
+    PanelVisibility(crate::workspace::Panel),
+    PanelResize(usize),
+    ResetWorkspace,
     Action(Action),
     Mode(Mode),
     Playlist(i64),

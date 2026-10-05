@@ -24,6 +24,9 @@ pub struct TextDialog {
 
 #[derive(Clone)]
 pub enum Dialog {
+    Panels {
+        selected: usize,
+    },
     Text(TextDialog),
     Browser(Browser),
     RemoveEntry {
@@ -64,6 +67,7 @@ impl Dialog {
     pub(super) fn opening_action(&self) -> Option<crate::input::Action> {
         use crate::input::Action;
         match self {
+            Self::Panels { .. } => Some(Action::Panels),
             Self::Help { .. } | Self::SettingsHelp { .. } => Some(Action::Help),
             Self::Settings { .. } => Some(Action::Settings),
             Self::Browser(browser) => Some(if browser.folder {
@@ -112,6 +116,13 @@ impl App {
             return;
         }
         match &mut self.dialog {
+            Some(Dialog::Panels { selected }) => {
+                *selected = bounded(
+                    *selected,
+                    i64::from(direction),
+                    crate::workspace::Panel::ALL.len() + 1,
+                )
+            }
             Some(Dialog::Browser(browser)) => {
                 browser.selected =
                     bounded(browser.selected, direction as i64, browser.entries.len())
@@ -146,6 +157,14 @@ impl App {
 
     pub(super) fn submit(&mut self) -> Result<()> {
         match self.dialog.take() {
+            Some(Dialog::Panels { selected }) => {
+                self.dialog = Some(Dialog::Panels { selected });
+                if let Some(panel) = crate::workspace::Panel::ALL.get(selected) {
+                    self.show_panel(*panel)?;
+                } else {
+                    self.reset_workspace()?;
+                }
+            }
             Some(Dialog::Text(dialog)) => {
                 let recovery = Some(Dialog::Text(dialog.clone()));
                 let text = dialog.text.clone();

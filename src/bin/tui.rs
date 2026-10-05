@@ -1,5 +1,5 @@
 use almavorn::{
-    app::{App, Options, Target},
+    app::{App, Options},
     input::{Action, Input, Key, KeyPress},
     ui,
 };
@@ -113,16 +113,10 @@ fn run() -> Result<()> {
                         app.handle(Input::Click { x, y, double });
                     }
                     MouseEventKind::Drag(event::MouseButton::Left) => {
-                        if app.hits.iter().any(|hit| {
-                            matches!(hit.target, Target::Seek(_))
-                                && hit.area.contains(Position::new(x, y))
-                        }) {
-                            app.handle(Input::Click {
-                                x,
-                                y,
-                                double: false,
-                            });
-                        }
+                        app.handle(Input::Drag { x, y });
+                    }
+                    MouseEventKind::Up(event::MouseButton::Left) => {
+                        app.handle(Input::Release { x, y })
                     }
                     MouseEventKind::ScrollUp => app.handle(Input::Scroll { x, y, delta: -3 }),
                     MouseEventKind::ScrollDown => app.handle(Input::Scroll { x, y, delta: 3 }),

@@ -6,3 +6,4 @@ pub mod model;
 pub mod preferences;
 pub mod store;
 pub mod ui;
+pub mod workspace;

@@ -1,18 +1,13 @@
 use super::{
     theme::Palette,
-    widgets::{block, button, button_rows, button_width},
+    widgets::{button, button_rows, button_width},
 };
 use crate::{
     app::{App, Target},
     input::Action,
     model::Mode,
 };
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Modifier, Style},
-    widgets::Borders,
-};
+use ratatui::{Frame, layout::Rect};
 
 pub(super) struct Group {
     pub title: String,
@@ -124,7 +119,7 @@ pub(super) fn commands(app: &App) -> Vec<Group> {
     groups
 }
 
-fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> (Vec<Rect>, u16) {
+pub(super) fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> (Vec<Rect>, u16) {
     let mut rects = Vec::with_capacity(groups.len());
     let (mut x, mut y, mut row_height) = (0u16, 0u16, 0u16);
     let border = if compact { 0 } else { 2 };
@@ -157,58 +152,34 @@ fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> (Vec<Rect>,
     (rects, y.saturating_add(row_height))
 }
 
-pub(super) fn height(app: &App, groups: &[Group], width: u16, compact: bool) -> u16 {
-    layout(app, groups, width, compact).1
-}
-
-pub(super) fn render(
+pub(super) fn contents(
     frame: &mut Frame,
     app: &mut App,
-    area: Rect,
-    groups: Vec<Group>,
+    inner: Rect,
+    group: &Group,
     compact: bool,
     palette: Palette,
 ) {
-    let (rects, _) = layout(app, &groups, area.width, compact);
-    for (group, local) in groups.into_iter().zip(rects) {
-        let rect = Rect::new(
-            area.x + local.x,
-            area.y + local.y,
-            local.width,
-            local.height,
-        )
-        .intersection(area);
-        let mut outer = block(group.title, palette, false).title_style(
-            Style::default()
-                .fg(palette.help_heading)
-                .add_modifier(Modifier::BOLD),
+    let (mut x, mut y) = (inner.x, inner.y);
+    let key_height = if compact { 1 } else { 3 };
+    for (label, target, enabled) in &group.entries {
+        let width = button_width(app, label, target).min(inner.width);
+        if x > inner.x && x.saturating_add(width) > inner.right() {
+            x = inner.x;
+            y = y.saturating_add(key_height);
+        }
+        if y.saturating_add(key_height) > inner.bottom() {
+            break;
+        }
+        button(
+            frame,
+            app,
+            Rect::new(x, y, width, key_height),
+            label,
+            target.clone(),
+            *enabled,
+            palette,
         );
-        if compact {
-            outer = outer.borders(Borders::TOP);
-        }
-        let inner = outer.inner(rect);
-        frame.render_widget(outer, rect);
-        let (mut x, mut y) = (inner.x, inner.y);
-        let key_height = if compact { 1 } else { 3 };
-        for (label, target, enabled) in group.entries {
-            let width = button_width(app, &label, &target).min(inner.width);
-            if x > inner.x && x.saturating_add(width) > inner.right() {
-                x = inner.x;
-                y = y.saturating_add(key_height);
-            }
-            if y.saturating_add(key_height) > inner.bottom() {
-                break;
-            }
-            button(
-                frame,
-                app,
-                Rect::new(x, y, width, key_height),
-                &label,
-                target,
-                enabled,
-                palette,
-            );
-            x = x.saturating_add(width).saturating_add(1);
-        }
+        x = x.saturating_add(width).saturating_add(1);
     }
 }
