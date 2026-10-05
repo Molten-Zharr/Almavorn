@@ -72,6 +72,8 @@ pub enum Target {
     DialogScroll(i16),
     Setting(usize),
     SettingsPage(SettingsPage),
+    SettingsTab(SettingsPage),
+    SettingsVolume(usize, Rect),
     SettingSelect(usize),
     SettingAdjust(usize, i64),
     SettingHelp(usize),

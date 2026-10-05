@@ -2,7 +2,7 @@ mod catalogs;
 mod files;
 mod items;
 
-use super::{App, Dialog, TextPurpose, bounded};
+use super::{App, Dialog, Target, TextPurpose, bounded};
 use crate::{
     input::{Key, KeyPress},
     model::{Language, Placement},
@@ -32,6 +32,23 @@ impl SettingsPage {
         Self::Typography,
         Self::Shortcuts,
     ];
+    pub const SECTIONS: [Self; 4] = [Self::General, Self::Profiles, Self::Themes, Self::Shortcuts];
+    pub const THEME_TABS: [Self; 3] = [Self::Themes, Self::Palettes, Self::Typography];
+
+    pub fn section(self) -> Self {
+        match self {
+            Self::Palettes | Self::Typography => Self::Themes,
+            page => page,
+        }
+    }
+
+    pub fn tab_name(self, language: Language) -> &'static str {
+        if self == Self::Themes {
+            language.text("Presets", "Пресеты")
+        } else {
+            self.name(language)
+        }
+    }
     pub fn name(self, language: Language) -> &'static str {
         match self {
             Self::General => language.text("General", "Общие"),
@@ -47,6 +64,7 @@ impl SettingsPage {
 pub enum SettingsFocus {
     #[default]
     Menu,
+    Subtabs,
     Parameters,
 }
 #[derive(Clone, Debug, Default)]
@@ -59,6 +77,7 @@ pub(crate) struct SettingsView {
     pub preset: usize,
     pub offset: usize,
     pub menu_area: Rect,
+    pub subtab_area: Rect,
     pub parameters_area: Rect,
     pub binding_modifiers: [bool; 3],
     pub binding_offset: usize,
@@ -154,6 +173,51 @@ impl App {
             selected: self.settings_view.selected,
         });
     }
+    pub(super) fn select_settings_tab(&mut self, page: SettingsPage) {
+        if SettingsPage::THEME_TABS.contains(&page) {
+            self.open_settings_page(page);
+            self.settings_view.focus = SettingsFocus::Subtabs;
+        }
+    }
+    pub(super) fn hover_settings(&mut self) {
+        if !matches!(self.dialog, Some(Dialog::Settings { .. })) || self.workspace.gesture.is_some()
+        {
+            return;
+        }
+        let target = self
+            .hits
+            .iter()
+            .rev()
+            .find(|hit| hit.enabled && hit.area.contains(self.pointer))
+            .map(|hit| hit.target.clone());
+        match target {
+            Some(Target::SettingsPage(page))
+                if self.settings_view.menu_area.contains(self.pointer) =>
+            {
+                if self.settings_view.page.section() != page {
+                    self.open_settings_page(page);
+                }
+                self.settings_view.focus = SettingsFocus::Menu;
+            }
+            Some(Target::SettingsTab(page))
+                if self.settings_view.subtab_area.contains(self.pointer) =>
+            {
+                if self.settings_view.page != page {
+                    self.select_settings_tab(page);
+                }
+                self.settings_view.focus = SettingsFocus::Subtabs;
+            }
+            Some(
+                Target::SettingSelect(index)
+                | Target::Setting(index)
+                | Target::SettingAdjust(index, _)
+                | Target::SettingsVolume(index, _),
+            ) if self.settings_view.parameters_area.contains(self.pointer) => {
+                self.select_setting(index);
+            }
+            _ => {}
+        }
+    }
     pub(super) fn close_dialog(&mut self) -> bool {
         match self.dialog.take() {
             Some(
@@ -177,13 +241,25 @@ impl App {
         }
     }
     pub(super) fn settings_scroll(&mut self, direction: i64) {
-        if self.settings_view.focus == SettingsFocus::Menu {
-            let index = SettingsPage::ALL
-                .iter()
-                .position(|page| *page == self.settings_view.page)
-                .unwrap_or(0);
-            let page = SettingsPage::ALL[bounded(index, direction, SettingsPage::ALL.len())];
-            self.open_settings_page(page);
+        if self.settings_view.focus != SettingsFocus::Parameters {
+            let subtabs = self.settings_view.focus == SettingsFocus::Subtabs;
+            let pages = if subtabs {
+                SettingsPage::THEME_TABS.as_slice()
+            } else {
+                SettingsPage::SECTIONS.as_slice()
+            };
+            let current = if subtabs {
+                self.settings_view.page
+            } else {
+                self.settings_view.page.section()
+            };
+            let index = pages.iter().position(|page| *page == current).unwrap_or(0);
+            let page = pages[bounded(index, direction, pages.len())];
+            if subtabs {
+                self.select_settings_tab(page);
+            } else {
+                self.open_settings_page(page);
+            }
         } else {
             self.settings_view.selected = bounded(
                 self.settings_view.selected,
@@ -197,11 +273,20 @@ impl App {
         let key = key.normalized();
         match key.key {
             Key::Tab => {
-                self.settings_view.focus = if self.settings_view.focus == SettingsFocus::Menu {
-                    SettingsFocus::Parameters
+                let focuses = if self.settings_view.page.section() == SettingsPage::Themes {
+                    &[
+                        SettingsFocus::Menu,
+                        SettingsFocus::Subtabs,
+                        SettingsFocus::Parameters,
+                    ][..]
                 } else {
-                    SettingsFocus::Menu
+                    &[SettingsFocus::Menu, SettingsFocus::Parameters][..]
                 };
+                self.settings_view.focus = cycle(
+                    self.settings_view.focus,
+                    focuses,
+                    if key.shift { -1 } else { 1 },
+                );
             }
             Key::Up => self.settings_scroll(-1),
             Key::Down => self.settings_scroll(1),
@@ -210,15 +295,29 @@ impl App {
             Key::PageUp => self.settings_scroll(-5),
             Key::PageDown => self.settings_scroll(5),
             Key::Right if self.settings_view.focus == SettingsFocus::Menu => {
-                self.settings_view.focus = SettingsFocus::Parameters
+                self.settings_view.focus =
+                    if self.settings_view.page.section() == SettingsPage::Themes {
+                        SettingsFocus::Subtabs
+                    } else {
+                        SettingsFocus::Parameters
+                    };
+            }
+            Key::Left | Key::Right if self.settings_view.focus == SettingsFocus::Subtabs => {
+                self.settings_scroll(if key.key == Key::Left { -1 } else { 1 });
             }
             Key::Left | Key::Right if self.settings_view.focus == SettingsFocus::Parameters => {
                 let direction = if key.key == Key::Left { -1 } else { 1 };
                 self.adjust_setting(self.settings_view.selected, direction)?;
             }
             Key::Enter | Key::Char(' ') => {
-                if self.settings_view.focus == SettingsFocus::Menu {
-                    self.settings_view.focus = SettingsFocus::Parameters;
+                if self.settings_view.focus != SettingsFocus::Parameters {
+                    self.settings_view.focus = if self.settings_view.focus == SettingsFocus::Menu
+                        && self.settings_view.page.section() == SettingsPage::Themes
+                    {
+                        SettingsFocus::Subtabs
+                    } else {
+                        SettingsFocus::Parameters
+                    };
                 } else {
                     self.setting(self.settings_view.selected)?;
                 }
@@ -312,29 +411,15 @@ impl App {
                 self.text("New preset", "Новый пресет").into(),
             ),
             SettingControl::PresetRename => {
-                let p = &self.settings.presets[self
-                    .settings_view
-                    .preset
-                    .min(self.settings.presets.len() - 1)];
+                let p = &self.settings.presets[self.selected_settings_preset_index()];
                 self.settings_text(SettingsEdit::RenamePreset(p.id.clone()), p.name.clone());
-            }
-            SettingControl::PresetApply => {
-                let style = self.settings.presets[self
-                    .settings_view
-                    .preset
-                    .min(self.settings.presets.len() - 1)]
-                .style
-                .clone();
-                self.settings.apply_style(style);
-                self.save_settings()?;
             }
             SettingControl::PresetUpdate => {
                 let style = self.settings.current_style();
-                let index = self
-                    .settings_view
-                    .preset
-                    .min(self.settings.presets.len() - 1);
+                let index = self.selected_settings_preset_index();
                 self.settings.presets[index].style = style;
+                self.settings.appearance.preset_ids[self.settings.mode.index()] =
+                    Some(self.settings.presets[index].id.clone());
                 self.save_settings()?;
             }
             SettingControl::DeleteCatalog => self.request_settings_delete()?,
@@ -372,11 +457,7 @@ impl App {
                 )
             }
             SettingControl::Volume => {
-                self.settings.volume =
-                    (self.settings.volume + direction as f32 * 0.05).clamp(0.0, 1.0);
-                if let Some(audio) = &self.audio {
-                    audio.volume(self.settings.volume);
-                }
+                return self.set_settings_volume(self.settings.volume + direction as f32 * 0.05);
             }
             SettingControl::Desk => self.settings.sorting_desk = !self.settings.sorting_desk,
             SettingControl::PlaylistPlacement => {
@@ -423,11 +504,12 @@ impl App {
             }
             SettingControl::PresetPick => {
                 self.settings_view.preset = cycle_index(
-                    self.settings_view.preset,
+                    self.selected_settings_preset_index(),
                     self.settings.presets.len(),
                     direction,
                 );
-                return Ok(());
+                let id = self.settings.presets[self.settings_view.preset].id.clone();
+                self.settings.apply_preset(&id)?;
             }
             SettingControl::ModePalette(mode) => {
                 let selected = self
@@ -469,6 +551,13 @@ impl App {
         }
         self.save_settings()
     }
+    pub(super) fn set_settings_volume(&mut self, volume: f32) -> Result<()> {
+        self.settings.volume = volume.clamp(0.0, 1.0);
+        if let Some(audio) = &self.audio {
+            audio.volume(self.settings.volume);
+        }
+        self.save_settings()
+    }
     fn settings_text(&mut self, edit: SettingsEdit, value: String) {
         self.text_dialog(TextPurpose::Settings(edit), value);
     }
@@ -490,5 +579,20 @@ impl App {
             .settings_view
             .palette
             .min(self.settings.palettes.len() - 1)]
+    }
+    pub(crate) fn selected_settings_preset_index(&self) -> usize {
+        self.settings
+            .current_preset()
+            .and_then(|current| {
+                self.settings
+                    .presets
+                    .iter()
+                    .position(|preset| preset.id == current.id)
+            })
+            .unwrap_or_else(|| {
+                self.settings_view
+                    .preset
+                    .min(self.settings.presets.len() - 1)
+            })
     }
 }

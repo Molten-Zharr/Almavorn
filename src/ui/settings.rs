@@ -1,48 +1,39 @@
 use super::{
     theme::Palette,
-    widgets::{block, button, buttons, visible_offset},
+    widgets::{block, button, button_width, buttons, visible_offset},
 };
-use crate::app::{App, Hit, SettingsFocus, SettingsPage, Target};
+use crate::app::{App, Hit, SettingControl, SettingsFocus, SettingsPage, Target};
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Rect},
     style::{Color, Modifier},
-    widgets::{Clear, Paragraph, Wrap},
+    text::Span,
+    widgets::{Clear, Gauge, Paragraph, Wrap},
 };
 
 pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette) {
     let area = frame.area();
     frame.render_widget(Clear, area);
-    let profile = app
-        .settings
-        .profiles
-        .iter()
-        .find(|p| p.id == app.settings.active_profile)
-        .map(|p| p.name.as_str())
-        .unwrap_or("");
-    let outer = block(
-        format!(
-            "Almavorn / {} / {}",
-            app.text("Settings", "Настройки"),
-            profile
-        ),
-        palette,
-        true,
-    );
-    let inner = outer.inner(area);
+    let outer = block(String::new(), palette, true);
+    let mut inner = outer.inner(area);
     frame.render_widget(outer, area);
+    breadcrumbs(frame, app, area, palette);
+    if inner.y == area.y && inner.height > 0 {
+        inner.y += 1;
+        inner.height -= 1;
+    }
     let footer_height = inner.height.min(6);
     let body_height = inner.height.saturating_sub(footer_height);
     let menu_width = (inner.width / 4).clamp(1, 24);
     let menu = Rect::new(inner.x, inner.y, menu_width, body_height);
-    let content = Rect::new(
+    let mut content = Rect::new(
         menu.right().saturating_add(1).min(inner.right()),
         inner.y,
         inner.width.saturating_sub(menu_width + 1),
         body_height,
     );
     app.settings_view.menu_area = menu;
-    app.settings_view.parameters_area = content;
+    app.settings_view.subtab_area = Rect::default();
     frame.render_widget(
         Paragraph::new(app.text("Sections", "Разделы")).style(
             palette
@@ -52,22 +43,26 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         ),
         Rect::new(menu.x, menu.y, menu.width, 1.min(menu.height)),
     );
-    let page_index = SettingsPage::ALL
+    let page_index = SettingsPage::SECTIONS
         .iter()
-        .position(|page| *page == app.settings_view.page)
+        .position(|page| *page == app.settings_view.page.section())
         .unwrap_or(0);
     let menu_offset = visible_offset(
         0,
         page_index,
         menu.height.saturating_sub(2) as usize,
-        SettingsPage::ALL.len(),
+        SettingsPage::SECTIONS.len(),
     );
-    for (index, page) in SettingsPage::ALL.into_iter().enumerate().skip(menu_offset) {
+    for (index, page) in SettingsPage::SECTIONS
+        .into_iter()
+        .enumerate()
+        .skip(menu_offset)
+    {
         let y = menu.y.saturating_add((index - menu_offset) as u16 + 2);
         if y >= menu.bottom() {
             break;
         }
-        let selected = app.settings_view.page == page;
+        let selected = app.settings_view.page.section() == page;
         let row = Rect::new(menu.x, y, menu.width, 1);
         let style = if selected {
             palette
@@ -75,6 +70,8 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
                 .bg(palette.sidebar_selection)
                 .fg(palette.background)
                 .add_modifier(Modifier::BOLD)
+        } else if app.hovered(row) {
+            palette.text().bg(palette.selection)
         } else {
             palette.text()
         };
@@ -109,6 +106,14 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             ),
         );
     }
+    if app.settings_view.page.section() == SettingsPage::Themes {
+        let height = theme_tabs(frame, app, content, palette);
+        app.settings_view.subtab_area = Rect::new(content.x, content.y, content.width, height);
+        let reserved = (height + 1).min(content.height);
+        content.y += reserved;
+        content.height -= reserved;
+    }
+    app.settings_view.parameters_area = content;
     let rows = app.settings_rows();
     app.settings_view.selected = app.settings_view.selected.min(rows.len().saturating_sub(1));
     let capacity = (content.height.saturating_sub(2) / 4).max(1) as usize;
@@ -121,7 +126,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     frame.render_widget(
         Paragraph::new(format!(
             "{}  {}/{}",
-            app.settings_view.page.name(app.settings.language),
+            app.settings_view.page.tab_name(app.settings.language),
             app.settings_view.selected + 1,
             rows.len()
         ))
@@ -149,7 +154,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         let row = Rect::new(content.x, y, content.width, height);
         let selected = app.settings_view.selected == index
             && app.settings_view.focus == SettingsFocus::Parameters;
-        let style = if selected {
+        let style = if selected || (item.enabled && app.hovered(row)) {
             palette.text().bg(palette.selection)
         } else {
             palette.text()
@@ -160,6 +165,10 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             target: Target::SettingSelect(index),
             enabled: true,
         });
+        if matches!(item.control, SettingControl::Volume) {
+            volume(frame, app, row, index, &item.label, style, palette);
+            continue;
+        }
         let value_width = ((item.value.chars().count() + if item.adjustable { 10 } else { 4 })
             as u16)
             .min(content.width / 2)
@@ -216,7 +225,11 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             app,
             value,
             &item.value,
-            Target::Setting(index),
+            if item.adjustable {
+                Target::SettingAdjust(index, 1)
+            } else {
+                Target::Setting(index)
+            },
             item.enabled,
             palette,
         );
@@ -338,4 +351,169 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             palette,
         );
     }
+}
+
+fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
+    if area.height == 0 {
+        return;
+    }
+    let inset = if palette.borders == crate::preferences::BorderWeight::None {
+        0
+    } else {
+        2
+    };
+    let width = area.width.saturating_sub(inset * 2);
+    let mut x = area.x + inset.min(area.width);
+    let right = x + width;
+    let profile = app
+        .settings
+        .profiles
+        .iter()
+        .find(|profile| profile.id == app.settings.active_profile)
+        .map(|profile| profile.name.clone())
+        .unwrap_or_default();
+    let page = app.settings_view.page;
+    let mut entries = vec![
+        ("Almavorn".to_owned(), Target::CloseDialog),
+        (
+            app.text("Settings", "Настройки").to_owned(),
+            Target::SettingsPage(SettingsPage::General),
+        ),
+        (profile, Target::SettingsPage(SettingsPage::Profiles)),
+        (
+            page.section().name(app.settings.language).to_owned(),
+            Target::SettingsPage(page.section()),
+        ),
+    ];
+    if page.section() == SettingsPage::Themes {
+        entries.push((
+            page.tab_name(app.settings.language).to_owned(),
+            Target::SettingsTab(page),
+        ));
+    }
+    for (index, (label, target)) in entries.into_iter().enumerate() {
+        if index > 0 {
+            let separator = Rect::new(x, area.y, 3.min(right.saturating_sub(x)), 1);
+            frame.render_widget(
+                Paragraph::new(" / ").style(palette.text().fg(palette.separator)),
+                separator,
+            );
+            x = separator.right();
+        }
+        if x >= right {
+            break;
+        }
+        let row = Rect::new(
+            x,
+            area.y,
+            (Span::raw(&label).width() as u16).min(right - x),
+            1,
+        );
+        let mut style = palette
+            .text()
+            .fg(palette.accent)
+            .add_modifier(Modifier::BOLD);
+        if app.hovered(row) {
+            style = style.bg(palette.selection);
+        }
+        frame.render_widget(Paragraph::new(label).style(style), row);
+        app.hits.push(Hit {
+            area: row,
+            target,
+            enabled: true,
+        });
+        x = row.right();
+    }
+}
+
+fn theme_tabs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) -> u16 {
+    let mut x = area.x;
+    let mut y = area.y;
+    for page in SettingsPage::THEME_TABS {
+        let label = page.tab_name(app.settings.language);
+        let width = button_width(app, label, &Target::SettingsTab(page)).min(area.width);
+        if x > area.x && x + width > area.right() {
+            x = area.x;
+            y += 1;
+        }
+        if width == 0 || y >= area.bottom() {
+            break;
+        }
+        let row = Rect::new(x, y, width, 1);
+        button(
+            frame,
+            app,
+            row,
+            label,
+            Target::SettingsTab(page),
+            true,
+            palette,
+        );
+        if page == app.settings_view.page {
+            frame.render_widget(
+                Paragraph::new(format!("│{label}│")).style(
+                    palette
+                        .text()
+                        .bg(palette.sidebar_selection)
+                        .fg(palette.background)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                row,
+            );
+        }
+        x = x.saturating_add(width).saturating_add(1);
+    }
+    if area.width == 0 || area.height == 0 {
+        0
+    } else {
+        (y.saturating_sub(area.y) + 1).min(area.height)
+    }
+}
+
+fn volume(
+    frame: &mut Frame,
+    app: &mut App,
+    row: Rect,
+    index: usize,
+    label: &str,
+    style: ratatui::style::Style,
+    palette: Palette,
+) {
+    frame.render_widget(
+        Paragraph::new(label).style(style.fg(palette.text).add_modifier(Modifier::BOLD)),
+        Rect::new(row.x, row.y, row.width, row.height.min(1)),
+    );
+    if row.height < 3 {
+        return;
+    }
+    let scale = Rect::new(
+        row.x,
+        row.y + 1,
+        row.width,
+        row.height.saturating_sub(2).min(2),
+    );
+    frame.render_widget(
+        Gauge::default()
+            .ratio(f64::from(app.settings.volume).clamp(0.0, 1.0))
+            .label("")
+            .gauge_style(style.fg(palette.accent).bg(palette.selection)),
+        scale,
+    );
+    app.hits.push(Hit {
+        area: scale,
+        target: Target::SettingsVolume(index, scale),
+        enabled: true,
+    });
+    let percentage = Rect::new(row.x, scale.bottom(), row.width, 1);
+    frame.render_widget(
+        Paragraph::new(format!("{}%", (app.settings.volume * 100.0).round() as u32))
+            .alignment(Alignment::Center)
+            .style(style.fg(palette.text)),
+        percentage,
+    );
+    app.hits.push(Hit {
+        area: percentage,
+        target: Target::SettingAdjust(index, 1),
+        enabled: true,
+    });
 }

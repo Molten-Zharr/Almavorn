@@ -82,21 +82,12 @@ fn run() -> Result<()> {
                 if backend.size().ok() != Some(ratatui::layout::Size::new(columns, rows)) {
                     gui_renderer::resize(backend, columns, rows);
                 }
-                // Apply the latest pointer position before painting the buttons.
+                // Only real pointer events may take selection back from keys or the wheel.
+                // Process them before painting so hover selection is visible this frame.
                 let image_rect = egui::Rect::from_min_size(ui.next_widget_position(), available);
-                let (x, y) = ctx
-                    .input(|input| input.pointer.hover_pos())
-                    .filter(|point| image_rect.contains(*point))
-                    .map(|point| {
-                        (
-                            ((point.x - image_rect.min.x) / image_rect.width() * f32::from(columns))
-                                .floor() as u16,
-                            ((point.y - image_rect.min.y) / image_rect.height() * f32::from(rows))
-                                .floor() as u16,
-                        )
-                    })
-                    .unwrap_or((u16::MAX, u16::MAX));
-                app.handle(Input::Move { x, y });
+                if let Some(movement) = pointer_movement(&ctx, image_rect, columns, rows) {
+                    app.handle(movement);
+                }
                 if let Err(error) = terminal.draw(|frame| ui::render(&mut app, frame)) {
                     app.notice = format!(
                         "{}: {error}",
@@ -204,11 +195,19 @@ fn run() -> Result<()> {
                         }
                         egui::Event::PointerButton {
                             pos,
-                            button: egui::PointerButton::Primary,
+                            button,
                             pressed: true,
                             ..
-                        } => {
+                        } if matches!(
+                            button,
+                            egui::PointerButton::Primary | egui::PointerButton::Secondary
+                        ) =>
+                        {
                             if let Some((x, y)) = to_cell(pos) {
+                                if button == egui::PointerButton::Secondary {
+                                    app.handle(Input::SecondaryClick { x, y });
+                                    continue;
+                                }
                                 let double =
                                     previous_click.as_ref().is_some_and(|(point, time)| {
                                         point.distance(pos) < 5.0
@@ -244,7 +243,7 @@ fn run() -> Result<()> {
                                 app.handle(Input::Scroll {
                                     x,
                                     y,
-                                    delta: if delta.y > 0.0 { -3 } else { 3 },
+                                    delta: if delta.y > 0.0 { -1 } else { 1 },
                                 });
                             }
                         }
@@ -273,6 +272,36 @@ fn run() -> Result<()> {
         }
     })
     .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+fn pointer_movement(
+    ctx: &egui::Context,
+    area: egui::Rect,
+    columns: u16,
+    rows: u16,
+) -> Option<Input> {
+    ctx.input(|input| {
+        if !input.events.iter().any(|event| {
+            matches!(
+                event,
+                egui::Event::PointerMoved(_) | egui::Event::PointerGone
+            )
+        }) {
+            return None;
+        }
+        let (x, y) = input
+            .pointer
+            .hover_pos()
+            .filter(|point| area.width() > 0.0 && area.height() > 0.0 && area.contains(*point))
+            .map(|point| {
+                (
+                    ((point.x - area.min.x) / area.width() * f32::from(columns)).floor() as u16,
+                    ((point.y - area.min.y) / area.height() * f32::from(rows)).floor() as u16,
+                )
+            })
+            .unwrap_or((u16::MAX, u16::MAX));
+        Some(Input::Move { x, y })
+    })
 }
 
 fn convert_key(key: egui::Key) -> Option<Key> {
@@ -317,4 +346,66 @@ fn convert_key(key: egui::Key) -> Option<Key> {
             }
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gui_repaints_keys_and_wheel_do_not_reemit_stationary_pointer_movement() {
+        let ctx = egui::Context::default();
+        let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 200.0));
+        let frame = |events| {
+            let mut movement = None;
+            let _ = ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(area),
+                    events,
+                    ..Default::default()
+                },
+                |ctx| movement = pointer_movement(ctx, area, 10, 20),
+            );
+            movement
+        };
+        let position = egui::pos2(25.0, 55.0);
+        assert!(matches!(
+            frame(vec![egui::Event::PointerMoved(position)]),
+            Some(Input::Move { x: 2, y: 5 })
+        ));
+        assert!(
+            frame(vec![egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Line,
+                delta: egui::vec2(0.0, -1.0),
+                phase: egui::TouchPhase::Move,
+                modifiers: Default::default(),
+            }])
+            .is_none()
+        );
+        assert_eq!(ctx.input(|input| input.pointer.hover_pos()), Some(position));
+        for _ in 0..5 {
+            assert!(frame(vec![]).is_none());
+        }
+        assert!(
+            frame(vec![egui::Event::Key {
+                key: egui::Key::ArrowDown,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Default::default(),
+            }])
+            .is_none()
+        );
+        assert!(matches!(
+            frame(vec![egui::Event::PointerMoved(egui::pos2(26.0, 55.0))]),
+            Some(Input::Move { x: 2, y: 5 })
+        ));
+        assert!(matches!(
+            frame(vec![egui::Event::PointerGone]),
+            Some(Input::Move {
+                x: u16::MAX,
+                y: u16::MAX
+            })
+        ));
+    }
 }

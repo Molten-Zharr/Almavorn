@@ -16,7 +16,6 @@ pub(crate) enum SettingControl {
     ProfileApply,
     ProfileRename,
     PresetPick,
-    PresetApply,
     PresetCreate,
     PresetRename,
     PresetUpdate,
@@ -83,17 +82,17 @@ impl App {
                 ]; rows.last_mut().unwrap().enabled = self.settings.profiles.len() > 1; rows
             }
             SettingsPage::Themes => {
-                let preset = &self.settings.presets[self.settings_view.preset.min(self.settings.presets.len()-1)];
+                let preset = &self.settings.presets[self.selected_settings_preset_index()];
+                let active_name = self.settings.current_preset().map(|preset| preset.name.as_str()).unwrap_or(lang.text("Custom", "Пользовательская"));
                 let palette_name = |mode: Mode| self.settings.palettes.iter().find(|p| p.id == self.settings.appearance.palette_ids[mode.index()]).map(|p| p.name.clone()).unwrap_or_default();
                 let mut rows = vec![
-                    make(lang.text("Theme preset", "Пресет темы"), preset.name.clone(), lang.text("Browse saved combinations of palette, font, size, borders and corners.", "Выбор сохранённого сочетания палитры, шрифта, размера, рамок и углов."), SettingControl::PresetPick, true),
-                    make(lang.text("Apply preset", "Применить пресет"), run.clone(), lang.text("Apply to the current mode. Font and geometry are shared by both modes; changes appear immediately.", "Применить к текущему режиму. Шрифт и геометрия общие для обоих режимов; изменения видны сразу."), SettingControl::PresetApply, false),
+                    make(lang.text("Theme preset", "Пресет темы"), active_name.into(), lang.text("Selection applies and saves immediately. Custom means the appearance differs from saved presets. Palette is per mode; font and geometry are shared.", "Выбор сразу применяет и сохраняет пресет. Пользовательская: оформление отличается от пресетов. Палитра для текущего режима, шрифт и геометрия общие."), SettingControl::PresetPick, true),
                     make(lang.text("Order palette", "Палитра Порядка"), palette_name(Mode::Order), lang.text("Colors used while the Order mode is active.", "Цвета интерфейса в режиме Порядка."), SettingControl::ModePalette(Mode::Order), true),
                     make(lang.text("Chaos palette", "Палитра Хаоса"), palette_name(Mode::Chaos), lang.text("Colors used while the Chaos mode is active.", "Цвета интерфейса в режиме Хаоса."), SettingControl::ModePalette(Mode::Chaos), true),
                     make(lang.text("Create preset", "Создать пресет"), action.clone(), lang.text("Save the current mode's palette, font, size and borders under a new name.", "Сохранить палитру текущего режима, шрифт, размер и рамки под новым именем."), SettingControl::PresetCreate, false),
-                    make(lang.text("Rename preset", "Переименовать пресет"), action.clone(), lang.text("Change the selected preset name.", "Изменить имя выбранного пресета."), SettingControl::PresetRename, false),
-                    make(lang.text("Update preset", "Обновить пресет"), run.clone(), lang.text("Replace the selected preset's appearance with the current settings.", "Заменить оформление выбранного пресета текущими настройками."), SettingControl::PresetUpdate, false),
-                    make(lang.text("Delete preset", "Удалить пресет"), action.clone(), lang.text("Remove after confirmation. The current appearance is kept; one preset must remain.", "Удалить после подтверждения. Текущее оформление сохраняется; один пресет должен остаться."), SettingControl::DeleteCatalog, false),
+                    make(lang.text("Rename preset", "Переименовать пресет"), preset.name.clone(), lang.text("Change the named preset's name.", "Изменить имя указанного пресета."), SettingControl::PresetRename, false),
+                    make(lang.text("Update preset", "Обновить пресет"), preset.name.clone(), lang.text("Replace the named preset's appearance with the current settings.", "Заменить оформление указанного пресета текущими настройками."), SettingControl::PresetUpdate, false),
+                    make(lang.text("Delete preset", "Удалить пресет"), preset.name.clone(), lang.text("Remove the named preset after confirmation. The current appearance is kept; one preset must remain.", "Удалить указанный пресет после подтверждения. Текущее оформление сохраняется; один пресет должен остаться."), SettingControl::DeleteCatalog, false),
                 ]; rows.last_mut().unwrap().enabled = self.settings.presets.len() > 1; rows
             }
             SettingsPage::Palettes => {
