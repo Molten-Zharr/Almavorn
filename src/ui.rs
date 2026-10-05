@@ -3,20 +3,16 @@ mod library;
 mod player;
 mod settings;
 mod theme;
+mod toolbar;
 mod widgets;
 
 use self::{
     dialogs::render_dialog,
     library::{playlists, tracks_table},
-    player::player,
+    player::{player, preferred_height},
     theme::Palette,
-    widgets::buttons,
 };
-use crate::{
-    app::{App, Target},
-    input::Action,
-    model::{Mode, Placement},
-};
+use crate::{app::App, model::Placement};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -60,9 +56,52 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         );
         return;
     }
-    let toolbar_height = if area.width < 70 { 5 } else { 3 };
-    let header_height = if area.width < 70 { 3 } else { 2 };
+    let groups = toolbar::commands(app);
+    let header_height = 1;
     let footer_height = if area.width < 80 { 4 } else { 3 };
+    let player_height = if area.width >= 80
+        && matches!(
+            app.settings.player_placement,
+            Placement::Left | Placement::Right
+        ) {
+        0
+    } else {
+        preferred_height(app, area.width)
+    };
+    let library_width = if player_height == 0 {
+        area.width.saturating_sub(30)
+    } else {
+        area.width
+    };
+    let library_height = if library_width >= 70
+        && matches!(
+            app.settings.playlist_placement,
+            Placement::Left | Placement::Right
+        ) {
+        9
+    } else {
+        11
+    };
+    let reserved = header_height + footer_height + player_height + library_height;
+    let compact =
+        toolbar::height(app, &groups, area.width, false).saturating_add(reserved) > area.height;
+    let toolbar_height = toolbar::height(app, &groups, area.width, compact);
+    if toolbar_height.saturating_add(reserved) > area.height {
+        frame.render_widget(
+            Paragraph::new(app.text(
+                "Enlarge the window or reduce zoom to fit all controls.",
+                "Увеличьте окно или уменьшите масштаб, чтобы все элементы поместились.",
+            ))
+            .style(palette.text())
+            .wrap(Wrap { trim: false }),
+            area,
+        );
+        if let Some(mut dialog) = app.dialog.take() {
+            render_dialog(frame, app, &mut dialog, palette);
+            app.dialog = Some(dialog);
+        }
+        return;
+    }
     let parts = Layout::vertical([
         Constraint::Length(header_height),
         Constraint::Length(toolbar_height),
@@ -86,89 +125,18 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         Paragraph::new(header),
         Rect::new(parts[0].x, parts[0].y, parts[0].width, 1),
     );
-    let lang = app.settings.language;
-    let mut modes: Vec<_> = Mode::ALL
-        .into_iter()
-        .map(|mode| {
-            (
-                format!(
-                    "{}{}",
-                    if app.settings.mode == mode { "* " } else { "" },
-                    mode.name(lang)
-                ),
-                Target::Mode(mode),
-                !app.busy(),
-            )
-        })
-        .collect();
-    modes.push((
-        format!(
-            "{} {}",
-            if app.editing { "x" } else { " " },
-            app.text("Edit", "Правка")
-        ),
-        Target::Action(Action::ToggleEdit),
-        app.allowed(Action::ToggleEdit),
-    ));
-    modes.push((
-        format!(
-            "{} {}",
-            if app.settings.sorting_desk { "x" } else { " " },
-            app.text("Sorting desk", "Сортировочный стол")
-        ),
-        Target::Action(Action::ToggleDesk),
-        !app.busy(),
-    ));
-    buttons(
-        frame,
-        app,
-        Rect::new(
-            parts[0].x,
-            parts[0].y + 1,
-            parts[0].width,
-            header_height - 1,
-        ),
-        modes,
-        palette,
-    );
-    let commands = [
-        (Action::AddFiles, "Files", "Файлы"),
-        (Action::AddFolder, "Folder", "Папка"),
-        (Action::AddNew, "New files", "Новые файлы"),
-        (Action::NewPlaylist, "+ Playlist", "+ Плейлист"),
-        (Action::Rename, "Rename", "Имя"),
-        (Action::Delete, "Remove", "Убрать"),
-        (Action::Transfer, "Copy to…", "Копировать…"),
-        (Action::MoveUp, "Move up", "Выше"),
-        (Action::MoveDown, "Move down", "Ниже"),
-        (Action::Search, "Search", "Поиск"),
-        (Action::Sort, "Sort", "Сортировка"),
-        (Action::Metadata, "Info", "Сведения"),
-        (Action::Mark, "Mark", "Отметить"),
-        (Action::Undo, "Undo", "Отмена"),
-        (Action::Redo, "Redo", "Повтор"),
-        (Action::Settings, "Settings", "Настройки"),
-        (Action::Help, "Help", "Помощь"),
-        (Action::Quit, "Exit", "Выход"),
-    ];
-    let entries = commands
-        .into_iter()
-        .map(|(action, en, ru)| {
-            (
-                app.text(en, ru).to_owned(),
-                Target::Action(action),
-                app.allowed(action),
-            )
-        })
-        .collect();
-    buttons(frame, app, parts[1], entries, palette);
+    toolbar::render(frame, app, parts[1], groups, compact, palette);
     let mut player_placement = app.settings.player_placement;
     if area.width < 80 && matches!(player_placement, Placement::Left | Placement::Right) {
         player_placement = Placement::Bottom;
     }
     let vertical = matches!(player_placement, Placement::Left | Placement::Right);
     let player_first = matches!(player_placement, Placement::Top | Placement::Left);
-    let size = if vertical { 30 } else { 7 };
+    let size = if vertical {
+        30
+    } else {
+        preferred_height(app, area.width)
+    };
     let content = Layout::default()
         .direction(if vertical {
             Direction::Horizontal

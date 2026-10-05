@@ -49,9 +49,12 @@ fn run() -> Result<()> {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show_inside(root, |ui| {
+                let pixels_per_point = ctx.pixels_per_point();
                 let requested_font = (
                     app.settings.appearance.font,
-                    app.settings.appearance.font_size,
+                    (f32::from(app.settings.appearance.font_size) * pixels_per_point)
+                        .round()
+                        .clamp(1.0, f32::from(u16::MAX)) as u16,
                 );
                 if requested_font != font_settings {
                     let dimensions = terminal
@@ -72,9 +75,9 @@ fn run() -> Result<()> {
                 // Resize before drawing: rendered hit areas and mouse coordinates must use the same grid.
                 let available = ui.available_size();
                 let backend = &mut terminal.backend_mut().soft_backend;
-                let columns = (available.x / backend.char_width.max(1) as f32)
+                let columns = (available.x * pixels_per_point / backend.char_width.max(1) as f32)
                     .clamp(1.0, f32::from(u16::MAX)) as u16;
-                let rows = (available.y / backend.char_height.max(1) as f32)
+                let rows = (available.y * pixels_per_point / backend.char_height.max(1) as f32)
                     .clamp(1.0, f32::from(u16::MAX)) as u16;
                 if backend.size().ok() != Some(ratatui::layout::Size::new(columns, rows)) {
                     gui_renderer::resize(backend, columns, rows);
@@ -119,6 +122,7 @@ fn run() -> Result<()> {
                 let Some(dimensions) = dimensions else {
                     return;
                 };
+                gui_renderer::paint_keycaps(ui, response.rect, &app, dimensions);
                 let to_cell = |point: egui::Pos2| -> Option<(u16, u16)> {
                     if !response.rect.contains(point)
                         || response.rect.width() <= 0.0

@@ -1,3 +1,7 @@
+use almavorn::{
+    app::{App, Target},
+    preferences::Corners,
+};
 use eframe::egui;
 use egui_ratatui::RataguiBackend;
 use ratatui::{buffer::Buffer, layout::Rect};
@@ -37,10 +41,10 @@ impl ImageCache {
         if full {
             let image = backend.to_egui_image();
             if let Some(texture) = &mut backend.text_handle {
-                texture.set(image, egui::TextureOptions::NEAREST);
+                texture.set(image, egui::TextureOptions::LINEAR);
             } else {
                 backend.text_handle =
-                    Some(ctx.load_texture("almavorn", image, egui::TextureOptions::NEAREST));
+                    Some(ctx.load_texture("almavorn", image, egui::TextureOptions::LINEAR));
             }
             self.buffer = Some(backend.soft_backend.buffer.clone());
         } else {
@@ -93,7 +97,7 @@ impl ImageCache {
                     .set_partial(
                         [left, top],
                         egui::ColorImage::new([width, height], pixels),
-                        egui::TextureOptions::NEAREST,
+                        egui::TextureOptions::LINEAR,
                     );
             }
         }
@@ -121,4 +125,66 @@ pub fn resize(backend: &mut SoftBackend<EmbeddedTTF>, columns: u16, rows: u16) {
     backend.rendered_cursor = None;
     // Terminal::draw will render the new layout. SoftBackend::resize would
     // rasterize the old layout first, only for Terminal to clear it immediately.
+}
+
+pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui::layout::Size) {
+    let palette = app.settings.current_palette();
+    for hit in &app.hits {
+        if hit.area.height != 1
+            || !matches!(
+                hit.target,
+                Target::Action(_)
+                    | Target::Mode(_)
+                    | Target::Submit
+                    | Target::CloseDialog
+                    | Target::Text(_)
+                    | Target::Backspace
+                    | Target::KeyboardLanguage
+                    | Target::KeyboardCase
+                    | Target::BrowserParent
+                    | Target::BrowserMarkAll
+                    | Target::BrowserOpen
+                    | Target::BrowserAdd
+                    | Target::DialogScroll(_)
+                    | Target::Setting(_)
+                    | Target::SettingAdjust(_, _)
+                    | Target::SettingHelp(_)
+                    | Target::BindingModifier(_)
+                    | Target::BindingKey(_)
+            )
+        {
+            continue;
+        }
+        let scale = egui::vec2(
+            image.width() / f32::from(size.width),
+            image.height() / f32::from(size.height),
+        );
+        let min = image.min
+            + egui::vec2(
+                f32::from(hit.area.x) * scale.x,
+                f32::from(hit.area.y) * scale.y,
+            );
+        let rect = egui::Rect::from_min_size(
+            min,
+            egui::vec2(f32::from(hit.area.width) * scale.x, scale.y),
+        )
+        .shrink(1.0);
+        let [r, g, b] = palette.color(if !hit.enabled {
+            "folder_path"
+        } else if app.hovered(hit.area) {
+            "active"
+        } else {
+            "inactive_panel_border"
+        });
+        ui.painter().rect_stroke(
+            rect,
+            egui::CornerRadius::same(if app.settings.appearance.corners == Corners::Rounded {
+                4
+            } else {
+                0
+            }),
+            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(r, g, b)),
+            egui::StrokeKind::Inside,
+        );
+    }
 }

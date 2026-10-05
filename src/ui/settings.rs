@@ -298,7 +298,8 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             .get(selected)
             .is_some_and(|row| row.adjustable && row.enabled);
         let close_width =
-            ((app.text("Close", "Закрыть").chars().count() + 3) as u16).min(footer.width);
+            super::widgets::button_width(app, app.text("Close", "Закрыть"), &Target::CloseDialog)
+                .min(footer.width);
         button(
             frame,
             app,

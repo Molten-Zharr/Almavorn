@@ -128,11 +128,10 @@ pub(super) fn browser_dialog(
         });
     }
     let add = if browser.folder {
-        app.text("Add folder · Ctrl+Enter", "Добавить папку · Ctrl+Enter")
-            .into()
+        app.text("Add folder", "Добавить папку").into()
     } else {
         format!(
-            "{} ({}) · Ctrl+Enter",
+            "{} ({})",
             app.text("Add selected", "Добавить выбранные"),
             browser.marked.len()
         )

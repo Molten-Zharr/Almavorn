@@ -61,6 +61,23 @@ pub enum Dialog {
 }
 
 impl Dialog {
+    pub(super) fn opening_action(&self) -> Option<crate::input::Action> {
+        use crate::input::Action;
+        match self {
+            Self::Help { .. } | Self::SettingsHelp { .. } => Some(Action::Help),
+            Self::Settings { .. } => Some(Action::Settings),
+            Self::Browser(browser) => Some(if browser.folder {
+                Action::AddFolder
+            } else {
+                Action::AddFiles
+            }),
+            Self::Metadata { .. } => Some(Action::Metadata),
+            Self::Transfer { .. } => Some(Action::Transfer),
+            Self::RemoveEntry { .. } | Self::ConfirmSettings { .. } => Some(Action::Delete),
+            Self::Text(_) | Self::CaptureBinding { .. } => None,
+        }
+    }
+
     pub(crate) fn is_settings(&self) -> bool {
         matches!(
             self,

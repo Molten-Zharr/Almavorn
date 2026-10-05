@@ -3,8 +3,9 @@ use crate::app::{App, Hit, Target};
 use crate::preferences::{BorderWeight, Corners};
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Rect},
     style::{Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
@@ -56,12 +57,100 @@ pub(super) fn button(
     if enabled && matches!(target, Target::Submit) {
         style = style.bg(palette.confirm_background);
     }
-    frame.render_widget(Paragraph::new(format!("[{label}] ")).style(style), area);
+    let shortcut = button_shortcut(app, &target);
+    let mut content = Vec::new();
+    if let Some(shortcut) = &shortcut {
+        content.push(Span::styled(
+            shortcut.clone(),
+            style.fg(if enabled {
+                palette.accent
+            } else {
+                palette.muted
+            }),
+        ));
+        content.push(Span::styled(" · ", style.fg(palette.muted)));
+    }
+    content.push(Span::styled(label, style));
+    let border_style = style.fg(if !enabled {
+        palette.muted
+    } else if app.hovered(area) {
+        palette.accent
+    } else {
+        palette.inactive_panel_border
+    });
+    if area.height >= 3 {
+        frame.render_widget(
+            Paragraph::new(Line::from(content))
+                .alignment(Alignment::Center)
+                .style(style)
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(match palette.corners {
+                            Corners::Rounded => BorderType::Rounded,
+                            Corners::Square => BorderType::Plain,
+                        })
+                        .border_style(border_style),
+                ),
+            area,
+        );
+    } else {
+        content.insert(0, Span::styled("│", border_style));
+        content.push(Span::styled("│", border_style));
+        frame.render_widget(Paragraph::new(Line::from(content)).style(style), area);
+    }
     app.hits.push(Hit {
         area,
         target,
         enabled,
     });
+}
+
+fn button_shortcut(app: &App, target: &Target) -> Option<String> {
+    match target {
+        Target::Action(action) => app
+            .settings
+            .bindings
+            .iter()
+            .find(|binding| binding.action == *action)
+            .map(|binding| binding.key.label()),
+        Target::Mode(mode) if *mode != app.settings.mode => app
+            .settings
+            .bindings
+            .iter()
+            .find(|binding| binding.action == crate::input::Action::SwitchMode)
+            .map(|binding| binding.key.label()),
+        Target::Submit | Target::BrowserOpen => Some("Enter".into()),
+        Target::CloseDialog => Some("Esc".into()),
+        Target::BrowserParent => Some("Backspace".into()),
+        Target::BrowserMarkAll => Some("Ctrl+A".into()),
+        Target::BrowserAdd => Some("Ctrl+Enter".into()),
+        _ => None,
+    }
+}
+
+pub(super) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
+    let shortcut = button_shortcut(app, target);
+    (Span::raw(label).width()
+        + shortcut
+            .as_ref()
+            .map_or(0, |key| Span::raw(key).width() + 3)
+        + 2)
+    .min(usize::from(u16::MAX)) as u16
+}
+
+pub(super) fn button_rows(app: &App, width: u16, entries: &[(String, Target, bool)]) -> u16 {
+    let mut rows = 1u16;
+    let mut used = 0u16;
+    for (label, target, _) in entries {
+        let length = button_width(app, label, target).min(width);
+        if used > 0 && used.saturating_add(length) > width {
+            rows = rows.saturating_add(1);
+            used = 0;
+        }
+        used = used.saturating_add(length).saturating_add(1);
+    }
+    rows
 }
 
 pub(super) fn buttons(
@@ -74,7 +163,7 @@ pub(super) fn buttons(
     let mut x = area.x;
     let mut y = area.y;
     for (label, target, enabled) in entries {
-        let width = (label.chars().count() as u16 + 3).min(area.width);
+        let width = button_width(app, &label, &target).min(area.width);
         if x > area.x && x + width > area.right() {
             x = area.x;
             y += 1;
@@ -91,7 +180,7 @@ pub(super) fn buttons(
             enabled,
             palette,
         );
-        x += width;
+        x = x.saturating_add(width).saturating_add(1);
     }
     y.saturating_sub(area.y) + 1
 }

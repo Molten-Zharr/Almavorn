@@ -81,6 +81,19 @@ impl App {
             }
             return Ok(());
         }
+        let normalized = key.normalized();
+        if let Some(action) = self.dialog.as_ref().and_then(Dialog::opening_action)
+            && (self
+                .settings
+                .bindings
+                .iter()
+                .any(|binding| binding.action == action && binding.key == normalized)
+                || (matches!(self.dialog, Some(Dialog::SettingsHelp { .. }))
+                    && key == KeyPress::plain(Key::F(1))))
+        {
+            self.close_dialog();
+            return Ok(());
+        }
         if matches!(self.dialog, Some(Dialog::Settings { .. })) {
             return self.settings_key(key);
         }
@@ -168,7 +181,6 @@ impl App {
             }
             return Ok(());
         }
-        let normalized = key.normalized();
         if let Some(action) = self
             .settings
             .bindings
