@@ -55,6 +55,32 @@ pub struct KeyPress {
 }
 
 impl KeyPress {
+    pub fn key_labels(self) -> Vec<String> {
+        let mut labels = Vec::new();
+        for (enabled, label) in [
+            (self.ctrl, "Ctrl"),
+            (self.alt, "Alt"),
+            (self.shift, "Shift"),
+        ] {
+            if enabled {
+                labels.push(label.into());
+            }
+        }
+        labels.push(match self.key {
+            Key::Escape => "Esc".into(),
+            Key::Delete => "Del".into(),
+            Key::Insert => "Ins".into(),
+            Key::PageUp => "PgUp".into(),
+            Key::PageDown => "PgDn".into(),
+            Key::Up => "↑".into(),
+            Key::Down => "↓".into(),
+            Key::Left => "←".into(),
+            Key::Right => "→".into(),
+            _ => Self::plain(self.key).label(),
+        });
+        labels
+    }
+
     pub fn plain(key: Key) -> Self {
         Self {
             key,

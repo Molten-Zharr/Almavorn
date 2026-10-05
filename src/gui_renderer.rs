@@ -186,4 +186,88 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
             egui::StrokeKind::Inside,
         );
     }
+    let scale = egui::vec2(
+        image.width() / f32::from(size.width),
+        image.height() / f32::from(size.height),
+    );
+    let face_rgb = palette.color("selected_file_background");
+    let shade = |target: u8, amount: u16| {
+        let color = face_rgb.map(|value| {
+            ((u16::from(value) * (100 - amount) + u16::from(target) * amount) / 100) as u8
+        });
+        egui::Color32::from_rgb(color[0], color[1], color[2])
+    };
+    for cap in &app.keycaps {
+        let rect = egui::Rect::from_min_size(
+            image.min
+                + egui::vec2(
+                    f32::from(cap.area.x) * scale.x,
+                    f32::from(cap.area.y) * scale.y,
+                ),
+            egui::vec2(
+                f32::from(cap.area.width) * scale.x,
+                f32::from(cap.area.height) * scale.y,
+            ),
+        )
+        .shrink(1.0);
+        let bevel = (rect.height() * 0.13).max(2.0);
+        let face = egui::Rect::from_min_max(
+            rect.min + egui::vec2(bevel, bevel),
+            rect.max - egui::vec2(bevel, bevel * 1.65),
+        );
+        ui.painter().rect_filled(rect, 0, shade(0, 45));
+        for (points, color) in [
+            (
+                vec![
+                    rect.left_top(),
+                    rect.right_top(),
+                    face.right_top(),
+                    face.left_top(),
+                ],
+                shade(255, 25),
+            ),
+            (
+                vec![
+                    rect.left_top(),
+                    face.left_top(),
+                    face.left_bottom(),
+                    rect.left_bottom(),
+                ],
+                shade(255, 12),
+            ),
+            (
+                vec![
+                    rect.right_top(),
+                    rect.right_bottom(),
+                    face.right_bottom(),
+                    face.right_top(),
+                ],
+                shade(0, 30),
+            ),
+            (
+                vec![
+                    rect.left_bottom(),
+                    face.left_bottom(),
+                    face.right_bottom(),
+                    rect.right_bottom(),
+                ],
+                shade(0, 45),
+            ),
+        ] {
+            ui.painter().add(egui::Shape::convex_polygon(
+                points,
+                color,
+                egui::Stroke::NONE,
+            ));
+        }
+        ui.painter().rect_filled(face, 0, shade(0, 0));
+        let [r, g, b] = palette.color("button_text");
+        ui.painter().text(
+            face.center(),
+            egui::Align2::CENTER_CENTER,
+            &cap.label,
+            egui::FontId::monospace((f32::from(app.settings.appearance.font_size) * 0.75).max(8.0)),
+            egui::Color32::from_rgb(r, g, b),
+        );
+    }
 }

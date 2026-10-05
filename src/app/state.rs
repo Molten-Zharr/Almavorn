@@ -86,3 +86,8 @@ pub struct Hit {
     pub target: Target,
     pub enabled: bool,
 }
+
+pub struct Keycap {
+    pub area: Rect,
+    pub label: String,
+}

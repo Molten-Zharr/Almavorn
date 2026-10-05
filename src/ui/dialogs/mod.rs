@@ -1,5 +1,6 @@
 mod bindings;
 mod browser;
+mod help;
 mod text;
 
 use self::{bindings::binding_dialog, browser::browser_dialog, text::text_dialog};
@@ -284,33 +285,13 @@ pub(super) fn render_dialog(
                 44,
                 palette,
             );
-            let mut lines=vec![app.text("Mouse: click to select; double-click a track to play; scroll lists.","Мышь: клик — выбор; двойной клик по композиции — играть; колесо — прокрутка.").to_owned(),app.text("Use track checkboxes to select several tracks for copying.","Чекбоксы композиций отмечают несколько файлов для копирования.").into(),app.text("Keyboard: arrows select, Tab changes panel, Enter plays or confirms, Esc closes.","Клавиатура: стрелки — выбор, Tab — панель, Enter — играть или подтвердить, Esc — закрыть.").into(),String::new(),app.text("Order playlists are protected. Enable Edit to rename, remove, reorder or add directly.","Плейлисты Порядка защищены. Включите Правку для переименования, удаления, перемещения и прямого добавления.").into(),app.text("The sorting desk is always editable. Its checkbox routes every addition there.","Сортировочный стол всегда доступен для правки. Его чекбокс направляет туда все добавляемые файлы.").into(),app.text("Chaos and the desk support undo/redo in this session. Concurrent edits in the same scope may reset history. Only one app process can open this library for writing.","Хаос и стол поддерживают отмену/повтор в этой сессии. Одновременная правка тех же списков может очистить историю. Библиотеку для записи открывает только один процесс приложения.").into(),app.text("Sorting and searching change the view, never stored positions or source tags.","Сортировка и поиск меняют вид, а не сохраненные позиции или теги исходных файлов.").into(),app.text("Add new scans the folders of the current tracks; duplicates are skipped.","Добавить новые проверяет папки текущих композиций; повторные файлы пропускаются.").into(),format!("{}: {}",app.text("Database","База"),app.store.path.display()),String::new()];
-            lines.push(app.text("Blocks: drag [↕] or a title; drop at an edge to dock, in the center to swap. Hold a shared border to resize. [-]/[+] collapses; [x] hides. Restore via Ctrl+B. Layout is saved in the active profile.", "Блоки: тяните [↕] или заголовок; край другого блока — разместить рядом, центр — поменять местами. Зажмите общую границу для размера. [-]/[+] сворачивает; [x] скрывает. Вернуть через Ctrl+B. Раскладка сохраняется в активный профиль.").into());
-            lines.push(app.text("File picker: Enter opens a folder or selects/unselects a file. Space selects a file; Ctrl+Enter adds the selection.", "Выбор файлов: Enter открывает папку или ставит/снимает отметку файла. Space отмечает файл; Ctrl+Enter добавляет выбранные файлы.").into());
-            lines.push(app.text("Focus a player, playback or volume block: Up/Down adjusts volume by 1%; Left/Right seeks by 5 seconds.", "При фокусе на проигрывателе, управлении или громкости: вверх/вниз меняют громкость на 1%; влево/вправо перематывают на 5 секунд.").into());
-            lines.push(app.text("Tab/Shift+Tab: focus block. Ctrl+Alt+arrows: swap with a neighbor. Ctrl+Shift+arrows: resize. Ctrl+Alt+Space: collapse/expand. Ctrl+Alt+Delete: hide. Esc: cancel dragging.", "Tab/Shift+Tab: фокус блока. Ctrl+Alt+стрелки: обмен с соседом. Ctrl+Shift+стрелки: размер. Ctrl+Alt+Space: свернуть/развернуть. Ctrl+Alt+Delete: скрыть. Esc: отменить перетаскивание.").into());
-            lines.extend(app.settings.bindings.iter().map(|binding| {
-                format!(
-                    "{} — {}",
-                    binding.key.label(),
-                    binding.action.name(app.settings.language)
-                )
-            }));
-            *offset = (*offset).min(lines.len().saturating_sub(1));
-            frame.render_widget(
-                Paragraph::new(lines.join("\n"))
-                    .scroll((*offset as u16, 0))
-                    .style(palette.text())
-                    .wrap(Wrap { trim: false }),
-                Rect::new(
-                    inner.x,
-                    inner.y,
-                    inner.width,
-                    inner.height.saturating_sub(3),
-                ),
-            );
-            dialog_footer(frame, app, inner, palette);
+            let mut lines=vec![app.text("Mouse: click to select; double-click a track to play; scroll lists.","Мышь: клик — выбор; двойной клик по композиции — играть; колесо — прокрутка.").to_owned(),app.text("Use track checkboxes to select several tracks for copying.","Чекбоксы композиций отмечают несколько файлов для копирования.").into(),String::new(),app.text("Order playlists are protected. Enable Edit to rename, remove, reorder or add directly.","Плейлисты Порядка защищены. Включите Правку для переименования, удаления, перемещения и прямого добавления.").into(),app.text("The sorting desk is always editable. Its checkbox routes every addition there.","Сортировочный стол всегда доступен для правки. Его чекбокс направляет туда все добавляемые файлы.").into(),app.text("Chaos and the desk support undo/redo in this session. Concurrent edits in the same scope may reset history. Only one app process can open this library for writing.","Хаос и стол поддерживают отмену/повтор в этой сессии. Одновременная правка тех же списков может очистить историю. Библиотеку для записи открывает только один процесс приложения.").into(),app.text("Sorting and searching change the view, never stored positions or source tags.","Сортировка и поиск меняют вид, а не сохраненные позиции или теги исходных файлов.").into(),app.text("Add new scans the folders of the current tracks; duplicates are skipped.","Добавить новые проверяет папки текущих композиций; повторные файлы пропускаются.").into(),format!("{}: {}",app.text("Database","База"),app.store.path.display()),String::new()];
+            lines.push(app.text("Blocks: drag [↕] or a title; drop at an edge to dock, in the center to swap. Hold a shared border to resize. [-]/[+] collapses; [x] hides. Restore through Blocks. Layout is saved in the active profile.", "Блоки: тяните [↕] или заголовок; край другого блока — разместить рядом, центр — поменять местами. Зажмите общую границу для размера. [-]/[+] сворачивает; [x] скрывает. Вернуть через меню «Блоки». Раскладка сохраняется в активный профиль.").into());
+            lines.push(app.text("File picker: mark the files, then add the selection. Open folders to navigate.", "Выбор файлов: отметьте файлы, затем добавьте выбранные. Открывайте папки для перехода.").into());
+            lines.push(app.text("Focus a player, playback or volume block to adjust volume and seek with the arrow keys.", "Выберите блок проигрывателя, управления или громкости для изменения громкости и перемотки стрелками.").into());
+            help::help_dialog(frame, app, offset, inner, lines, palette);
         }
+
         Dialog::Metadata { track, offset } => {
             let inner = modal(
                 frame,

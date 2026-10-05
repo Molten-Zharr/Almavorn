@@ -1,4 +1,5 @@
 mod dialogs;
+mod keycaps;
 mod library;
 mod player;
 mod settings;
@@ -28,6 +29,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     let palette = Palette::new(app);
     app.hits.clear();
+    app.keycaps.clear();
     if app
         .dialog
         .as_ref()
@@ -38,6 +40,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             && let Some(mut dialog) = app.dialog.take()
         {
             app.hits.clear();
+            app.keycaps.clear();
             render_dialog(frame, app, &mut dialog, palette);
             app.dialog = Some(dialog);
         }
@@ -159,6 +162,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     );
     if let Some(mut dialog) = app.dialog.take() {
         app.hits.clear();
+        app.keycaps.clear();
         render_dialog(frame, app, &mut dialog, palette);
         app.dialog = Some(dialog);
     }

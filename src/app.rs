@@ -17,7 +17,7 @@ pub use dialogs::{Dialog, TextDialog, TextPurpose};
 pub use options::Options;
 pub(crate) use settings::SettingControl;
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
-pub use state::{Focus, Hit, Sort, Target};
+pub use state::{Focus, Hit, Keycap, Sort, Target};
 
 use self::{
     database::{Background, DatabaseJob, LibraryJob, background},
@@ -58,6 +58,7 @@ pub struct App {
     pub query: String,
     pub dialog: Option<Dialog>,
     pub hits: Vec<Hit>,
+    pub keycaps: Vec<Keycap>,
     pub playlist_area: Rect,
     pub tracks_area: Rect,
     pub playlist_offset: usize,
@@ -139,6 +140,7 @@ impl App {
             query: String::new(),
             dialog: None,
             hits: Vec::new(),
+            keycaps: Vec::new(),
             playlist_area: Rect::default(),
             tracks_area: Rect::default(),
             playlist_offset: 0,
