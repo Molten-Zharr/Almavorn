@@ -72,28 +72,24 @@ fn run() -> Result<()> {
                 // Resize before drawing: rendered hit areas and mouse coordinates must use the same grid.
                 let available = ui.available_size();
                 let backend = &mut terminal.backend_mut().soft_backend;
-                let columns =
-                    (available.x / backend.char_width.max(1) as f32).clamp(1.0, 512.0) as u16;
-                let rows =
-                    (available.y / backend.char_height.max(1) as f32).clamp(1.0, 256.0) as u16;
+                let columns = (available.x / backend.char_width.max(1) as f32)
+                    .clamp(1.0, f32::from(u16::MAX)) as u16;
+                let rows = (available.y / backend.char_height.max(1) as f32)
+                    .clamp(1.0, f32::from(u16::MAX)) as u16;
                 if backend.size().ok() != Some(ratatui::layout::Size::new(columns, rows)) {
                     gui_renderer::resize(backend, columns, rows);
                 }
                 // Apply the latest pointer position before painting the buttons.
-                let image_rect = egui::Rect::from_min_size(
-                    ui.next_widget_position(),
-                    egui::vec2(
-                        backend.get_pixmap_width() as f32,
-                        backend.get_pixmap_height() as f32,
-                    ),
-                );
+                let image_rect = egui::Rect::from_min_size(ui.next_widget_position(), available);
                 let (x, y) = ctx
                     .input(|input| input.pointer.hover_pos())
                     .filter(|point| image_rect.contains(*point))
                     .map(|point| {
                         (
-                            ((point.x - image_rect.min.x) / backend.char_width as f32) as u16,
-                            ((point.y - image_rect.min.y) / backend.char_height as f32) as u16,
+                            ((point.x - image_rect.min.x) / image_rect.width() * f32::from(columns))
+                                .floor() as u16,
+                            ((point.y - image_rect.min.y) / image_rect.height() * f32::from(rows))
+                                .floor() as u16,
                         )
                     })
                     .unwrap_or((u16::MAX, u16::MAX));
@@ -113,7 +109,10 @@ fn run() -> Result<()> {
                     .expect("Terminal texture exists")
                     .id();
                 let response = ui.add(
-                    egui::Image::new((texture_id, image_size)).sense(egui::Sense::click_and_drag()),
+                    egui::Image::new((texture_id, image_size))
+                        .fit_to_exact_size(available)
+                        .maintain_aspect_ratio(false)
+                        .sense(egui::Sense::click_and_drag()),
                 );
                 response.request_focus();
                 let dimensions = terminal.backend().soft_backend.size().ok();
