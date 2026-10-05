@@ -1,14 +1,17 @@
-use super::{
-    theme::Palette,
-    widgets::{button, button_width},
-};
+use super::{theme::Palette, widgets::button_shortcut};
 use crate::{
-    app::{App, Target},
+    app::{App, Hit, Target},
     input::Action,
     model::Mode,
     workspace::{Control, Panel},
 };
-use ratatui::{Frame, layout::Rect};
+use ratatui::{
+    Frame,
+    layout::Rect,
+    style::{Color, Modifier},
+    text::{Line, Span},
+    widgets::Paragraph,
+};
 
 pub(super) struct Group {
     pub panel: Panel,
@@ -29,28 +32,131 @@ impl Group {
     }
 }
 
-fn columns(app: &App, width: u16, group: &Group) -> usize {
-    let maximum = group
-        .entries
-        .iter()
-        .map(|(label, target, _)| button_width(app, label, target))
-        .max()
-        .unwrap_or(1);
+pub(super) fn command_width(app: &App, label: &str, target: &Target) -> u16 {
+    (Span::raw(label).width()
+        + button_shortcut(app, target).map_or(0, |key| Span::raw(key).width() + 3)
+        + 2)
+    .min(usize::from(u16::MAX)) as u16
+}
+
+fn band(target: &Target) -> usize {
+    match target {
+        Target::Mode(_) => 0,
+        Target::Action(action) => match action {
+            Action::ToggleDesk => 1,
+            Action::ToggleEdit => 2,
+            Action::Settings | Action::Help | Action::Quit => 2,
+            Action::Undo | Action::Redo => 1,
+            Action::Transfer | Action::MoveUp | Action::MoveDown => 1,
+            Action::Search | Action::Sort | Action::Metadata | Action::Mark => 2,
+            Action::VolumeDown | Action::VolumeUp => 1,
+            _ => 0,
+        },
+        _ => 0,
+    }
+}
+
+fn cells(app: &App, width: u16, group: &Group) -> Vec<(usize, Rect)> {
+    if width == 0 {
+        return Vec::new();
+    }
+    let margin = u16::from(width >= 36);
+    let available = width.saturating_sub(margin * 2);
+    let gap = 2u16;
+    let separation = u16::from(app.workspace.bounds.width >= 80);
+    let mut bands: [Vec<usize>; 3] = Default::default();
+    for (index, (_, target, _)) in group.entries.iter().enumerate() {
+        bands[band(target)].push(index);
+    }
+    let measure = |index: usize| {
+        let (label, target, _) = &group.entries[index];
+        command_width(app, label, target).min(available)
+    };
+    let needed = |indices: &[usize]| {
+        indices.iter().map(|index| measure(*index)).sum::<u16>()
+            + gap * indices.len().saturating_sub(1) as u16
+    };
+    let mut result = Vec::with_capacity(group.entries.len());
+    let mut place = |indices: &[usize], y: u16, left: u16, space: u16| {
+        let padding = (space.saturating_sub(needed(indices)) / indices.len().max(1) as u16).min(2);
+        let occupied = needed(indices) + padding * indices.len() as u16;
+        let mut x = left + space.saturating_sub(occupied) / 2;
+        for index in indices {
+            let size = measure(*index).saturating_add(padding);
+            result.push((*index, Rect::new(x, y, size, 1)));
+            x = x.saturating_add(size).saturating_add(gap);
+        }
+    };
+    if group.panel == Panel::Player {
+        let left = needed(&bands[0]);
+        let right = needed(&bands[1]);
+        if left.saturating_add(right).saturating_add(gap * 2) <= available {
+            let padding = (available.saturating_sub(left + right + gap * 2) / 2).min(8);
+            place(&bands[0], 0, margin, left + padding);
+            place(
+                &bands[1],
+                0,
+                width.saturating_sub(margin + right + padding),
+                right + padding,
+            );
+            return result;
+        }
+    }
+    let mut widths: Vec<_> = (0..group.entries.len()).map(measure).collect();
+    widths.sort_unstable();
+    let median = widths.get(widths.len() / 2).copied().unwrap_or(1);
     let preferred = match group.panel {
         Panel::Application => 2,
-        Panel::Add => 3,
-        Panel::PlaylistActions => 3,
-        Panel::Player => 6,
+        Panel::Player => 4,
         _ => 3,
     };
-    usize::from(width.saturating_add(1) / maximum.saturating_add(1))
+    let columns = (available.saturating_add(gap) / median.saturating_add(gap))
         .max(1)
-        .min(preferred)
-        .min(group.entries.len().max(1))
+        .min(preferred);
+    let cell_width =
+        (available.saturating_sub(gap * (columns - 1)) / columns).min(median.saturating_add(4));
+    let occupied = cell_width * columns + gap * (columns - 1);
+    let left = margin + available.saturating_sub(occupied) / 2;
+    let mut y = 0u16;
+    for indices in bands.iter().filter(|indices| !indices.is_empty()) {
+        if y > 0 {
+            y = y.saturating_add(separation);
+        }
+        let mut column = 0u16;
+        for index in indices {
+            let span = measure(*index)
+                .saturating_add(gap)
+                .div_ceil(cell_width + gap)
+                .max(1)
+                .min(columns);
+            if column + span > columns {
+                y = y.saturating_add(1);
+                column = 0;
+            }
+            let size = if span == columns && measure(*index) > occupied {
+                available
+            } else {
+                cell_width * span + gap * (span - 1)
+            };
+            let x = if size > occupied {
+                margin
+            } else {
+                left + column * (cell_width + gap)
+            };
+            result.push((*index, Rect::new(x, y, size, 1)));
+            column += span;
+        }
+        y = y.saturating_add(1);
+    }
+    result
 }
 
 pub(super) fn rows(app: &App, width: u16, group: &Group) -> u16 {
-    group.entries.len().div_ceil(columns(app, width, group)) as u16
+    cells(app, width, group)
+        .iter()
+        .map(|(_, rect)| rect.bottom())
+        .max()
+        .unwrap_or(0)
 }
 
 type Command = (Action, &'static str, &'static str);
@@ -61,11 +167,7 @@ pub(super) fn commands(app: &App) -> Vec<Group> {
         .into_iter()
         .map(|mode| {
             (
-                format!(
-                    "{}{}",
-                    if app.settings.mode == mode { "* " } else { "" },
-                    mode.name(app.settings.language)
-                ),
+                mode.name(app.settings.language).into(),
                 Target::Mode(mode),
                 !app.busy(),
             )
@@ -81,7 +183,7 @@ pub(super) fn commands(app: &App) -> Vec<Group> {
         ),
     ] {
         modes.push((
-            format!("{} {}", if checked { "x" } else { " " }, app.text(en, ru)),
+            format!("[{}] {}", if checked { "x" } else { " " }, app.text(en, ru)),
             Target::Action(action),
             app.allowed(action),
         ));
@@ -168,7 +270,7 @@ pub(super) fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> 
             group
                 .entries
                 .iter()
-                .map(|(label, target, _)| button_width(app, label, target) + border)
+                .map(|(label, target, _)| command_width(app, label, target) + border + 2)
                 .max()
                 .unwrap_or(20)
                 .max(group.title.chars().count() as u16 + 13)
@@ -198,7 +300,7 @@ pub(super) fn layout(app: &App, groups: &[Group], width: u16, compact: bool) -> 
             .entries
             .iter()
             .fold(0u16, |used, (label, target, _)| {
-                used.saturating_add(button_width(app, label, target))
+                used.saturating_add(command_width(app, label, target))
                     .saturating_add(1)
             })
             .saturating_sub(1)
@@ -235,22 +337,78 @@ pub(super) fn contents(
     group: &Group,
     palette: Palette,
 ) {
-    let count = columns(app, inner.width, group);
-    let width = inner.width.saturating_sub(count.saturating_sub(1) as u16) / count as u16;
-    for (index, (label, target, enabled)) in group.entries.iter().enumerate() {
-        let x = inner.x + (index % count) as u16 * (width + 1);
-        let y = inner.y + (index / count) as u16;
-        if y >= inner.bottom() {
+    for (index, cell) in cells(app, inner.width, group) {
+        if cell.bottom() > inner.height {
             break;
         }
-        button(
+        let (label, target, enabled) = &group.entries[index];
+        command_button(
             frame,
             app,
-            Rect::new(x, y, width, 1),
+            Rect::new(inner.x + cell.x, inner.y + cell.y, cell.width, cell.height),
             label,
             target.clone(),
             *enabled,
             palette,
         );
     }
+}
+
+fn command_button(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    label: &str,
+    target: Target,
+    enabled: bool,
+    palette: Palette,
+) {
+    let active = match target {
+        Target::Mode(mode) => app.settings.mode == mode,
+        Target::Action(Action::ToggleEdit) => app.editing,
+        Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
+        _ => false,
+    };
+    let hovered = enabled && app.hovered(area);
+    let surface = match (palette.background, palette.selection) {
+        (Color::Rgb(r, g, b), Color::Rgb(sr, sg, sb)) => {
+            let blend = |background: u8, selection: u8| {
+                ((u16::from(background) * 4 + u16::from(selection)) / 5) as u8
+            };
+            Color::Rgb(blend(r, sr), blend(g, sg), blend(b, sb))
+        }
+        (background, _) => background,
+    };
+    let mut style = palette.text().bg(surface);
+    if active || hovered {
+        style = style.bg(palette.selection).add_modifier(Modifier::BOLD);
+    }
+    if !enabled {
+        style = style.fg(palette.muted);
+    }
+    let mut content = vec![Span::styled(
+        if active || hovered { "│" } else { " " },
+        style.fg(palette.accent),
+    )];
+    if let Some(shortcut) = button_shortcut(app, &target) {
+        let key_style = style.bg(palette.selection).fg(if enabled {
+            palette.button_text
+        } else {
+            palette.muted
+        });
+        content.push(Span::styled("[", key_style.fg(palette.muted)));
+        content.push(Span::styled(
+            shortcut,
+            key_style.add_modifier(Modifier::BOLD),
+        ));
+        content.push(Span::styled("]", key_style.fg(palette.muted)));
+        content.push(Span::styled(" ", style));
+    }
+    content.push(Span::styled(label.to_owned(), style));
+    frame.render_widget(Paragraph::new(Line::from(content)).style(style), area);
+    app.hits.push(Hit {
+        area,
+        target,
+        enabled,
+    });
 }

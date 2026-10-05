@@ -123,7 +123,7 @@ pub(super) fn button(
     });
 }
 
-fn button_shortcut(app: &App, target: &Target) -> Option<String> {
+pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
         Target::Action(action) => app
             .settings

@@ -130,6 +130,16 @@ pub fn resize(backend: &mut SoftBackend<EmbeddedTTF>, columns: u16, rows: u16) {
 pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui::layout::Size) {
     let palette = app.settings.current_palette();
     for hit in &app.hits {
+        if app.dialog.is_none()
+            && matches!(hit.target, Target::Action(_) | Target::Mode(_))
+            && app
+                .workspace
+                .areas
+                .iter()
+                .any(|(_, area)| hit.area.y > area.y && hit.area.intersection(*area) == hit.area)
+        {
+            continue;
+        }
         if hit.area.height != 1
             || !matches!(
                 hit.target,

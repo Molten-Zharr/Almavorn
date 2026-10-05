@@ -2,7 +2,7 @@ use super::{
     library, player,
     theme::Palette,
     toolbar::{self, Group},
-    widgets::{block, button_width},
+    widgets::block,
 };
 use crate::{
     app::{App, Hit, Target},
@@ -138,7 +138,9 @@ fn min_width(app: &App, groups: &[Group], node: &Dock) -> u16 {
                 group
                     .entries
                     .iter()
-                    .map(|(label, target, _)| button_width(app, label, target).saturating_add(2))
+                    .map(|(label, target, _)| {
+                        toolbar::command_width(app, label, target).saturating_add(4)
+                    })
                     .max()
                     .unwrap_or(20)
                     .max(20)
