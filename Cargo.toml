@@ -5,6 +5,10 @@ edition = "2024"
 publish = false
 default-run = "almavorn"
 
+[profile.dev]
+# The GUI rasterizes fonts and converts pixels on the CPU, also during development.
+opt-level = 1
+
 [features]
 default = ["guitui"]
 guitui = ["dep:eframe", "dep:egui_ratatui", "dep:soft_ratatui"]

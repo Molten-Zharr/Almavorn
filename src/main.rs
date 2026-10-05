@@ -9,6 +9,7 @@ use egui_ratatui::RataguiBackend;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
 mod gui_fonts;
+mod gui_renderer;
 use std::time::{Duration, Instant};
 
 fn main() {
@@ -39,9 +40,10 @@ fn run() -> Result<()> {
         ..Default::default()
     };
     let mut previous_click: Option<(egui::Pos2, Instant)> = None;
+    let mut image_cache = gui_renderer::ImageCache::default();
     eframe::run_ui_native("Almavorn · GUITUI", options, move |root, _| {
         let ctx = root.ctx().clone();
-        ctx.request_repaint_after(Duration::from_millis(50));
+        ctx.request_repaint_after(Duration::from_millis(16));
         app.tick();
         let text_active = app.accepts_text();
         egui::CentralPanel::default()
@@ -64,6 +66,7 @@ fn run() -> Result<()> {
                         dimensions.height,
                     );
                     let _ = terminal.clear();
+                    image_cache.invalidate();
                     font_settings = requested_font;
                 }
                 // Resize before drawing: rendered hit areas and mouse coordinates must use the same grid.
@@ -74,8 +77,27 @@ fn run() -> Result<()> {
                 let rows =
                     (available.y / backend.char_height.max(1) as f32).clamp(1.0, 256.0) as u16;
                 if backend.size().ok() != Some(ratatui::layout::Size::new(columns, rows)) {
-                    backend.resize(columns, rows);
+                    gui_renderer::resize(backend, columns, rows);
                 }
+                // Apply the latest pointer position before painting the buttons.
+                let image_rect = egui::Rect::from_min_size(
+                    ui.next_widget_position(),
+                    egui::vec2(
+                        backend.get_pixmap_width() as f32,
+                        backend.get_pixmap_height() as f32,
+                    ),
+                );
+                let (x, y) = ctx
+                    .input(|input| input.pointer.hover_pos())
+                    .filter(|point| image_rect.contains(*point))
+                    .map(|point| {
+                        (
+                            ((point.x - image_rect.min.x) / backend.char_width as f32) as u16,
+                            ((point.y - image_rect.min.y) / backend.char_height as f32) as u16,
+                        )
+                    })
+                    .unwrap_or((u16::MAX, u16::MAX));
+                app.handle(Input::Move { x, y });
                 if let Err(error) = terminal.draw(|frame| ui::render(&mut app, frame)) {
                     app.notice = format!(
                         "{}: {error}",
@@ -84,14 +106,7 @@ fn run() -> Result<()> {
                     app.notice_error = true;
                 }
                 let backend = terminal.backend_mut();
-                let image = backend.to_egui_image();
-                let image_size = egui::vec2(image.size[0] as f32, image.size[1] as f32);
-                if let Some(texture) = &mut backend.text_handle {
-                    texture.set(image, egui::TextureOptions::NEAREST);
-                } else {
-                    backend.text_handle =
-                        Some(ctx.load_texture("almavorn", image, egui::TextureOptions::NEAREST));
-                }
+                let image_size = image_cache.update(&ctx, backend);
                 let texture_id = backend
                     .text_handle
                     .as_ref()
@@ -180,22 +195,18 @@ fn run() -> Result<()> {
                             }
                         }
                         egui::Event::PointerMoved(pos) => {
-                            if let Some((x, y)) = to_cell(pos) {
-                                app.handle(Input::Move { x, y });
-                                if down
-                                    && app.hits.iter().any(|hit| {
-                                        matches!(hit.target, Target::Seek(_))
-                                            && hit
-                                                .area
-                                                .contains(ratatui::layout::Position::new(x, y))
-                                    })
-                                {
-                                    app.handle(Input::Click {
-                                        x,
-                                        y,
-                                        double: false,
-                                    });
-                                }
+                            if let Some((x, y)) = to_cell(pos)
+                                && down
+                                && app.hits.iter().any(|hit| {
+                                    matches!(hit.target, Target::Seek(_))
+                                        && hit.area.contains(ratatui::layout::Position::new(x, y))
+                                })
+                            {
+                                app.handle(Input::Click {
+                                    x,
+                                    y,
+                                    double: false,
+                                });
                             }
                         }
                         egui::Event::MouseWheel { delta, .. } => {
