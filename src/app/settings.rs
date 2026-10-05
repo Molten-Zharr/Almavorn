@@ -168,6 +168,10 @@ impl App {
                 self.show_settings();
                 true
             }
+            Some(Dialog::Browser(_)) => {
+                self.cancel_browser();
+                true
+            }
             Some(_) => true,
             None => false,
         }

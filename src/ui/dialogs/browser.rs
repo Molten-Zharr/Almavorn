@@ -59,7 +59,7 @@ pub(super) fn browser_dialog(
             (
                 app.text("Mark all", "Отметить все").into(),
                 Target::BrowserMarkAll,
-                !browser.folder,
+                !browser.folder && app.browser_ready() && !browser.entries.is_empty(),
             ),
         ],
         palette,
@@ -70,6 +70,12 @@ pub(super) fn browser_dialog(
         inner.width,
         inner.height.saturating_sub(4 + used),
     );
+    if app.browser_loading() {
+        frame.render_widget(
+            Paragraph::new(app.text("Reading folder...", "Чтение папки...")).style(palette.text()),
+            list,
+        );
+    }
     browser.offset = visible_offset(
         browser.offset,
         browser.selected,
@@ -139,12 +145,13 @@ pub(super) fn browser_dialog(
             (
                 add,
                 Target::BrowserAdd,
-                browser.folder
-                    || !browser.marked.is_empty()
-                    || browser
-                        .entries
-                        .get(browser.selected)
-                        .is_some_and(|entry| !entry.directory),
+                app.browser_ready()
+                    && (browser.folder
+                        || !browser.marked.is_empty()
+                        || browser
+                            .entries
+                            .get(browser.selected)
+                            .is_some_and(|entry| !entry.directory)),
             ),
             (
                 app.text("Cancel", "Отмена").into(),

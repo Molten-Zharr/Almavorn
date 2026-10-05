@@ -1,4 +1,4 @@
-use super::{App, Browser, Dialog, Focus, TextPurpose, database::DatabaseOutcome};
+use super::{App, Dialog, Focus, TextPurpose, database::DatabaseOutcome};
 use crate::{
     input::Action,
     model::{Mode, PlaylistKind},
@@ -107,10 +107,13 @@ impl App {
                     }
                 })
             }
-            TogglePlay => self.current.is_some() || self.entry().is_some(),
-            Next => self.current.is_some() && self.queue_index + 1 < self.queue.len(),
-            Previous => self.current.is_some() && self.queue_index > 0,
-            SeekForward | SeekBackward | Stop => self.current.is_some(),
+            TogglePlay => {
+                self.current.is_some() || self.preparing_playback() || self.entry().is_some()
+            }
+            Next => self.can_step_playback(1),
+            Previous => self.can_step_playback(-1),
+            Stop => self.current.is_some() || self.preparing_playback(),
+            SeekForward | SeekBackward => self.current.is_some(),
             VolumeUp => self.settings.volume < 1.0,
             VolumeDown => self.settings.volume > 0.0,
             Transfer | Metadata | Mark => self.entry().is_some(),
@@ -150,21 +153,9 @@ impl App {
             Quit => self.quit = true,
             Help => self.dialog = Some(Dialog::Help { offset: 0 }),
             Settings => self.open_settings_page(super::SettingsPage::General),
-            TogglePlay => {
-                if self.current.is_some() {
-                    if let Some(audio) = &self.audio {
-                        audio.toggle();
-                    }
-                } else {
-                    self.play_selected()?;
-                }
-            }
+            TogglePlay => self.toggle_playback()?,
             Stop => {
-                if let Some(audio) = &mut self.audio {
-                    audio.stop();
-                }
-                self.current = None;
-                self.queue.clear();
+                self.stop_playback();
             }
             Next => self.next(1, true)?,
             Previous => self.next(-1, true)?,
@@ -205,13 +196,9 @@ impl App {
             }
             AddFiles | AddFolder => {
                 let directory = dirs::audio_dir()
-                    .filter(|directory| directory.is_dir())
                     .or_else(dirs::home_dir)
                     .unwrap_or(std::env::current_dir()?);
-                self.dialog = Some(Dialog::Browser(Browser::open(
-                    directory,
-                    action == AddFolder,
-                )?));
+                self.show_browser(directory, action == AddFolder);
             }
             AddNew => {
                 let directories: HashSet<PathBuf> = self

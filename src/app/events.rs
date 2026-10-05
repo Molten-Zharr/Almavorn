@@ -293,12 +293,7 @@ impl App {
                 }
             }
             Target::BrowserParent => {
-                if let Some(Dialog::Browser(browser)) = &mut self.dialog
-                    && let Some(parent) = browser.directory.parent()
-                {
-                    browser.directory = parent.to_owned();
-                    browser.refresh()?;
-                }
+                self.browser_parent();
             }
             Target::BrowserMarkAll => {
                 if let Some(Dialog::Browser(browser)) = &mut self.dialog {

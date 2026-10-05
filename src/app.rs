@@ -31,7 +31,7 @@ use ratatui::layout::{Position, Rect};
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
-    sync::atomic::Ordering,
+    sync::{Arc, atomic::Ordering},
     time::Duration,
 };
 use tokio::runtime::{Builder, Runtime};
@@ -42,6 +42,10 @@ pub struct App {
     pub settings: Settings,
     pub(crate) settings_view: settings::SettingsView,
     pub(crate) settings_file: Option<settings::SettingsFileJob>,
+    browser_job: Option<browser::BrowserJob>,
+    pending_browser: Option<browser::BrowserRequest>,
+    browser_generation: u64,
+    browser_ready: bool,
     pub playlists: Vec<Playlist>,
     pub selected_playlist: Option<i64>,
     pub selected_entry: Option<i64>,
@@ -60,9 +64,12 @@ pub struct App {
     pub quit: bool,
     pub editing: bool,
     pub current: Option<Track>,
-    queue: Vec<Track>,
+    queue: Arc<[Track]>,
     queue_index: usize,
     audio: Option<Audio>,
+    playback_job: Option<playback::PlaybackJob>,
+    pending_playback: Option<playback::PlaybackRequest>,
+    playback_generation: u64,
     import: Option<ImportJob>,
     database: Option<DatabaseJob>,
     library: Option<LibraryJob>,
@@ -114,6 +121,10 @@ impl App {
             settings,
             settings_view: settings::SettingsView::default(),
             settings_file: None,
+            browser_job: None,
+            pending_browser: None,
+            browser_generation: 0,
+            browser_ready: false,
             playlists,
             selected_playlist,
             selected_entry,
@@ -137,9 +148,12 @@ impl App {
             quit: false,
             editing: false,
             current: None,
-            queue: Vec::new(),
+            queue: Arc::from([]),
             queue_index: 0,
             audio: None,
+            playback_job: None,
+            pending_playback: None,
+            playback_generation: 0,
             import: None,
             database: None,
             library: None,
@@ -186,6 +200,9 @@ impl App {
                 Some("Композиции больше нет в этом плейлисте.")
             }
             "Select music files first" => Some("Сначала выберите музыкальные файлы."),
+            "Choose an available folder before adding music" => {
+                Some("Выберите доступную папку и дождитесь ее загрузки.")
+            }
             "Music import is already running" => {
                 Some("Добавление музыкальных файлов уже выполняется.")
             }
@@ -250,6 +267,9 @@ impl App {
             "Audio output unavailable" => {
                 Some("Устройство вывода звука недоступно. Проверьте подключение и настройки звука.")
             }
+            "Unsupported or damaged audio file" => {
+                Some("Аудиофайл поврежден или его формат не поддерживается.")
+            }
             "Seeking is not available for this file" => {
                 Some("Для этого файла перемотка недоступна.")
             }
@@ -282,9 +302,12 @@ impl App {
         self.tick_database()?;
         self.tick_settings()?;
         self.tick_settings_files()?;
+        self.tick_browser()?;
+        self.tick_playback()?;
         self.poll_import()?;
         self.tick_library()?;
-        if self.audio.as_mut().is_some_and(Audio::finished)
+        if !self.preparing_playback()
+            && self.audio.as_mut().is_some_and(Audio::finished)
             && let Err(error) = self.next(1, false)
         {
             self.current = None;

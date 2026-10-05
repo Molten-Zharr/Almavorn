@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
-use std::{fs::File, path::Path, time::Duration};
+use std::{fs::File, io::BufReader, path::Path, time::Duration};
+
+pub type PreparedAudio = Decoder<BufReader<File>>;
 
 pub struct Audio {
     device: MixerDeviceSink,
@@ -22,18 +24,34 @@ impl Audio {
         })
     }
 
-    pub fn play(&mut self, path: &Path) -> Result<()> {
-        let source = Decoder::try_from(
+    pub fn prepare(path: &Path) -> Result<PreparedAudio> {
+        Decoder::try_from(
             File::open(path).with_context(|| format!("Cannot open {}", path.display()))?,
         )
-        .context("Unsupported or damaged audio file")?;
+        .context("Unsupported or damaged audio file")
+    }
+
+    pub fn play(&mut self, path: &Path) -> Result<()> {
+        self.play_prepared(Self::prepare(path)?, false);
+        Ok(())
+    }
+
+    pub fn play_prepared(&mut self, source: PreparedAudio, paused: bool) {
         let volume = self.player.volume();
         self.player.stop();
         self.player = Player::connect_new(self.device.mixer());
         self.player.set_volume(volume);
+        self.set_paused(paused);
         self.player.append(source);
         self.started = true;
-        Ok(())
+    }
+
+    pub fn set_paused(&self, paused: bool) {
+        if paused {
+            self.player.pause();
+        } else {
+            self.player.play();
+        }
     }
 
     pub fn toggle(&self) {
