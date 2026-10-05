@@ -133,12 +133,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .wrap(Wrap { trim: false }),
         Rect::new(parts[2].x, parts[2].y, parts[2].width, 2),
     );
-    let hint = if matches!(
-        app.workspace.focus,
-        crate::workspace::Panel::Player
-            | crate::workspace::Panel::Playback
-            | crate::workspace::Panel::Volume
-    ) {
+    let hint = if matches!(app.workspace.focus, crate::workspace::Panel::Player) {
         app.text(
             "↑↓ volume 1% · ←→ seek · Tab panel · Space pause · F1 help · Q quit",
             "↑↓ громкость 1% · ←→ перемотка · Tab панель · Space пауза · F1 помощь · Q выход",

@@ -26,6 +26,7 @@ pub struct TextDialog {
 pub enum Dialog {
     Panels {
         selected: usize,
+        expanded: Vec<crate::workspace::Panel>,
     },
     Text(TextDialog),
     Browser(Browser),
@@ -116,11 +117,11 @@ impl App {
             return;
         }
         match &mut self.dialog {
-            Some(Dialog::Panels { selected }) => {
+            Some(Dialog::Panels { selected, expanded }) => {
                 *selected = bounded(
                     *selected,
                     i64::from(direction),
-                    crate::workspace::Panel::ALL.len() + 1,
+                    crate::workspace::panel_rows(expanded).len(),
                 )
             }
             Some(Dialog::Browser(browser)) => {
@@ -157,13 +158,9 @@ impl App {
 
     pub(super) fn submit(&mut self) -> Result<()> {
         match self.dialog.take() {
-            Some(Dialog::Panels { selected }) => {
-                self.dialog = Some(Dialog::Panels { selected });
-                if let Some(panel) = crate::workspace::Panel::ALL.get(selected) {
-                    self.show_panel(*panel)?;
-                } else {
-                    self.reset_workspace()?;
-                }
+            Some(Dialog::Panels { selected, expanded }) => {
+                self.dialog = Some(Dialog::Panels { selected, expanded });
+                self.activate_panel_row(selected, false)?;
             }
             Some(Dialog::Text(dialog)) => {
                 let recovery = Some(Dialog::Text(dialog.clone()));

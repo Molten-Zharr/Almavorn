@@ -11,7 +11,7 @@ use ratatui::{
     widgets::{Paragraph, Wrap},
 };
 
-fn wrapped_height(text: &str, width: u16) -> u16 {
+pub(super) fn wrapped_height(text: &str, width: u16) -> u16 {
     let width = usize::from(width.max(1));
     let mut total = 0usize;
     for line in text.lines() {

@@ -1,4 +1,7 @@
-use crate::model::Language;
+use crate::{
+    input::Action,
+    model::{Language, Mode},
+};
 use ratatui::layout::{Position, Rect};
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +21,16 @@ pub enum Panel {
 }
 
 impl Panel {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 6] = [
+        Self::Application,
+        Self::Add,
+        Self::PlaylistActions,
+        Self::Playlists,
+        Self::Tracks,
+        Self::Player,
+    ];
+
+    const LEGACY: [Self; 11] = [
         Self::Mode,
         Self::Add,
         Self::PlaylistActions,
@@ -31,6 +43,60 @@ impl Panel {
         Self::Playback,
         Self::Volume,
     ];
+
+    fn category(self) -> Self {
+        match self {
+            Self::Mode => Self::Application,
+            Self::History => Self::Add,
+            Self::View => Self::PlaylistActions,
+            Self::Playback | Self::Volume => Self::Player,
+            _ => self,
+        }
+    }
+
+    pub fn controls(self) -> &'static [Control] {
+        use Action::*;
+        use Control::{Action as Button, Mode as Page};
+        match self {
+            Self::Application => &[
+                Page(Mode::Order),
+                Page(Mode::Chaos),
+                Button(ToggleEdit),
+                Button(ToggleDesk),
+                Button(Settings),
+                Button(Help),
+                Button(Quit),
+            ],
+            Self::Add => &[
+                Button(AddFiles),
+                Button(AddFolder),
+                Button(AddNew),
+                Button(Undo),
+                Button(Redo),
+            ],
+            Self::PlaylistActions => &[
+                Button(NewPlaylist),
+                Button(Rename),
+                Button(Delete),
+                Button(Transfer),
+                Button(MoveUp),
+                Button(MoveDown),
+                Button(Search),
+                Button(Sort),
+                Button(Metadata),
+                Button(Mark),
+            ],
+            Self::Player => &[
+                Button(Previous),
+                Button(TogglePlay),
+                Button(Stop),
+                Button(Next),
+                Button(VolumeDown),
+                Button(VolumeUp),
+            ],
+            _ => &[],
+        }
+    }
 
     pub fn name(self, language: Language) -> &'static str {
         match self {
@@ -47,6 +113,40 @@ impl Panel {
             Self::Volume => language.text("Volume", "Громкость"),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Control {
+    Mode(Mode),
+    Action(Action),
+}
+
+impl Control {
+    pub fn name(self, language: Language) -> &'static str {
+        match self {
+            Self::Mode(mode) => mode.name(language),
+            Self::Action(action) => action.name(language),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum PanelRow {
+    Category(Panel),
+    Control(Control),
+    Reset,
+}
+
+pub fn panel_rows(expanded: &[Panel]) -> Vec<PanelRow> {
+    let mut rows = Vec::new();
+    for panel in Panel::ALL {
+        rows.push(PanelRow::Category(panel));
+        if expanded.contains(&panel) {
+            rows.extend(panel.controls().iter().copied().map(PanelRow::Control));
+        }
+    }
+    rows.push(PanelRow::Reset);
+    rows
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +167,23 @@ pub enum Dock {
 }
 
 impl Dock {
+    fn consolidate(self, retained: &[(Panel, Panel)]) -> Option<Self> {
+        match self {
+            Self::Panel(panel) => retained
+                .iter()
+                .find(|(old, _)| *old == panel)
+                .map(|(_, category)| Self::Panel(*category)),
+            Self::Split {
+                axis,
+                ratio,
+                first,
+                second,
+            } => match (first.consolidate(retained), second.consolidate(retained)) {
+                (Some(first), Some(second)) => Some(Self::split(axis, ratio, first, second)),
+                (first, second) => first.or(second),
+            },
+        }
+    }
     fn only_buttons(&self) -> bool {
         match self {
             Self::Panel(panel) => {
@@ -184,27 +301,119 @@ impl Dock {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WorkspaceLayout {
-    // Older saved layouts have no version; newly created layouts are already compact.
+    // Versions 0/1 used separate blocks for controls now grouped by subject.
     #[serde(default)]
     pub version: u8,
     pub root: Option<Dock>,
     pub hidden: Vec<Panel>,
     pub collapsed: Vec<Panel>,
+    pub hidden_controls: Vec<Control>,
 }
 
 impl Default for WorkspaceLayout {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: 2,
             root: None,
             hidden: Vec::new(),
             collapsed: Vec::new(),
+            hidden_controls: Vec::new(),
         }
     }
 }
 
 impl WorkspaceLayout {
     pub fn normalize(&mut self) {
+        if self.version == 0
+            && let Some(root) = &mut self.root
+        {
+            root.compact_buttons();
+        }
+        if self.version < 2 {
+            if let Some(root) = self.root.take() {
+                let mut panels = Vec::new();
+                root.panels(&mut panels);
+                let retained: Vec<_> = Panel::ALL
+                    .iter()
+                    .filter_map(|category| {
+                        let preferred =
+                            if *category == Panel::Application && panels.contains(&Panel::Mode) {
+                                Panel::Mode
+                            } else {
+                                *category
+                            };
+                        panels
+                            .iter()
+                            .find(|panel| **panel == preferred)
+                            .or_else(|| panels.iter().find(|panel| panel.category() == *category))
+                            .map(|panel| (*panel, *category))
+                    })
+                    .collect();
+                self.root = root.consolidate(&retained);
+            }
+            let hidden = self.hidden.clone();
+            let collapsed = self.collapsed.clone();
+            for panel in &hidden {
+                if Panel::LEGACY
+                    .iter()
+                    .filter(|member| member.category() == panel.category())
+                    .all(|member| hidden.contains(member))
+                {
+                    continue;
+                }
+                use Action::*;
+                use Control::{Action as Button, Mode as Page};
+                let controls: &[Control] = match panel {
+                    Panel::Mode => &[
+                        Page(Mode::Order),
+                        Page(Mode::Chaos),
+                        Button(ToggleEdit),
+                        Button(ToggleDesk),
+                    ],
+                    Panel::Application => &[Button(Settings), Button(Help), Button(Quit)],
+                    Panel::Add => &[Button(AddFiles), Button(AddFolder), Button(AddNew)],
+                    Panel::History => &[Button(Undo), Button(Redo)],
+                    Panel::PlaylistActions => &[
+                        Button(NewPlaylist),
+                        Button(Rename),
+                        Button(Delete),
+                        Button(Transfer),
+                        Button(MoveUp),
+                        Button(MoveDown),
+                    ],
+                    Panel::View => &[Button(Search), Button(Sort), Button(Metadata), Button(Mark)],
+                    Panel::Playback => &[
+                        Button(Previous),
+                        Button(TogglePlay),
+                        Button(Stop),
+                        Button(Next),
+                    ],
+                    Panel::Volume => &[Button(VolumeDown), Button(VolumeUp)],
+                    _ => &[],
+                };
+                self.hidden_controls.extend_from_slice(controls);
+            }
+            self.hidden = Panel::ALL
+                .into_iter()
+                .filter(|category| {
+                    Panel::LEGACY
+                        .iter()
+                        .filter(|panel| panel.category() == *category)
+                        .all(|panel| hidden.contains(panel))
+                })
+                .collect();
+            self.collapsed = Panel::ALL
+                .into_iter()
+                .filter(|category| {
+                    let mut visible = Panel::LEGACY
+                        .iter()
+                        .filter(|panel| panel.category() == *category && !hidden.contains(panel))
+                        .peekable();
+                    visible.peek().is_some() && visible.all(|panel| collapsed.contains(panel))
+                })
+                .collect();
+            self.version = 2;
+        }
         if let Some(root) = &self.root {
             let mut panels = Vec::new();
             root.panels(&mut panels);
@@ -216,18 +425,24 @@ impl WorkspaceLayout {
                 self.root = None;
             }
         }
-        if self.version == 0 {
-            if let Some(root) = &mut self.root {
-                root.compact_buttons();
-            }
-            self.version = 1;
-        }
+        self.hidden.retain(|panel| Panel::ALL.contains(panel));
+        self.collapsed.retain(|panel| Panel::ALL.contains(panel));
         self.hidden
             .sort_by_key(|panel| Panel::ALL.iter().position(|value| value == panel));
         self.hidden.dedup();
         self.collapsed
             .sort_by_key(|panel| Panel::ALL.iter().position(|value| value == panel));
         self.collapsed.dedup();
+        let controls: Vec<_> = Panel::ALL
+            .iter()
+            .flat_map(|panel| panel.controls())
+            .copied()
+            .collect();
+        self.hidden_controls
+            .retain(|control| controls.contains(control));
+        self.hidden_controls
+            .sort_by_key(|control| controls.iter().position(|value| value == control));
+        self.hidden_controls.dedup();
     }
 }
 

@@ -1,12 +1,76 @@
-use super::{App, Focus};
+use super::{App, Dialog, Focus};
 use crate::{
     input::{Key, KeyPress},
-    workspace::{Axis, Dock, Edge, Gesture, Panel},
+    workspace::{Axis, Dock, Edge, Gesture, Panel, PanelRow, panel_rows},
 };
 use anyhow::Result;
 use ratatui::layout::Position;
 
 impl App {
+    pub(crate) fn activate_panel_row(&mut self, index: usize, visibility: bool) -> Result<()> {
+        let Some(Dialog::Panels { selected, expanded }) = &mut self.dialog else {
+            return Ok(());
+        };
+        let rows = panel_rows(expanded);
+        let Some(row) = rows.get(index).copied() else {
+            return Ok(());
+        };
+        *selected = index;
+        match row {
+            PanelRow::Category(panel) => {
+                if visibility || panel.controls().is_empty() {
+                    self.show_panel(panel)?;
+                } else {
+                    let open = !expanded.contains(&panel);
+                    self.expand_panel_category(open);
+                }
+            }
+            PanelRow::Control(control) => {
+                if self.settings.workspace.hidden_controls.contains(&control) {
+                    self.settings
+                        .workspace
+                        .hidden_controls
+                        .retain(|value| *value != control);
+                } else {
+                    self.settings.workspace.hidden_controls.push(control);
+                }
+                self.save_settings()?;
+            }
+            PanelRow::Reset => {
+                self.reset_workspace()?;
+                if let Some(Dialog::Panels { selected, expanded }) = &mut self.dialog {
+                    expanded.clear();
+                    *selected = Panel::ALL.len();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn expand_panel_category(&mut self, open: bool) {
+        let Some(Dialog::Panels { selected, expanded }) = &mut self.dialog else {
+            return;
+        };
+        let rows = panel_rows(expanded);
+        let category = match rows.get(*selected) {
+            Some(PanelRow::Category(panel)) => Some(*panel),
+            Some(PanelRow::Control(control)) if !open => Panel::ALL
+                .into_iter()
+                .find(|panel| panel.controls().contains(control)),
+            _ => None,
+        };
+        if let Some(panel) = category.filter(|panel| !panel.controls().is_empty()) {
+            if open && !expanded.contains(&panel) {
+                expanded.push(panel);
+            } else if !open {
+                expanded.retain(|value| *value != panel);
+            }
+            *selected = panel_rows(expanded)
+                .iter()
+                .position(|row| matches!(row, PanelRow::Category(value) if *value == panel))
+                .unwrap_or(0);
+        }
+    }
     pub(crate) fn focus_panel(&mut self, panel: Panel) {
         self.workspace.focus = panel;
         match panel {
@@ -69,6 +133,12 @@ impl App {
     }
 
     pub(crate) fn show_panel(&mut self, panel: Panel) -> Result<()> {
+        if let Some(Dialog::Panels { selected, expanded }) = &mut self.dialog {
+            *selected = panel_rows(expanded)
+                .iter()
+                .position(|row| matches!(row, PanelRow::Category(value) if *value == panel))
+                .unwrap_or(*selected);
+        }
         if self.settings.workspace.hidden.contains(&panel) {
             self.settings
                 .workspace

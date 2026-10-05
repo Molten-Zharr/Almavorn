@@ -33,14 +33,14 @@ fn join(axis: Axis, mut nodes: Vec<(Dock, u16)>) -> Dock {
 }
 
 fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
-    let (rects, height) = toolbar::layout(app, &groups[..6], area.width, compact);
+    let (rects, height) = toolbar::layout(app, &groups[..3], area.width, compact);
     let mut rows: Vec<ToolbarRow> = Vec::new();
     for (index, rect) in rects.iter().enumerate() {
         if rows.last().is_none_or(|(_, y, _)| *y != rect.y) {
             rows.push((Vec::new(), rect.y, rect.height));
         }
         let row = rows.last_mut().expect("Toolbar row");
-        row.0.push((Dock::Panel(Panel::ALL[index]), rect.width));
+        row.0.push((Dock::Panel(groups[index].panel), rect.width));
         row.2 = row.2.max(rect.height);
     }
     let toolbar = join(
@@ -93,17 +93,7 @@ fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
         (u32::from(player::preferred_height(app, area.width)) * 1000
             / u32::from(area.height.saturating_sub(height).max(1))) as u16
     };
-    let player = Dock::split(
-        Axis::Vertical,
-        400,
-        Dock::Panel(Panel::Player),
-        Dock::split(
-            Axis::Horizontal,
-            650,
-            Dock::Panel(Panel::Playback),
-            Dock::Panel(Panel::Volume),
-        ),
-    );
+    let player = Dock::Panel(Panel::Player);
     let content = if player_first {
         Dock::split(
             if side_player {
@@ -136,14 +126,7 @@ fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
 }
 
 fn group(groups: &[Group], panel: Panel) -> Option<&Group> {
-    match panel {
-        Panel::Playback => groups.get(6),
-        Panel::Volume => groups.get(7),
-        _ => Panel::ALL
-            .iter()
-            .position(|value| *value == panel)
-            .and_then(|index| (index < 6).then(|| &groups[index])),
-    }
+    groups.iter().find(|group| group.panel == panel)
 }
 
 fn min_width(app: &App, groups: &[Group], node: &Dock) -> u16 {
@@ -214,6 +197,10 @@ fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) 
                 return if compact { 1 } else { 2 };
             }
             if let Some(group) = group(groups, *panel) {
+                if *panel == Panel::Player {
+                    return player::content_height(app, width.saturating_sub(2), group)
+                        + if compact { 1 } else { 2 };
+                }
                 return button_rows(app, width.saturating_sub(2), &group.entries)
                     + if compact { 1 } else { 2 };
             }
@@ -533,13 +520,16 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         if app.settings.workspace.collapsed.contains(&panel) {
             continue;
         }
-        if let Some(group) = group(&groups, panel) {
+        if panel == Panel::Player {
+            if let Some(controls) = group(&groups, panel) {
+                player::player(frame, app, inner, controls, palette);
+            }
+        } else if let Some(group) = group(&groups, panel) {
             toolbar::contents(frame, app, inner, group, palette);
         } else {
             match panel {
                 Panel::Playlists => library::playlists(frame, app, inner, palette),
                 Panel::Tracks => library::tracks_table(frame, app, inner, palette),
-                Panel::Player => player::player(frame, app, inner, palette),
                 _ => {}
             }
         }

@@ -193,6 +193,23 @@ impl App {
             return Ok(());
         }
         if self.dialog.is_some() {
+            if !key.ctrl
+                && !key.alt
+                && let Some(Dialog::Panels { selected, .. }) = &self.dialog
+            {
+                let selected = *selected;
+                match key.key {
+                    Key::Left | Key::Right => {
+                        self.expand_panel_category(key.key == Key::Right);
+                        return Ok(());
+                    }
+                    Key::Char(' ') => {
+                        self.activate_panel_row(selected, true)?;
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
             if matches!(self.dialog, Some(Dialog::Browser(_))) {
                 if key.key == Key::Char('a') && key.ctrl {
                     return self.target(Target::BrowserMarkAll, false);
@@ -240,12 +257,8 @@ impl App {
             }
             return Ok(());
         }
-        if matches!(
-            self.workspace.focus,
-            crate::workspace::Panel::Player
-                | crate::workspace::Panel::Playback
-                | crate::workspace::Panel::Volume
-        ) && !key.ctrl
+        if matches!(self.workspace.focus, crate::workspace::Panel::Player)
+            && !key.ctrl
             && !key.alt
             && !key.shift
             && matches!(key.key, Key::Up | Key::Down)
@@ -301,6 +314,7 @@ impl App {
             Target::PanelCollapse(panel) => self.toggle_panel(panel)?,
             Target::PanelClose(panel) => self.close_panel(panel)?,
             Target::PanelVisibility(panel) => self.show_panel(panel)?,
+            Target::PanelRow(index) => self.activate_panel_row(index, false)?,
             Target::PanelResize(index) => {
                 if let (Some(split), Some(root)) =
                     (self.workspace.splits.get(index), &self.workspace.root)

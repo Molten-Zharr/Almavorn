@@ -49,6 +49,7 @@ pub enum Target {
     PanelCollapse(crate::workspace::Panel),
     PanelClose(crate::workspace::Panel),
     PanelVisibility(crate::workspace::Panel),
+    PanelRow(usize),
     PanelResize(usize),
     ResetWorkspace,
     Action(Action),

@@ -356,7 +356,12 @@ impl App {
                 self.settings.workspace.root = None;
                 self.save_settings()?;
             }
-            Panels => self.dialog = Some(Dialog::Panels { selected: 0 }),
+            Panels => {
+                self.dialog = Some(Dialog::Panels {
+                    selected: 0,
+                    expanded: Vec::new(),
+                })
+            }
         }
         Ok(())
     }

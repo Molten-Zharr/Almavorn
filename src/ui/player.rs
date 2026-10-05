@@ -3,6 +3,7 @@ use crate::{
     app::{App, Hit, Target},
     input::Action,
     model::duration_text,
+    workspace::Panel,
 };
 use ratatui::{
     Frame,
@@ -30,15 +31,12 @@ pub(super) fn controls(app: &App) -> Vec<Group> {
         (Action::VolumeDown, "Vol -", "Громк -"),
         (Action::VolumeUp, "Vol +", "Громк +"),
     ];
-    [
-        (app.text("Playback", "Управление"), playback.as_slice()),
-        (app.text("Volume", "Громкость"), volume.as_slice()),
-    ]
-    .into_iter()
-    .map(|(title, actions)| Group {
-        title: title.into(),
-        entries: actions
+    let mut group = Group {
+        panel: Panel::Player,
+        title: app.text("Player", "Проигрыватель").into(),
+        entries: playback
             .iter()
+            .chain(volume.iter())
             .map(|(action, en, ru)| {
                 (
                     app.text(en, ru).into(),
@@ -47,38 +45,32 @@ pub(super) fn controls(app: &App) -> Vec<Group> {
                 )
             })
             .collect(),
-    })
-    .collect()
+    };
+    group.retain_visible(app);
+    vec![group]
 }
 
 pub(super) fn preferred_height(app: &App, width: u16) -> u16 {
     let groups = controls(app);
-    let min_width = |group: &Group| {
-        group
-            .entries
-            .iter()
-            .map(|(label, target, _)| {
-                super::widgets::button_width(app, label, target).saturating_add(2)
-            })
-            .max()
-            .unwrap_or(20)
-            .max(20)
-            .max(group.title.chars().count() as u16 + 13)
-    };
-    let [left, right] = [min_width(&groups[0]), min_width(&groups[1])];
-    let height = |group: &Group, width: u16| {
-        super::widgets::button_rows(app, width.saturating_sub(2), &group.entries) + 2
-    };
-    let controls_height = if left.saturating_add(right) > width {
-        height(&groups[0], width).saturating_add(height(&groups[1], width))
-    } else {
-        let cut = ((u32::from(width) * 650 / 1000) as u16).clamp(left, width - right);
-        height(&groups[0], cut).max(height(&groups[1], width - cut))
-    };
-    controls_height.saturating_add(6)
+    content_height(app, width.saturating_sub(2), &groups[0]).saturating_add(2)
 }
 
-pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
+pub(super) fn content_height(app: &App, width: u16, controls: &Group) -> u16 {
+    let rows = if controls.entries.is_empty() {
+        0
+    } else {
+        super::widgets::button_rows(app, width, &controls.entries)
+    };
+    rows.saturating_add(4)
+}
+
+pub(super) fn player(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    controls: &Group,
+    palette: Palette,
+) {
     let inner = area;
     if inner.height < 4 {
         return;
@@ -95,7 +87,18 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         Paragraph::new(clean(&title)).style(palette.text().fg(palette.accent)),
         Rect::new(inner.x, inner.y, inner.width, 1),
     );
-    let y = inner.y + 2;
+    let rows = content_height(app, inner.width, controls).saturating_sub(4);
+    super::toolbar::contents(
+        frame,
+        app,
+        Rect::new(inner.x, inner.y + 1, inner.width, rows),
+        controls,
+        palette,
+    );
+    let y = inner.y + rows + 2;
+    if y >= inner.bottom() {
+        return;
+    }
     let duration = app.current.as_ref().map_or(0, |track| track.duration_ms);
     let position = app.position_ms();
     let ratio = if duration > 0 {
