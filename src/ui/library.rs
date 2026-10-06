@@ -91,7 +91,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         )];
         if playing {
             content.push(Span::styled(
-                format!("[{}] ", if app.current_paused() { "‖" } else { "▶" }),
+                format!("[{}]", if app.current_paused() { "‖" } else { "▶" }),
                 style
                     .bg(if app.current_paused() {
                         palette.muted
@@ -101,6 +101,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
                     .fg(palette.background)
                     .add_modifier(Modifier::BOLD),
             ));
+            content.push(Span::styled(" ", style));
         }
         let count = count.to_string();
         let counter = if usize::from(rect.width) > count.len() + 3 {
@@ -290,7 +291,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             let mut title = Vec::new();
             if playing {
                 title.push(Span::styled(
-                    format!("[{}] ", if app.current_paused() { "‖" } else { "▶" }),
+                    format!("[{}]", if app.current_paused() { "‖" } else { "▶" }),
                     style
                         .bg(if app.current_paused() {
                             palette.muted
@@ -300,6 +301,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
                         .fg(palette.background)
                         .add_modifier(Modifier::BOLD),
                 ));
+                title.push(Span::styled(" ", style));
             }
             title.push(Span::styled(clean(&entry.track.title), style));
             Row::new(vec![
