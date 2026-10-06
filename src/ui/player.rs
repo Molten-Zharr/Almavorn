@@ -62,7 +62,7 @@ pub(super) fn content_height(app: &App, width: u16, controls: &Group) -> u16 {
     } else {
         super::toolbar::rows(app, width, controls)
     };
-    rows.saturating_add(7)
+    rows.saturating_add(9)
 }
 
 pub(super) fn player(
@@ -73,7 +73,7 @@ pub(super) fn player(
     palette: Palette,
 ) {
     let inner = area;
-    if inner.height < 7 {
+    if inner.height < 9 {
         return;
     }
     let title = if app.preparing_playback() && !app.playback_active() {
@@ -115,7 +115,7 @@ pub(super) fn player(
         palette,
     );
     let y = inner.y + rows + 2;
-    if y + 4 >= inner.bottom() {
+    if y + 6 >= inner.bottom() {
         return;
     }
     let duration = app
@@ -129,9 +129,11 @@ pub(super) fn player(
     } else {
         0.0
     };
-    let wave = Rect::new(inner.x, y, inner.width, 2);
+    let wave = Rect::new(inner.x, y, inner.width, 4);
+    app.view.waveform_area = wave;
     waveform(frame, app, wave, ratio, palette);
-    let rect = Rect::new(inner.x, y + 2, inner.width, 1);
+    let rect = Rect::new(inner.x, y + 4, inner.width, 1);
+    app.view.progress_area = rect;
     frame.render_widget(
         Gauge::default()
             .ratio(ratio)
@@ -152,9 +154,9 @@ pub(super) fn player(
         ))
         .alignment(Alignment::Center)
         .style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, y + 3, inner.width, 1),
+        Rect::new(inner.x, y + 5, inner.width, 1),
     );
-    let seek = Rect::new(inner.x, y, inner.width, 3);
+    let seek = Rect::new(inner.x, y, inner.width, 5);
     app.view.hits.push(Hit {
         area: seek,
         target: Target::Seek(seek),
@@ -163,7 +165,7 @@ pub(super) fn player(
     volume(
         frame,
         app,
-        Rect::new(inner.x, y + 4, inner.width, 1),
+        Rect::new(inner.x, y + 6, inner.width, 1),
         palette,
     );
 }
@@ -220,13 +222,6 @@ fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palet
                 cell.set_fg(palette.accent);
             }
         }
-    }
-    if app.playback_active() && area.width > 0 {
-        let x = area.x + played.min(area.width - 1);
-        frame.render_widget(
-            Paragraph::new("│\n│").style(palette.text().fg(palette.accent)),
-            Rect::new(x, area.y, 1, area.height),
-        );
     }
 }
 

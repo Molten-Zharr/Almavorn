@@ -31,6 +31,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let palette = Palette::new(app);
     app.view.hits.clear();
     app.view.keycaps.clear();
+    app.view.waveform_area = Rect::default();
+    app.view.progress_area = Rect::default();
     if app
         .view
         .dialog

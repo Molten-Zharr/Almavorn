@@ -245,7 +245,7 @@ pub(super) fn render_dialog(
                 )
                 .into(),
             );
-            lines.push(app.text("Click or drag the waveform and progress bar to seek. Click or drag the divided volume bar to adjust volume; Up/Down in the player changes it by 1%.", "Клик или перетаскивание по аудиоволне и дорожке меняет позицию. Полоска громкости с делениями управляется мышью; стрелки вверх/вниз в плеере меняют громкость на 1%.").into());
+            lines.push(app.text("Hold the waveform or progress bar to choose a position silently; release to seek and keep the previous play/pause state. Esc cancels dragging. Click or drag the divided volume bar; Up/Down in the player changes volume by 1%.", "Зажмите аудиоволну или дорожку для тихого выбора позиции; отпустите для перемотки с сохранением воспроизведения или паузы. Esc отменяет перетаскивание. Полоска громкости управляется мышью; стрелки вверх/вниз в плеере меняют громкость на 1%.").into());
             lines.push(app.text("PLAYING and PAUSED mark the actual playing playlist and track. The selected row is highlighted separately.", "Метки ИГРАЕТ и ПАУЗА показывают воспроизводящийся плейлист и композицию. Выбранная строка выделяется отдельно.").into());
             help::help_dialog(frame, app, offset, inner, lines, palette);
         }

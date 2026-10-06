@@ -41,6 +41,7 @@ fn run() -> Result<()> {
     };
     let mut previous_click: Option<(egui::Pos2, Instant)> = None;
     let mut image_cache = gui_renderer::ImageCache::default();
+    let mut playback_painter = gui_renderer::PlaybackPainter::default();
     eframe::run_ui_native("Almavorn · GUITUI", options, move |root, _| {
         let ctx = root.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(16));
@@ -129,7 +130,6 @@ fn run() -> Result<()> {
                 let Some(dimensions) = dimensions else {
                     return;
                 };
-                gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
                 if let Some(point) = ctx.input(|input| input.pointer.hover_pos()) {
                     let x = ((point.x - image_rect.min.x) / image_rect.width()
                         * f32::from(dimensions.width))
@@ -238,10 +238,17 @@ fn run() -> Result<()> {
                                     });
                                 previous_click = Some((pos, Instant::now()));
                                 app.handle(Input::Click { x, y, double });
+                                if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos) {
+                                    app.scrub(ratio, false);
+                                }
                             }
                         }
                         egui::Event::PointerMoved(pos) => {
-                            if let Some((x, y)) = to_cell(pos)
+                            if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos)
+                                && down
+                            {
+                                app.scrub(ratio, false);
+                            } else if let Some((x, y)) = to_cell(pos)
                                 && down
                             {
                                 app.handle(Input::Drag { x, y });
@@ -253,6 +260,10 @@ fn run() -> Result<()> {
                             pressed: false,
                             ..
                         } => {
+                            if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos) {
+                                app.scrub(ratio, true);
+                                continue;
+                            }
                             let point =
                                 pos.clamp(image_rect.min, image_rect.max - egui::vec2(0.1, 0.1));
                             if let Some((x, y)) = to_cell(point) {
@@ -289,12 +300,29 @@ fn run() -> Result<()> {
                     );
                     app.view.notice_error = true;
                 }
+                playback_painter.paint(ui, image_rect, &app, dimensions);
+                gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
             });
         if app.view.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     })
     .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+fn seek_ratio(
+    app: &App,
+    image: egui::Rect,
+    size: ratatui::layout::Size,
+    point: egui::Pos2,
+) -> Option<f64> {
+    let Some(almavorn::workspace::Gesture::Seek(area)) = &app.view.workspace.gesture else {
+        return None;
+    };
+    let cell_width = image.width() / f32::from(size.width);
+    let left = image.left() + f32::from(area.x) * cell_width;
+    let width = (f32::from(area.width) * cell_width - 1.0).max(1.0);
+    Some(f64::from(((point.x - left) / width).clamp(0.0, 1.0)))
 }
 
 fn pointer_movement(

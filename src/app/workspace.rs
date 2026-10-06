@@ -243,6 +243,7 @@ impl App {
                 }
             }
             Some(Gesture::Resize { .. }) => self.save_settings()?,
+            Some(Gesture::Seek(_)) => self.commit_seek(),
             _ => {}
         }
         self.view.workspace.drop = None;
@@ -253,9 +254,13 @@ impl App {
         let Some(gesture) = self.view.workspace.gesture.take() else {
             return false;
         };
-        if let Gesture::Resize { before, .. } = gesture {
-            self.view.workspace.root = Some(before.clone());
-            self.settings.workspace.root = Some(before);
+        match gesture {
+            Gesture::Resize { before, .. } => {
+                self.view.workspace.root = Some(before.clone());
+                self.settings.workspace.root = Some(before);
+            }
+            Gesture::Seek(_) => self.cancel_seek(),
+            _ => {}
         }
         self.view.workspace.drop = None;
         true

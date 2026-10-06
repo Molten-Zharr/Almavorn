@@ -48,6 +48,9 @@ pub struct PlaybackState {
     pub(super) queue_index: usize,
     pub(super) audio: Option<Audio>,
     pub(super) preparation: LatestJob<playback::PlaybackRequest, crate::audio::PreparedAudio>,
+    pub(super) seek: LatestJob<playback::SeekRequest, crate::audio::PreparedAudio>,
+    pub(super) seek_preview: Option<u64>,
+    pub(super) seek_paused: Option<bool>,
 }
 
 #[derive(Default)]
@@ -58,6 +61,8 @@ pub struct UiState {
     pub dialog: Option<Dialog>,
     pub hits: Vec<Hit>,
     pub keycaps: Vec<Keycap>,
+    pub waveform_area: Rect,
+    pub progress_area: Rect,
     pub playlist_area: Rect,
     pub tracks_area: Rect,
     pub playlist_offset: usize,

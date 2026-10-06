@@ -1,6 +1,6 @@
 use crate::errors::AppError;
 use anyhow::{Context, Result};
-use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
+use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
 use std::{
     fs::File,
     io::BufReader,
@@ -15,6 +15,7 @@ pub struct Audio {
     device: MixerDeviceSink,
     player: Player,
     started: bool,
+    position_offset: Duration,
 }
 
 impl Audio {
@@ -28,6 +29,7 @@ impl Audio {
             device,
             player,
             started: false,
+            position_offset: Duration::ZERO,
         })
     }
 
@@ -42,8 +44,8 @@ impl Audio {
         let source = Self::prepare(path)?;
         // Keep an energy envelope of the whole file in bounded memory. When the
         // buffer fills, merge neighboring windows instead of retaining samples.
-        let mut windows: Vec<(f64, u64)> = Vec::with_capacity(1024);
-        let mut window_size = 4096u64;
+        let mut windows: Vec<(f64, u64)> = Vec::with_capacity(8192);
+        let mut window_size = 512u64;
         let (mut energy, mut count) = (0.0f64, 0u64);
         for sample in source {
             if count.is_multiple_of(4096) && cancel.load(Ordering::Relaxed) {
@@ -57,12 +59,12 @@ impl Audio {
             if count == window_size {
                 windows.push((energy, count));
                 (energy, count) = (0.0, 0);
-                if windows.len() == 1024 {
-                    for index in 0..512 {
+                if windows.len() == 8192 {
+                    for index in 0..4096 {
                         let (a, b) = (windows[index * 2], windows[index * 2 + 1]);
                         windows[index] = (a.0 + b.0, a.1 + b.1);
                     }
-                    windows.truncate(512);
+                    windows.truncate(4096);
                     window_size = window_size.saturating_mul(2);
                 }
             }
@@ -82,6 +84,18 @@ impl Audio {
     }
 
     pub fn play_prepared(&mut self, source: PreparedAudio, paused: bool) {
+        self.play_prepared_at(source, paused, Duration::ZERO);
+    }
+
+    pub fn prepare_at(path: &Path, position: Duration) -> Result<PreparedAudio> {
+        let mut source = Self::prepare(path)?;
+        source
+            .try_seek(position)
+            .context(AppError::SeekingUnavailable)?;
+        Ok(source)
+    }
+
+    pub fn play_prepared_at(&mut self, source: PreparedAudio, paused: bool, position: Duration) {
         let volume = self.player.volume();
         self.player.stop();
         self.player = Player::connect_new(self.device.mixer());
@@ -89,6 +103,7 @@ impl Audio {
         self.set_paused(paused);
         self.player.append(source);
         self.started = true;
+        self.position_offset = position;
     }
 
     pub fn set_paused(&self, paused: bool) {
@@ -110,6 +125,7 @@ impl Audio {
     pub fn stop(&mut self) {
         self.player.stop();
         self.started = false;
+        self.position_offset = Duration::ZERO;
     }
     pub fn paused(&self) -> bool {
         self.player.is_paused()
@@ -126,12 +142,14 @@ impl Audio {
         }
     }
     pub fn position(&self) -> Duration {
-        self.player.get_pos()
+        self.position_offset.saturating_add(self.player.get_pos())
     }
-    pub fn seek(&self, position: Duration) -> Result<()> {
+    pub fn seek(&mut self, position: Duration) -> Result<()> {
         self.player
             .try_seek(position)
-            .context(AppError::SeekingUnavailable)
+            .context(AppError::SeekingUnavailable)?;
+        self.position_offset = Duration::ZERO;
+        Ok(())
     }
     pub fn volume(&self, volume: f32) {
         self.player.set_volume(volume);

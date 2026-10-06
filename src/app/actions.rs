@@ -8,7 +8,6 @@ use anyhow::{Context, Result};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 impl App {
@@ -171,14 +170,12 @@ impl App {
                 self.adjust_volume(if action == VolumeUp { 5 } else { -5 })?;
             }
             SeekForward | SeekBackward => {
-                if let Some(audio) = &self.playback.audio {
-                    let position = audio.position();
-                    audio.seek(if action == SeekForward {
-                        position.saturating_add(Duration::from_secs(5))
-                    } else {
-                        position.saturating_sub(Duration::from_secs(5))
-                    })?;
-                }
+                let position = self.position_ms();
+                self.seek_to(if action == SeekForward {
+                    position.saturating_add(5000)
+                } else {
+                    position.saturating_sub(5000)
+                });
             }
             SwitchMode => self.set_mode(if self.settings.mode == Mode::Order {
                 Mode::Chaos

@@ -6,7 +6,6 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use ratatui::layout::{Position, Rect};
-use std::time::Duration;
 
 impl App {
     pub fn accepts_text(&self) -> bool {
@@ -372,15 +371,14 @@ impl App {
                 if self.view.workspace.gesture.is_none() {
                     self.view.workspace.gesture = Some(crate::workspace::Gesture::Seek(area));
                 }
-                if let (Some(audio), Some(current)) = (&self.playback.audio, &self.playback.current)
-                {
+                if let Some(current) = &self.playback.current {
                     let duration = current.duration_ms;
                     if duration > 0 && area.width > 0 {
                         let point = self.last_pointer_x(area);
-                        audio.seek(Duration::from_millis(
+                        self.preview_seek(
                             duration.saturating_mul(point as u64)
                                 / area.width.saturating_sub(1).max(1) as u64,
-                        ))?;
+                        );
                     }
                 }
             }

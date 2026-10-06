@@ -107,10 +107,12 @@ impl App {
         self.tick_settings_files()?;
         self.tick_browser()?;
         self.tick_playback()?;
+        self.tick_seek()?;
         self.tick_waveform();
         self.poll_import()?;
         self.tick_library()?;
         if !self.preparing_playback()
+            && self.playback.seek_preview.is_none()
             && self.playback.audio.as_mut().is_some_and(Audio::finished)
             && let Err(error) = self.next(1, false)
         {
