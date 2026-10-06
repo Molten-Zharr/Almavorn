@@ -6,6 +6,158 @@ use eframe::egui;
 use egui_ratatui::RataguiBackend;
 use ratatui::{buffer::Buffer, layout::Rect};
 use soft_ratatui::{EmbeddedTTF, RgbPixmap, SoftBackend};
+use std::sync::Arc;
+
+type WaveformKey = (usize, usize, egui::Rect, egui::Color32, egui::Color32);
+
+#[derive(Default)]
+pub struct PlaybackPainter {
+    waveform_key: Option<WaveformKey>,
+    waveform_meshes: Option<(Arc<egui::Mesh>, Arc<egui::Mesh>)>,
+}
+
+impl PlaybackPainter {
+    pub fn paint(
+        &mut self,
+        ui: &egui::Ui,
+        image: egui::Rect,
+        app: &App,
+        size: ratatui::layout::Size,
+    ) {
+        if (app.view.dialog.is_some() && app.view.overlay_area.is_empty())
+            || (app.view.progress_area.is_empty() && app.view.waveform_area.is_empty())
+        {
+            return;
+        }
+        let scale = egui::vec2(
+            image.width() / f32::from(size.width),
+            image.height() / f32::from(size.height),
+        );
+        let map = |area: Rect| {
+            egui::Rect::from_min_size(
+                image.min + egui::vec2(f32::from(area.x) * scale.x, f32::from(area.y) * scale.y),
+                egui::vec2(
+                    f32::from(area.width) * scale.x,
+                    f32::from(area.height) * scale.y,
+                ),
+            )
+        };
+        let waveform = !app.view.waveform_area.is_empty();
+        let wave = map(if waveform {
+            app.view.waveform_area
+        } else {
+            app.view.progress_area
+        });
+        let palette = app.settings.current_palette();
+        let color = |key| {
+            let [r, g, b] = palette.color(key);
+            egui::Color32::from_rgb(r, g, b)
+        };
+        let background = color("background");
+        let active = color("active");
+        let future = color("inactive_panel_border");
+        let duration = app
+            .playback
+            .current
+            .as_ref()
+            .map_or(0, |track| track.duration_ms);
+        let ratio = if duration > 0 {
+            (app.position_ms() as f64 / duration as f64).clamp(0.0, 1.0) as f32
+        } else {
+            0.0
+        };
+        let x = wave.left() + ratio * wave.width();
+        let painter = ui.painter().with_clip_rect(image.intersect(ui.clip_rect()));
+        if let Some(values) = app
+            .playback
+            .waveform
+            .as_deref()
+            .filter(|values| waveform && !values.is_empty())
+        {
+            painter.rect_filled(wave, 0, background);
+            let key = (values.as_ptr() as usize, values.len(), wave, active, future);
+            if self.waveform_key != Some(key) {
+                let columns = (wave.width() * ui.painter().pixels_per_point())
+                    .ceil()
+                    .clamp(2.0, 8192.0) as usize;
+                let peak = values
+                    .iter()
+                    .copied()
+                    .fold(0.0f32, f32::max)
+                    .max(f32::EPSILON);
+                let mut mesh = egui::Mesh::default();
+                let amplitude = (wave.height() / 2.0 - 3.0).max(0.0);
+                for column in 0..=columns {
+                    let start = (column * values.len() / (columns + 1)).min(values.len() - 1);
+                    let end = (((column + 1) * values.len() / (columns + 1)).max(start + 1))
+                        .min(values.len());
+                    let level = values[start..end].iter().copied().fold(0.0f32, f32::max) / peak;
+                    let x = wave.left() + column as f32 * wave.width() / columns as f32;
+                    let height = level.clamp(0.0, 1.0) * amplitude;
+                    for y in [wave.center().y - height, wave.center().y + height] {
+                        mesh.colored_vertex(egui::pos2(x, y), future);
+                    }
+                    if column > 0 {
+                        let a = (column as u32 - 1) * 2;
+                        mesh.add_triangle(a, a + 1, a + 2);
+                        mesh.add_triangle(a + 1, a + 3, a + 2);
+                    }
+                }
+                let mut played = mesh.clone();
+                for vertex in &mut played.vertices {
+                    vertex.color = active;
+                }
+                self.waveform_meshes = Some((Arc::new(mesh), Arc::new(played)));
+                self.waveform_key = Some(key);
+            }
+            if let Some((future_mesh, played_mesh)) = &self.waveform_meshes {
+                painter.add(egui::Shape::mesh(future_mesh.clone()));
+                if ratio > 0.0 {
+                    painter
+                        .with_clip_rect(
+                            egui::Rect::from_min_max(wave.min, egui::pos2(x, wave.bottom()))
+                                .intersect(painter.clip_rect()),
+                        )
+                        .add(egui::Shape::mesh(played_mesh.clone()));
+                }
+            }
+            painter.line_segment(
+                [
+                    egui::pos2(wave.left(), wave.center().y),
+                    egui::pos2(wave.right(), wave.center().y),
+                ],
+                egui::Stroke::new(0.5_f32, future),
+            );
+        } else {
+            self.waveform_key = None;
+            self.waveform_meshes = None;
+        }
+        if !waveform {
+            painter.rect_filled(wave, 0, future);
+            if ratio > 0.0 {
+                painter.rect_filled(
+                    egui::Rect::from_min_max(wave.min, egui::pos2(x, wave.bottom())),
+                    0,
+                    active,
+                );
+            }
+        }
+        if app.playback_active() && (!waveform || self.waveform_meshes.is_some()) {
+            let x = x.clamp(wave.left() + 0.5, wave.right() - 0.5);
+            let painter = painter.with_clip_rect(wave.intersect(painter.clip_rect()));
+            if waveform {
+                painter.line_segment(
+                    [
+                        egui::pos2(x, wave.top() + 2.0),
+                        egui::pos2(x, wave.bottom() - 2.0),
+                    ],
+                    egui::Stroke::new(1.0 / ui.painter().pixels_per_point(), active),
+                );
+            }
+            painter.circle_filled(egui::pos2(x, wave.center().y), 2.5, active);
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct ImageCache {
@@ -147,6 +299,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
                 Target::Action(_)
                     | Target::Mode(_)
                     | Target::Submit
+                    | Target::SearchPlay
                     | Target::CloseDialog
                     | Target::Text(_)
                     | Target::Backspace
@@ -159,6 +312,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
                     | Target::DialogScroll(_)
                     | Target::Setting(_)
                     | Target::SettingAdjust(_, _)
+                    | Target::SettingsTimeline(_, _)
                     | Target::SettingHelp(_)
                     | Target::BindingModifier(_)
                     | Target::BindingKey(_)

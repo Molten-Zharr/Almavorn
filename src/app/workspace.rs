@@ -1,4 +1,4 @@
-use super::{App, Dialog, Focus};
+use super::{App, Dialog, Focus, database::DatabaseOutcome};
 use crate::{
     input::{Key, KeyPress},
     workspace::{Axis, Dock, Edge, Gesture, Panel, PanelRow, panel_rows},
@@ -166,6 +166,27 @@ impl App {
 
     pub(crate) fn drag_workspace(&mut self, point: Position) -> Result<()> {
         match &self.view.workspace.gesture {
+            Some(Gesture::Playlist { id, .. }) => {
+                let id = *id;
+                // A wheel event changes the viewport before hit regions are redrawn.
+                let target =
+                    if self.view.dialog.is_none() && self.view.playlist_area.contains(point) {
+                        let row = usize::from(point.y - self.view.playlist_area.y);
+                        self.visible_playlists()
+                            .get(self.view.playlist_offset + row)
+                            .map(|playlist| playlist.id)
+                            .filter(|target| *target != id && self.playlist_movable(*target))
+                    } else {
+                        None
+                    };
+                if let Some(Gesture::Playlist {
+                    target: destination,
+                    ..
+                }) = &mut self.view.workspace.gesture
+                {
+                    *destination = target;
+                }
+            }
             Some(Gesture::Move { panel, .. }) => {
                 self.view.workspace.drop = self.view.workspace.destination(point, *panel);
             }
@@ -221,6 +242,17 @@ impl App {
     pub(crate) fn release_workspace(&mut self, point: Position) -> Result<()> {
         self.drag_workspace(point)?;
         match self.view.workspace.gesture.take() {
+            Some(Gesture::Playlist {
+                id,
+                target: Some(target),
+            }) if self.playlist_movable(id) && self.playlist_movable(target) => {
+                let unlocked = self.view.editing;
+                self.start_database(None, move |store| {
+                    Ok(DatabaseOutcome::Changed(
+                        store.move_playlist_to(id, target, unlocked)?,
+                    ))
+                })?;
+            }
             Some(Gesture::Move { panel, origin }) if point != origin => {
                 if let Some((target, edge)) = self.view.workspace.drop.take()
                     && let Some(root) = self.view.workspace.root.take()
@@ -244,6 +276,7 @@ impl App {
                 }
             }
             Some(Gesture::Resize { .. }) => self.save_settings()?,
+            Some(Gesture::Seek(_)) => self.commit_seek(),
             _ => {}
         }
         self.view.workspace.drop = None;
@@ -254,9 +287,13 @@ impl App {
         let Some(gesture) = self.view.workspace.gesture.take() else {
             return false;
         };
-        if let Gesture::Resize { before, .. } = gesture {
-            self.view.workspace.root = Some(before.clone());
-            self.settings.workspace.root = Some(before);
+        match gesture {
+            Gesture::Resize { before, .. } => {
+                self.view.workspace.root = Some(before.clone());
+                self.settings.workspace.root = Some(before);
+            }
+            Gesture::Seek(_) => self.cancel_seek(),
+            _ => {}
         }
         self.view.workspace.drop = None;
         true

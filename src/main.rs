@@ -42,6 +42,7 @@ fn run() -> Result<()> {
     };
     let mut previous_click: Option<(egui::Pos2, Instant)> = None;
     let mut image_cache = gui_renderer::ImageCache::default();
+    let mut playback_painter = gui_renderer::PlaybackPainter::default();
     eframe::run_ui_native("Almavorn · GUITUI", options, move |root, _| {
         let ctx = root.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(16));
@@ -130,7 +131,6 @@ fn run() -> Result<()> {
                 let Some(dimensions) = dimensions else {
                     return;
                 };
-                gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
                 if let Some(point) = ctx.input(|input| input.pointer.hover_pos()) {
                     let x = ((point.x - image_rect.min.x) / image_rect.width()
                         * f32::from(dimensions.width))
@@ -140,6 +140,16 @@ fn run() -> Result<()> {
                     .floor() as u16;
                     let target = app.target_at(ratatui::layout::Position::new(x, y));
                     let cursor = match target {
+                        _ if matches!(
+                            app.view.workspace.gesture,
+                            Some(almavorn::workspace::Gesture::Playlist { .. })
+                        ) =>
+                        {
+                            egui::CursorIcon::Grabbing
+                        }
+                        Some(Target::Playlist(id)) if app.playlist_movable(*id) => {
+                            egui::CursorIcon::Grab
+                        }
                         Some(
                             Target::PlaybackVolume(_)
                             | Target::Seek(_)
@@ -160,17 +170,27 @@ fn run() -> Result<()> {
                             | Target::SettingHelp(_)
                             | Target::SettingsPage(_)
                             | Target::SettingsTab(_)
-                            | Target::CloseDialog,
+                            | Target::CloseDialog
+                            | Target::SearchResult(_)
+                            | Target::SearchPlay
+                            | Target::SearchPlaylist(_)
+                            | Target::SearchAll(_)
+                            | Target::QueryKeyboard
+                            | Target::ClearFilter
+                            | Target::SettingsTimeline(_, _),
                         ) => egui::CursorIcon::PointingHand,
+                        Some(Target::SearchInput | Target::FilterInput) => egui::CursorIcon::Text,
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
-                        Some(Target::PanelResize(index)) => match app.view.workspace.splits[*index]
-                            .axis
-                        {
-                            almavorn::workspace::Axis::Horizontal => {
-                                egui::CursorIcon::ResizeHorizontal
+                        Some(Target::PanelResize(index)) => {
+                            match app.view.workspace.splits[*index].axis {
+                                almavorn::workspace::Axis::Horizontal => {
+                                    egui::CursorIcon::ResizeHorizontal
+                                }
+                                almavorn::workspace::Axis::Vertical => {
+                                    egui::CursorIcon::ResizeVertical
+                                }
                             }
-                            almavorn::workspace::Axis::Vertical => egui::CursorIcon::ResizeVertical,
-                        },
+                        }
                         _ => egui::CursorIcon::Default,
                     };
                     ui.ctx().set_cursor_icon(cursor);
@@ -255,10 +275,17 @@ fn run() -> Result<()> {
                                     });
                                 previous_click = Some((pos, Instant::now()));
                                 app.handle(Input::Click { x, y, double });
+                                if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos) {
+                                    app.scrub(ratio, false);
+                                }
                             }
                         }
                         egui::Event::PointerMoved(pos) => {
-                            if let Some((x, y)) = to_cell(pos)
+                            if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos)
+                                && down
+                            {
+                                app.scrub(ratio, false);
+                            } else if let Some((x, y)) = to_cell(pos)
                                 && down
                             {
                                 app.handle(Input::Drag { x, y });
@@ -270,6 +297,10 @@ fn run() -> Result<()> {
                             pressed: false,
                             ..
                         } => {
+                            if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos) {
+                                app.scrub(ratio, true);
+                                continue;
+                            }
                             let point =
                                 pos.clamp(image_rect.min, image_rect.max - egui::vec2(0.1, 0.1));
                             if let Some((x, y)) = to_cell(point) {
@@ -306,12 +337,49 @@ fn run() -> Result<()> {
                     );
                     app.view.notice_error = true;
                 }
+                playback_painter.paint(ui, image_rect, &app, dimensions);
+                let overlay = app.view.overlay_area;
+                if !overlay.is_empty() {
+                    let area = overlay;
+                    let uv = egui::Rect::from_min_max(
+                        egui::pos2(
+                            f32::from(area.x) / f32::from(dimensions.width),
+                            f32::from(area.y) / f32::from(dimensions.height),
+                        ),
+                        egui::pos2(
+                            f32::from(area.right()) / f32::from(dimensions.width),
+                            f32::from(area.bottom()) / f32::from(dimensions.height),
+                        ),
+                    );
+                    let popup = egui::Rect::from_min_max(
+                        image_rect.min + uv.min.to_vec2() * image_rect.size(),
+                        image_rect.min + uv.max.to_vec2() * image_rect.size(),
+                    );
+                    ui.painter()
+                        .image(texture_id, popup, uv, egui::Color32::WHITE);
+                }
+                gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
             });
         if app.view.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     })
     .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+fn seek_ratio(
+    app: &App,
+    image: egui::Rect,
+    size: ratatui::layout::Size,
+    point: egui::Pos2,
+) -> Option<f64> {
+    let Some(almavorn::workspace::Gesture::Seek(area)) = &app.view.workspace.gesture else {
+        return None;
+    };
+    let cell_width = image.width() / f32::from(size.width);
+    let left = image.left() + f32::from(area.x) * cell_width;
+    let width = (f32::from(area.width) * cell_width - 1.0).max(1.0);
+    Some(f64::from(((point.x - left) / width).clamp(0.0, 1.0)))
 }
 
 fn pointer_movement(

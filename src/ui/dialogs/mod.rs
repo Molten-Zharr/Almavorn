@@ -2,7 +2,9 @@ mod bindings;
 mod browser;
 mod help;
 mod panels;
+mod search;
 mod text;
+pub(crate) use text::keyboard;
 
 use self::{bindings::binding_dialog, browser::browser_dialog, text::text_dialog};
 use super::{
@@ -67,6 +69,7 @@ pub(super) fn render_dialog(
             panels::render(frame, app, selected, expanded, area, palette);
         }
         Dialog::Text(dialog) => text_dialog(frame, app, dialog, area, palette),
+        Dialog::Search(search) => self::search::render(frame, app, search, area, palette),
         Dialog::Browser(browser) => browser_dialog(frame, app, browser, area, palette),
         Dialog::RemoveEntry { title, .. } => {
             let inner = modal(
@@ -255,8 +258,11 @@ pub(super) fn render_dialog(
                 )
                 .into(),
             );
-            lines.push(app.text("Click or drag the waveform and progress bar to seek. Click or drag the divided volume bar to adjust volume; Up/Down in the player changes it by 1%.", "Клик или перетаскивание по аудиоволне и дорожке меняет позицию. Полоска громкости с делениями управляется мышью; стрелки вверх/вниз в плеере меняют громкость на 1%.").into());
-            lines.push(app.text("PLAYING and PAUSED mark the actual playing playlist and track. The selected row is highlighted separately.", "Метки ИГРАЕТ и ПАУЗА показывают воспроизводящийся плейлист и композицию. Выбранная строка выделяется отдельно.").into());
+            lines.push(app.text("Hold the waveform or progress bar to choose a position silently; release to seek and keep the previous play/pause state. Esc cancels dragging. Click or drag the divided volume bar; Up/Down in the player changes volume by 1%.", "Зажмите аудиоволну или дорожку для тихого выбора позиции; отпустите для перемотки с сохранением воспроизведения или паузы. Esc отменяет перетаскивание. Полоска громкости управляется мышью; стрелки вверх/вниз в плеере меняют громкость на 1%.").into());
+            lines.push(app.text("Settings > General > Playback timeline chooses waveform or progress bar. Only one view is shown. The choice applies immediately in GUI and TUI and is saved in the active profile. Progress bar mode skips waveform analysis.", "Настройки > Общие > Дорожка проигрывания: аудиоволна или обычная полоса. Показывается один выбранный вид. Выбор сразу применяется в GUI и TUI и сохраняется в активном профиле. При обычной полосе анализ аудиоволны не запускается.").into());
+            lines.push(app.text("[▶] and [‖] mark the playing playlist and track, including pause. [■] stops playback. The selected row is highlighted separately. Playlist track counts stay visible on the right; long names end with an ellipsis.", "[▶] и [‖] обозначают воспроизводящийся плейлист и композицию, включая паузу. [■] останавливает воспроизведение. Выбранная строка выделяется отдельно. Счетчики композиций всегда справа; длинные названия сокращаются с многоточием.").into());
+            lines.push(app.text("Playlist numbers show their positions. Select a regular playlist; Ctrl+Up/Down moves it by one position. At least two regular playlists are required in the current mode. In Order, enable Edit first. The sorting desk stays first and cannot be reordered. Hold LMB on a regular playlist row, drag onto another regular playlist and release to move it there. The target row is highlighted. While dragging, use the wheel to reach hidden rows. Esc cancels the drag; dropping outside the list changes nothing. Playlist order is saved; Chaos supports undo/redo. Tracks and their positions remain unchanged.", "Номера плейлистов показывают их позиции. Выберите обычный плейлист; Ctrl+вверх/вниз перемещает его на одну позицию. В текущем режиме нужны хотя бы два обычных плейлиста. В Порядке сначала включите Правку. Сортировочный стол закреплен первым и не переставляется. Зажмите ЛКМ на строке обычного плейлиста, перенесите на другой обычный плейлист и отпустите. Строка назначения подсвечивается. При переносе колесо открывает строки за пределами списка. Esc отменяет перенос; отпускание вне списка ничего не меняет. Порядок плейлистов сохраняется; в Хаосе работает отмена/повтор. Композиции и их позиции не меняются.").into());
+            lines.push(app.text("Search always accepts text, spaces, paste and Backspace in its query field; Ctrl+A selects the query. Up/Down selects tracks; Enter or double-click plays the selection without ending input. Tab switches sections. In playlists, Left/Right selects a row and Ctrl+Space toggles it; Ctrl+L selects all playlists, Ctrl+D clears them. Mouse checkboxes work independently of typing. Filter edits the current playlist header immediately. Enter keeps it, Esc restores it, x clears it. Keyboard buttons allow mouse-only typing.", "Поиск всегда принимает текст, пробелы, вставку и Backspace в строку запроса; Ctrl+A выделяет запрос. Вверх/вниз выбирает композицию; Enter или двойной клик запускает ее, сохраняя возможность ввода. Tab переключает разделы. В плейлистах влево/вправо выбирает строку, Ctrl+Space меняет ее отметку; Ctrl+L выбирает все плейлисты, Ctrl+D снимает отметки. Чекбоксы работают мышью независимо от ввода. Фильтр сразу меняет вид текущего плейлиста в строке Композиций. Enter сохраняет его, Esc возвращает прежний, x очищает. Кнопки клавиатуры позволяют вводить мышью.").into());
             help::help_dialog(frame, app, offset, inner, lines, palette);
         }
 

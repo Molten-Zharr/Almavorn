@@ -8,7 +8,6 @@ use anyhow::{Context, Result};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 impl App {
@@ -25,6 +24,8 @@ impl App {
                     | Delete
                     | MoveUp
                     | MoveDown
+                    | PlaylistUp
+                    | PlaylistDown
                     | Transfer
                     | Undo
                     | Redo
@@ -68,11 +69,13 @@ impl App {
                         }),
                     }
             }
-            MoveUp | MoveDown => {
+            MoveUp | MoveDown | PlaylistUp | PlaylistDown => {
                 if !editable {
                     return false;
                 }
-                let (index, length) = if self.view.focus == Focus::Playlists {
+                let (index, length) = if self.view.focus == Focus::Playlists
+                    || matches!(action, PlaylistUp | PlaylistDown)
+                {
                     let lists: Vec<_> = self
                         .visible_playlists()
                         .into_iter()
@@ -103,7 +106,7 @@ impl App {
                         .unwrap_or((None, 0))
                 };
                 index.is_some_and(|index| {
-                    if action == MoveUp {
+                    if matches!(action, MoveUp | PlaylistUp) {
                         index > 0
                     } else {
                         index + 1 < length
@@ -119,6 +122,7 @@ impl App {
             Previous => self.can_step_playback(-1),
             Stop => self.playback.current.is_some() || self.preparing_playback(),
             SeekForward | SeekBackward => self.playback.current.is_some(),
+            Filter => self.playlist().is_some(),
             VolumeUp => self.settings.volume < 1.0,
             VolumeDown => self.settings.volume > 0.0,
             Transfer | Metadata | Mark => self.entry().is_some(),
@@ -145,15 +149,84 @@ impl App {
         }
     }
 
+    fn playlist_move_unavailable(&self, action: Action) -> String {
+        let language = self.settings.language;
+        if self.database_busy() {
+            return AppError::LibraryBusy.message(language).into();
+        }
+        let Some(playlist) = self.playlist() else {
+            return AppError::PlaylistSelectionRequired.message(language).into();
+        };
+        if playlist.kind != PlaylistKind::Normal {
+            return self
+                .text(
+                    "Sorting desk stays first. Select a regular playlist to reorder.",
+                    "Стол закреплен первым. Выберите обычный плейлист для перестановки.",
+                )
+                .into();
+        }
+        if self
+            .visible_playlists()
+            .iter()
+            .filter(|playlist| playlist.kind == PlaylistKind::Normal)
+            .count()
+            < 2
+        {
+            return self
+                .text(
+                    "Need two regular playlists to reorder. The sorting desk stays first.",
+                    "Нужны два обычных плейлиста. Сортировочный стол закреплен первым.",
+                )
+                .into();
+        }
+        if !playlist.can_edit(self.view.editing) {
+            let shortcut = self
+                .settings
+                .bindings
+                .iter()
+                .find(|binding| binding.action == Action::ToggleEdit)
+                .map(|binding| format!(" ({})", binding.key.label()))
+                .unwrap_or_default();
+            return format!(
+                "{}{shortcut} {}",
+                self.text("Enable Edit", "Включите Правку"),
+                self.text(
+                    "to reorder Order playlists.",
+                    "для перестановки плейлистов Порядка."
+                ),
+            );
+        }
+        self.text(
+            if matches!(action, Action::MoveUp | Action::PlaylistUp) {
+                "Already the first regular playlist."
+            } else {
+                "Already the last regular playlist."
+            },
+            if matches!(action, Action::MoveUp | Action::PlaylistUp) {
+                "Уже первый среди обычных плейлистов."
+            } else {
+                "Уже последний среди обычных плейлистов."
+            },
+        )
+        .into()
+    }
+
     pub fn action(&mut self, action: Action) -> Result<()> {
         if !self.allowed(action) {
-            self.message(
+            let message = if matches!(action, Action::PlaylistUp | Action::PlaylistDown)
+                || (self.view.focus == Focus::Playlists
+                    && matches!(action, Action::MoveUp | Action::MoveDown))
+            {
+                self.playlist_move_unavailable(action)
+            } else {
                 self.text(
                     "Action unavailable. Check selection and Order editing.",
                     "Действие недоступно. Проверьте выбор и редактирование Порядка.",
                 )
-                .into(),
-            );
+                .into()
+            };
+            self.message(message);
+            self.view.notice_error = true;
             return Ok(());
         }
         use Action::*;
@@ -171,14 +244,12 @@ impl App {
                 self.adjust_volume(if action == VolumeUp { 5 } else { -5 })?;
             }
             SeekForward | SeekBackward => {
-                if let Some(audio) = &self.playback.audio {
-                    let position = audio.position();
-                    audio.seek(if action == SeekForward {
-                        position.saturating_add(Duration::from_secs(5))
-                    } else {
-                        position.saturating_sub(Duration::from_secs(5))
-                    })?;
-                }
+                let position = self.position_ms();
+                self.seek_to(if action == SeekForward {
+                    position.saturating_add(5000)
+                } else {
+                    position.saturating_sub(5000)
+                });
             }
             SwitchMode => self.set_mode(if self.settings.mode == Mode::Order {
                 Mode::Chaos
@@ -258,8 +329,16 @@ impl App {
                     });
                 }
             }
-            MoveUp | MoveDown => {
-                let direction = if action == MoveUp { -1 } else { 1 };
+            MoveUp | MoveDown | PlaylistUp | PlaylistDown => {
+                let direction = if matches!(action, MoveUp | PlaylistUp) {
+                    -1
+                } else {
+                    1
+                };
+                if matches!(action, PlaylistUp | PlaylistDown) {
+                    self.focus_panel(crate::workspace::Panel::Playlists);
+                }
+                self.cancel_workspace_drag();
                 if let Some(playlist) = self.library.selected_playlist {
                     let focus = self.view.focus;
                     let entry = self.library.selected_entry;
@@ -293,7 +372,8 @@ impl App {
                     .collect();
                 self.view.dialog = Some(Dialog::Transfer { ids, selected: 0 });
             }
-            Search => self.text_dialog(TextPurpose::Search, self.library.query.clone()),
+            Search => self.open_search(),
+            Filter => self.edit_filter()?,
             Sort => {
                 self.library.sort = self.library.sort.next();
                 self.library.sort_descending = false;

@@ -100,6 +100,20 @@ pub(super) fn quiet_button(
 
 pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::Action(action @ (Action::MoveUp | Action::MoveDown))
+            if app.view.focus == crate::app::Focus::Playlists =>
+        {
+            let action = if *action == Action::MoveUp {
+                Action::PlaylistUp
+            } else {
+                Action::PlaylistDown
+            };
+            app.settings
+                .bindings
+                .iter()
+                .find(|binding| binding.action == action)
+                .map(|binding| binding.key.label())
+        }
         Target::Action(action) => app
             .settings
             .bindings
@@ -113,6 +127,7 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
             .find(|binding| binding.action == crate::input::Action::SwitchMode)
             .map(|binding| binding.key.label()),
         Target::Submit | Target::BrowserOpen => Some("Enter".into()),
+        Target::SearchPlay => Some("Enter".into()),
         Target::CloseDialog => Some("Esc".into()),
         Target::BrowserParent => Some("Backspace".into()),
         Target::BrowserMarkAll => Some("Ctrl+A".into()),
@@ -231,6 +246,9 @@ fn quiet(
     let active = match target {
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
+        Target::Action(Action::ToggleEdit) => app.view.editing,
+        Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
+        Target::Action(Action::Filter) => app.view.filter_editing || !app.library.query.is_empty(),
         _ => false,
     };
     let hovered = app.hovered(area);

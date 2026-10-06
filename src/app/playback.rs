@@ -4,19 +4,24 @@ use super::{
     bounded,
 };
 use crate::errors::AppError;
-use crate::{audio::Audio, model::Entry};
+use crate::{audio::Audio, model::Entry, preferences::PlaybackTimeline};
 use anyhow::{Context, Result, ensure};
 use rodio::Source;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
+use std::{path::PathBuf, time::Duration};
 
 pub(super) struct PlaybackRequest {
     queue: Arc<[Entry]>,
     playlist_id: i64,
     index: usize,
     paused: bool,
+}
+pub(super) struct SeekRequest {
+    path: PathBuf,
+    position_ms: u64,
 }
 pub(super) struct WaveformJob {
     receiver: Background<Vec<f32>>,
@@ -25,6 +30,15 @@ pub(super) struct WaveformJob {
 }
 
 impl App {
+    pub(super) fn set_playback_timeline(&mut self, choice: PlaybackTimeline) -> Result<()> {
+        if self.settings.appearance.playback_timeline != choice {
+            self.cancel_workspace_drag();
+            self.settings.appearance.playback_timeline = choice;
+            self.save_settings()?;
+        }
+        Ok(())
+    }
+
     pub(super) fn adjust_volume(&mut self, step: i16) -> Result<()> {
         let percent = (self.settings.volume * 100.0).round() as i16;
         let volume = (percent + step).clamp(0, 100) as f32 / 100.0;
@@ -39,6 +53,9 @@ impl App {
     }
 
     pub fn position_ms(&self) -> u64 {
+        if let Some(position) = self.playback.seek_preview {
+            return position;
+        }
         if self.playback.current.is_none() {
             return 0;
         }
@@ -48,6 +65,9 @@ impl App {
     }
 
     pub fn paused(&self) -> bool {
+        if let Some(paused) = self.playback.seek_paused {
+            return paused;
+        }
         self.requested_playback().map_or_else(
             || {
                 self.playback.audio.as_ref().is_none_or(Audio::paused)
@@ -61,7 +81,9 @@ impl App {
             && self.playback.audio.as_ref().is_some_and(Audio::has_track)
     }
     pub fn current_paused(&self) -> bool {
-        self.playback.audio.as_ref().is_none_or(Audio::paused)
+        self.playback
+            .seek_paused
+            .unwrap_or_else(|| self.playback.audio.as_ref().is_none_or(Audio::paused))
     }
     fn requested_playback(&self) -> Option<&PlaybackRequest> {
         self.playback.preparation.requested()
@@ -94,7 +116,7 @@ impl App {
             .context(AppError::TrackMissing)?;
         self.prepare_playback(queue, playlist_id, index)
     }
-    fn prepare_playback(
+    pub(super) fn prepare_playback(
         &mut self,
         queue: Arc<[Entry]>,
         playlist_id: i64,
@@ -102,6 +124,7 @@ impl App {
     ) -> Result<()> {
         ensure!(index < queue.len(), AppError::TrackSelectionRequired);
         let title = queue[index].track.title.clone();
+        self.cancel_seek();
         self.cancel_waveform();
         self.playback.preparation.request(PlaybackRequest {
             queue,
@@ -165,9 +188,11 @@ impl App {
         self.playback.queue_index = request.index;
         self.playback.current = Some(track.clone());
         self.playback.waveform = None;
-        self.playback.pending_waveform =
-            Some((track.path.clone(), self.playback.preparation.generation()));
-        self.start_waveform_job();
+        if self.settings.appearance.playback_timeline == PlaybackTimeline::Waveform {
+            self.playback.pending_waveform =
+                Some((track.path.clone(), self.playback.preparation.generation()));
+            self.start_waveform_job();
+        }
         self.message(format!(
             "{}: {}",
             self.text("Playing", "Воспроизведение"),
@@ -176,6 +201,10 @@ impl App {
         Ok(())
     }
     pub(super) fn toggle_playback(&mut self) -> Result<()> {
+        if let Some(paused) = &mut self.playback.seek_paused {
+            *paused = !*paused;
+            return Ok(());
+        }
         let request = self.playback.preparation.requested_mut();
         if let Some(request) = request {
             request.paused = !request.paused;
@@ -192,6 +221,7 @@ impl App {
         Ok(())
     }
     pub(super) fn stop_playback(&mut self) {
+        self.cancel_seek();
         self.playback.preparation.cancel();
         if let Some(audio) = &mut self.playback.audio {
             audio.stop();
@@ -241,6 +271,118 @@ impl App {
         }
     }
 
+    pub(super) fn preview_seek(&mut self, position_ms: u64) {
+        let Some(track) = &self.playback.current else {
+            return;
+        };
+        let position_ms = position_ms.min(track.duration_ms.saturating_sub(1));
+        if self.playback.seek_paused.is_none() {
+            self.playback.seek_paused = Some(self.current_paused());
+            if let Some(audio) = &self.playback.audio {
+                audio.set_paused(true);
+            }
+        }
+        self.playback.seek_preview = Some(position_ms);
+    }
+
+    pub(super) fn commit_seek(&mut self) {
+        if let (Some(position_ms), Some(track)) =
+            (self.playback.seek_preview, &self.playback.current)
+        {
+            self.playback.seek.request(SeekRequest {
+                path: track.path.clone(),
+                position_ms,
+            });
+            self.start_seek_job();
+        }
+    }
+
+    pub(super) fn seek_to(&mut self, position_ms: u64) {
+        self.preview_seek(position_ms);
+        self.commit_seek();
+    }
+
+    pub(super) fn cancel_seek(&mut self) {
+        self.playback.seek.cancel();
+        self.playback.seek_preview = None;
+        if let Some(paused) = self.playback.seek_paused.take()
+            && let Some(audio) = &self.playback.audio
+        {
+            audio.set_paused(paused);
+        }
+        if matches!(
+            self.view.workspace.gesture,
+            Some(crate::workspace::Gesture::Seek(_))
+        ) {
+            self.view.workspace.gesture = None;
+        }
+    }
+
+    fn start_seek_job(&mut self) {
+        let runtime = self.runtime.as_ref().expect("runtime is alive");
+        self.playback.seek.start(|request| {
+            let path = request.path.clone();
+            let position = Duration::from_millis(request.position_ms);
+            background(runtime, move || Audio::prepare_at(&path, position))
+        });
+    }
+
+    pub(super) fn tick_seek(&mut self) -> Result<()> {
+        let Some(completed) = self.playback.seek.poll() else {
+            return Ok(());
+        };
+        self.start_seek_job();
+        if !completed.current {
+            return Ok(());
+        }
+        // A new drag may already be previewing another position. Finish this
+        // decode without replacing the audible source until that drag ends.
+        if matches!(
+            self.view.workspace.gesture,
+            Some(crate::workspace::Gesture::Seek(_))
+        ) {
+            return Ok(());
+        }
+        let paused = self.playback.seek_paused.take().unwrap_or(true);
+        self.playback.seek_preview = None;
+        match completed.result {
+            Ok(source) => {
+                if let Some(audio) = &mut self.playback.audio {
+                    audio.play_prepared_at(
+                        source,
+                        paused,
+                        Duration::from_millis(completed.request.position_ms),
+                    );
+                }
+            }
+            Err(error) => {
+                if let Some(audio) = &self.playback.audio {
+                    audio.set_paused(paused);
+                }
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
+    /// GUI pointer positions retain pixel precision; terminal events use cells.
+    pub fn scrub(&mut self, ratio: f64, release: bool) {
+        if !matches!(
+            self.view.workspace.gesture,
+            Some(crate::workspace::Gesture::Seek(_))
+        ) || !ratio.is_finite()
+        {
+            return;
+        }
+        if let Some(track) = &self.playback.current {
+            self.preview_seek((ratio.clamp(0.0, 1.0) * track.duration_ms as f64).round() as u64);
+        }
+        if release {
+            self.view.workspace.gesture = None;
+            self.commit_seek();
+        }
+    }
+
     fn start_waveform_job(&mut self) {
         if self.playback.waveform_job.is_none()
             && let Some((path, generation)) = self.playback.pending_waveform.take()
@@ -266,6 +408,17 @@ impl App {
     }
 
     pub(super) fn tick_waveform(&mut self) {
+        if self.settings.appearance.playback_timeline == PlaybackTimeline::Progress {
+            self.cancel_waveform();
+        } else if self.playback.waveform.is_none()
+            && !self.preparing_playback()
+            && !self.preparing_waveform()
+            && let Some(track) = &self.playback.current
+        {
+            self.playback.pending_waveform =
+                Some((track.path.clone(), self.playback.preparation.generation()));
+            self.start_waveform_job();
+        }
         let Some(result) = self
             .playback
             .waveform_job

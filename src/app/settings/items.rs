@@ -11,6 +11,7 @@ pub(crate) enum SettingControl {
     Desk,
     PlaylistPlacement,
     PlayerPlacement,
+    PlaybackTimeline,
     ProfilePick,
     ProfileCreate,
     ProfileApply,
@@ -70,6 +71,7 @@ impl App {
                 make(lang.text("Sorting desk", "Сортировочный стол"), lang.text(if self.settings.sorting_desk { "On" } else { "Off" }, if self.settings.sorting_desk { "Включён" } else { "Выключен" }).into(), lang.text("Route added files to the editable desk instead of the selected playlist.", "Направлять добавляемые файлы на доступный для правки стол вместо выбранного плейлиста."), SettingControl::Desk, true),
                 make(lang.text("Playlists panel", "Панель плейлистов"), self.settings.playlist_placement.name(lang).into(), lang.text("Position of the playlist list relative to the tracks.", "Расположение списка плейлистов относительно композиций."), SettingControl::PlaylistPlacement, true),
                 make(lang.text("Player panel", "Панель проигрывателя"), self.settings.player_placement.name(lang).into(), lang.text("Position of playback controls relative to the library.", "Расположение управления воспроизведением относительно библиотеки."), SettingControl::PlayerPlacement, true),
+                make(lang.text("Playback timeline", "Дорожка проигрывания"), self.settings.appearance.playback_timeline.name(lang).into(), lang.text("Choose waveform or progress bar. Only the selected view is shown, in both GUI and TUI. Saves into the active profile.", "Выберите аудиоволну или обычную полосу. Показывается только выбранный вид, в GUI и TUI. Выбор сохраняется в активный профиль."), SettingControl::PlaybackTimeline, true),
             ],
             SettingsPage::Profiles => {
                 let profile = &self.settings.profiles[self.view.settings.profile.min(self.settings.profiles.len()-1)];

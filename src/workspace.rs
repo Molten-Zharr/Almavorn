@@ -83,6 +83,7 @@ impl Panel {
                 Button(MoveUp),
                 Button(MoveDown),
                 Button(Search),
+                Button(Filter),
                 Button(Sort),
                 Button(Metadata),
                 Button(Mark),
@@ -506,6 +507,7 @@ pub struct SplitArea {
 }
 
 pub enum Gesture {
+    Playlist { id: i64, target: Option<i64> },
     Move { panel: Panel, origin: Position },
     Resize { split: SplitArea, before: Dock },
     Seek(Rect),

@@ -7,6 +7,7 @@ use crate::{
     app::{App, Hit, Target},
     input::Action,
     model::duration_text,
+    preferences::PlaybackTimeline,
     workspace::Panel,
 };
 use ratatui::{
@@ -19,8 +20,8 @@ use ratatui::{
 fn controls(app: &App) -> Vec<(Action, &'static str)> {
     [
         (Action::Previous, "‹"),
-        (Action::TogglePlay, if app.paused() { "▶" } else { "II" }),
-        (Action::Stop, "■"),
+        (Action::TogglePlay, if app.paused() { "[▶]" } else { "[‖]" }),
+        (Action::Stop, "[■]"),
         (Action::Next, "›"),
     ]
     .into_iter()
@@ -33,7 +34,40 @@ pub(super) fn preferred_height(app: &App, width: u16) -> u16 {
 }
 
 pub(super) fn content_height(app: &App, width: u16) -> u16 {
-    (if width >= 70 { 2 } else { 3 }) + if app.playback_active() { 2 } else { 0 }
+    base_height(app, width)
+        + if app.playback_active()
+            && app.settings.appearance.playback_timeline == PlaybackTimeline::Waveform
+        {
+            4
+        } else {
+            0
+        }
+}
+
+fn volume_width(width: u16) -> u16 {
+    if width >= 70 {
+        22
+    } else {
+        (width / 2).clamp(8, 22)
+    }
+}
+
+fn stack_volume(app: &App, width: u16) -> bool {
+    let controls_width: u16 = controls(app)
+        .iter()
+        .map(|(_, label)| quiet_width(label).saturating_add(1))
+        .sum();
+    controls_width.saturating_add(volume_width(width)) > width
+}
+
+fn base_height(app: &App, width: u16) -> u16 {
+    if stack_volume(app, width) {
+        4
+    } else if width >= 70 {
+        2
+    } else {
+        3
+    }
 }
 
 pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -49,8 +83,8 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         .filter(|_| app.playback_active())
     {
         format!(
-            "{}{}{}",
-            if app.current_paused() { "II " } else { "▶ " },
+            "[{}] {}{}",
+            if app.current_paused() { "‖" } else { "▶" },
             track.title,
             if track.artist.is_empty() {
                 String::new()
@@ -74,21 +108,18 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         Rect::new(area.x, area.y, area.width, 1),
     );
     let row = Rect::new(area.x, area.y + 1, area.width, 1);
-    let volume_width = if area.width >= 70 {
-        22
-    } else {
-        (area.width / 2).clamp(8, 22)
-    };
+    let volume_width = volume_width(area.width).min(area.width);
+    let stacked = stack_volume(app, area.width);
     let volume_area = Rect::new(
         row.right().saturating_sub(volume_width),
-        row.y,
+        row.y + u16::from(stacked),
         volume_width,
         1,
     );
     let mut x = row.x;
     for (action, label) in controls(app) {
         let width = quiet_width(label);
-        if x + width > volume_area.x {
+        if x + width > if stacked { row.right() } else { volume_area.x } {
             break;
         }
         quiet_button(
@@ -103,10 +134,10 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         x += width + 1;
     }
     volume(frame, app, volume_area, palette);
-    let progress = if area.width >= 70 {
+    let progress = if area.width >= 70 && !stacked {
         Rect::new(x + 1, row.y, volume_area.x.saturating_sub(x + 2), 1)
-    } else if area.height >= 3 {
-        Rect::new(area.x, area.y + 2, area.width, 1)
+    } else if area.height >= base_height(app, area.width) {
+        Rect::new(area.x, area.y + 2 + u16::from(stacked), area.width, 1)
     } else {
         Rect::default()
     };
@@ -129,7 +160,15 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         progress.width.saturating_sub(time_width + 1),
         1,
     );
-    slider(frame, seek, ratio, palette);
+    if app.settings.appearance.playback_timeline == PlaybackTimeline::Progress {
+        app.view.progress_area = seek;
+        slider(frame, seek, ratio, palette);
+        app.view.hits.push(Hit {
+            area: seek,
+            target: Target::Seek(seek),
+            enabled: app.playback_active() && duration > 0 && seek.width > 0,
+        });
+    }
     frame.render_widget(
         Paragraph::new(time).style(palette.text().fg(palette.muted)),
         Rect::new(
@@ -139,14 +178,13 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             1,
         ),
     );
-    app.view.hits.push(Hit {
-        area: seek,
-        target: Target::Seek(seek),
-        enabled: app.playback_active() && duration > 0 && seek.width > 0,
-    });
-    let wave_y = area.y + if area.width >= 70 { 2 } else { 3 };
-    if app.playback_active() && wave_y + 2 <= area.bottom() {
-        let wave = Rect::new(area.x, wave_y, area.width, 2);
+    let wave_y = area.y + base_height(app, area.width);
+    if app.playback_active()
+        && app.settings.appearance.playback_timeline == PlaybackTimeline::Waveform
+        && wave_y + 4 <= area.bottom()
+    {
+        let wave = Rect::new(area.x, wave_y, area.width, 4);
+        app.view.waveform_area = wave;
         waveform(frame, app, wave, ratio, palette);
         app.view.hits.push(Hit {
             area: wave,
@@ -229,13 +267,6 @@ fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palet
             }
         }
     }
-    if app.playback_active() && area.width > 0 {
-        let x = area.x + played.min(area.width - 1);
-        frame.render_widget(
-            Paragraph::new("│\n│").style(palette.text().fg(palette.accent)),
-            Rect::new(x, area.y, 1, area.height),
-        );
-    }
 }
 
 fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -256,7 +287,21 @@ fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         area.width.saturating_sub(label_width + 5),
         1,
     );
-    slider(frame, bar, f64::from(app.settings.volume), palette);
+    let segments = bar.width.div_ceil(2);
+    let filled = (f32::from(percent) * f32::from(segments) / 100.0).round() as u16;
+    let bars: Vec<_> = (0..bar.width)
+        .map(|column| {
+            Span::styled(
+                if column % 2 == 0 { "█" } else { " " },
+                palette.text().fg(if column / 2 < filled {
+                    palette.accent
+                } else {
+                    palette.inactive_panel_border
+                }),
+            )
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(Line::from(bars)), bar);
     frame.render_widget(
         Paragraph::new(format!("{percent:>3}%")).style(palette.text().fg(palette.muted)),
         Rect::new(area.right().saturating_sub(4), area.y, 4, 1),

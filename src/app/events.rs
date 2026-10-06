@@ -6,11 +6,12 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use ratatui::layout::{Position, Rect};
-use std::time::Duration;
 
 impl App {
     pub fn accepts_text(&self) -> bool {
         matches!(self.view.dialog, Some(Dialog::Text(_)))
+            || matches!(self.view.dialog, Some(Dialog::Search(_)))
+            || (self.view.dialog.is_none() && self.view.filter_editing)
     }
 
     pub fn hovered(&self, area: Rect) -> bool {
@@ -63,6 +64,24 @@ impl App {
                     self.focus_point(self.view.pointer);
                 }
                 let hit = self.target_at(self.view.pointer).cloned();
+                if self.view.dialog.is_none()
+                    && self.view.filter_editing
+                    && !matches!(
+                        hit,
+                        Some(
+                            Target::Action(crate::input::Action::Filter)
+                                | Target::FilterInput
+                                | Target::QueryKeyboard
+                                | Target::Text(_)
+                                | Target::Backspace
+                                | Target::KeyboardLanguage
+                                | Target::KeyboardCase
+                        )
+                    )
+                {
+                    self.view.filter_editing = false;
+                    self.view.filter_keyboard = false;
+                }
                 if let Some(target) = hit {
                     self.target(target, double)?;
                 }
@@ -94,8 +113,35 @@ impl App {
                     self.view.pointer = Position::new(u16::MAX, u16::MAX);
                 }
                 if self.view.dialog.is_some() {
+                    if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                        search.focus = if search.playlists_area.contains(Position::new(x, y)) {
+                            super::SearchFocus::Playlists
+                        } else {
+                            super::SearchFocus::Results
+                        };
+                    }
                     self.scroll_dialog(delta);
+                } else if matches!(
+                    self.target_at(Position::new(x, y)),
+                    Some(Target::PlaybackVolume(_))
+                ) {
+                    self.adjust_volume(-delta)?;
                 } else if self.view.playlist_area.contains(Position::new(x, y)) {
+                    if matches!(
+                        self.view.workspace.gesture,
+                        Some(crate::workspace::Gesture::Playlist { .. })
+                    ) {
+                        let maximum = self
+                            .visible_playlists()
+                            .len()
+                            .saturating_sub(usize::from(self.view.playlist_area.height));
+                        self.view.playlist_offset = super::bounded(
+                            self.view.playlist_offset,
+                            i64::from(delta),
+                            maximum + 1,
+                        );
+                        return self.drag_workspace(Position::new(x, y));
+                    }
                     self.focus_panel(crate::workspace::Panel::Playlists);
                     self.navigate(delta as i64);
                 } else if self.view.tracks_area.contains(Position::new(x, y)) {
@@ -104,6 +150,9 @@ impl App {
                 }
             }
             Input::Text(text) => {
+                if self.query_text(&text)? {
+                    return self.tick_search();
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
@@ -168,10 +217,13 @@ impl App {
                 result?;
             }
         }
-        Ok(())
+        self.tick_search()
     }
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
+        if self.view.dialog.is_none() && self.view.filter_editing {
+            return self.filter_key(key);
+        }
         if key.key == Key::Escape {
             if self.cancel_workspace_drag() {
                 return Ok(());
@@ -242,6 +294,9 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if matches!(self.view.dialog, Some(Dialog::Search(_))) {
+                return self.search_key(key);
+            }
             if matches!(self.view.dialog, Some(Dialog::Commands { .. }))
                 && self.view.toolbar_selected.is_some()
                 && !key.ctrl
@@ -440,6 +495,10 @@ impl App {
             Target::Playlist(id) => {
                 self.select_playlist(id);
                 self.view.focus = Focus::Playlists;
+                if self.playlist_movable(id) {
+                    self.view.workspace.gesture =
+                        Some(crate::workspace::Gesture::Playlist { id, target: None });
+                }
             }
             Target::Track(id) => {
                 self.library.selected_entry = Some(id);
@@ -463,6 +522,55 @@ impl App {
                 self.view.focus = Focus::Tracks;
                 self.refresh()?;
             }
+            Target::FilterInput => {
+                if !self.view.filter_editing {
+                    self.edit_filter()?;
+                }
+            }
+            Target::ClearFilter => {
+                self.library.query.clear();
+                self.view.filter_editing = false;
+                self.view.filter_keyboard = false;
+                self.view.track_offset = 0;
+                self.refresh()?;
+            }
+            Target::SearchInput => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.focus = super::SearchFocus::Input;
+                }
+            }
+            Target::SearchResult(index) => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.selected = index.min(search.results.len().saturating_sub(1));
+                    search.focus = super::SearchFocus::Results;
+                }
+                if double {
+                    self.play_search_result()?;
+                }
+            }
+            Target::SearchPlaylist(id) => self.toggle_search_playlist(id),
+            Target::SearchPlay => self.play_search_result()?,
+            Target::SearchAll(all) => {
+                let ids = if all {
+                    self.playlists().iter().map(|p| p.id).collect()
+                } else {
+                    Default::default()
+                };
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.playlists = ids;
+                }
+            }
+            Target::QueryKeyboard => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.keyboard_visible = !search.keyboard_visible;
+                    search.focus = super::SearchFocus::Input;
+                } else {
+                    if !self.view.filter_editing {
+                        self.edit_filter()?;
+                    }
+                    self.view.filter_keyboard = !self.view.filter_keyboard;
+                }
+            }
             Target::PlaybackVolume(area) => {
                 if self.view.workspace.gesture.is_none() {
                     self.view.workspace.gesture =
@@ -477,15 +585,14 @@ impl App {
                 if self.view.workspace.gesture.is_none() {
                     self.view.workspace.gesture = Some(crate::workspace::Gesture::Seek(area));
                 }
-                if let (Some(audio), Some(current)) = (&self.playback.audio, &self.playback.current)
-                {
+                if let Some(current) = &self.playback.current {
                     let duration = current.duration_ms;
                     if duration > 0 && area.width > 0 {
                         let point = self.last_pointer_x(area);
-                        audio.seek(Duration::from_millis(
+                        self.preview_seek(
                             duration.saturating_mul(point as u64)
                                 / area.width.saturating_sub(1).max(1) as u64,
-                        ))?;
+                        );
                     }
                 }
             }
@@ -494,6 +601,12 @@ impl App {
             }
             Target::Submit => self.submit()?,
             Target::Text(c) => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.focus = super::SearchFocus::Input;
+                }
+                if self.query_text(&c.to_string())? {
+                    return Ok(());
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
@@ -505,6 +618,14 @@ impl App {
                 }
             }
             Target::Backspace => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.focus = super::SearchFocus::Input;
+                    self.search_key(KeyPress::plain(Key::Backspace))?;
+                    return Ok(());
+                }
+                if self.view.dialog.is_none() && self.view.filter_editing {
+                    return self.filter_key(KeyPress::plain(Key::Backspace));
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
@@ -515,6 +636,23 @@ impl App {
                 }
             }
             Target::KeyboardLanguage => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.keyboard = if search.keyboard == Language::Russian {
+                        Language::English
+                    } else {
+                        Language::Russian
+                    };
+                    return Ok(());
+                }
+                if self.view.dialog.is_none() && self.view.filter_editing {
+                    self.view.filter_keyboard_language =
+                        if self.view.filter_keyboard_language == Language::Russian {
+                            Language::English
+                        } else {
+                            Language::Russian
+                        };
+                    return Ok(());
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     dialog.keyboard = if dialog.keyboard == Language::Russian {
                         Language::English
@@ -524,6 +662,14 @@ impl App {
                 }
             }
             Target::KeyboardCase => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.upper = !search.upper;
+                    return Ok(());
+                }
+                if self.view.dialog.is_none() && self.view.filter_editing {
+                    self.view.filter_keyboard_upper = !self.view.filter_keyboard_upper;
+                    return Ok(());
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     dialog.upper = !dialog.upper;
                 }
@@ -591,6 +737,10 @@ impl App {
                 }
             }
             Target::SettingHelp(index) => self.settings_help(index),
+            Target::SettingsTimeline(index, choice) => {
+                self.select_setting(index);
+                self.set_playback_timeline(choice)?;
+            }
             Target::BindingModifier(index) => {
                 if matches!(self.view.dialog, Some(Dialog::CaptureBinding { .. }))
                     && let Some(value) = self.view.settings.binding_modifiers.get_mut(index)

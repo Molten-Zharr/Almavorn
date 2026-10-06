@@ -1,5 +1,5 @@
 use super::{App, Focus, Sort, bounded};
-use crate::model::{Entry, Mode, Playlist};
+use crate::model::{Entry, Mode, Playlist, PlaylistKind};
 use anyhow::Result;
 use std::collections::HashSet;
 
@@ -48,6 +48,16 @@ impl App {
 
     pub fn playlists(&self) -> &[Playlist] {
         &self.library.playlists
+    }
+
+    pub fn playlist_movable(&self, id: i64) -> bool {
+        !self.database_busy()
+            && self.library.playlists.iter().any(|playlist| {
+                playlist.id == id
+                    && playlist.mode == self.settings.mode
+                    && playlist.kind == PlaylistKind::Normal
+                    && playlist.can_edit(self.view.editing)
+            })
     }
 
     pub fn rows(&self) -> Vec<&Entry> {
@@ -178,6 +188,11 @@ impl App {
     }
 
     pub(super) fn select_playlist(&mut self, id: i64) {
+        if self.library.selected_playlist != Some(id) {
+            self.library.query.clear();
+            self.view.filter_editing = false;
+            self.view.filter_keyboard = false;
+        }
         self.library.selected_playlist = Some(id);
         self.library.selected_entry = self
             .playlist()
@@ -194,6 +209,8 @@ impl App {
         self.settings.mode = mode;
         self.view.editing = false;
         self.library.query.clear();
+        self.view.filter_editing = false;
+        self.view.filter_keyboard = false;
         self.library.marked.clear();
         self.library.selected_playlist =
             self.visible_playlists().first().map(|playlist| playlist.id);

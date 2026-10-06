@@ -6,7 +6,9 @@ use super::{App, Dialog, Target, TextPurpose, bounded};
 use crate::{
     input::{Key, KeyPress},
     model::{Language, Placement},
-    preferences::{BorderWeight, Corners, FontFace, MAX_FONT_SIZE, MIN_FONT_SIZE, color_hex},
+    preferences::{
+        BorderWeight, Corners, FontFace, MAX_FONT_SIZE, MIN_FONT_SIZE, PlaybackTimeline, color_hex,
+    },
 };
 use anyhow::Result;
 pub(crate) use files::SettingsFileJob;
@@ -468,6 +470,13 @@ impl App {
                 return self.set_settings_volume(self.settings.volume + direction as f32 * 0.05);
             }
             SettingControl::Desk => self.settings.sorting_desk = !self.settings.sorting_desk,
+            SettingControl::PlaybackTimeline => {
+                return self.set_playback_timeline(cycle(
+                    self.settings.appearance.playback_timeline,
+                    &[PlaybackTimeline::Waveform, PlaybackTimeline::Progress],
+                    direction,
+                ));
+            }
             SettingControl::PlaylistPlacement => {
                 self.settings.workspace.root = None;
                 self.settings.playlist_placement = cycle(

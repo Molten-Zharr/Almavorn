@@ -48,6 +48,9 @@ pub struct PlaybackState {
     pub(super) queue_index: usize,
     pub(super) audio: Option<Audio>,
     pub(super) preparation: LatestJob<playback::PlaybackRequest, crate::audio::PreparedAudio>,
+    pub(super) seek: LatestJob<playback::SeekRequest, crate::audio::PreparedAudio>,
+    pub(super) seek_preview: Option<u64>,
+    pub(super) seek_paused: Option<bool>,
 }
 
 #[derive(Default)]
@@ -59,6 +62,8 @@ pub struct UiState {
     pub hits: Vec<Hit>,
     pub keycaps: Vec<Keycap>,
     pub graphical_keycaps: bool,
+    pub waveform_area: Rect,
+    pub progress_area: Rect,
     pub playlist_area: Rect,
     pub tracks_area: Rect,
     pub playlist_offset: usize,
@@ -71,6 +76,15 @@ pub struct UiState {
     pub toolbar_selected: Option<usize>,
     pub(crate) toolbar_areas: Vec<Rect>,
     pub(crate) dialog_scroll_max: usize,
+    pub filter_editing: bool,
+    pub filter_keyboard: bool,
+    pub(crate) filter_field: Rect,
+    pub(crate) filter_keyboard_language: Language,
+    pub(crate) filter_keyboard_upper: bool,
+    pub(super) filter_before: String,
+    pub(crate) filter_selected_all: bool,
+    pub filter_keyboard_area: Rect,
+    pub overlay_area: Rect,
     pub(super) pointer: Position,
 }
 

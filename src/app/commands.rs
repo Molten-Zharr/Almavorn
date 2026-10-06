@@ -84,17 +84,16 @@ impl App {
         }
         if self.control_visible(Panel::PlaylistActions, Action::Search) {
             entries.push((
-                if self.library.query.is_empty() {
-                    self.text("Search…", "Поиск…").into()
-                } else {
-                    format!(
-                        "{}: {}",
-                        self.text("Search", "Поиск"),
-                        self.library.query.chars().take(16).collect::<String>()
-                    )
-                },
+                self.text("Search…", "Поиск…").into(),
                 Target::Action(Action::Search),
                 true,
+            ));
+        }
+        if self.control_visible(Panel::PlaylistActions, Action::Filter) {
+            entries.push((
+                self.text("Filter", "Фильтр").into(),
+                Target::Action(Action::Filter),
+                self.allowed(Action::Filter),
             ));
         }
         if self.control_visible(Panel::Application, Action::Settings) {
@@ -157,6 +156,7 @@ impl App {
                 Panel::PlaylistActions,
                 &[
                     TogglePlay, Mark, Rename, Transfer, Delete, MoveUp, MoveDown, Metadata, Sort,
+                    Search, Filter,
                 ],
             ),
             CommandMenu::Application => (

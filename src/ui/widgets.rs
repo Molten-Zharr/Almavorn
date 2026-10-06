@@ -64,6 +64,17 @@ pub(super) fn buttons(
     y.saturating_sub(area.y) + 1
 }
 
+pub(super) fn modal_rect(area: Rect, height: u16) -> Rect {
+    let width = area.width.saturating_sub(4).min(88);
+    let height = height.min(area.height.saturating_sub(4));
+    Rect::new(
+        area.x + (area.width - width) / 2,
+        area.y + (area.height - height) / 2,
+        width,
+        height,
+    )
+}
+
 pub(super) fn modal(
     frame: &mut Frame,
     area: Rect,
@@ -71,14 +82,7 @@ pub(super) fn modal(
     height: u16,
     palette: Palette,
 ) -> Rect {
-    let width = area.width.saturating_sub(4).min(88);
-    let height = height.min(area.height.saturating_sub(4));
-    let rect = Rect::new(
-        area.x + (area.width - width) / 2,
-        area.y + (area.height - height) / 2,
-        width,
-        height,
-    );
+    let rect = modal_rect(area, height);
     frame.render_widget(Clear, rect);
     let outer = block(title, palette, true);
     let inner = outer.inner(rect);

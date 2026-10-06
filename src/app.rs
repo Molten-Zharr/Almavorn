@@ -11,6 +11,7 @@ mod import;
 mod library;
 mod options;
 mod playback;
+mod search;
 mod settings;
 mod state;
 mod workspace;
@@ -21,6 +22,7 @@ use context::{BrowserState, SettingsPersistence};
 pub use context::{LibraryState, PlaybackState, UiState};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
 pub use options::Options;
+pub use search::{SearchDialog, SearchFocus};
 pub(crate) use settings::SettingControl;
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
@@ -40,6 +42,7 @@ pub struct App {
     pub view: UiState,
     browser_state: BrowserState,
     persistence: SettingsPersistence,
+    search_job: background::LatestJob<search::SearchRequest, Vec<search::SearchHit>>,
 }
 
 impl App {
@@ -55,15 +58,7 @@ impl App {
         let mut settings = store.settings()?;
         settings.volume = settings.volume.clamp(0.0, 1.0);
         settings.workspace.normalize();
-        for binding in crate::input::default_bindings() {
-            if !settings
-                .bindings
-                .iter()
-                .any(|value| value.action == binding.action)
-            {
-                settings.bindings.push(binding);
-            }
-        }
+        settings.ensure_bindings();
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
         let view = UiState::new(settings.language);
         Ok(Self {
@@ -75,6 +70,7 @@ impl App {
             playback: Default::default(),
             browser_state: Default::default(),
             persistence: Default::default(),
+            search_job: Default::default(),
         })
     }
 
@@ -109,10 +105,13 @@ impl App {
         self.tick_settings_files()?;
         self.tick_browser()?;
         self.tick_playback()?;
+        self.tick_seek()?;
         self.tick_waveform();
         self.poll_import()?;
         self.tick_library()?;
+        self.tick_search()?;
         if !self.preparing_playback()
+            && self.playback.seek_preview.is_none()
             && self.playback.audio.as_mut().is_some_and(Audio::finished)
             && let Err(error) = self.next(1, false)
         {

@@ -1,17 +1,18 @@
 use super::{
     theme::Palette,
-    widgets::{clean, visible_offset},
+    widgets::{block, button, clean, visible_offset},
 };
 use crate::{
     app::{App, Hit, Sort, Target},
     model::duration_text,
+    workspace::Gesture,
 };
 use ratatui::{
     Frame,
-    layout::{Constraint, Flex, Layout, Rect},
-    style::Modifier,
+    layout::{Alignment, Constraint, Flex, Layout, Rect},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Cell, Paragraph, Row, Table, Wrap},
+    widgets::{Cell, Clear, Paragraph, Row, Table, Wrap},
 };
 
 pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -23,7 +24,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .map(|playlist| {
             (
                 playlist.id,
-                playlist.display_name(app.settings.language).to_owned(),
+                clean(playlist.display_name(app.settings.language)),
                 playlist.entries.len(),
             )
         })
@@ -32,12 +33,24 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .iter()
         .position(|(id, _, _)| Some(*id) == app.library.selected_playlist)
         .unwrap_or(0);
-    app.view.playlist_offset = visible_offset(
-        app.view.playlist_offset,
-        selected,
-        inner.height as usize,
-        items.len(),
-    );
+    let dragging = matches!(app.view.workspace.gesture, Some(Gesture::Playlist { .. }));
+    app.view.playlist_offset = if dragging {
+        app.view
+            .playlist_offset
+            .min(items.len().saturating_sub(usize::from(inner.height)))
+    } else {
+        visible_offset(
+            app.view.playlist_offset,
+            selected,
+            inner.height as usize,
+            items.len(),
+        )
+    };
+    let destination = match &app.view.workspace.gesture {
+        Some(Gesture::Playlist { target, .. }) => *target,
+        _ => None,
+    };
+    let position_width = items.len().max(1).to_string().len();
     if items.is_empty() {
         frame.render_widget(
             Paragraph::new(app.text("Create a playlist", "Создайте плейлист"))
@@ -46,12 +59,13 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
             inner,
         );
     }
-    for (row, (id, name, count)) in items
+    for (index, (id, name, count)) in items
         .iter()
+        .enumerate()
         .skip(app.view.playlist_offset)
         .take(inner.height as usize)
-        .enumerate()
     {
+        let row = index - app.view.playlist_offset;
         let rect = Rect::new(inner.x, inner.y + row as u16, inner.width, 1);
         let selected = Some(*id) == app.library.selected_playlist;
         let style = if selected {
@@ -59,14 +73,25 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
                 .text()
                 .bg(palette.sidebar_selection)
                 .fg(palette.background)
+        } else if destination == Some(*id) {
+            palette.text().bg(palette.selection)
         } else {
             palette.text()
         };
         let playing = app.playback_active() && app.playback.playing_playlist == Some(*id);
-        let mut content = Vec::new();
+        let mut content = vec![Span::styled(
+            format!("{:>position_width$}. ", index + 1),
+            style
+                .fg(if selected {
+                    palette.background
+                } else {
+                    palette.accent
+                })
+                .add_modifier(Modifier::BOLD),
+        )];
         if playing {
             content.push(Span::styled(
-                if app.current_paused() { "II " } else { "▶ " },
+                format!("[{}]", if app.current_paused() { "‖" } else { "▶" }),
                 style
                     .bg(if app.current_paused() {
                         palette.muted
@@ -76,11 +101,31 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
                     .fg(palette.background)
                     .add_modifier(Modifier::BOLD),
             ));
-        } else {
-            content.push(Span::styled("  ", style));
+            content.push(Span::styled(" ", style));
         }
-        content.push(Span::styled(format!("{name} · {count}"), style));
-        frame.render_widget(Paragraph::new(Line::from(content)).style(style), rect);
+        let count = count.to_string();
+        let counter = if usize::from(rect.width) > count.len() + 3 {
+            format!(" · {count}")
+        } else {
+            count
+        };
+        let count_width = (Span::raw(counter.as_str()).width() as u16).min(rect.width);
+        let name_area = Rect::new(rect.x, rect.y, rect.width - count_width, 1);
+        let prefix_width: usize = content.iter().map(Span::width).sum();
+        content.push(Span::styled(
+            ellipsize_name(
+                name,
+                usize::from(name_area.width).saturating_sub(prefix_width),
+            ),
+            style,
+        ));
+        frame.render_widget(Paragraph::new(Line::from(content)).style(style), name_area);
+        frame.render_widget(
+            Paragraph::new(counter)
+                .style(style)
+                .alignment(Alignment::Right),
+            Rect::new(name_area.right(), rect.y, count_width, 1),
+        );
         app.view.hits.push(Hit {
             area: rect,
             target: Target::Playlist(*id),
@@ -89,12 +134,100 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
     }
 }
 
+fn ellipsize_name(name: &str, width: usize) -> String {
+    let line = Line::raw(name);
+    if line.width() <= width {
+        return name.to_owned();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let mut remaining = width - 1;
+    let mut truncated = String::new();
+    for grapheme in line.styled_graphemes(Style::default()) {
+        let width = Span::raw(grapheme.symbol).width();
+        if width > remaining {
+            break;
+        }
+        truncated.push_str(grapheme.symbol);
+        remaining -= width;
+    }
+    truncated.push('…');
+    truncated
+}
+
 pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     app.view.tracks_area = area;
     let inner = area;
     if inner.height < 2 {
         return;
     }
+    let filtering = app.view.filter_editing || !app.library.query.is_empty();
+    let inner = if filtering {
+        let right = 10u16.min(inner.width.saturating_sub(1));
+        let field = Rect::new(inner.x, inner.y, inner.width.saturating_sub(right), 1);
+        app.view.filter_field = field;
+        let label = app.text("Filter: ", "Фильтр: ");
+        let label_width = (Span::raw(label).width() as u16).min(field.width);
+        frame.render_widget(
+            Paragraph::new(label).style(palette.text().fg(palette.accent)),
+            Rect::new(field.x, field.y, label_width, 1),
+        );
+        let input = Rect::new(
+            field.x + label_width,
+            field.y,
+            field.width.saturating_sub(label_width),
+            1,
+        );
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{}{}",
+                clean(&app.library.query),
+                if app.view.filter_editing { "│" } else { "" }
+            ))
+            .scroll((
+                0,
+                Span::raw(&app.library.query)
+                    .width()
+                    .saturating_sub(usize::from(input.width.saturating_sub(1)))
+                    as u16,
+            ))
+            .style(palette.text().bg(
+                if app.view.filter_selected_all && app.view.filter_editing {
+                    palette.selection
+                } else {
+                    palette.background
+                },
+            )),
+            input,
+        );
+        app.view.hits.push(Hit {
+            area: field,
+            target: Target::FilterInput,
+            enabled: true,
+        });
+        super::buttons::quiet_button(
+            frame,
+            app,
+            Rect::new(inner.right() - right, inner.y, right.saturating_sub(3), 1),
+            app.text("Keys", "Клав."),
+            Target::QueryKeyboard,
+            true,
+            palette,
+        );
+        super::buttons::quiet_button(
+            frame,
+            app,
+            Rect::new(inner.right().saturating_sub(3), inner.y, 3, 1),
+            "x",
+            Target::ClearFilter,
+            true,
+            palette,
+        );
+        Rect::new(inner.x, inner.y + 1, inner.width, inner.height - 1)
+    } else {
+        inner
+    };
     let capacity = inner.height.saturating_sub(1) as usize;
     let entries = app.rows();
     let selected = entries
@@ -135,7 +268,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             let mut title = Vec::new();
             if playing {
                 title.push(Span::styled(
-                    if app.current_paused() { "II " } else { "▶ " },
+                    format!("[{}]", if app.current_paused() { "‖" } else { "▶" }),
                     style
                         .bg(if app.current_paused() {
                             palette.muted
@@ -145,6 +278,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
                         .fg(palette.background)
                         .add_modifier(Modifier::BOLD),
                 ));
+                title.push(Span::styled(" ", style));
             }
             title.push(Span::styled(clean(&entry.track.title), style));
             Row::new(vec![
@@ -239,10 +373,17 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     );
     if empty {
         frame.render_widget(
-            Paragraph::new(app.text(
-                "Add music with Add ↓ or drop files here.",
-                "Добавьте музыку через «Добавить ↓» или перетащите файлы сюда.",
-            ))
+            Paragraph::new(if !app.library.query.is_empty() {
+                app.text(
+                    "No matches. Clear the filter to show all tracks.",
+                    "Ничего не найдено. Очистите фильтр для показа всех композиций.",
+                )
+            } else {
+                app.text(
+                    "Add music with Add ↓ or copy tracks from the sorting desk.",
+                    "Добавьте музыку через «Добавить ↓» или скопируйте композиции из сортировочного стола.",
+                )
+            })
             .style(palette.text().fg(palette.muted))
             .wrap(Wrap { trim: false }),
             Rect::new(
@@ -266,4 +407,51 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             enabled: true,
         });
     }
+}
+
+pub(super) fn filter_keyboard(frame: &mut Frame, app: &mut App, palette: Palette) {
+    let field = app.view.filter_field;
+    if field.is_empty() {
+        return;
+    }
+    let area = frame.area();
+    let width = 41u16.min(area.width);
+    let height = 9u16.min(area.height.saturating_sub(3));
+    let y = if field.bottom() + height <= area.bottom().saturating_sub(3) {
+        field.bottom()
+    } else {
+        field.y.saturating_sub(height).max(area.y)
+    };
+    let rect = Rect::new(
+        field.x.min(area.right().saturating_sub(width)),
+        y,
+        width,
+        height,
+    );
+    app.view.filter_keyboard_area = rect;
+    app.view.overlay_area = rect;
+    app.view
+        .hits
+        .retain(|hit| hit.area.intersection(rect).is_empty());
+    frame.render_widget(Clear, rect);
+    let outer = block(app.text("Keyboard", "Клавиатура").into(), palette, true);
+    let inner = outer.inner(rect);
+    frame.render_widget(outer, rect);
+    super::dialogs::keyboard(
+        frame,
+        app,
+        inner,
+        app.view.filter_keyboard_language,
+        app.view.filter_keyboard_upper,
+        palette,
+    );
+    button(
+        frame,
+        app,
+        Rect::new(rect.right() - 4, rect.y, 3, 1),
+        "x",
+        Target::QueryKeyboard,
+        true,
+        palette,
+    );
 }

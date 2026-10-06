@@ -86,57 +86,20 @@ pub(super) fn text_dialog(
             ),
         field,
     );
-    let keyboard = if dialog.keyboard == Language::Russian {
-        vec![
-            "йцукенгшщзхъ",
-            "фывапролджэ",
-            "ячсмитьбю",
-            "1234567890",
-            "ё _-()./:\\#",
-        ]
-    } else {
-        vec![
-            "qwertyuiop",
-            "asdfghjkl",
-            "zxcvbnm",
-            "1234567890",
-            " _-()./:\\#",
-        ]
-    };
-    for (row, letters) in keyboard.iter().enumerate() {
-        let y = field.bottom() + 1 + row as u16;
-        if y >= inner.bottom().saturating_sub(4) {
-            break;
-        }
-        for (column, c) in letters.chars().enumerate() {
-            let c = if dialog.upper {
-                c.to_uppercase().next().unwrap_or(c)
-            } else {
-                c
-            };
-            let x = inner.x + column as u16 * 3;
-            if x + 3 <= inner.right() {
-                button(
-                    frame,
-                    app,
-                    Rect::new(x, y, 3, 1),
-                    &c.to_string(),
-                    Target::Text(c),
-                    true,
-                    palette,
-                );
-            }
-        }
-    }
-    buttons(
+    keyboard(
         frame,
         app,
-        Rect::new(inner.x, inner.bottom().saturating_sub(4), inner.width, 2),
-        vec![
-            ("RU / EN".into(), Target::KeyboardLanguage, true),
-            ("Shift".into(), Target::KeyboardCase, true),
-            ("Backspace".into(), Target::Backspace, true),
-        ],
+        Rect::new(
+            inner.x,
+            field.bottom() + 1,
+            inner.width,
+            inner
+                .bottom()
+                .saturating_sub(4)
+                .saturating_sub(field.bottom() + 1),
+        ),
+        dialog.keyboard,
+        dialog.upper,
         palette,
     );
     let can_submit = match &dialog.purpose {
@@ -158,6 +121,70 @@ pub(super) fn text_dialog(
                 Target::CloseDialog,
                 true,
             ),
+        ],
+        palette,
+    );
+}
+
+pub(crate) fn keyboard(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    language: Language,
+    upper: bool,
+    palette: Palette,
+) {
+    let keyboard = if language == Language::Russian {
+        vec![
+            "йцукенгшщзхъ",
+            "фывапролджэ",
+            "ячсмитьбю",
+            "1234567890",
+            "ё _-()./:\\#",
+        ]
+    } else {
+        vec![
+            "qwertyuiop",
+            "asdfghjkl",
+            "zxcvbnm",
+            "1234567890",
+            " _-()./:\\#",
+        ]
+    };
+    for (row, letters) in keyboard.iter().enumerate() {
+        let y = area.y + row as u16;
+        if y >= area.bottom().saturating_sub(2) {
+            break;
+        }
+        for (column, c) in letters.chars().enumerate() {
+            let c = if upper {
+                c.to_uppercase().next().unwrap_or(c)
+            } else {
+                c
+            };
+            let x = area.x + column as u16 * 3;
+            if x + 3 <= area.right() {
+                button(
+                    frame,
+                    app,
+                    Rect::new(x, y, 3, 1),
+                    &c.to_string(),
+                    Target::Text(c),
+                    true,
+                    palette,
+                );
+            }
+        }
+    }
+    buttons(
+        frame,
+        app,
+        Rect::new(area.x, area.bottom().saturating_sub(2), area.width, 2),
+        vec![
+            ("RU / EN".into(), Target::KeyboardLanguage, true),
+            ("Shift".into(), Target::KeyboardCase, true),
+            ("Backspace".into(), Target::Backspace, true),
+            (app.text("Space", "Пробел").into(), Target::Text(' '), true),
         ],
         palette,
     );

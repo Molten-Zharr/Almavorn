@@ -35,6 +35,7 @@ pub enum Dialog {
         expanded: Vec<crate::workspace::Panel>,
     },
     Text(TextDialog),
+    Search(super::search::SearchDialog),
     Browser(Browser),
     RemoveEntry {
         playlist: i64,
@@ -86,6 +87,7 @@ impl Dialog {
             Self::Transfer { .. } => Some(Action::Transfer),
             Self::RemoveEntry { .. } | Self::ConfirmSettings { .. } => Some(Action::Delete),
             Self::Text(_) | Self::CaptureBinding { .. } | Self::Commands { .. } => None,
+            Self::Search(_) => None,
         }
     }
 
@@ -117,6 +119,10 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if matches!(self.view.dialog, Some(Dialog::Search(_))) {
+            self.search_navigate(i64::from(direction));
+            return;
+        }
         if let Some(Dialog::Commands { menu, selected, .. }) = &self.view.dialog {
             let next = Self::command_selection(
                 &self.command_items(*menu),
@@ -182,6 +188,9 @@ impl App {
     pub(super) fn submit(&mut self) -> Result<()> {
         if let Some(Dialog::Commands { selected, .. }) = &self.view.dialog {
             return self.activate_command(*selected);
+        }
+        if matches!(self.view.dialog, Some(Dialog::Search(_))) {
+            return self.play_search_result();
         }
         match self.view.dialog.take() {
             Some(Dialog::Panels { selected, expanded }) => {
