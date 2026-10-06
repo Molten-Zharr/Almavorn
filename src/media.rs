@@ -91,7 +91,7 @@ pub fn read_track(path: &Path) -> Result<ImportedTrack> {
 }
 
 pub fn audio_files(directory: &Path) -> Result<Vec<PathBuf>> {
-    let scan = scan_audio_files(directory, &AtomicBool::new(false))?;
+    let scan = scan_audio_files(directory, &AtomicBool::new(false), true)?;
     if let Some(error) = scan.errors.first() {
         anyhow::bail!("{error}");
     }
@@ -104,7 +104,11 @@ pub(crate) struct AudioFiles {
     pub errors: Vec<String>,
 }
 
-pub(crate) fn scan_audio_files(directory: &Path, cancel: &AtomicBool) -> Result<AudioFiles> {
+pub(crate) fn scan_audio_files(
+    directory: &Path,
+    cancel: &AtomicBool,
+    recursive: bool,
+) -> Result<AudioFiles> {
     let mut scan = AudioFiles {
         files: Vec::new(),
         skipped: 0,
@@ -139,7 +143,7 @@ pub(crate) fn scan_audio_files(directory: &Path, cancel: &AtomicBool) -> Result<
                     continue;
                 }
             };
-            if kind.is_dir() {
+            if kind.is_dir() && recursive {
                 directories.push(entry.path());
             } else if kind.is_file() && is_audio(&entry.path()) {
                 scan.files.push(entry.path());

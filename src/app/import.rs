@@ -104,6 +104,7 @@ impl App {
         );
         let mut worker_store = self.store.try_clone()?;
         let unlocked = self.view.editing;
+        let recursive = self.settings.scan_subfolders;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let progress = Arc::new(AtomicUsize::new(0));
@@ -119,7 +120,7 @@ impl App {
                     anyhow::bail!(AppError::ImportInterrupted);
                 }
                 if path.is_dir() {
-                    match media::scan_audio_files(&path, &worker_cancel) {
+                    match media::scan_audio_files(&path, &worker_cancel, recursive) {
                         Ok(scan) => {
                             folders.push(path.canonicalize()?);
                             candidates.extend(scan.files);

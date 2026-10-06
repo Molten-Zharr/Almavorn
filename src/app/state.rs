@@ -89,6 +89,7 @@ pub enum Target {
     FolderEdit,
     FolderRemove,
     FolderScan,
+    ScanSubfolders,
     DialogScroll(i16),
     Setting(usize),
     SettingsPage(SettingsPage),

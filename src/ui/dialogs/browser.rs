@@ -58,9 +58,29 @@ pub(super) fn browser_dialog(
                 !browser.entries.is_empty(),
             ),
             (
-                app.text("Mark all", "Отметить все").into(),
-                Target::BrowserMarkAll,
-                !browser.folder && app.browser_ready() && !browser.entries.is_empty(),
+                if browser.folder {
+                    format!(
+                        "[{}] {}",
+                        if app.settings.scan_subfolders {
+                            'x'
+                        } else {
+                            ' '
+                        },
+                        app.text("Search subfolders", "Искать в подпапках")
+                    )
+                } else {
+                    app.text("Mark all", "Отметить все").into()
+                },
+                if browser.folder {
+                    Target::ScanSubfolders
+                } else {
+                    Target::BrowserMarkAll
+                },
+                if browser.folder {
+                    !app.busy()
+                } else {
+                    app.browser_ready() && !browser.entries.is_empty()
+                },
             ),
         ],
         palette,

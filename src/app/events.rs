@@ -300,6 +300,7 @@ impl App {
                     Key::F(3) | Key::Enter => Some(Target::FolderEdit),
                     Key::Delete => Some(Target::FolderRemove),
                     Key::Char('r') => Some(Target::FolderScan),
+                    Key::Char(' ') => Some(Target::ScanSubfolders),
                     _ => None,
                 };
                 if let Some(target) = target {
@@ -362,6 +363,11 @@ impl App {
                 }
             }
             if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
+                if key.key == Key::Char(' ')
+                    && matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder)
+                {
+                    return self.target(Target::ScanSubfolders, false);
+                }
                 if key.key == Key::Char('a') && key.ctrl {
                     return self.target(Target::BrowserMarkAll, false);
                 }
@@ -626,6 +632,16 @@ impl App {
             Target::FolderScan => {
                 let (id, _) = self.folder_selection()?;
                 self.scan_playlist_folders(id)?;
+            }
+            Target::ScanSubfolders => {
+                ensure!(!self.busy(), AppError::LibraryBusy);
+                ensure!(
+                    matches!(self.view.dialog, Some(Dialog::Folders { .. }))
+                        || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder),
+                    AppError::FolderNotReady
+                );
+                self.settings.scan_subfolders = !self.settings.scan_subfolders;
+                self.save_settings()?;
             }
             Target::Text(c) => {
                 if let Some(Dialog::Search(search)) = &mut self.view.dialog {

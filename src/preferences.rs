@@ -335,6 +335,8 @@ pub struct ProfilePreferences {
     pub language: Language,
     pub volume: f32,
     pub sorting_desk: bool,
+    #[serde(default = "default_scan_subfolders")]
+    pub scan_subfolders: bool,
     pub playlist_placement: Placement,
     pub player_placement: Placement,
     #[serde(default)]
@@ -349,6 +351,9 @@ pub struct SettingsProfile {
     pub name: String,
     pub preferences: ProfilePreferences,
 }
+fn default_scan_subfolders() -> bool {
+    true
+}
 impl Settings {
     pub(crate) fn ensure_bindings(&mut self) {
         for mut binding in crate::input::default_bindings() {
@@ -362,6 +367,7 @@ impl Settings {
             if matches!(
                 binding.action,
                 crate::input::Action::Filter
+                    | crate::input::Action::PlaylistFolders
                     | crate::input::Action::PlaylistUp
                     | crate::input::Action::PlaylistDown
             ) && self.bindings.iter().any(|value| value.key == binding.key)
@@ -387,6 +393,7 @@ impl Settings {
             language: self.language,
             volume: self.volume,
             sorting_desk: self.sorting_desk,
+            scan_subfolders: self.scan_subfolders,
             playlist_placement: self.playlist_placement,
             player_placement: self.player_placement,
             workspace: self.workspace.clone(),
@@ -399,6 +406,7 @@ impl Settings {
         self.language = preferences.language;
         self.volume = preferences.volume.clamp(0.0, 1.0);
         self.sorting_desk = preferences.sorting_desk;
+        self.scan_subfolders = preferences.scan_subfolders;
         self.playlist_placement = preferences.playlist_placement;
         self.player_placement = preferences.player_placement;
         self.workspace = preferences.workspace;

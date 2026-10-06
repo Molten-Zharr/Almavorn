@@ -138,6 +138,7 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::FolderEdit => Some("F3".into()),
         Target::FolderRemove => Some("Delete".into()),
         Target::FolderScan => Some("R".into()),
+        Target::ScanSubfolders => Some("Space".into()),
         _ => None,
     }
 }

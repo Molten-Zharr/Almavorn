@@ -1,6 +1,6 @@
 use super::super::{
     theme::Palette,
-    widgets::{button_width, buttons, clean, modal, visible_offset},
+    widgets::{button, button_width, buttons, clean, modal, visible_offset},
 };
 use crate::app::{App, Hit, Target};
 use ratatui::{
@@ -61,22 +61,47 @@ pub(super) fn folders(
         ),
     ];
     let footer_rows = action_rows(app, inner.width, &actions).min(inner.height);
-    let hint = app.text("Linked folders and subfolders are scanned for new tracks. Unlinking keeps music in the library. Order changes require editing.", "Поиск новых треков идет в связанных и вложенных папках. Отключение папки сохраняет композиции в библиотеке. Правки в Порядке требуют редактирования.");
+    let hint = app.text("Find new music in linked folders. The checkbox includes subfolders; otherwise only files directly in each folder are checked. Unlinking keeps tracks.", "Поиск новых треков идет в связанных папках. Галочка включает подпапки; без нее проверяются только файлы в каждой папке. Отключение сохраняет композиции.");
     let hints = super::help::wrapped_height(hint, inner.width)
-        .min(inner.height.saturating_sub(footer_rows + 4));
+        .min(inner.height.saturating_sub(footer_rows + 6));
     frame.render_widget(
         Paragraph::new(hint)
             .style(palette.text().fg(palette.muted))
             .wrap(Wrap { trim: false }),
         Rect::new(inner.x, inner.y, inner.width, hints),
     );
+    let checkbox_y = inner.y + hints + u16::from(hints > 0);
+    let checkbox = format!(
+        "[{}] {}",
+        if app.settings.scan_subfolders {
+            'x'
+        } else {
+            ' '
+        },
+        app.text("Search subfolders", "Искать в подпапках")
+    );
+    button(
+        frame,
+        app,
+        Rect::new(
+            inner.x,
+            checkbox_y,
+            button_width(app, &checkbox, &Target::ScanSubfolders).min(inner.width),
+            1,
+        ),
+        &checkbox,
+        Target::ScanSubfolders,
+        !app.busy(),
+        palette,
+    );
     let list = Rect::new(
         inner.x,
-        inner.y + hints + u16::from(hints > 0),
+        checkbox_y + 2,
         inner.width,
         inner
-            .height
-            .saturating_sub(hints + u16::from(hints > 0) + footer_rows + 1),
+            .bottom()
+            .saturating_sub(footer_rows + 1)
+            .saturating_sub(checkbox_y + 2),
     );
     let capacity = usize::from(list.height / 2);
     *selected = (*selected).min(paths.len().saturating_sub(1));
