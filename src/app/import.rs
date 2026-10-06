@@ -61,19 +61,47 @@ impl App {
     }
 
     pub fn start_import(&mut self, paths: Vec<PathBuf>) -> Result<()> {
+        self.start_import_skipping(paths, HashSet::new())
+    }
+
+    pub(super) fn scan_playlist_folders(&mut self, id: i64) -> Result<()> {
+        ensure!(!self.busy(), AppError::LibraryBusy);
+        let playlist = self
+            .library
+            .playlists
+            .iter()
+            .find(|playlist| playlist.id == id)
+            .context(AppError::PlaylistMissing)?;
+        let mut folders = playlist.folders.clone();
+        folders.sort();
+        folders.dedup();
+        ensure!(!folders.is_empty(), AppError::FolderNotReady);
+        let known = playlist
+            .entries
+            .iter()
+            .map(|entry| entry.track.path.clone())
+            .collect();
+        self.start_import_skipping(folders, known)
+    }
+
+    fn start_import_skipping(
+        &mut self,
+        paths: Vec<PathBuf>,
+        mut known: HashSet<PathBuf>,
+    ) -> Result<()> {
         ensure!(self.library.import.is_none(), AppError::ImportBusy);
         let target = self
             .import_target()
             .context("Select an editable playlist or enable the sorting desk")?;
-        let existing: HashSet<PathBuf> = self
-            .library
-            .playlists
-            .iter()
-            .find(|playlist| playlist.id == target)
-            .into_iter()
-            .flat_map(|playlist| &playlist.entries)
-            .map(|entry| entry.track.path.clone())
-            .collect();
+        known.extend(
+            self.library
+                .playlists
+                .iter()
+                .find(|playlist| playlist.id == target)
+                .into_iter()
+                .flat_map(|playlist| &playlist.entries)
+                .map(|entry| entry.track.path.clone()),
+        );
         let mut worker_store = self.store.try_clone()?;
         let unlocked = self.view.editing;
         let cancel = Arc::new(AtomicBool::new(false));
@@ -85,13 +113,20 @@ impl App {
             let mut errors = Vec::new();
             let mut skipped = 0;
             let mut candidates = Vec::new();
+            let mut folders = Vec::new();
             for path in paths {
                 if worker_cancel.load(Ordering::Relaxed) {
                     anyhow::bail!(AppError::ImportInterrupted);
                 }
                 if path.is_dir() {
-                    match media::audio_files(&path) {
-                        Ok(files) => candidates.extend(files),
+                    match media::scan_audio_files(&path, &worker_cancel) {
+                        Ok(scan) => {
+                            folders.push(path.canonicalize()?);
+                            candidates.extend(scan.files);
+                            skipped += scan.skipped;
+                            let available = 5usize.saturating_sub(errors.len());
+                            errors.extend(scan.errors.into_iter().take(available));
+                        }
                         Err(error) => {
                             skipped += 1;
                             if errors.len() < 5 {
@@ -103,11 +138,12 @@ impl App {
                     candidates.push(path);
                 }
             }
-            let mut seen = existing;
+            let mut seen = known;
             for path in candidates {
                 if worker_cancel.load(Ordering::Relaxed) {
                     anyhow::bail!(AppError::ImportInterrupted);
                 }
+                worker_progress.fetch_add(1, Ordering::Relaxed);
                 if path
                     .canonicalize()
                     .ok()
@@ -119,6 +155,11 @@ impl App {
                 match media::read_track(&path) {
                     Ok(track) => {
                         if seen.insert(track.path.clone()) {
+                            if let Some(parent) = track.path.parent()
+                                && !folders.iter().any(|folder| parent.starts_with(folder))
+                            {
+                                folders.push(parent.to_owned());
+                            }
                             tracks.push(track);
                         } else {
                             skipped += 1;
@@ -131,12 +172,14 @@ impl App {
                         }
                     }
                 }
-                worker_progress.fetch_add(1, Ordering::Relaxed);
             }
             if worker_cancel.load(Ordering::Relaxed) {
                 anyhow::bail!(AppError::ImportInterrupted);
             }
-            let change = worker_store.add_tracks(target, &tracks, unlocked)?;
+            folders.sort();
+            folders.dedup();
+            let change =
+                worker_store.add_tracks_from_folders(target, &tracks, &folders, unlocked)?;
             Ok(ImportOutcome {
                 change,
                 errors,
@@ -174,7 +217,9 @@ impl App {
                 .iter()
                 .find(|playlist| playlist.id == job.target)
                 .map(|playlist| {
-                    if playlist.mode == "chaos" {
+                    if playlist.kind == "desk" {
+                        self.settings.mode
+                    } else if playlist.mode == "chaos" {
                         Mode::Chaos
                     } else {
                         Mode::Order

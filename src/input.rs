@@ -145,6 +145,7 @@ pub enum Action {
     AddFiles,
     AddFolder,
     AddNew,
+    PlaylistFolders,
     NewPlaylist,
     Rename,
     Delete,
@@ -184,7 +185,8 @@ impl Action {
             Self::ToggleDesk => language.text("Route imported files to the desk or selected playlist.", "Направлять добавляемые файлы на стол либо в выбранный плейлист."),
             Self::AddFiles => language.text("Select music files to import.", "Выбрать музыкальные файлы для добавления."),
             Self::AddFolder => language.text("Select a folder and import its music.", "Выбрать папку и добавить её музыку."),
-            Self::AddNew => language.text("Scan current tracks' folders for files not yet imported.", "Проверить папки текущих композиций на ещё не добавленные файлы."),
+            Self::AddNew => language.text("Scan saved playlist folders, including subfolders, for new tracks. Existing tracks and positions stay unchanged.", "Проверить сохраненные папки плейлиста и вложенные папки на новые композиции. Существующие композиции и позиции сохраняются."),
+            Self::PlaylistFolders => language.text("View and manage folders used to find new tracks for this playlist.", "Просмотреть и настроить папки для поиска новых композиций этого плейлиста."),
             Self::NewPlaylist => language.text("Create an empty playlist in the current mode.", "Создать пустой плейлист в текущем режиме."),
             Self::Rename => language.text("Rename the playlist or the local track title.", "Переименовать плейлист либо название композиции в базе."),
             Self::Delete => language.text("Confirm removal of a playlist or track entry; keep source files.", "Подтвердить удаление плейлиста либо композиции из списка; сохранить исходные файлы."),
@@ -226,6 +228,7 @@ impl Action {
             Self::AddFiles => language.text("Add files", "Добавить файлы"),
             Self::AddFolder => language.text("Add folder", "Добавить папку"),
             Self::AddNew => language.text("Add new files", "Добавить новые"),
+            Self::PlaylistFolders => language.text("Playlist folders", "Папки плейлиста"),
             Self::NewPlaylist => language.text("New playlist", "Создать плейлист"),
             Self::Rename => language.text("Rename", "Переименовать"),
             Self::Delete => language.text("Remove", "Убрать"),
@@ -303,6 +306,7 @@ pub fn default_bindings() -> Vec<Binding> {
         (PlayerPanel, Key::Char('p'), true, false),
         (Panels, Key::Char('b'), true, false),
         (Filter, Key::Char('f'), true, false),
+        (PlaylistFolders, Key::Char('r'), true, false),
     ] {
         bindings.push(Binding {
             action,

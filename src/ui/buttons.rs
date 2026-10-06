@@ -134,6 +134,10 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::BrowserParent => Some("Backspace".into()),
         Target::BrowserMarkAll => Some("Ctrl+A".into()),
         Target::BrowserAdd => Some("Ctrl+Enter".into()),
+        Target::FolderAdd => Some("Insert".into()),
+        Target::FolderEdit => Some("F3".into()),
+        Target::FolderRemove => Some("Delete".into()),
+        Target::FolderScan => Some("R".into()),
         _ => None,
     }
 }

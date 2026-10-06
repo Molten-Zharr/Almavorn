@@ -16,6 +16,7 @@ use std::{
 };
 
 mod migration;
+mod playlists;
 mod queries;
 use queries::{playlist_access, read_playlists, snapshot};
 
@@ -34,6 +35,8 @@ pub struct SavedPlaylist {
     pub kind: String,
     pub position: i64,
     pub entries: Vec<SavedEntry>,
+    #[serde(default)]
+    pub folders: Vec<PathBuf>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -265,7 +268,30 @@ impl Store {
         tracks: &[ImportedTrack],
         unlocked: bool,
     ) -> Result<Change> {
+        let mut folders: Vec<_> = tracks
+            .iter()
+            .filter_map(|track| track.path.parent())
+            .filter(|path| path.is_absolute())
+            .map(Path::to_path_buf)
+            .collect();
+        folders.sort();
+        folders.dedup();
+        self.add_tracks_from_folders(playlist_id, tracks, &folders, unlocked)
+    }
+
+    pub fn add_tracks_from_folders(
+        &mut self,
+        playlist_id: i64,
+        tracks: &[ImportedTrack],
+        folders: &[PathBuf],
+        unlocked: bool,
+    ) -> Result<Change> {
         self.mutate(Some(playlist_id), Mode::Order, unlocked, |connection| {
+            for folder in folders {
+                let path = folder.to_str().context(AppError::InvalidPathEncoding)?;
+                ensure!(folder.is_absolute(), AppError::FolderNotReady);
+                connection.execute("INSERT INTO playlist_folders(playlist_id,path) VALUES (?1,?2) ON CONFLICT DO NOTHING", params![playlist_id, path])?;
+            }
             for track in tracks {
                 let path = track.path.to_str().context(AppError::InvalidPathEncoding)?;
                 connection.execute("INSERT INTO tracks(path,title,artist,album,duration_ms,tags) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(path) DO NOTHING", params![path, track.title, track.artist, track.album, track.duration_ms.min(i64::MAX as u64) as i64, track.tags])?;
@@ -285,6 +311,10 @@ impl Store {
         self.mutate(Some(destination), Mode::Order, unlocked, |connection| {
             for &id in track_ids {
                 append_track(connection, destination, id)?;
+                let path: String = connection.query_row("SELECT path FROM tracks WHERE id=?1", [id], |row| row.get(0))?;
+                if let Some(folder) = Path::new(&path).parent() {
+                    connection.execute("INSERT INTO playlist_folders(playlist_id,path) VALUES (?1,?2) ON CONFLICT DO NOTHING", params![destination, folder.to_str()])?;
+                }
             }
             Ok(())
         })
@@ -460,6 +490,12 @@ impl Store {
                         params![entry.id, playlist.id, entry.track_id, entry.position],
                     )?;
                 }
+                for folder in &playlist.folders {
+                    transaction.execute(
+                        "INSERT INTO playlist_folders(playlist_id,path) VALUES (?1,?2)",
+                        params![playlist.id, folder.to_str().context(AppError::InvalidPathEncoding)?],
+                    )?;
+                }
             }
             Ok(())
         })?;
@@ -572,6 +608,7 @@ impl Snapshot {
                 }
                 .to_owned(),
                 position: playlist.position,
+                folders: playlist.folders.clone(),
                 entries: playlist
                     .entries
                     .iter()

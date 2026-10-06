@@ -7,6 +7,8 @@ use anyhow::{Context, Result};
 pub enum TextPurpose {
     Create,
     RenamePlaylist(i64),
+    PlaylistFolder(i64, Option<String>),
+    RemovePlaylistFolder(i64, String),
     RenameTrack(i64, i64),
     Search,
     DeletePlaylist(i64, String),
@@ -37,6 +39,10 @@ pub enum Dialog {
     Text(TextDialog),
     Search(super::search::SearchDialog),
     Browser(Browser),
+    Folders {
+        playlist: i64,
+        selected: usize,
+    },
     RemoveEntry {
         playlist: i64,
         entry: i64,
@@ -84,6 +90,7 @@ impl Dialog {
                 Action::AddFiles
             }),
             Self::Metadata { .. } => Some(Action::Metadata),
+            Self::Folders { .. } => Some(Action::PlaylistFolders),
             Self::Transfer { .. } => Some(Action::Transfer),
             Self::RemoveEntry { .. } | Self::ConfirmSettings { .. } => Some(Action::Delete),
             Self::Text(_) | Self::CaptureBinding { .. } | Self::Commands { .. } => None,
@@ -135,11 +142,23 @@ impl App {
             return;
         }
         let transfer_length = self.transfer_destinations().len();
+        let folder_length = if let Some(Dialog::Folders { playlist, .. }) = &self.view.dialog {
+            self.library
+                .playlists
+                .iter()
+                .find(|item| item.id == *playlist)
+                .map_or(0, |item| item.folders.len())
+        } else {
+            0
+        };
         if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
             self.settings_scroll(i64::from(direction));
             return;
         }
         match &mut self.view.dialog {
+            Some(Dialog::Folders { selected, .. }) => {
+                *selected = bounded(*selected, i64::from(direction), folder_length)
+            }
             Some(Dialog::Panels { selected, expanded }) => {
                 *selected = bounded(
                     *selected,
@@ -215,6 +234,42 @@ impl App {
                                 store.rename_playlist(id, &text, unlocked)?,
                             ))
                         })
+                    }
+                    TextPurpose::PlaylistFolder(id, previous) => {
+                        let id = *id;
+                        let previous = previous.clone();
+                        let folder = std::path::PathBuf::from(text.trim());
+                        let result = self.start_database(recovery, move |store| {
+                            Ok(DatabaseOutcome::Changed(store.set_playlist_folder(
+                                id,
+                                previous.as_deref(),
+                                &folder,
+                                unlocked,
+                            )?))
+                        });
+                        if result.is_ok() {
+                            self.view.dialog = Some(Dialog::Folders {
+                                playlist: id,
+                                selected: 0,
+                            });
+                        }
+                        result
+                    }
+                    TextPurpose::RemovePlaylistFolder(id, folder) => {
+                        let id = *id;
+                        let folder = folder.clone();
+                        let result = self.start_database(recovery, move |store| {
+                            Ok(DatabaseOutcome::Changed(
+                                store.remove_playlist_folder(id, &folder, &text, unlocked)?,
+                            ))
+                        });
+                        if result.is_ok() {
+                            self.view.dialog = Some(Dialog::Folders {
+                                playlist: id,
+                                selected: 0,
+                            });
+                        }
+                        result
                     }
                     TextPurpose::RenameTrack(track, playlist) => {
                         let (track, playlist) = (*track, *playlist);

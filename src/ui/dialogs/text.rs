@@ -23,6 +23,14 @@ pub(super) fn text_dialog(
     let title = match &dialog.purpose {
         TextPurpose::Create => app.text("Create playlist", "Создать плейлист"),
         TextPurpose::RenamePlaylist(_) => app.text("Rename playlist", "Переименовать плейлист"),
+        TextPurpose::PlaylistFolder(_, _) => app.text(
+            "Playlist folder · full path",
+            "Папка плейлиста · полный путь",
+        ),
+        TextPurpose::RemovePlaylistFolder(_, _) => app.text(
+            "Unlink folder · tracks are kept",
+            "Отключить папку · композиции сохраняются",
+        ),
         TextPurpose::RenameTrack(_, _) => app.text(
             "Local track name · source tags untouched",
             "Имя в базе · исходные теги сохраняются",
@@ -39,10 +47,12 @@ pub(super) fn text_dialog(
         TextPurpose::Settings(edit) => edit.title(app.settings.language),
     };
     let inner = modal(frame, app, area, title.into(), 27, palette);
-    let hint = if let TextPurpose::DeletePlaylist(_, name) = &dialog.purpose {
+    let hint = if let TextPurpose::DeletePlaylist(_, name)
+    | TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose
+    {
         format!(
             "{}: {name}",
-            app.text("Enter exact name", "Введите точное имя")
+            app.text("Enter exact name or path", "Введите точное имя или путь")
         )
     } else {
         app.text(
@@ -103,7 +113,9 @@ pub(super) fn text_dialog(
         palette,
     );
     let can_submit = match &dialog.purpose {
-        TextPurpose::DeletePlaylist(_, name) => &dialog.text == name,
+        TextPurpose::DeletePlaylist(_, name) | TextPurpose::RemovePlaylistFolder(_, name) => {
+            &dialog.text == name
+        }
         _ => true,
     };
     buttons(

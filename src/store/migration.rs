@@ -34,6 +34,11 @@ CREATE TABLE playlist_ordering (mode TEXT PRIMARY KEY CHECK(mode IN ('order','ch
 INSERT INTO playlist_ordering VALUES ('order',0),('chaos',0);
 ";
 
+const FOLDER_SCHEMA: &str = "CREATE TABLE playlist_folders (
+    playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    path TEXT NOT NULL, PRIMARY KEY(playlist_id,path)
+);";
+
 #[derive(Deserialize)]
 struct Library {
     tracks: Option<Vec<Track>>,
@@ -127,10 +132,17 @@ impl Row {
 
 pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     if path.try_exists()? {
-        let connection = connect(path)?;
+        let mut connection = connect(path)?;
         let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if version == 2 {
-            validate_schema(&connection)?;
+        if matches!(version, 2 | 3) {
+            if version == 2 {
+                let transaction =
+                    connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+                upgrade_folders(&transaction)?;
+                transaction.commit()?;
+            } else {
+                validate_schema(&connection, version)?;
+            }
             configure_wal(&connection)?;
             return Ok(connection);
         }
@@ -169,8 +181,8 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     connection.pragma_update(None, "synchronous", "FULL")?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let version: i64 = transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if version == 2 {
-        validate_schema(&transaction)?;
+    if matches!(version, 2 | 3) {
+        upgrade_folders(&transaction)?;
         transaction.commit()?;
         configure_wal(&connection)?;
         return Ok(connection);
@@ -180,6 +192,7 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
         "Unrecognized SQLite library; existing data was preserved"
     );
     transaction.execute_batch(SCHEMA)?;
+    transaction.execute_batch(FOLDER_SCHEMA)?;
     if let Some(library) = imported {
         import_duckdb(&transaction, library)?;
     } else if let Some(source) = &legacy {
@@ -187,6 +200,7 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     } else {
         transaction.execute("INSERT INTO playlists(name,name_fold,mode,kind,position,desk) VALUES ('Sorting desk','sorting desk','order','desk',-1,1)", [])?;
     }
+    infer_legacy_folders(&transaction)?;
     let desks: i64 = transaction.query_row(
         "SELECT COUNT(*) FROM playlists WHERE kind='desk'",
         [],
@@ -200,8 +214,8 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
         !broken,
         "Library contains broken references; original databases were preserved"
     );
-    transaction.execute("INSERT INTO almavorn_metadata(key,value) VALUES ('schema_version','2') ON CONFLICT(key) DO UPDATE SET value=excluded.value", [])?;
-    transaction.pragma_update(None, "user_version", 2)?;
+    transaction.execute("INSERT INTO almavorn_metadata(key,value) VALUES ('schema_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value", [])?;
+    transaction.pragma_update(None, "user_version", 3)?;
     transaction.commit()?;
     configure_wal(&connection)?;
     Ok(connection)
@@ -214,7 +228,38 @@ fn empty(connection: &Connection) -> Result<bool> {
         |row| row.get::<_, i64>(0),
     )? == 0)
 }
-fn validate_schema(connection: &Connection) -> Result<()> {
+fn upgrade_folders(connection: &Connection) -> Result<()> {
+    let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    validate_schema(connection, version)?;
+    if version == 2 {
+        connection.execute_batch(FOLDER_SCHEMA)?;
+        infer_legacy_folders(connection)?;
+        connection.execute(
+            "UPDATE almavorn_metadata SET value='3' WHERE key='schema_version'",
+            [],
+        )?;
+        connection.pragma_update(None, "user_version", 3)?;
+    }
+    Ok(())
+}
+
+fn infer_legacy_folders(connection: &Connection) -> Result<()> {
+    let mut statement = connection
+        .prepare("SELECT e.playlist_id,t.path FROM entries e JOIN tracks t ON t.id=e.track_id")?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    for (id, path) in rows {
+        if let Some(folder) = Path::new(&path).parent().filter(|path| path.is_absolute()) {
+            connection.execute("INSERT INTO playlist_folders(playlist_id,path) VALUES (?1,?2) ON CONFLICT DO NOTHING", params![id, folder.to_str()])?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_schema(connection: &Connection, version: i64) -> Result<()> {
     let tables: i64 = connection.query_row("SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name IN ('tracks','playlists','entries','settings','almavorn_metadata','playlist_ordering')", [], |row| row.get(0))?;
     ensure!(
         tables == 6,
@@ -228,7 +273,7 @@ fn validate_schema(connection: &Connection) -> Result<()> {
         )
         .optional()?;
     ensure!(
-        marker.as_deref() == Some("2"),
+        marker.as_deref() == Some(if version == 2 { "2" } else { "3" }),
         "Unrecognized SQLite schema marker; existing data was preserved"
     );
     connection.prepare(
@@ -240,6 +285,9 @@ fn validate_schema(connection: &Connection) -> Result<()> {
     connection.prepare("SELECT id,playlist_id,track_id,position FROM entries LIMIT 0")?;
     connection.prepare("SELECT key,value FROM settings LIMIT 0")?;
     connection.prepare("SELECT mode,revision FROM playlist_ordering LIMIT 0")?;
+    if version == 3 {
+        connection.prepare("SELECT playlist_id,path FROM playlist_folders LIMIT 0")?;
+    }
     Ok(())
 }
 fn configure_wal(connection: &Connection) -> Result<()> {

@@ -77,6 +77,7 @@ impl Panel {
             ],
             Self::PlaylistActions => &[
                 Button(NewPlaylist),
+                Button(PlaylistFolders),
                 Button(Rename),
                 Button(Delete),
                 Button(Transfer),

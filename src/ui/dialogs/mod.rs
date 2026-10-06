@@ -2,6 +2,7 @@ mod bindings;
 mod browser;
 mod help;
 mod panels;
+mod playlists;
 mod search;
 mod text;
 pub(crate) use text::keyboard;
@@ -71,6 +72,9 @@ pub(super) fn render_dialog(
         Dialog::Text(dialog) => text_dialog(frame, app, dialog, area, palette),
         Dialog::Search(search) => self::search::render(frame, app, search, area, palette),
         Dialog::Browser(browser) => browser_dialog(frame, app, browser, area, palette),
+        Dialog::Folders { playlist, selected } => {
+            playlists::folders(frame, app, *playlist, selected, area, palette)
+        }
         Dialog::RemoveEntry { title, .. } => {
             let inner = modal(
                 frame,

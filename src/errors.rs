@@ -14,6 +14,9 @@ pub enum AppError {
     EntryMissing,
     MusicSelectionRequired,
     FolderNotReady,
+    FolderMissing,
+    FolderAlreadyRegistered,
+    FolderConfirmationRequired,
     ImportBusy,
     ShortcutConflict,
     ReservedShortcut,
@@ -98,6 +101,18 @@ impl AppError {
             Self::FolderNotReady => language.text(
                 "Choose an available folder before adding music",
                 "Выберите доступную папку и дождитесь ее загрузки.",
+            ),
+            Self::FolderMissing => language.text(
+                "Folder is no longer linked to this playlist",
+                "Папка больше не связана с этим плейлистом.",
+            ),
+            Self::FolderAlreadyRegistered => language.text(
+                "Folder is already linked to this playlist",
+                "Папка уже связана с этим плейлистом.",
+            ),
+            Self::FolderConfirmationRequired => language.text(
+                "Enter the exact folder path to unlink it",
+                "Введите точный путь папки для отключения.",
             ),
             Self::ImportBusy => language.text(
                 "Music import is already running",

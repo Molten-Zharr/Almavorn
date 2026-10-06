@@ -294,6 +294,18 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if matches!(self.view.dialog, Some(Dialog::Folders { .. })) && !key.ctrl && !key.alt {
+                let target = match key.key {
+                    Key::Insert => Some(Target::FolderAdd),
+                    Key::F(3) | Key::Enter => Some(Target::FolderEdit),
+                    Key::Delete => Some(Target::FolderRemove),
+                    Key::Char('r') => Some(Target::FolderScan),
+                    _ => None,
+                };
+                if let Some(target) = target {
+                    return self.target(target, false);
+                }
+            }
             if matches!(self.view.dialog, Some(Dialog::Search(_))) {
                 return self.search_key(key);
             }
@@ -600,6 +612,21 @@ impl App {
                 self.close_dialog();
             }
             Target::Submit => self.submit()?,
+            Target::FolderRow(index) => {
+                if let Some(Dialog::Folders { selected, .. }) = &mut self.view.dialog {
+                    *selected = index;
+                }
+                if double {
+                    self.edit_playlist_folder(true)?;
+                }
+            }
+            Target::FolderAdd => self.edit_playlist_folder(false)?,
+            Target::FolderEdit => self.edit_playlist_folder(true)?,
+            Target::FolderRemove => self.request_folder_removal()?,
+            Target::FolderScan => {
+                let (id, _) = self.folder_selection()?;
+                self.scan_playlist_folders(id)?;
+            }
             Target::Text(c) => {
                 if let Some(Dialog::Search(search)) = &mut self.view.dialog {
                     search.focus = super::SearchFocus::Input;

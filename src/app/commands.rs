@@ -150,7 +150,14 @@ impl App {
             CommandMenu::Add => (Panel::Add, &[AddFiles, AddFolder, AddNew]),
             CommandMenu::Playlist => (
                 Panel::PlaylistActions,
-                &[NewPlaylist, Rename, Delete, MoveUp, MoveDown],
+                &[
+                    NewPlaylist,
+                    PlaylistFolders,
+                    Rename,
+                    Delete,
+                    MoveUp,
+                    MoveDown,
+                ],
             ),
             CommandMenu::Tracks => (
                 Panel::PlaylistActions,

@@ -10,6 +10,7 @@ use rodio::{Decoder, Source};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 pub fn is_audio(path: &Path) -> bool {
@@ -90,21 +91,70 @@ pub fn read_track(path: &Path) -> Result<ImportedTrack> {
 }
 
 pub fn audio_files(directory: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
+    let scan = scan_audio_files(directory, &AtomicBool::new(false))?;
+    if let Some(error) = scan.errors.first() {
+        anyhow::bail!("{error}");
+    }
+    Ok(scan.files)
+}
+
+pub(crate) struct AudioFiles {
+    pub files: Vec<PathBuf>,
+    pub skipped: usize,
+    pub errors: Vec<String>,
+}
+
+pub(crate) fn scan_audio_files(directory: &Path, cancel: &AtomicBool) -> Result<AudioFiles> {
+    let mut scan = AudioFiles {
+        files: Vec::new(),
+        skipped: 0,
+        errors: Vec::new(),
+    };
     let mut directories = vec![directory.canonicalize()?];
     while let Some(directory) = directories.pop() {
-        let mut entries = std::fs::read_dir(&directory)?.collect::<std::io::Result<Vec<_>>>()?;
+        anyhow::ensure!(!cancel.load(Ordering::Relaxed), AppError::ImportInterrupted);
+        let iterator = match std::fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(error) => {
+                scan.warning(&directory, error);
+                continue;
+            }
+        };
+        let mut entries = Vec::new();
+        for entry in iterator {
+            anyhow::ensure!(!cancel.load(Ordering::Relaxed), AppError::ImportInterrupted);
+            match entry {
+                Ok(entry) => entries.push(entry),
+                Err(error) => scan.warning(&directory, error),
+            }
+        }
         entries.sort_by_key(|entry| entry.file_name());
         for entry in entries {
+            anyhow::ensure!(!cancel.load(Ordering::Relaxed), AppError::ImportInterrupted);
             // Символические ссылки на каталоги не обходятся: исключены циклы.
-            let kind = entry.file_type()?;
+            let kind = match entry.file_type() {
+                Ok(kind) => kind,
+                Err(error) => {
+                    scan.warning(&entry.path(), error);
+                    continue;
+                }
+            };
             if kind.is_dir() {
                 directories.push(entry.path());
             } else if kind.is_file() && is_audio(&entry.path()) {
-                files.push(entry.path());
+                scan.files.push(entry.path());
             }
         }
     }
-    files.sort();
-    Ok(files)
+    scan.files.sort();
+    Ok(scan)
+}
+
+impl AudioFiles {
+    fn warning(&mut self, path: &Path, error: std::io::Error) {
+        self.skipped += 1;
+        if self.errors.len() < 5 {
+            self.errors.push(format!("{}: {error}", path.display()));
+        }
+    }
 }

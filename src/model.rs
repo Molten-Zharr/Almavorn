@@ -81,6 +81,7 @@ pub struct Playlist {
     pub kind: PlaylistKind,
     pub position: i64,
     pub entries: Vec<Entry>,
+    pub folders: Vec<PathBuf>,
 }
 
 impl Playlist {

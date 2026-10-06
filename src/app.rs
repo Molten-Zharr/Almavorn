@@ -11,6 +11,7 @@ mod import;
 mod library;
 mod options;
 mod playback;
+mod playlist_operations;
 mod search;
 mod settings;
 mod state;

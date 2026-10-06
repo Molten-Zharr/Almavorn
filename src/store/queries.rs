@@ -55,6 +55,7 @@ pub(super) fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
             kind: kind(&saved_kind)?,
             position,
             entries: Vec::new(),
+            folders: Vec::new(),
         });
     }
     // Fetch entries once for the entire library, including shared tracks.
@@ -86,6 +87,10 @@ pub(super) fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
             .context("Entry refers to a missing playlist")?;
         playlists[*index].entries.push(entry);
     }
+    for (id, path) in read_folders(connection, None)? {
+        let index = indices.get(&id).context(AppError::PlaylistMissing)?;
+        playlists[*index].folders.push(path);
+    }
     Ok(playlists)
 }
 
@@ -101,6 +106,7 @@ pub(super) fn snapshot(connection: &Connection, scope: &str) -> Result<Snapshot>
             kind: row.get(3)?,
             position: row.get(4)?,
             entries: Vec::new(),
+            folders: Vec::new(),
         })
     })?;
     let mut playlists = Vec::new();
@@ -110,7 +116,7 @@ pub(super) fn snapshot(connection: &Connection, scope: &str) -> Result<Snapshot>
         indices.insert(playlist.id, playlists.len());
         playlists.push(playlist);
     }
-    // Undo needs references and order, never paths, tags, or audio metadata.
+    // Undo stores track references and order; audio metadata is never copied.
     let mut statement = connection.prepare(
         "SELECT e.playlist_id,e.id,e.track_id,e.position FROM entries e JOIN playlists p ON p.id=e.playlist_id WHERE (?1='desk' AND p.kind='desk') OR (?1!='desk' AND p.mode=?1 AND p.kind='normal') ORDER BY e.playlist_id,e.position,e.id",
     )?;
@@ -131,5 +137,20 @@ pub(super) fn snapshot(connection: &Connection, scope: &str) -> Result<Snapshot>
             .context("Entry refers to a missing playlist")?;
         playlists[*index].entries.push(entry);
     }
+    for (id, path) in read_folders(connection, Some(scope))? {
+        let index = indices.get(&id).context(AppError::PlaylistMissing)?;
+        playlists[*index].folders.push(path);
+    }
     Ok(Snapshot { playlists })
+}
+
+fn read_folders(connection: &Connection, scope: Option<&str>) -> Result<Vec<(i64, PathBuf)>> {
+    let mut statement = connection.prepare(
+        "SELECT f.playlist_id,f.path FROM playlist_folders f JOIN playlists p ON p.id=f.playlist_id WHERE ?1 IS NULL OR (?1='desk' AND p.kind='desk') OR (?1!='desk' AND p.mode=?1 AND p.kind='normal') ORDER BY f.playlist_id,f.path",
+    )?;
+    Ok(statement
+        .query_map([scope], |row| {
+            Ok((row.get(0)?, PathBuf::from(row.get::<_, String>(1)?)))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?)
 }

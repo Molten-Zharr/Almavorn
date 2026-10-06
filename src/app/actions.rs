@@ -5,10 +5,6 @@ use crate::{
     model::{Mode, PlaylistKind},
 };
 use anyhow::{Context, Result};
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
 
 impl App {
     pub fn allowed(&self, action: Action) -> bool {
@@ -48,6 +44,7 @@ impl App {
             .playlist()
             .is_some_and(|playlist| playlist.can_edit(self.view.editing));
         match action {
+            PlaylistFolders => self.playlist().is_some(),
             ToggleEdit => self.settings.mode == Mode::Order,
             Rename | Delete => {
                 editable
@@ -131,7 +128,7 @@ impl App {
                 self.import_target().is_some()
                     && self
                         .playlist()
-                        .is_some_and(|playlist| !playlist.entries.is_empty())
+                        .is_some_and(|playlist| !playlist.folders.is_empty())
             }
             Undo | Redo => self.scope().is_some_and(|scope| {
                 self.library
@@ -274,15 +271,21 @@ impl App {
                 self.show_browser(directory, action == AddFolder);
             }
             AddNew => {
-                let directories: HashSet<PathBuf> = self
-                    .playlist()
-                    .into_iter()
-                    .flat_map(|playlist| &playlist.entries)
-                    .filter_map(|entry| entry.track.path.parent().map(Path::to_path_buf))
-                    .collect();
-                let mut directories: Vec<_> = directories.into_iter().collect();
-                directories.sort();
-                self.start_import(directories)?;
+                let id = self
+                    .library
+                    .selected_playlist
+                    .context(AppError::PlaylistSelectionRequired)?;
+                self.scan_playlist_folders(id)?;
+            }
+            PlaylistFolders => {
+                let playlist = self
+                    .library
+                    .selected_playlist
+                    .context(AppError::PlaylistSelectionRequired)?;
+                self.view.dialog = Some(Dialog::Folders {
+                    playlist,
+                    selected: 0,
+                });
             }
             NewPlaylist => {
                 let mut number = 1;
