@@ -21,12 +21,16 @@ pub(super) fn browser_dialog(
         app,
         area,
         app.text(
-            if browser.folder {
+            if browser.playlist_name.is_some() {
+                "Playlist name · choose a folder"
+            } else if browser.folder {
                 "Add folder"
             } else {
                 "Add files"
             },
-            if browser.folder {
+            if browser.playlist_name.is_some() {
+                "Название плейлиста · выберите папку"
+            } else if browser.folder {
                 "Добавить папку"
             } else {
                 "Добавить файлы"
@@ -42,47 +46,50 @@ pub(super) fn browser_dialog(
             .wrap(Wrap { trim: false }),
         Rect::new(inner.x, inner.y, inner.width, 2),
     );
+    let mut controls = vec![
+        (
+            app.text("Parent", "Выше").into(),
+            Target::BrowserParent,
+            browser.directory.parent().is_some(),
+        ),
+        (
+            app.text("Select / open", "Выбрать / открыть").into(),
+            Target::BrowserOpen,
+            !browser.entries.is_empty(),
+        ),
+    ];
+    if browser.playlist_name.is_none() {
+        controls.push((
+            if browser.folder {
+                format!(
+                    "[{}] {}",
+                    if app.settings.scan_subfolders {
+                        'x'
+                    } else {
+                        ' '
+                    },
+                    app.text("Search subfolders", "Искать в подпапках")
+                )
+            } else {
+                app.text("Mark all", "Отметить все").into()
+            },
+            if browser.folder {
+                Target::ScanSubfolders
+            } else {
+                Target::BrowserMarkAll
+            },
+            if browser.folder {
+                !app.busy()
+            } else {
+                app.browser_ready() && !browser.entries.is_empty()
+            },
+        ));
+    }
     let used = buttons(
         frame,
         app,
         Rect::new(inner.x, inner.y + 2, inner.width, 3),
-        vec![
-            (
-                app.text("Parent", "Выше").into(),
-                Target::BrowserParent,
-                browser.directory.parent().is_some(),
-            ),
-            (
-                app.text("Select / open", "Выбрать / открыть").into(),
-                Target::BrowserOpen,
-                !browser.entries.is_empty(),
-            ),
-            (
-                if browser.folder {
-                    format!(
-                        "[{}] {}",
-                        if app.settings.scan_subfolders {
-                            'x'
-                        } else {
-                            ' '
-                        },
-                        app.text("Search subfolders", "Искать в подпапках")
-                    )
-                } else {
-                    app.text("Mark all", "Отметить все").into()
-                },
-                if browser.folder {
-                    Target::ScanSubfolders
-                } else {
-                    Target::BrowserMarkAll
-                },
-                if browser.folder {
-                    !app.busy()
-                } else {
-                    app.browser_ready() && !browser.entries.is_empty()
-                },
-            ),
-        ],
+        controls,
         palette,
     );
     let list = Rect::new(
@@ -148,7 +155,9 @@ pub(super) fn browser_dialog(
             enabled: true,
         });
     }
-    let add = if browser.folder {
+    let add = if browser.playlist_name.is_some() {
+        app.text("Use folder name", "Использовать имя").into()
+    } else if browser.folder {
         app.text("Add folder", "Добавить папку").into()
     } else {
         format!(

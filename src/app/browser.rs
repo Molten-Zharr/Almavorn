@@ -1,4 +1,4 @@
-use super::{App, Dialog, background::background};
+use super::{App, Dialog, TextDialog, TextPurpose, background::background};
 use crate::errors::AppError;
 use crate::media;
 use anyhow::{Context, Result, ensure};
@@ -23,6 +23,7 @@ pub struct Browser {
     pub offset: usize,
     pub marked: HashSet<PathBuf>,
     pub folder: bool,
+    pub playlist_name: Option<TextDialog>,
 }
 
 impl Browser {
@@ -34,6 +35,7 @@ impl Browser {
             offset: 0,
             marked: HashSet::new(),
             folder,
+            playlist_name: None,
         }
     }
     pub(super) fn open(directory: PathBuf, folder: bool) -> Result<Self> {
@@ -68,6 +70,25 @@ impl Browser {
 }
 
 impl App {
+    pub(super) fn choose_playlist_name_folder(&mut self) -> Result<()> {
+        ensure!(!self.busy(), AppError::LibraryBusy);
+        let Some(Dialog::Text(dialog)) = &self.view.dialog else {
+            return Ok(());
+        };
+        if !matches!(dialog.purpose, TextPurpose::Create) {
+            return Ok(());
+        }
+        let dialog = dialog.clone();
+        let directory = dirs::audio_dir()
+            .or_else(dirs::home_dir)
+            .unwrap_or(std::env::current_dir()?);
+        self.show_browser(directory, true);
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            browser.playlist_name = Some(dialog);
+        }
+        Ok(())
+    }
+
     pub(super) fn show_browser(&mut self, directory: PathBuf, folder: bool) {
         self.view.dialog = Some(Dialog::Browser(Browser::unloaded(
             directory.clone(),
@@ -166,6 +187,34 @@ impl App {
 
     pub(super) fn browser_add(&mut self) -> Result<()> {
         ensure!(self.browser_state.ready, AppError::FolderNotReady);
+        if let Some(Dialog::Browser(browser)) = &self.view.dialog
+            && let Some(dialog) = &browser.playlist_name
+        {
+            let name = browser
+                .directory
+                .file_name()
+                .and_then(|name| name.to_str())
+                .context(self.text("Choose a folder with a name", "Выберите папку с названием"))?;
+            let name: String = name
+                .chars()
+                .map(|c| if c.is_control() { ' ' } else { c })
+                .collect();
+            ensure!(!name.trim().is_empty(), AppError::InvalidTrackName);
+            let name = if matches!(
+                name.trim().to_lowercase().as_str(),
+                "sorting desk" | "сортировочный стол"
+            ) {
+                format!("{} (1)", name.trim())
+            } else {
+                name.trim().to_owned()
+            };
+            let mut dialog = dialog.clone();
+            dialog.text = self.fresh_playlist_name(&name);
+            dialog.selected_all = true;
+            self.cancel_browser();
+            self.view.dialog = Some(Dialog::Text(dialog));
+            return Ok(());
+        }
         let paths = if let Some(Dialog::Browser(browser)) = &self.view.dialog {
             if browser.folder {
                 vec![browser.directory.clone()]

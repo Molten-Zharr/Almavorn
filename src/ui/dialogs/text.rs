@@ -103,17 +103,32 @@ pub(super) fn text_dialog(
             ),
         field,
     );
+    let mut keyboard_top = field.bottom() + 1;
+    if matches!(dialog.purpose, TextPurpose::Create) {
+        let used = buttons(
+            frame,
+            app,
+            Rect::new(inner.x, keyboard_top, inner.width, 1),
+            vec![(
+                app.text("Name from folder", "По имени папки").into(),
+                Target::PlaylistAutoName,
+                !app.busy(),
+            )],
+            palette,
+        );
+        keyboard_top += used + 1;
+    }
     keyboard(
         frame,
         app,
         Rect::new(
             inner.x,
-            field.bottom() + 1,
+            keyboard_top,
             inner.width,
             inner
                 .bottom()
                 .saturating_sub(4)
-                .saturating_sub(field.bottom() + 1),
+                .saturating_sub(keyboard_top),
         ),
         dialog.keyboard,
         dialog.upper,

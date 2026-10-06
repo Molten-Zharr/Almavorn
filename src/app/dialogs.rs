@@ -89,6 +89,7 @@ impl Dialog {
             Self::Panels { .. } => Some(Action::Panels),
             Self::Help { .. } | Self::SettingsHelp { .. } => Some(Action::Help),
             Self::Settings { .. } => Some(Action::Settings),
+            Self::Browser(browser) if browser.playlist_name.is_some() => None,
             Self::Browser(browser) => Some(if browser.folder {
                 Action::AddFolder
             } else {

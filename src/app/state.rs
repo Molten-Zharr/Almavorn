@@ -83,6 +83,7 @@ pub enum Target {
     BrowserMarkAll,
     BrowserOpen,
     BrowserAdd,
+    PlaylistAutoName,
     TransferRow(usize),
     FolderRow(usize),
     FolderAdd,

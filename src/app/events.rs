@@ -294,6 +294,13 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if key.ctrl
+                && !key.alt
+                && key.key == Key::Char('f')
+                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::Create))
+            {
+                return self.choose_playlist_name_folder();
+            }
             if let Some(Dialog::ComposePlaylists { selected, .. }) = &self.view.dialog {
                 let selected = *selected;
                 if key.ctrl && !key.alt && matches!(key.key, Key::Up | Key::Down) {
@@ -383,7 +390,7 @@ impl App {
             }
             if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
                 if key.key == Key::Char(' ')
-                    && matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder)
+                    && matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none())
                 {
                     return self.target(Target::ScanSubfolders, false);
                 }
@@ -658,7 +665,7 @@ impl App {
                 ensure!(!self.busy(), AppError::LibraryBusy);
                 ensure!(
                     matches!(self.view.dialog, Some(Dialog::Folders { .. }))
-                        || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder),
+                        || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none()),
                     AppError::FolderNotReady
                 );
                 self.settings.scan_subfolders = !self.settings.scan_subfolders;
@@ -766,6 +773,7 @@ impl App {
             }
             Target::BrowserOpen => self.browser_open()?,
             Target::BrowserAdd => self.browser_add()?,
+            Target::PlaylistAutoName => self.choose_playlist_name_folder()?,
             Target::TransferRow(index) => {
                 if let Some(Dialog::Transfer { selected, .. }) = &mut self.view.dialog {
                     *selected = index;

@@ -241,8 +241,9 @@ impl App {
                 self.show_settings();
                 true
             }
-            Some(Dialog::Browser(_)) => {
+            Some(Dialog::Browser(browser)) => {
                 self.cancel_browser();
+                self.view.dialog = browser.playlist_name.map(Dialog::Text);
                 true
             }
             Some(_) => true,
