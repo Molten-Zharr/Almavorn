@@ -36,26 +36,21 @@ pub(super) fn render(
     frame.render_widget(
         Paragraph::new(if search.focus == SearchFocus::Playlists {
             app.text(
-                "Space / Enter: select · Tab: section",
-                "Space / Enter: выбрать · Tab: раздел",
+                "←→: playlist · Ctrl+Space: select · Enter: play",
+                "←→: плейлист · Ctrl+Space: выбрать · Enter: играть",
             )
         } else {
             app.text(
-                "Type to search · Tab: section · Enter: play",
-                "Ввод: поиск · Tab: раздел · Enter: играть",
+                "Type to search · ↑↓: tracks · Enter: play",
+                "Ввод: поиск · ↑↓: композиции · Enter: играть",
             )
         })
         .style(palette.text().fg(palette.muted)),
         Rect::new(inner.x, inner.y, inner.width, 1),
     );
     let field = Rect::new(inner.x, inner.y + 1, inner.width, 3);
-    let active = search.focus == SearchFocus::Input;
     frame.render_widget(
-        Paragraph::new(format!(
-            "{}{}",
-            clean(&search.query),
-            if active { "│" } else { "" }
-        ))
+        Paragraph::new(format!("{}│", clean(&search.query)))
         .scroll((
             0,
             Line::from(search.query.as_str())
@@ -65,11 +60,7 @@ pub(super) fn render(
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(palette.text().fg(if active {
-                    palette.accent
-                } else {
-                    palette.inactive_panel_border
-                })),
+                .border_style(palette.text().fg(palette.accent)),
         )
         .style(palette.text().bg(if search.selected_all {
             palette.selection

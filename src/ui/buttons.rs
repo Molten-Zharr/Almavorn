@@ -113,7 +113,7 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
             .find(|binding| binding.action == crate::input::Action::SwitchMode)
             .map(|binding| binding.key.label()),
         Target::Submit | Target::BrowserOpen => Some("Enter".into()),
-        Target::SearchPlay => Some("Ctrl+Enter".into()),
+        Target::SearchPlay => Some("Enter".into()),
         Target::CloseDialog => Some("Esc".into()),
         Target::BrowserParent => Some("Backspace".into()),
         Target::BrowserMarkAll => Some("Ctrl+A".into()),

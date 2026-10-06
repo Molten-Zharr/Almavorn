@@ -10,7 +10,7 @@ use ratatui::layout::{Position, Rect};
 impl App {
     pub fn accepts_text(&self) -> bool {
         matches!(self.view.dialog, Some(Dialog::Text(_)))
-            || matches!(&self.view.dialog, Some(Dialog::Search(search)) if search.focus == super::SearchFocus::Input)
+            || matches!(self.view.dialog, Some(Dialog::Search(_)))
             || (self.view.dialog.is_none() && self.view.filter_editing)
     }
 

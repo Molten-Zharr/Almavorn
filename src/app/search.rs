@@ -223,12 +223,14 @@ impl App {
         let Some(Dialog::Search(search)) = &mut self.view.dialog else {
             return Ok(());
         };
+        // Result navigation never takes text input away from the query field.
+        if matches!(
+            key.key,
+            Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home | Key::End
+        ) {
+            search.focus = SearchFocus::Results;
+        }
         match key.key {
-            Key::Enter if key.ctrl => {
-                if !search.results.is_empty() {
-                    self.play_search_result()?;
-                }
-            }
             Key::Tab => {
                 search.focus = match (search.focus, key.shift) {
                     (SearchFocus::Input, false) | (SearchFocus::Playlists, true) => {
@@ -240,16 +242,18 @@ impl App {
                     _ => SearchFocus::Input,
                 }
             }
-            Key::Char('a') if key.ctrl && search.focus == SearchFocus::Input => {
-                search.selected_all = true
+            Key::Char('l') if key.ctrl => {
+                self.target(super::Target::SearchAll(true), false)?
             }
-            Key::Char('a') if key.ctrl && search.focus == SearchFocus::Playlists => {
-                self.target(super::Target::SearchAll(!key.shift), false)?
+            Key::Char('a') if key.ctrl => {
+                search.focus = SearchFocus::Input;
+                search.selected_all = true;
             }
             Key::Char('d') if key.ctrl && search.focus == SearchFocus::Playlists => {
                 self.target(super::Target::SearchAll(false), false)?
             }
-            Key::Backspace if search.focus == SearchFocus::Input => {
+            Key::Backspace => {
+                search.focus = SearchFocus::Input;
                 if search.selected_all {
                     search.query.clear();
                     search.selected_all = false;
@@ -261,19 +265,16 @@ impl App {
             Key::Down => self.search_navigate(1),
             Key::PageUp => self.search_navigate(-8),
             Key::PageDown => self.search_navigate(8),
-            Key::Home if search.focus != SearchFocus::Input => self.search_navigate(i64::MIN),
-            Key::End if search.focus != SearchFocus::Input => self.search_navigate(i64::MAX),
-            Key::Enter | Key::Char(' ') if search.focus == SearchFocus::Playlists => {
+            Key::Home => self.search_navigate(i64::MIN),
+            Key::End => self.search_navigate(i64::MAX),
+            Key::Left if search.focus == SearchFocus::Playlists => self.search_navigate(-1),
+            Key::Right if search.focus == SearchFocus::Playlists => self.search_navigate(1),
+            Key::Char(' ') if key.ctrl && search.focus == SearchFocus::Playlists => {
                 if let Some(id) = playlist_id {
                     self.toggle_search_playlist(id);
                 }
             }
-            Key::Enter => {
-                if !search.results.is_empty() {
-                    self.play_search_result()?;
-                }
-            }
-            Key::Char(' ') if search.focus == SearchFocus::Results => self.toggle_playback()?,
+            Key::Enter if !search.results.is_empty() => self.play_search_result()?,
             _ => {}
         }
         Ok(())
@@ -359,9 +360,8 @@ impl App {
 
     pub(super) fn query_text(&mut self, text: &str) -> Result<bool> {
         let input = text.chars().filter(|c| !c.is_control());
-        if let Some(Dialog::Search(search)) = &mut self.view.dialog
-            && search.focus == SearchFocus::Input
-        {
+        if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+            search.focus = SearchFocus::Input;
             if search.selected_all {
                 search.query.clear();
                 search.selected_all = false;
