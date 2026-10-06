@@ -111,6 +111,11 @@ impl App {
                         };
                     }
                     self.scroll_dialog(delta);
+                } else if matches!(
+                    self.target_at(Position::new(x, y)),
+                    Some(Target::PlaybackVolume(_))
+                ) {
+                    self.adjust_volume(-delta)?;
                 } else if self.view.playlist_area.contains(Position::new(x, y)) {
                     self.view.focus = Focus::Playlists;
                     self.navigate(delta as i64);
