@@ -121,7 +121,7 @@ pub(super) fn browser_dialog(
             }),
             rect,
         );
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: rect,
             target: Target::BrowserRow(index),
             enabled: true,

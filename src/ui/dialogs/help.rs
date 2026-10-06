@@ -231,7 +231,7 @@ pub(super) fn help_dialog(
         Paragraph::new(close).style(palette.text().add_modifier(Modifier::BOLD)),
         Rect::new(footer.x + 7, footer.y, footer.width.saturating_sub(7), 1),
     );
-    app.hits.push(Hit {
+    app.view.hits.push(Hit {
         area: Rect::new(footer.x, footer.y, close_width.min(footer.width), 2),
         target: Target::CloseDialog,
         enabled: true,
@@ -247,7 +247,7 @@ pub(super) fn help_dialog(
                 .intersection(footer),
             palette,
         );
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: rect,
             target: Target::DialogScroll(delta),
             enabled: true,

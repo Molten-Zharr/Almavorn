@@ -288,7 +288,7 @@ fn arrange(
     match node {
         Dock::Panel(panel) => {
             if !app.settings.workspace.hidden.contains(panel) {
-                app.workspace.areas.push((*panel, area));
+                app.view.workspace.areas.push((*panel, area));
             }
         }
         Dock::Split {
@@ -336,7 +336,7 @@ fn arrange(
                 left.min(length),
                 length.saturating_sub(right).max(left.min(length)),
             );
-            app.workspace.splits.push(SplitArea {
+            app.view.workspace.splits.push(SplitArea {
                 path: path.clone(),
                 area,
                 axis,
@@ -394,7 +394,7 @@ fn chrome(
     compact: bool,
     palette: Palette,
 ) -> Rect {
-    let active = app.workspace.focus == panel;
+    let active = app.view.workspace.focus == panel;
     let outer = block(String::new(), palette, active)
         .borders(if compact {
             Borders::TOP | Borders::LEFT | Borders::RIGHT
@@ -417,7 +417,7 @@ fn chrome(
             }
         }
     }
-    app.hits.push(Hit {
+    app.view.hits.push(Hit {
         area,
         target: Target::PanelFocus(panel),
         enabled: true,
@@ -443,7 +443,7 @@ fn chrome(
         ),
         title_hit,
     );
-    app.hits.push(Hit {
+    app.view.hits.push(Hit {
         area: title_hit,
         target: Target::PanelMove(panel),
         enabled: true,
@@ -486,7 +486,7 @@ fn chrome(
             .style(style),
             rect,
         );
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: rect,
             target,
             enabled: true,
@@ -496,11 +496,11 @@ fn chrome(
 }
 
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    app.workspace.bounds = area;
-    app.workspace.areas.clear();
-    app.workspace.splits.clear();
-    app.playlist_area = Rect::default();
-    app.tracks_area = Rect::default();
+    app.view.workspace.bounds = area;
+    app.view.workspace.areas.clear();
+    app.view.workspace.splits.clear();
+    app.view.playlist_area = Rect::default();
+    app.view.tracks_area = Rect::default();
     let mut groups = toolbar::commands(app);
     groups.extend(player::controls(app));
     let mut root = app
@@ -522,12 +522,12 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             .style(palette.text()),
             area,
         );
-        app.workspace.root = Some(root);
+        app.view.workspace.root = Some(root);
         return;
     }
     arrange(app, &groups, &root, area, compact, &mut Vec::new());
-    app.workspace.root = Some(root);
-    for (panel, rect) in app.workspace.areas.clone() {
+    app.view.workspace.root = Some(root);
+    for (panel, rect) in app.view.workspace.areas.clone() {
         let inner = chrome(frame, app, panel, rect, compact, palette);
         if app.settings.workspace.collapsed.contains(&panel) {
             continue;
@@ -547,7 +547,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         }
     }
     // Register shared borders after content; leave the title buttons usable at intersections.
-    for (index, split) in app.workspace.splits.iter().enumerate() {
+    for (index, split) in app.view.workspace.splits.iter().enumerate() {
         let rect = match split.axis {
             Axis::Horizontal => Rect::new(
                 split.area.x + split.cut.saturating_sub(1),
@@ -567,7 +567,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
                 if compact { 1 } else { 2 },
             ),
         };
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: rect.intersection(area),
             target: Target::PanelResize(index),
             enabled: split.minimum.0.saturating_add(split.minimum.1)
@@ -578,8 +578,9 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
                 },
         });
     }
-    if let Some((panel, edge)) = app.workspace.drop
+    if let Some((panel, edge)) = app.view.workspace.drop
         && let Some((_, rect)) = app
+            .view
             .workspace
             .areas
             .iter()
@@ -611,5 +612,6 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
 pub(super) fn fits(app: &App, root: &Dock) -> bool {
     let mut groups = toolbar::commands(app);
     groups.extend(player::controls(app));
-    minimum(app, &groups, root, app.workspace.bounds.width, true) <= app.workspace.bounds.height
+    minimum(app, &groups, root, app.view.workspace.bounds.width, true)
+        <= app.view.workspace.bounds.height
 }

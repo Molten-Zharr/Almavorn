@@ -1,5 +1,6 @@
 pub mod app;
 pub mod audio;
+pub mod errors;
 pub mod input;
 pub mod media;
 pub mod model;

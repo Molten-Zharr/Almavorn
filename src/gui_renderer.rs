@@ -129,10 +129,11 @@ pub fn resize(backend: &mut SoftBackend<EmbeddedTTF>, columns: u16, rows: u16) {
 
 pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui::layout::Size) {
     let palette = app.settings.current_palette();
-    for hit in &app.hits {
-        if app.dialog.is_none()
+    for hit in &app.view.hits {
+        if app.view.dialog.is_none()
             && matches!(hit.target, Target::Action(_) | Target::Mode(_))
             && app
+                .view
                 .workspace
                 .areas
                 .iter()
@@ -210,7 +211,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         });
         egui::Color32::from_rgb(color[0], color[1], color[2])
     };
-    for cap in &app.keycaps {
+    for cap in &app.view.keycaps {
         let cell_rect = egui::Rect::from_min_size(
             image.min
                 + egui::vec2(

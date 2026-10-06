@@ -148,13 +148,13 @@ pub(super) fn render(
                 rect.height,
             ),
         );
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: rect,
             target: Target::PanelRow(index),
             enabled: true,
         });
         if let PanelRow::Category(panel) = row {
-            app.hits.push(Hit {
+            app.view.hits.push(Hit {
                 area: Rect::new(inner.x + 2, rect.y, 3, 1).intersection(inner),
                 target: Target::PanelVisibility(*panel),
                 enabled: true,

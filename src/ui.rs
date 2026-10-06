@@ -1,3 +1,4 @@
+mod buttons;
 mod dialogs;
 mod keycaps;
 mod library;
@@ -28,21 +29,22 @@ use ratatui::{
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     let palette = Palette::new(app);
-    app.hits.clear();
-    app.keycaps.clear();
+    app.view.hits.clear();
+    app.view.keycaps.clear();
     if app
+        .view
         .dialog
         .as_ref()
         .is_some_and(crate::app::Dialog::is_settings)
     {
         settings::render_settings(frame, app, palette);
-        if !matches!(app.dialog, Some(crate::app::Dialog::Settings { .. }))
-            && let Some(mut dialog) = app.dialog.take()
+        if !matches!(app.view.dialog, Some(crate::app::Dialog::Settings { .. }))
+            && let Some(mut dialog) = app.view.dialog.take()
         {
-            app.hits.clear();
-            app.keycaps.clear();
+            app.view.hits.clear();
+            app.view.keycaps.clear();
             render_dialog(frame, app, &mut dialog, palette);
-            app.dialog = Some(dialog);
+            app.view.dialog = Some(dialog);
         }
         return;
     }
@@ -109,8 +111,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         palette,
     );
     workspace::render(frame, app, parts[1], palette);
-    let notice = if app.notice_error {
-        app.notice.clone()
+    let notice = if app.view.notice_error {
+        app.view.notice.clone()
     } else if app.importing() {
         format!(
             "{}: {}",
@@ -121,11 +123,11 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         app.text("Updating library…", "Обновление библиотеки…")
             .to_owned()
     } else {
-        app.notice.clone()
+        app.view.notice.clone()
     };
     frame.render_widget(
         Paragraph::new(notice)
-            .style(Style::default().fg(if app.notice_error {
+            .style(Style::default().fg(if app.view.notice_error {
                 palette.error
             } else {
                 palette.muted
@@ -133,7 +135,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .wrap(Wrap { trim: false }),
         Rect::new(parts[2].x, parts[2].y, parts[2].width, 2),
     );
-    let hint = if matches!(app.workspace.focus, crate::workspace::Panel::Player) {
+    let hint = if matches!(app.view.workspace.focus, crate::workspace::Panel::Player) {
         app.text(
             "↑↓ volume 1% · ←→ seek · Tab panel · Space pause · F1 help · Q quit",
             "↑↓ громкость 1% · ←→ перемотка · Tab панель · Space пауза · F1 помощь · Q выход",
@@ -155,10 +157,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             footer_height - 2,
         ),
     );
-    if let Some(mut dialog) = app.dialog.take() {
-        app.hits.clear();
-        app.keycaps.clear();
+    if let Some(mut dialog) = app.view.dialog.take() {
+        app.view.hits.clear();
+        app.view.keycaps.clear();
         render_dialog(frame, app, &mut dialog, palette);
-        app.dialog = Some(dialog);
+        app.view.dialog = Some(dialog);
     }
 }

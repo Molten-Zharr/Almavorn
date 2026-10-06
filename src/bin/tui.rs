@@ -69,7 +69,7 @@ fn run() -> Result<()> {
     }));
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut previous_click: Option<(Position, Instant)> = None;
-    while !app.quit {
+    while !app.view.quit {
         app.tick();
         terminal.draw(|frame| ui::render(&mut app, frame))?;
         if !event::poll(Duration::from_millis(50))? {

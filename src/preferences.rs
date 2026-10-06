@@ -1,4 +1,5 @@
 //! Persistent settings catalogs and portable palette files, independent of UI state.
+use crate::errors::AppError;
 use crate::{
     input::Binding,
     model::{Language, Mode, Placement, Settings, Theme},
@@ -151,11 +152,8 @@ pub fn color_role_name(token: &str, language: Language) -> &str {
 }
 pub fn parse_color(text: &str) -> Result<[u8; 3]> {
     let hex = text.trim().strip_prefix('#').unwrap_or(text.trim());
-    ensure!(
-        hex.len() == 6 && hex.is_ascii(),
-        "Use a six-digit color, for example FF0000"
-    );
-    let rgb = u32::from_str_radix(hex, 16).context("Use a six-digit color, for example FF0000")?;
+    ensure!(hex.len() == 6 && hex.is_ascii(), AppError::InvalidColor);
+    let rgb = u32::from_str_radix(hex, 16).context(AppError::InvalidColor)?;
     Ok([(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8])
 }
 pub fn color_hex(rgb: [u8; 3]) -> String {
@@ -166,7 +164,7 @@ pub fn validate_name(name: &str) -> Result<()> {
         !name.trim().is_empty()
             && name.chars().count() <= 80
             && !name.chars().any(char::is_control),
-        "Name must contain 1-80 printable characters"
+        AppError::InvalidCatalogName
     );
     Ok(())
 }
@@ -206,24 +204,20 @@ impl NamedPalette {
         Ok(palette)
     }
     pub fn import_json(bytes: &[u8]) -> Result<Self> {
-        ensure!(
-            bytes.len() <= 1_048_576,
-            "Palette file is larger than 1 MiB"
-        );
+        ensure!(bytes.len() <= 1_048_576, AppError::PaletteFileTooLarge);
         let value: serde_json::Value =
-            serde_json::from_slice(bytes).context("Cannot read palette JSON")?;
+            serde_json::from_slice(bytes).context(AppError::InvalidPaletteJson)?;
         if value.get("format").is_some() {
             let document: PaletteDocument = serde_json::from_value(value)?;
             ensure!(
                 document.format == "almavorn.palette" && document.version == 1,
-                "Unsupported palette format or version"
+                AppError::UnsupportedPaletteVersion
             );
             document.palette.validate()?;
             Ok(document.palette)
         } else {
             Self::from_brand(
-                serde_json::from_value(value)
-                    .context("Expected an Almavorn or Molten-Zharr palette")?,
+                serde_json::from_value(value).context(AppError::UnsupportedPaletteFormat)?,
             )
         }
     }
@@ -472,7 +466,7 @@ impl Settings {
         let validate_appearance = |appearance: &Appearance| -> Result<()> {
             ensure!(
                 (MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&appearance.font_size),
-                "Font size must be 10-32 pixels"
+                AppError::InvalidFontSize
             );
             ensure!(
                 appearance.palette_ids.iter().all(|id| ids.contains(id)),
@@ -507,7 +501,7 @@ impl Settings {
             );
             ensure!(
                 (MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&preset.style.font_size),
-                "Font size must be 10-32 pixels"
+                AppError::InvalidFontSize
             );
         }
         for appearance in std::iter::once(&self.appearance).chain(
@@ -527,7 +521,7 @@ impl Settings {
         Ok(())
     }
     pub fn remove_preset(&mut self, id: &str) -> Result<()> {
-        ensure!(self.presets.len() > 1, "Keep at least one theme preset");
+        ensure!(self.presets.len() > 1, AppError::LastPreset);
         ensure!(
             self.presets.iter().any(|preset| preset.id == id),
             "Preset no longer exists"
@@ -547,12 +541,12 @@ impl Settings {
         Ok(())
     }
     pub fn remove_palette(&mut self, id: &str) -> Result<()> {
-        ensure!(self.palettes.len() > 1, "Keep at least one palette");
+        ensure!(self.palettes.len() > 1, AppError::LastPalette);
         let replacement = self
             .palettes
             .iter()
             .find(|p| p.id != id)
-            .context("Palette no longer exists")?
+            .context(AppError::PaletteMissing)?
             .id
             .clone();
         let replace = |appearance: &mut Appearance| {

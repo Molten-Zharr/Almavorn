@@ -46,7 +46,7 @@ fn ctrl(app: &mut App, c: char) {
 fn until(app: &mut App, predicate: impl Fn(&App) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while !predicate(app) {
-        assert!(Instant::now() < deadline, "Timed out: {}", app.notice);
+        assert!(Instant::now() < deadline, "Timed out: {}", app.view.notice);
         app.tick();
         std::thread::sleep(Duration::from_millis(3));
     }
@@ -62,7 +62,7 @@ fn submit(app: &mut App, text: &str) {
     ctrl(app, 'a');
     app.handle(Input::Text(text.into()));
     key(app, Key::Enter);
-    assert!(!app.notice_error, "{}", app.notice);
+    assert!(!app.view.notice_error, "{}", app.view.notice);
 }
 fn select_row(app: &mut App, row: usize) {
     while app.settings_focus() != SettingsFocus::Parameters {
@@ -83,6 +83,7 @@ fn mouse_click(app: &mut App, predicate: impl Fn(&Target) -> bool, secondary: bo
     let mut terminal = Terminal::new(TestBackend::new(120, 50)).unwrap();
     terminal.draw(|frame| ui::render(app, frame)).unwrap();
     let area = app
+        .view
         .hits
         .iter()
         .find(|hit| hit.enabled && predicate(&hit.target))
@@ -129,6 +130,26 @@ fn screen_text(terminal: &Terminal<TestBackend>) -> String {
         .collect()
 }
 
+fn assert_theme_indicator(app: &mut App, expected: &str) {
+    let terminal = rendered(app, 120, 50);
+    let area = app
+        .view
+        .hits
+        .iter()
+        .find(|hit| matches!(hit.target, Target::SettingSelect(0)))
+        .expect("theme selector must be visible")
+        .area;
+    let buffer = terminal.backend().buffer();
+    let mut text = String::new();
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            text.push_str(buffer[(x, y)].symbol());
+        }
+        text.push('\n');
+    }
+    assert!(text.contains(expected), "Expected theme {expected}: {text}");
+}
+
 #[test]
 fn brand_palette_is_first_and_applies_all_approved_colors() {
     let directory = Directory::new();
@@ -171,7 +192,7 @@ fn pages_keep_mouse_keyboard_descriptions_and_footer_available() {
     key(&mut app, Key::Tab);
     assert_eq!(app.settings_focus(), SettingsFocus::Parameters);
     key(&mut app, Key::F(1));
-    assert!(matches!(app.dialog, Some(Dialog::SettingsHelp { .. })));
+    assert!(matches!(app.view.dialog, Some(Dialog::SettingsHelp { .. })));
     key(&mut app, Key::Escape);
     assert_eq!(app.settings_page(), SettingsPage::Profiles);
     click(&mut app, |target| {
@@ -188,13 +209,15 @@ fn pages_keep_mouse_keyboard_descriptions_and_footer_available() {
             for (width, height) in [(120, 50), (70, 30), (44, 22), (20, 8)] {
                 let terminal = rendered(&mut app, width, height);
                 assert!(
-                    app.hits
+                    app.view
+                        .hits
                         .iter()
                         .any(|hit| hit.enabled && matches!(hit.target, Target::CloseDialog)),
                     "{page:?} {width}x{height}"
                 );
                 assert!(
-                    app.hits
+                    app.view
+                        .hits
                         .iter()
                         .all(|hit| hit.area.right() <= width && hit.area.bottom() <= height)
                 );
@@ -208,11 +231,11 @@ fn pages_keep_mouse_keyboard_descriptions_and_footer_available() {
                 if page == SettingsPage::Palettes && width == 120 {
                     let text = screen_text(&terminal);
                     assert!(
-                        text.contains("│#F8F8F2│") && text.contains("│#F9F9FE│"),
+                        text.contains("#F8F8F2") && text.contains("#F9F9FE"),
                         "{text}"
                     );
                 }
-                assert!(!app.hits.iter().any(|hit| matches!(
+                assert!(!app.view.hits.iter().any(|hit| matches!(
                     hit.target,
                     Target::Playlist(_) | Target::Track(_) | Target::Mode(_)
                 )));
@@ -228,6 +251,7 @@ fn mouse_wheel_moves_one_settings_item_at_a_time() {
     app.open_settings_page(SettingsPage::General);
     rendered(&mut app, 120, 50);
     let menu = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingsPage(SettingsPage::Themes)))
@@ -248,6 +272,7 @@ fn mouse_wheel_moves_one_settings_item_at_a_time() {
     select_row(&mut app, 0);
     rendered(&mut app, 120, 50);
     let row = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingSelect(1)))
@@ -258,7 +283,10 @@ fn mouse_wheel_moves_one_settings_item_at_a_time() {
         y: row.y,
         delta: 3,
     });
-    assert!(matches!(app.dialog, Some(Dialog::Settings { selected: 1 })));
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::Settings { selected: 1 })
+    ));
 }
 
 #[test]
@@ -268,30 +296,34 @@ fn theme_subtabs_support_mouse_keyboard_wheel_and_breadcrumbs() {
     app.open_settings_page(SettingsPage::Themes);
     let baseline = rendered(&mut app, 120, 50);
     assert_eq!(
-        app.hits
+        app.view
+            .hits
             .iter()
             .filter(|hit| hit.area.y > 0 && matches!(hit.target, Target::SettingsPage(_)))
             .count(),
         4
     );
-    assert!(!app.hits.iter().any(|hit| matches!(
+    assert!(!app.view.hits.iter().any(|hit| matches!(
         hit.target,
         Target::SettingsPage(SettingsPage::Palettes | SettingsPage::Typography)
     )));
     assert_eq!(
-        app.hits
+        app.view
+            .hits
             .iter()
             .filter(|hit| hit.area.y > 0 && matches!(hit.target, Target::SettingsTab(_)))
             .count(),
         3
     );
     let tab = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingsTab(SettingsPage::Palettes)))
         .unwrap()
         .area;
     let breadcrumb = app
+        .view
         .hits
         .iter()
         .find(|hit| {
@@ -347,6 +379,7 @@ fn theme_subtabs_support_mouse_keyboard_wheel_and_breadcrumbs() {
     assert_eq!(app.settings_page(), SettingsPage::Palettes);
     let terminal = rendered(&mut app, 120, 50);
     let old_tab = app
+        .view
         .hits
         .iter()
         .find(|hit| {
@@ -388,7 +421,7 @@ fn theme_subtabs_support_mouse_keyboard_wheel_and_breadcrumbs() {
     });
     assert_eq!(app.settings_page(), SettingsPage::General);
     click(&mut app, |target| matches!(target, Target::CloseDialog));
-    assert!(app.dialog.is_none());
+    assert!(app.view.dialog.is_none());
 }
 
 #[test]
@@ -442,6 +475,7 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
     app.open_settings_page(SettingsPage::General);
     rendered(&mut app, 120, 50);
     let scale = app
+        .view
         .hits
         .iter()
         .find_map(|hit| match hit.target {
@@ -458,7 +492,7 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
         });
         assert_eq!(app.settings.volume, expected);
         app.handle(Input::Release { x, y: scale.y });
-        assert!(app.workspace.gesture.is_none());
+        assert!(app.view.workspace.gesture.is_none());
         let terminal = rendered(&mut app, 120, 50);
         assert!(screen_text(&terminal).contains(&format!("{}%", (expected * 100.0) as u32)));
     }
@@ -487,11 +521,12 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
         x: scale.x + scale.width / 2,
         y: scale.bottom() + 1,
     });
-    assert!(app.workspace.gesture.is_none());
+    assert!(app.view.workspace.gesture.is_none());
     let expected = f32::from(scale.width / 2) / f32::from(scale.width - 1);
     assert_eq!(app.settings.volume, expected);
     let terminal = rendered(&mut app, 120, 50);
     let percentage = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingAdjust(1, 1)))
@@ -513,6 +548,7 @@ fn settings_hover_selects_sections_without_changing_preferences() {
     let original_settings = serde_json::to_value(&app.settings).unwrap();
     rendered(&mut app, 120, 50);
     let section = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingsPage(SettingsPage::Themes)))
@@ -563,6 +599,7 @@ fn settings_hover_wheel_and_keyboard_share_one_current_section() {
     app.open_settings_page(SettingsPage::General);
     rendered(&mut app, 120, 50);
     let section = app
+        .view
         .hits
         .iter()
         .find(|hit| {
@@ -594,6 +631,7 @@ fn settings_hover_wheel_and_keyboard_share_one_current_section() {
                 Color::Rgb(r, g, b)
             );
             let highlighted = app
+                .view
                 .hits
                 .iter()
                 .filter(|hit| {
@@ -635,6 +673,7 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
     app.open_settings_page(SettingsPage::General);
     rendered(&mut app, 120, 50);
     let row = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingSelect(3)))
@@ -643,7 +682,10 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
     let placement = app.settings.playlist_placement;
     app.handle(Input::Move { x: row.x, y: row.y });
     assert_eq!(app.settings_focus(), SettingsFocus::Parameters);
-    assert!(matches!(app.dialog, Some(Dialog::Settings { selected: 3 })));
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::Settings { selected: 3 })
+    ));
     assert_eq!(app.settings.playlist_placement, placement);
     key(&mut app, Key::Right);
     assert_ne!(app.settings.playlist_placement, placement);
@@ -652,6 +694,7 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
     assert_eq!(app.settings.playlist_placement, placement);
     rendered(&mut app, 120, 50);
     let value = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingAdjust(1, 1)))
@@ -662,10 +705,14 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
         x: value.x,
         y: value.y,
     });
-    assert!(matches!(app.dialog, Some(Dialog::Settings { selected: 1 })));
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::Settings { selected: 1 })
+    ));
     assert_eq!(app.settings.volume, volume);
     let before = rendered(&mut app, 120, 50);
     let volume_row = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingSelect(1)))
@@ -684,7 +731,10 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
         y: value.y,
         delta: 1,
     });
-    assert!(matches!(app.dialog, Some(Dialog::Settings { selected: 2 })));
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::Settings { selected: 2 })
+    ));
     for _ in 0..3 {
         let after = rendered(&mut app, 120, 50);
         let [r, g, b] = app.settings.current_palette().color("background");
@@ -693,7 +743,10 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
             Color::Rgb(r, g, b)
         );
         assert!(!app.hovered(value));
-        assert!(matches!(app.dialog, Some(Dialog::Settings { selected: 2 })));
+        assert!(matches!(
+            app.view.dialog,
+            Some(Dialog::Settings { selected: 2 })
+        ));
     }
     app.handle(Input::Move {
         x: value.x,
@@ -704,6 +757,7 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
     app.open_settings_page(SettingsPage::Themes);
     rendered(&mut app, 120, 50);
     let preset = app
+        .view
         .hits
         .iter()
         .find(|hit| matches!(hit.target, Target::SettingAdjust(0, 1)))
@@ -714,7 +768,10 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
         x: preset.x,
         y: preset.y,
     });
-    assert!(matches!(app.dialog, Some(Dialog::Settings { selected: 0 })));
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::Settings { selected: 0 })
+    ));
     assert_eq!(app.settings.current_palette().id, original_theme);
     key(&mut app, Key::Right);
     assert_eq!(app.settings.current_palette().id, "classic-amber");
@@ -729,7 +786,7 @@ fn choosing_a_theme_applies_it_immediately_with_keyboard_and_mouse() {
     key(&mut app, Key::Right);
     assert_eq!(app.settings.current_palette().id, "classic-amber");
     let terminal = rendered(&mut app, 120, 50);
-    assert!(screen_text(&terminal).contains("Classic Amber"));
+    assert_theme_indicator(&mut app, "Classic Amber");
     assert!(!screen_text(&terminal).contains("Применить пресет"));
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].bg,
@@ -748,7 +805,7 @@ fn choosing_a_theme_applies_it_immediately_with_keyboard_and_mouse() {
     app.open_settings_page(SettingsPage::Themes);
     let terminal = rendered(&mut app, 120, 50);
     assert_eq!(app.settings.current_palette().id, "light");
-    assert!(screen_text(&terminal).contains("│Light│"));
+    assert_theme_indicator(&mut app, "Light");
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].bg,
         Color::Rgb(239, 242, 246)
@@ -774,23 +831,23 @@ fn theme_indicator_tracks_profiles_modes_and_custom_appearance() {
     click_row(&mut app, 1);
     app.open_settings_page(SettingsPage::Themes);
     assert_eq!(app.settings.current_palette().id, "classic-amber");
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│Classic Amber│"));
+    assert_theme_indicator(&mut app, "Classic Amber");
     select_row(&mut app, 0);
     key(&mut app, Key::Right);
     assert_eq!(app.settings.current_palette().id, "classic-violet");
     app.set_mode(almavorn::model::Mode::Chaos).unwrap();
     app.open_settings_page(SettingsPage::Themes);
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│Molten-Zharr│"));
+    assert_theme_indicator(&mut app, "Molten-Zharr");
     app.open_settings_page(SettingsPage::Typography);
     click_row(&mut app, 1);
     submit(&mut app, "23");
     app.open_settings_page(SettingsPage::Themes);
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│Пользовательская│"));
+    assert_theme_indicator(&mut app, "Пользовательская");
     saved(&mut app);
     drop(app);
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::Themes);
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│Пользовательская│"));
+    assert_theme_indicator(&mut app, "Пользовательская");
 }
 
 #[test]
@@ -800,7 +857,7 @@ fn copied_theme_keeps_its_name_after_restart_and_deletion_keeps_appearance() {
     app.open_settings_page(SettingsPage::Themes);
     key(&mut app, Key::Insert);
     submit(&mut app, "My theme");
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│My theme│"));
+    assert_theme_indicator(&mut app, "My theme");
     app.open_settings_page(SettingsPage::Profiles);
     key(&mut app, Key::Insert);
     submit(&mut app, "Another profile");
@@ -808,11 +865,11 @@ fn copied_theme_keeps_its_name_after_restart_and_deletion_keeps_appearance() {
     drop(app);
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::Themes);
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│My theme│"));
+    assert_theme_indicator(&mut app, "My theme");
     let before = serde_json::to_value(app.settings.current_style()).unwrap();
     key(&mut app, Key::F(3));
     submit(&mut app, "Renamed theme");
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│Renamed theme│"));
+    assert_theme_indicator(&mut app, "Renamed theme");
     key(&mut app, Key::Delete);
     key(&mut app, Key::Enter);
     assert!(
@@ -864,7 +921,7 @@ fn theme_selection_is_inferred_for_settings_saved_before_preset_ids() {
     drop(connection);
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::Themes);
-    assert!(screen_text(&rendered(&mut app, 120, 50)).contains("│Light│"));
+    assert_theme_indicator(&mut app, "Light");
     assert_eq!(app.settings.current_palette().id, "light");
     select_row(&mut app, 0);
     key(&mut app, Key::Right);
@@ -888,13 +945,16 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
     click(&mut app, |target| {
         matches!(target, Target::BindingKey(Key::F(1)))
     });
-    assert!(app.notice_error);
+    assert!(app.view.notice_error);
     assert_eq!(app.settings.bindings[index].key, original);
-    assert!(matches!(app.dialog, Some(Dialog::CaptureBinding { .. })));
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::CaptureBinding { .. })
+    ));
     click(&mut app, |target| {
         matches!(target, Target::BindingKey(Key::Up))
     });
-    assert!(app.notice_error);
+    assert!(app.view.notice_error);
     assert_eq!(app.settings.bindings[index].key, original);
     click(&mut app, |target| {
         matches!(target, Target::BindingModifier(0))
@@ -915,11 +975,11 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
         }
     );
     assert_eq!(app.settings_page(), SettingsPage::Shortcuts);
-    assert!(matches!(app.dialog, Some(Dialog::Settings { .. })));
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     key(&mut app, Key::Escape);
     app.handle(Input::Key(app.settings.bindings[index].key));
     assert_eq!(app.settings_page(), SettingsPage::General);
-    assert!(matches!(app.dialog, Some(Dialog::Settings { .. })));
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     saved(&mut app);
     drop(app);
     let app = App::new(&directory.0).unwrap();
@@ -933,32 +993,35 @@ fn settings_editors_keep_context_and_mouse_return_when_the_window_shrinks() {
     let mut dialogs = Vec::new();
     app.open_settings_page(SettingsPage::Profiles);
     key(&mut app, Key::Insert);
-    dialogs.push(app.dialog.clone().unwrap());
+    dialogs.push(app.view.dialog.clone().unwrap());
     submit(&mut app, "Second profile");
     key(&mut app, Key::Delete);
-    dialogs.push(app.dialog.clone().unwrap());
+    dialogs.push(app.view.dialog.clone().unwrap());
     key(&mut app, Key::Escape);
     key(&mut app, Key::F(1));
-    dialogs.push(app.dialog.clone().unwrap());
+    dialogs.push(app.view.dialog.clone().unwrap());
     key(&mut app, Key::Escape);
     app.open_settings_page(SettingsPage::Shortcuts);
     click_row(&mut app, 1);
-    dialogs.push(app.dialog.clone().unwrap());
+    dialogs.push(app.view.dialog.clone().unwrap());
     for dialog in dialogs {
         for (width, height) in [(120, 50), (70, 30), (44, 22), (20, 8)] {
-            app.dialog = Some(dialog.clone());
+            app.view.dialog = Some(dialog.clone());
             rendered(&mut app, width, height);
             assert!(
-                app.hits
+                app.view
+                    .hits
                     .iter()
                     .all(|hit| hit.area.right() <= width && hit.area.bottom() <= height)
             );
             assert!(
-                !app.hits
+                !app.view
+                    .hits
                     .iter()
                     .any(|hit| matches!(hit.target, Target::SettingsPage(_)))
             );
             let close = app
+                .view
                 .hits
                 .iter()
                 .find(|hit| hit.enabled && matches!(hit.target, Target::CloseDialog))
@@ -969,7 +1032,7 @@ fn settings_editors_keep_context_and_mouse_return_when_the_window_shrinks() {
                 y: close.y,
                 double: false,
             });
-            assert!(matches!(app.dialog, Some(Dialog::Settings { .. })));
+            assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
         }
     }
 }
@@ -1005,7 +1068,10 @@ fn profiles_clone_autosave_switch_rename_delete_and_survive_restart() {
     click_row(&mut app, 1);
     assert_eq!(app.settings.active_profile, id);
     key(&mut app, Key::Delete);
-    assert!(matches!(app.dialog, Some(Dialog::ConfirmSettings { .. })));
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::ConfirmSettings { .. })
+    ));
     key(&mut app, Key::Escape);
     assert_eq!(app.settings.profiles.len(), 2);
     saved(&mut app);
@@ -1037,7 +1103,7 @@ fn palettes_crud_validate_colors_roundtrip_and_preserve_references() {
     ctrl(&mut app, 'a');
     app.handle(Input::Text("invalid".into()));
     key(&mut app, Key::Enter);
-    assert!(app.notice_error);
+    assert!(app.view.notice_error);
     assert_eq!(
         app.settings.palettes.last().unwrap().color("background"),
         original
@@ -1102,15 +1168,15 @@ fn palette_import_failure_and_export_collision_keep_existing_data() {
     let palettes = app.settings.palettes.clone();
     ctrl(&mut app, 'i');
     submit(&mut app, path.to_str().unwrap());
-    until(&mut app, |app| app.notice_error);
+    until(&mut app, |app| app.view.notice_error);
     assert_eq!(app.settings.palettes, palettes);
     assert_eq!(fs::read(&path).unwrap(), b"keep this file");
     ctrl(&mut app, 'e');
     submit(&mut app, path.to_str().unwrap());
-    until(&mut app, |app| app.notice_error);
+    until(&mut app, |app| app.view.notice_error);
     assert_eq!(fs::read(&path).unwrap(), b"keep this file");
     assert_eq!(app.settings.palettes, palettes);
-    assert!(matches!(app.dialog, Some(Dialog::Settings { .. })));
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
 }
 
 #[test]
@@ -1180,7 +1246,7 @@ fn geometry_changes_rendered_borders_and_help_keeps_context() {
     assert_ne!(terminal.backend().buffer()[(0, 0)].symbol(), "┌");
     select_row(&mut app, 1);
     key(&mut app, Key::F(1));
-    assert!(matches!(app.dialog, Some(Dialog::SettingsHelp { .. })));
+    assert!(matches!(app.view.dialog, Some(Dialog::SettingsHelp { .. })));
     click(&mut app, |target| matches!(target, Target::CloseDialog));
     assert_eq!(app.settings_page(), SettingsPage::Typography);
     click_row(&mut app, 1);
@@ -1192,7 +1258,7 @@ fn geometry_changes_rendered_borders_and_help_keeps_context() {
     ctrl(&mut app, 'a');
     app.handle(Input::Text("1000".into()));
     key(&mut app, Key::Enter);
-    assert!(app.notice_error);
+    assert!(app.view.notice_error);
     assert_eq!(app.settings.appearance.font_size, 32);
     key(&mut app, Key::Escape);
     assert_eq!(app.settings_page(), SettingsPage::Typography);

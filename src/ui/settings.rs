@@ -32,8 +32,8 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         inner.width.saturating_sub(menu_width + 1),
         body_height,
     );
-    app.settings_view.menu_area = menu;
-    app.settings_view.subtab_area = Rect::default();
+    app.view.settings.menu_area = menu;
+    app.view.settings.subtab_area = Rect::default();
     frame.render_widget(
         Paragraph::new(app.text("Sections", "Разделы")).style(
             palette
@@ -45,7 +45,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     );
     let page_index = SettingsPage::SECTIONS
         .iter()
-        .position(|page| *page == app.settings_view.page.section())
+        .position(|page| *page == app.view.settings.page.section())
         .unwrap_or(0);
     let menu_offset = visible_offset(
         0,
@@ -62,7 +62,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         if y >= menu.bottom() {
             break;
         }
-        let selected = app.settings_view.page.section() == page;
+        let selected = app.view.settings.page.section() == page;
         let row = Rect::new(menu.x, y, menu.width, 1);
         let style = if selected {
             palette
@@ -78,7 +78,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         frame.render_widget(
             Paragraph::new(format!(
                 "{} {}",
-                if selected && app.settings_view.focus == SettingsFocus::Menu {
+                if selected && app.view.settings.focus == SettingsFocus::Menu {
                     ">"
                 } else {
                     " "
@@ -88,7 +88,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             .style(style),
             row,
         );
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: row,
             target: Target::SettingsPage(page),
             enabled: true,
@@ -106,28 +106,28 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             ),
         );
     }
-    if app.settings_view.page.section() == SettingsPage::Themes {
+    if app.view.settings.page.section() == SettingsPage::Themes {
         let height = theme_tabs(frame, app, content, palette);
-        app.settings_view.subtab_area = Rect::new(content.x, content.y, content.width, height);
+        app.view.settings.subtab_area = Rect::new(content.x, content.y, content.width, height);
         let reserved = (height + 1).min(content.height);
         content.y += reserved;
         content.height -= reserved;
     }
-    app.settings_view.parameters_area = content;
+    app.view.settings.parameters_area = content;
     let rows = app.settings_rows();
-    app.settings_view.selected = app.settings_view.selected.min(rows.len().saturating_sub(1));
+    app.view.settings.selected = app.view.settings.selected.min(rows.len().saturating_sub(1));
     let capacity = (content.height.saturating_sub(2) / 4).max(1) as usize;
-    app.settings_view.offset = visible_offset(
-        app.settings_view.offset,
-        app.settings_view.selected,
+    app.view.settings.offset = visible_offset(
+        app.view.settings.offset,
+        app.view.settings.selected,
         capacity,
         rows.len(),
     );
     frame.render_widget(
         Paragraph::new(format!(
             "{}  {}/{}",
-            app.settings_view.page.tab_name(app.settings.language),
-            app.settings_view.selected + 1,
+            app.view.settings.page.tab_name(app.settings.language),
+            app.view.settings.selected + 1,
             rows.len()
         ))
         .style(
@@ -141,26 +141,26 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     for (index, item) in rows
         .iter()
         .enumerate()
-        .skip(app.settings_view.offset)
+        .skip(app.view.settings.offset)
         .take(capacity)
     {
         let y = content
             .y
-            .saturating_add(2 + ((index - app.settings_view.offset) * 4) as u16);
+            .saturating_add(2 + ((index - app.view.settings.offset) * 4) as u16);
         if y >= content.bottom() {
             break;
         }
         let height = 4.min(content.bottom() - y);
         let row = Rect::new(content.x, y, content.width, height);
-        let selected = app.settings_view.selected == index
-            && app.settings_view.focus == SettingsFocus::Parameters;
+        let selected = app.view.settings.selected == index
+            && app.view.settings.focus == SettingsFocus::Parameters;
         let style = if selected || (item.enabled && app.hovered(row)) {
             palette.text().bg(palette.selection)
         } else {
             palette.text()
         };
         frame.render_widget(Paragraph::new(" ").style(style), row);
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: row,
             target: Target::SettingSelect(index),
             enabled: true,
@@ -262,11 +262,13 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     );
     if footer.height > 0 {
         frame.render_widget(
-            Paragraph::new(app.notice.clone()).style(palette.text().fg(if app.notice_error {
-                palette.error
-            } else {
-                palette.muted
-            })),
+            Paragraph::new(app.view.notice.clone()).style(palette.text().fg(
+                if app.view.notice_error {
+                    palette.error
+                } else {
+                    palette.muted
+                },
+            )),
             Rect::new(footer.x, footer.y, footer.width, 1),
         );
     }
@@ -278,7 +280,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             )
             .to_owned();
         if matches!(
-            app.settings_view.page,
+            app.view.settings.page,
             SettingsPage::Profiles | SettingsPage::Themes | SettingsPage::Palettes
         ) {
             legend.push_str(app.text(
@@ -286,7 +288,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
                 "\nIns: создать  F3: имя  Del: удалить",
             ));
         }
-        if app.settings_view.page == SettingsPage::Palettes {
+        if app.view.settings.page == SettingsPage::Palettes {
             legend.push_str(app.text(
                 "  Ctrl+I: import  Ctrl+E: export",
                 "  Ctrl+I: импорт  Ctrl+E: экспорт",
@@ -305,7 +307,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         );
     }
     if footer.height >= 2 {
-        let selected = app.settings_view.selected;
+        let selected = app.view.settings.selected;
         let enabled = rows.get(selected).is_some_and(|row| row.enabled);
         let adjustable = rows
             .get(selected)
@@ -372,7 +374,7 @@ fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         .find(|profile| profile.id == app.settings.active_profile)
         .map(|profile| profile.name.clone())
         .unwrap_or_default();
-    let page = app.settings_view.page;
+    let page = app.view.settings.page;
     let mut entries = vec![
         ("Almavorn".to_owned(), Target::CloseDialog),
         (
@@ -417,7 +419,7 @@ fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
             style = style.bg(palette.selection);
         }
         frame.render_widget(Paragraph::new(label).style(style), row);
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: row,
             target,
             enabled: true,
@@ -449,7 +451,7 @@ fn theme_tabs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) ->
             true,
             palette,
         );
-        if page == app.settings_view.page {
+        if page == app.view.settings.page {
             frame.render_widget(
                 Paragraph::new(format!("│{label}│")).style(
                     palette
@@ -499,7 +501,7 @@ fn volume(
             .gauge_style(style.fg(palette.accent).bg(palette.selection)),
         scale,
     );
-    app.hits.push(Hit {
+    app.view.hits.push(Hit {
         area: scale,
         target: Target::SettingsVolume(index, scale),
         enabled: true,
@@ -511,7 +513,7 @@ fn volume(
             .style(style.fg(palette.text)),
         percentage,
     );
-    app.hits.push(Hit {
+    app.view.hits.push(Hit {
         area: percentage,
         target: Target::SettingAdjust(index, 1),
         enabled: true,

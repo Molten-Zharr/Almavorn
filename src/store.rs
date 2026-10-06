@@ -1,5 +1,6 @@
-use crate::model::{Entry, ImportedTrack, Mode, Playlist, PlaylistKind, Settings, Track};
-use anyhow::{Context, Result, bail, ensure};
+use crate::errors::AppError;
+use crate::model::{ImportedTrack, Mode, Playlist, PlaylistKind, Settings};
+use anyhow::{Context, Result, ensure};
 use rusqlite::{
     Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, params,
 };
@@ -15,6 +16,8 @@ use std::{
 };
 
 mod migration;
+mod queries;
+use queries::{playlist_access, read_playlists, snapshot};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedEntry {
@@ -144,7 +147,7 @@ impl Store {
         let writer = self.writer.clone();
         let _guard = writer
             .lock()
-            .map_err(|_| anyhow::anyhow!("Database writer failed"))?;
+            .map_err(|_| anyhow::anyhow!(AppError::DatabaseWriterFailed))?;
         let result = (|| {
             let transaction =
                 Transaction::new_unchecked(self.connection()?, TransactionBehavior::Immediate)?;
@@ -154,15 +157,7 @@ impl Store {
         })();
         result.map_err(|error: anyhow::Error| {
             if transaction_conflict(&error) {
-                error.context(
-                    "Library changed concurrently; no changes were saved. Repeat the action",
-                )
-            } else if error.chain().any(|cause| {
-                cause
-                    .to_string()
-                    .contains("UNIQUE constraint failed: playlists.mode, playlists.name_fold")
-            }) {
-                error.context("Playlist with this name already exists")
+                error.context(AppError::LibraryConflict)
             } else {
                 error
             }
@@ -181,22 +176,21 @@ impl Store {
     {
         let change = self.write(|transaction| {
             let scope = if let Some(id) = playlist_id {
-                let playlist = read_playlists(transaction)?
-                    .into_iter()
-                    .find(|playlist| playlist.id == id)
-                    .context("Playlist no longer exists")?;
+                let (playlist_mode, playlist_kind) = playlist_access(transaction, id)?;
                 ensure!(
-                    playlist.can_edit(unlocked),
-                    "Enable Order editing before changing this playlist"
+                    playlist_mode != Mode::Order
+                        || playlist_kind == PlaylistKind::SortingDesk
+                        || unlocked,
+                    AppError::OrderProtected
                 );
                 // The writer owns the transaction until commit; protected-state
                 // checks and the corresponding changes observe the same snapshot.
                 transaction
                     .execute("UPDATE playlists SET revision=revision+1 WHERE id=?1", [id])?;
-                if playlist.kind == PlaylistKind::SortingDesk {
+                if playlist_kind == PlaylistKind::SortingDesk {
                     "desk"
                 } else {
-                    playlist.mode.key()
+                    playlist_mode.key()
                 }
             } else {
                 mode.key()
@@ -217,6 +211,7 @@ impl Store {
     pub fn create_playlist(&mut self, name: &str, mode: Mode) -> Result<Change> {
         let name = playlist_name(name)?;
         self.mutate(None, mode, true, |connection| {
+            unique_playlist_name(connection, mode.key(), name, None)?;
             lock_ordering(connection, mode.key())?;
             connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3))", params![name, name.to_lowercase(), mode.key()])?;
             Ok(())
@@ -226,11 +221,13 @@ impl Store {
     pub fn rename_playlist(&mut self, id: i64, name: &str, unlocked: bool) -> Result<Change> {
         let name = playlist_name(name)?;
         self.mutate(Some(id), Mode::Order, unlocked, |connection| {
-            let kind: String =
-                connection.query_row("SELECT kind FROM playlists WHERE id=?1", [id], |row| {
-                    row.get(0)
-                })?;
-            ensure!(kind == "normal", "The sorting desk cannot be renamed");
+            let (kind, mode): (String, String) = connection.query_row(
+                "SELECT kind,mode FROM playlists WHERE id=?1",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            ensure!(kind == "normal", AppError::DeskRenameForbidden);
+            unique_playlist_name(connection, &mode, name, Some(id))?;
             connection.execute(
                 "UPDATE playlists SET name=?1,name_fold=?2 WHERE id=?3",
                 params![name, name.to_lowercase(), id],
@@ -246,10 +243,10 @@ impl Store {
                 [id],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )?;
-            ensure!(kind == "normal", "The sorting desk cannot be deleted");
+            ensure!(kind == "normal", AppError::DeskRemovalForbidden);
             ensure!(
                 name == typed_name,
-                "Enter the exact playlist name to confirm removal"
+                AppError::PlaylistRemovalConfirmationRequired
             );
             let mode: String =
                 connection.query_row("SELECT mode FROM playlists WHERE id=?1", [id], |row| {
@@ -270,7 +267,7 @@ impl Store {
     ) -> Result<Change> {
         self.mutate(Some(playlist_id), Mode::Order, unlocked, |connection| {
             for track in tracks {
-                let path = track.path.to_str().context("File path is not valid Unicode")?;
+                let path = track.path.to_str().context(AppError::InvalidPathEncoding)?;
                 connection.execute("INSERT INTO tracks(path,title,artist,album,duration_ms,tags) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(path) DO NOTHING", params![path, track.title, track.artist, track.album, track.duration_ms.min(i64::MAX as u64) as i64, track.tags])?;
                 let track_id: i64 = connection.query_row("SELECT id FROM tracks WHERE path=?1", [path], |row| row.get(0))?;
                 append_track(connection, playlist_id, track_id)?;
@@ -300,7 +297,7 @@ impl Store {
                     "DELETE FROM entries WHERE id=?1 AND playlist_id=?2",
                     params![entry, playlist]
                 )? == 1,
-                "Track no longer exists in this playlist"
+                AppError::EntryMissing
             );
             // Метаданные композиции остаются в базе даже после удаления из списка.
             Ok(())
@@ -330,7 +327,7 @@ impl Store {
     pub fn move_playlist(&mut self, id: i64, direction: i64, unlocked: bool) -> Result<Change> {
         self.mutate(Some(id), Mode::Order, unlocked, |connection| {
             let (mode, kind, position): (String, String, i64) = connection.query_row("SELECT mode,kind,position FROM playlists WHERE id=?1", [id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
-            ensure!(kind == "normal", "The sorting desk has a fixed position");
+            ensure!(kind == "normal", AppError::DeskPositionFixed);
             lock_ordering(connection, &mode)?;
             let sql = if direction < 0 { "SELECT id,position FROM playlists WHERE mode=?1 AND kind='normal' AND position<?2 ORDER BY position DESC LIMIT 1" } else { "SELECT id,position FROM playlists WHERE mode=?1 AND kind='normal' AND position>?2 ORDER BY position LIMIT 1" };
             if let Some((other, other_position)) = connection.query_row(sql, params![mode, position], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))).optional()? {
@@ -350,27 +347,17 @@ impl Store {
     ) -> Result<()> {
         let title = checked_name(title)?;
         self.write(|transaction| {
-            let library = read_playlists(transaction)?;
-            let selected = library
-                .iter()
-                .find(|value| value.id == playlist)
-                .context("Playlist no longer exists")?;
-            ensure!(
-                selected.can_edit(unlocked),
-                "Enable Order editing before renaming tracks"
-            );
-            // Общий псевдоним затрагивает и другие плейлисты Порядка: они тоже должны быть разблокированы.
-            ensure!(
-                unlocked
-                    || !library.iter().any(|value| value.mode == Mode::Order
-                        && value.kind == PlaylistKind::Normal
-                        && value.entries.iter().any(|entry| entry.track.id == id)),
-                "Track is also used by a protected Order playlist"
-            );
-            ensure!(
-                selected.entries.iter().any(|entry| entry.track.id == id),
-                "Track is not in this playlist"
-            );
+            let (mode, kind) = playlist_access(transaction, playlist)?;
+            ensure!(mode != Mode::Order || kind == PlaylistKind::SortingDesk || unlocked,
+                AppError::TrackRenameProtected);
+            let protected: bool = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM entries e JOIN playlists p ON p.id=e.playlist_id WHERE e.track_id=?1 AND p.mode='order' AND p.kind='normal')",
+                [id], |row| row.get(0))?;
+            ensure!(unlocked || !protected, AppError::SharedTrackProtected);
+            let belongs: bool = transaction.query_row(
+                "SELECT EXISTS(SELECT 1 FROM entries WHERE playlist_id=?1 AND track_id=?2)",
+                params![playlist, id], |row| row.get(0))?;
+            ensure!(belongs, AppError::TrackNotInPlaylist);
             transaction.execute(
                 "UPDATE playlists SET revision=revision+1 WHERE id=?1",
                 [playlist],
@@ -394,7 +381,7 @@ impl Store {
         );
         ensure!(
             scope != "desk" || replacement.playlists.len() == 1,
-            "The sorting desk cannot be deleted"
+            AppError::DeskRemovalForbidden
         );
         ensure!(
             replacement.playlists.iter().all(|playlist| {
@@ -410,7 +397,7 @@ impl Store {
             lock_ordering(transaction, if scope == "desk" { "order" } else { scope })?;
             ensure!(
                 &snapshot(transaction, scope)? == expected,
-                "Playlist changed concurrently; undo is no longer safe"
+                AppError::UndoConflict
             );
             let ids: Vec<i64> = expected
                 .playlists
@@ -486,7 +473,7 @@ fn checked_name(name: &str) -> Result<&str> {
     let name = name.trim();
     ensure!(
         !name.is_empty() && name.chars().count() <= 160 && !name.chars().any(char::is_control),
-        "Name must contain 1–160 printable characters"
+        AppError::InvalidTrackName
     );
     Ok(name)
 }
@@ -498,9 +485,25 @@ fn playlist_name(name: &str) -> Result<&str> {
             name.to_lowercase().as_str(),
             "sorting desk" | "сортировочный стол"
         ),
-        "This name is reserved for the sorting desk"
+        AppError::ReservedPlaylistName
     );
     Ok(name)
+}
+
+fn unique_playlist_name(
+    connection: &Connection,
+    mode: &str,
+    name: &str,
+    except: Option<i64>,
+) -> Result<()> {
+    // Called inside an IMMEDIATE transaction: another writer cannot race this
+    // check. Domain errors do not depend on SQLite's diagnostic wording.
+    let taken: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM playlists WHERE mode=?1 AND name_fold=?2 AND (?3 IS NULL OR id!=?3))",
+        params![mode, name.to_lowercase(), except], |row| row.get(0),
+    )?;
+    ensure!(!taken, AppError::PlaylistNameConflict);
+    Ok(())
 }
 
 fn append_track(connection: &Connection, playlist: i64, track: i64) -> Result<()> {
@@ -508,69 +511,10 @@ fn append_track(connection: &Connection, playlist: i64, track: i64) -> Result<()
     // unnoticed while rename_track checks whether the shared track is protected.
     ensure!(
         connection.execute("UPDATE tracks SET revision=revision+1 WHERE id=?1", [track])? == 1,
-        "Track no longer exists"
+        AppError::TrackMissing
     );
     connection.execute("INSERT INTO entries(playlist_id,track_id,position) SELECT ?1,?2,COALESCE(MAX(position),-1)+1 FROM entries WHERE playlist_id=?1 ON CONFLICT(playlist_id,track_id) DO NOTHING", params![playlist, track])?;
     Ok(())
-}
-
-fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
-    let mut statement = connection
-        .prepare("SELECT id,name,mode,kind,position FROM playlists ORDER BY mode,position,id")?;
-    let rows = statement.query_map([], |row| {
-        Ok((
-            row.get::<_, i64>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, String>(3)?,
-            row.get::<_, i64>(4)?,
-        ))
-    })?;
-    let mut playlists = Vec::new();
-    for row in rows {
-        let (id, name, mode, kind, position) = row?;
-        let mode = match mode.as_str() {
-            "order" => Mode::Order,
-            "chaos" => Mode::Chaos,
-            _ => bail!("Unknown playlist mode"),
-        };
-        let kind = match kind.as_str() {
-            "normal" => PlaylistKind::Normal,
-            "desk" => PlaylistKind::SortingDesk,
-            _ => bail!("Unknown playlist type"),
-        };
-        let mut entries_statement = connection.prepare("SELECT e.id,e.position,t.id,t.path,t.title,t.artist,t.album,t.duration_ms,t.tags FROM entries e JOIN tracks t ON t.id=e.track_id WHERE e.playlist_id=?1 ORDER BY e.position,e.id")?;
-        let entries = entries_statement
-            .query_map([id], |row| {
-                Ok(Entry {
-                    id: row.get(0)?,
-                    position: row.get(1)?,
-                    track: Track {
-                        id: row.get(2)?,
-                        path: PathBuf::from(row.get::<_, String>(3)?),
-                        title: row.get(4)?,
-                        artist: row.get(5)?,
-                        album: row.get(6)?,
-                        duration_ms: row.get::<_, i64>(7)? as u64,
-                        tags: row.get(8)?,
-                    },
-                })
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        playlists.push(Playlist {
-            id,
-            name,
-            mode,
-            kind,
-            position,
-            entries,
-        });
-    }
-    Ok(playlists)
-}
-
-fn snapshot(connection: &Connection, scope: &str) -> Result<Snapshot> {
-    Ok(Snapshot::from_library(&read_playlists(connection)?, scope))
 }
 
 impl Snapshot {

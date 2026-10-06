@@ -1,17 +1,11 @@
-use super::{theme::Palette, widgets::button_shortcut};
+use super::{buttons::command_button, theme::Palette};
 use crate::{
-    app::{App, Hit, Target},
+    app::{App, Target},
     input::Action,
     model::Mode,
     workspace::{Control, Panel},
 };
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::Modifier,
-    text::{Line, Span},
-    widgets::Paragraph,
-};
+use ratatui::{Frame, layout::Rect};
 
 pub(super) struct Group {
     pub panel: Panel,
@@ -32,12 +26,7 @@ impl Group {
     }
 }
 
-pub(super) fn command_width(app: &App, label: &str, target: &Target) -> u16 {
-    (Span::raw(label).width()
-        + button_shortcut(app, target).map_or(0, |key| Span::raw(key).width() + 3)
-        + 2)
-    .min(usize::from(u16::MAX)) as u16
-}
+pub(super) use super::buttons::button_width as command_width;
 
 fn band(target: &Target) -> usize {
     match target {
@@ -60,10 +49,28 @@ fn cells(app: &App, width: u16, group: &Group) -> Vec<(usize, Rect)> {
     if width == 0 {
         return Vec::new();
     }
+    if app.view.workspace.bounds.height < 40 {
+        // Pack by actual text width in short windows instead of reserving a grid
+        // cell and blank band separators for every command.
+        let mut cells = Vec::with_capacity(group.entries.len());
+        let (mut x, mut y) = (0u16, 0u16);
+        for (index, (label, target, _)) in group.entries.iter().enumerate() {
+            let size = command_width(app, label, target).min(width);
+            if x > 0 && x.saturating_add(size) > width {
+                x = 0;
+                y = y.saturating_add(1);
+            }
+            cells.push((index, Rect::new(x, y, size, 1)));
+            x = x.saturating_add(size).saturating_add(1);
+        }
+        return cells;
+    }
     let margin = u16::from(width >= 36);
     let available = width.saturating_sub(margin * 2);
     let gap = 2u16;
-    let separation = u16::from(app.workspace.bounds.width >= 80);
+    // Extra spacing is useful only when both dimensions leave room for it.
+    let separation =
+        u16::from(app.view.workspace.bounds.width >= 100 && app.view.workspace.bounds.height >= 40);
     let mut bands: [Vec<usize>; 3] = Default::default();
     for (index, (_, target, _)) in group.entries.iter().enumerate() {
         bands[band(target)].push(index);
@@ -174,7 +181,7 @@ pub(super) fn commands(app: &App) -> Vec<Group> {
         })
         .collect();
     for (action, en, ru, checked) in [
-        (Action::ToggleEdit, "Edit", "Правка", app.editing),
+        (Action::ToggleEdit, "Edit", "Правка", app.view.editing),
         (
             Action::ToggleDesk,
             "Sorting desk",
@@ -352,66 +359,4 @@ pub(super) fn contents(
             palette,
         );
     }
-}
-
-fn command_button(
-    frame: &mut Frame,
-    app: &mut App,
-    area: Rect,
-    label: &str,
-    target: Target,
-    enabled: bool,
-    palette: Palette,
-) {
-    let active = match target {
-        Target::Mode(mode) => app.settings.mode == mode,
-        Target::Action(Action::ToggleEdit) => app.editing,
-        Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
-        _ => false,
-    };
-    let hovered = app.hovered(area);
-    let mut style = palette.text();
-    if hovered {
-        style = style.bg(palette.selection).add_modifier(Modifier::BOLD);
-    } else if active {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-    if !enabled {
-        style = style.fg(palette.muted);
-    }
-    let mut content = vec![Span::styled(
-        if active || hovered { "│" } else { " " },
-        style.fg(palette.accent),
-    )];
-    if let Some(shortcut) = button_shortcut(app, &target) {
-        let key_style = style.fg(if enabled {
-            palette.button_text
-        } else {
-            palette.muted
-        });
-        content.push(Span::styled("[", key_style.fg(palette.accent)));
-        content.push(Span::styled(
-            shortcut,
-            key_style.add_modifier(Modifier::BOLD),
-        ));
-        content.push(Span::styled("]", key_style.fg(palette.accent)));
-        content.push(Span::styled(" ", style));
-    }
-    if let Some((state, text)) = label
-        .strip_prefix('[')
-        .and_then(|label| label.split_once(']'))
-    {
-        content.push(Span::styled("[", style.fg(palette.accent)));
-        content.push(Span::styled(state, style));
-        content.push(Span::styled("]", style.fg(palette.accent)));
-        content.push(Span::styled(text, style));
-    } else {
-        content.push(Span::styled(label, style));
-    }
-    frame.render_widget(Paragraph::new(Line::from(content)).style(style), area);
-    app.hits.push(Hit {
-        area,
-        target,
-        enabled,
-    });
 }

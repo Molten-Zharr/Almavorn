@@ -1,4 +1,5 @@
 use super::{App, Browser, SettingsCatalog, SettingsEdit, bounded, database::DatabaseOutcome};
+use crate::errors::AppError;
 use crate::model::{Language, Playlist, Track};
 use anyhow::{Context, Result};
 
@@ -101,7 +102,7 @@ impl Dialog {
 impl App {
     pub(super) fn text_dialog(&mut self, purpose: TextPurpose, text: String) {
         let selected_all = !text.is_empty();
-        self.dialog = Some(Dialog::Text(TextDialog {
+        self.view.dialog = Some(Dialog::Text(TextDialog {
             purpose,
             text,
             keyboard: self.settings.language,
@@ -112,11 +113,11 @@ impl App {
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
         let transfer_length = self.transfer_destinations().len();
-        if matches!(self.dialog, Some(Dialog::Settings { .. })) {
+        if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
             self.settings_scroll(i64::from(direction));
             return;
         }
-        match &mut self.dialog {
+        match &mut self.view.dialog {
             Some(Dialog::Panels { selected, expanded }) => {
                 *selected = bounded(
                     *selected,
@@ -129,8 +130,8 @@ impl App {
                     bounded(browser.selected, direction as i64, browser.entries.len())
             }
             Some(Dialog::CaptureBinding { .. }) => {
-                self.settings_view.binding_offset = bounded(
-                    self.settings_view.binding_offset,
+                self.view.settings.binding_offset = bounded(
+                    self.view.settings.binding_offset,
                     i64::from(direction) * 8,
                     crate::input::Key::shortcut_choices().count(),
                 );
@@ -148,25 +149,27 @@ impl App {
     }
 
     pub fn transfer_destinations(&self) -> Vec<&Playlist> {
-        self.playlists
+        self.library
+            .playlists
             .iter()
             .filter(|playlist| {
-                Some(playlist.id) != self.selected_playlist && playlist.can_edit(self.editing)
+                Some(playlist.id) != self.library.selected_playlist
+                    && playlist.can_edit(self.view.editing)
             })
             .collect()
     }
 
     pub(super) fn submit(&mut self) -> Result<()> {
-        match self.dialog.take() {
+        match self.view.dialog.take() {
             Some(Dialog::Panels { selected, expanded }) => {
-                self.dialog = Some(Dialog::Panels { selected, expanded });
+                self.view.dialog = Some(Dialog::Panels { selected, expanded });
                 self.activate_panel_row(selected, false)?;
             }
             Some(Dialog::Text(dialog)) => {
                 let recovery = Some(Dialog::Text(dialog.clone()));
                 let text = dialog.text.clone();
                 let mode = self.settings.mode;
-                let unlocked = self.editing;
+                let unlocked = self.view.editing;
                 let result = match &dialog.purpose {
                     TextPurpose::Create => self.start_database(recovery, move |store| {
                         Ok(DatabaseOutcome::Created(
@@ -190,8 +193,8 @@ impl App {
                     }
                     TextPurpose::DeletePlaylist(id, expected) => {
                         if &dialog.text != expected {
-                            self.dialog = Some(Dialog::Text(dialog));
-                            anyhow::bail!("Enter the exact playlist name");
+                            self.view.dialog = Some(Dialog::Text(dialog));
+                            anyhow::bail!(AppError::PlaylistConfirmationRequired);
                         }
                         let id = *id;
                         self.start_database(recovery, move |store| {
@@ -201,8 +204,8 @@ impl App {
                         })
                     }
                     TextPurpose::Search => {
-                        self.query = dialog.text.clone();
-                        self.track_offset = 0;
+                        self.library.query = dialog.text.clone();
+                        self.view.track_offset = 0;
                         self.refresh()
                     }
                     TextPurpose::Accent => {
@@ -210,7 +213,7 @@ impl App {
                         let color = u32::from_str_radix(value, 16)
                             .ok()
                             .filter(|_| value.len() == 6)
-                            .context("Use a six-digit color, for example E89E4A");
+                            .context(AppError::InvalidLegacyColor);
                         color.and_then(|color| {
                             self.settings.themes[self.settings.mode.index()].accent =
                                 [(color >> 16) as u8, (color >> 8) as u8, color as u8];
@@ -222,7 +225,7 @@ impl App {
                     }
                 };
                 if let Err(error) = result {
-                    self.dialog = Some(Dialog::Text(dialog));
+                    self.view.dialog = Some(Dialog::Text(dialog));
                     return Err(error);
                 }
             }
@@ -236,13 +239,13 @@ impl App {
                     entry,
                     title,
                 };
-                let unlocked = self.editing;
+                let unlocked = self.view.editing;
                 if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
                     Ok(DatabaseOutcome::Changed(
                         store.remove_entry(playlist, entry, unlocked)?,
                     ))
                 }) {
-                    self.dialog = Some(recovery);
+                    self.view.dialog = Some(recovery);
                     return Err(error);
                 }
             }
@@ -256,7 +259,7 @@ impl App {
                     ids: ids.clone(),
                     selected,
                 };
-                let unlocked = self.editing;
+                let unlocked = self.view.editing;
                 if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
                     Ok(DatabaseOutcome::Changed(store.copy_tracks(
                         destination,
@@ -264,18 +267,18 @@ impl App {
                         unlocked,
                     )?))
                 }) {
-                    self.dialog = Some(recovery);
+                    self.view.dialog = Some(recovery);
                     return Err(error);
                 }
             }
             Some(Dialog::Browser(browser)) => {
-                self.dialog = Some(Dialog::Browser(browser));
+                self.view.dialog = Some(Dialog::Browser(browser));
                 self.browser_open()?;
             }
             Some(Dialog::Settings { selected }) => self.setting(selected)?,
             Some(Dialog::ConfirmSettings { catalog, id, name }) => {
                 if let Err(error) = self.delete_settings_item(catalog, &id) {
-                    self.dialog = Some(Dialog::ConfirmSettings { catalog, id, name });
+                    self.view.dialog = Some(Dialog::ConfirmSettings { catalog, id, name });
                     return Err(error);
                 }
             }

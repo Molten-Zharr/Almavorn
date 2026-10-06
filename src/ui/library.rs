@@ -15,7 +15,7 @@ use ratatui::{
 };
 
 pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    app.playlist_area = area;
+    app.view.playlist_area = area;
     let inner = area;
     let items: Vec<(i64, String, usize)> = app
         .visible_playlists()
@@ -30,10 +30,10 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .collect();
     let selected = items
         .iter()
-        .position(|(id, _, _)| Some(*id) == app.selected_playlist)
+        .position(|(id, _, _)| Some(*id) == app.library.selected_playlist)
         .unwrap_or(0);
-    app.playlist_offset = visible_offset(
-        app.playlist_offset,
+    app.view.playlist_offset = visible_offset(
+        app.view.playlist_offset,
         selected,
         inner.height as usize,
         items.len(),
@@ -48,12 +48,12 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
     }
     for (row, (id, name, count)) in items
         .iter()
-        .skip(app.playlist_offset)
+        .skip(app.view.playlist_offset)
         .take(inner.height as usize)
         .enumerate()
     {
         let rect = Rect::new(inner.x, inner.y + row as u16, inner.width, 1);
-        let selected = Some(*id) == app.selected_playlist;
+        let selected = Some(*id) == app.library.selected_playlist;
         let style = if selected {
             palette
                 .text()
@@ -62,7 +62,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         } else {
             palette.text()
         };
-        let playing = app.playback_active() && app.playing_playlist == Some(*id);
+        let playing = app.playback_active() && app.playback.playing_playlist == Some(*id);
         let mut content = Vec::new();
         if playing {
             content.push(Span::styled(
@@ -88,7 +88,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         }
         content.push(Span::styled(format!("{name} · {count}"), style));
         frame.render_widget(Paragraph::new(Line::from(content)).style(style), rect);
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: rect,
             target: Target::Playlist(*id),
             enabled: true,
@@ -97,7 +97,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
 }
 
 pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    app.tracks_area = area;
+    app.view.tracks_area = area;
     let inner = area;
     if inner.height < 2 {
         return;
@@ -108,12 +108,16 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         .unwrap_or(app.text("Tracks", "Композиции"));
     let title = format!(
         "{name} · {} {}{}",
-        app.sort.name(app.settings.language),
-        if app.sort_descending { "↓" } else { "↑" },
-        if app.query.is_empty() {
+        app.library.sort.name(app.settings.language),
+        if app.library.sort_descending {
+            "↓"
+        } else {
+            "↑"
+        },
+        if app.library.query.is_empty() {
             String::new()
         } else {
-            format!(" · {}", app.query)
+            format!(" · {}", app.library.query)
         }
     );
     frame.render_widget(
@@ -125,9 +129,9 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     let entries = app.rows();
     let selected = entries
         .iter()
-        .position(|entry| Some(entry.id) == app.selected_entry)
+        .position(|entry| Some(entry.id) == app.library.selected_entry)
         .unwrap_or(0);
-    let offset = visible_offset(app.track_offset, selected, capacity, entries.len());
+    let offset = visible_offset(app.view.track_offset, selected, capacity, entries.len());
     let ids: Vec<i64> = entries
         .iter()
         .skip(offset)
@@ -139,11 +143,11 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         .skip(offset)
         .take(capacity)
         .map(|entry| {
-            let selected = Some(entry.id) == app.selected_entry;
+            let selected = Some(entry.id) == app.library.selected_entry;
             let playing = app.playback_active()
-                && app.playing_playlist == app.selected_playlist
-                && app.playing_entry == Some(entry.id);
-            let mark = if app.marked.contains(&entry.id) {
+                && app.playback.playing_playlist == app.library.selected_playlist
+                && app.playback.playing_entry == Some(entry.id);
+            let mark = if app.library.marked.contains(&entry.id) {
                 "[x]"
             } else {
                 "[ ]"
@@ -189,7 +193,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         })
         .collect();
     let empty = entries.is_empty();
-    app.track_offset = offset;
+    app.view.track_offset = offset;
     let columns = if inner.width < 55 {
         vec![
             Constraint::Length(3),
@@ -228,7 +232,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     let mut header_cells = Vec::new();
     for (index, (label, sort)) in labels.into_iter().zip(sorts).enumerate() {
         let rect = column_areas[index];
-        let active = sort == Some(app.sort);
+        let active = sort == Some(app.library.sort);
         let mut style = palette.text().fg(if active {
             palette.accent
         } else {
@@ -238,7 +242,14 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             style = style.bg(palette.selection).add_modifier(Modifier::BOLD);
         }
         let label = if active {
-            format!("{} {label}", if app.sort_descending { "↓" } else { "↑" })
+            format!(
+                "{} {label}",
+                if app.library.sort_descending {
+                    "↓"
+                } else {
+                    "↑"
+                }
+            )
         } else {
             label.to_owned()
         };
@@ -246,7 +257,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         if let Some(sort) = sort
             && rect.width > 0
         {
-            app.hits.push(Hit {
+            app.view.hits.push(Hit {
                 area: rect,
                 target: Target::SortColumn(sort),
                 enabled: true,
@@ -279,12 +290,12 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     }
     for (row, id) in ids.into_iter().enumerate() {
         let rect = Rect::new(inner.x, inner.y + 1 + row as u16, inner.width, 1);
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: rect,
             target: Target::Track(id),
             enabled: true,
         });
-        app.hits.push(Hit {
+        app.view.hits.push(Hit {
             area: Rect::new(rect.x, rect.y, 3.min(rect.width), 1),
             target: Target::Mark(id),
             enabled: true,

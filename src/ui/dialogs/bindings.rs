@@ -55,7 +55,7 @@ pub(super) fn binding_dialog(
             (
                 format!(
                     "{} {name}",
-                    if app.settings_view.binding_modifiers[index] {
+                    if app.view.settings.binding_modifiers[index] {
                         "x"
                     } else {
                         " "
@@ -77,14 +77,15 @@ pub(super) fn binding_dialog(
     let columns = (inner.width / 8).max(1) as usize;
     let key_y = modifier_y + modifier_height;
     let capacity = columns * usize::from(footer_y.saturating_sub(key_y));
-    app.settings_view.binding_offset = app
-        .settings_view
+    app.view.settings.binding_offset = app
+        .view
+        .settings
         .binding_offset
         .min(keys.len().saturating_sub(capacity.max(1)));
     for (visible, key) in keys
         .iter()
         .copied()
-        .skip(app.settings_view.binding_offset)
+        .skip(app.view.settings.binding_offset)
         .take(capacity)
         .enumerate()
     {
@@ -132,12 +133,12 @@ pub(super) fn binding_dialog(
             (
                 "↑".into(),
                 Target::DialogScroll(-5),
-                app.settings_view.binding_offset > 0,
+                app.view.settings.binding_offset > 0,
             ),
             (
                 "↓".into(),
                 Target::DialogScroll(5),
-                app.settings_view.binding_offset + capacity < keys.len(),
+                app.view.settings.binding_offset + capacity < keys.len(),
             ),
             (
                 app.text("Cancel", "Отмена").into(),

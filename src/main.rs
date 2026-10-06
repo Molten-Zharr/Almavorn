@@ -95,11 +95,11 @@ fn run() -> Result<()> {
                     app.handle(movement);
                 }
                 if let Err(error) = terminal.draw(|frame| ui::render(&mut app, frame)) {
-                    app.notice = format!(
+                    app.view.notice = format!(
                         "{}: {error}",
                         app.text("Rendering failed", "Ошибка отображения")
                     );
-                    app.notice_error = true;
+                    app.view.notice_error = true;
                 }
                 let backend = terminal.backend_mut();
                 let image_size = image_cache.update(&ctx, backend);
@@ -146,7 +146,8 @@ fn run() -> Result<()> {
                             egui::CursorIcon::PointingHand
                         }
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
-                        Some(Target::PanelResize(index)) => match app.workspace.splits[*index].axis
+                        Some(Target::PanelResize(index)) => match app.view.workspace.splits[*index]
+                            .axis
                         {
                             almavorn::workspace::Axis::Horizontal => {
                                 egui::CursorIcon::ResizeHorizontal
@@ -272,7 +273,7 @@ fn run() -> Result<()> {
                         _ => {}
                     }
                 }
-                if app.workspace.gesture.is_some() && !down {
+                if app.view.workspace.gesture.is_some() && !down {
                     if let Some((x, y)) = pointer.and_then(to_cell) {
                         app.handle(Input::Release { x, y });
                     } else {
@@ -282,14 +283,14 @@ fn run() -> Result<()> {
                 if !dropped.is_empty()
                     && let Err(error) = app.start_import(dropped)
                 {
-                    app.notice = format!(
+                    app.view.notice = format!(
                         "{}: {error}",
                         app.text("Import failed", "Ошибка добавления")
                     );
-                    app.notice_error = true;
+                    app.view.notice_error = true;
                 }
             });
-        if app.quit {
+        if app.view.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     })
@@ -380,13 +381,13 @@ mod tests {
         let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(100.0, 200.0));
         let frame = |events| {
             let mut movement = None;
-            let _ = ctx.run(
+            let _ = ctx.run_ui(
                 egui::RawInput {
                     screen_rect: Some(area),
                     events,
                     ..Default::default()
                 },
-                |ctx| movement = pointer_movement(ctx, area, 10, 20),
+                |ui| movement = pointer_movement(ui.ctx(), area, 10, 20),
             );
             movement
         };

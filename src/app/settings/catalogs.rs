@@ -1,4 +1,5 @@
 use super::{App, SettingsCatalog, SettingsEdit, SettingsPage};
+use crate::errors::AppError;
 use crate::{
     app::Dialog,
     preferences::{
@@ -19,7 +20,7 @@ fn available_name<'a>(
             .into_iter()
             .any(|(id, existing)| Some(id) != current
                 && existing.to_lowercase() == name.to_lowercase()),
-        "This name is already used"
+        AppError::CatalogNameConflict
     );
     Ok(name.into())
 }
@@ -42,7 +43,7 @@ impl App {
                     preferences: self.settings.profile_preferences(),
                 });
                 self.settings.active_profile = id;
-                self.settings_view.profile = self.settings.profiles.len() - 1;
+                self.view.settings.profile = self.settings.profiles.len() - 1;
             }
             SettingsEdit::RenameProfile(id) => {
                 let name = available_name(
@@ -73,7 +74,7 @@ impl App {
                 palette.id = self.settings.fresh_id("palette");
                 palette.name = name;
                 self.settings.palettes.push(palette);
-                self.settings_view.palette = self.settings.palettes.len() - 1;
+                self.view.settings.palette = self.settings.palettes.len() - 1;
             }
             SettingsEdit::RenamePalette(id) => {
                 let name = available_name(
@@ -88,7 +89,7 @@ impl App {
                     .palettes
                     .iter_mut()
                     .find(|p| p.id == id)
-                    .context("Palette no longer exists")?
+                    .context(AppError::PaletteMissing)?
                     .name = name;
             }
             SettingsEdit::PaletteColor { id, token } => {
@@ -98,7 +99,7 @@ impl App {
                     .palettes
                     .iter_mut()
                     .find(|p| p.id == id)
-                    .context("Palette no longer exists")?;
+                    .context(AppError::PaletteMissing)?;
                 ensure!(palette.colors.contains_key(&token), "Unknown palette color");
                 palette.colors.insert(token, color);
             }
@@ -115,7 +116,7 @@ impl App {
                 let style = self.settings.current_style();
                 self.settings.appearance.preset_ids[self.settings.mode.index()] = Some(id.clone());
                 self.settings.presets.push(ThemePreset { id, name, style });
-                self.settings_view.preset = self.settings.presets.len() - 1;
+                self.view.settings.preset = self.settings.presets.len() - 1;
             }
             SettingsEdit::RenamePreset(id) => {
                 let name = available_name(
@@ -134,13 +135,10 @@ impl App {
                     .name = name;
             }
             SettingsEdit::FontSize => {
-                let size: u16 = text
-                    .trim()
-                    .parse()
-                    .context("Font size must be 10-32 pixels")?;
+                let size: u16 = text.trim().parse().context(AppError::InvalidFontSize)?;
                 ensure!(
                     (MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&size),
-                    "Font size must be 10-32 pixels"
+                    AppError::InvalidFontSize
                 );
                 self.settings.appearance.font_size = size;
             }
@@ -162,14 +160,15 @@ impl App {
     }
     pub(super) fn apply_selected_profile(&mut self) -> Result<()> {
         let profile = self.settings.profiles[self
-            .settings_view
+            .view
+            .settings
             .profile
             .min(self.settings.profiles.len() - 1)]
         .clone();
         self.settings.sync_active_profile();
         self.settings.apply_preferences(profile.preferences);
         self.settings.active_profile = profile.id;
-        if let Some(audio) = &self.audio {
+        if let Some(audio) = &self.playback.audio {
             audio.volume(self.settings.volume);
         }
         self.save_settings()?;
@@ -179,7 +178,7 @@ impl App {
     }
     pub(super) fn settings_catalog_shortcut(&mut self, rename: bool) -> Result<()> {
         use super::SettingControl as C;
-        let control = match (self.settings_view.page, rename) {
+        let control = match (self.view.settings.page, rename) {
             (SettingsPage::Profiles, false) => C::ProfileCreate,
             (SettingsPage::Profiles, true) => C::ProfileRename,
             (SettingsPage::Palettes, false) => C::PaletteCreate,
@@ -196,10 +195,11 @@ impl App {
         Ok(())
     }
     pub(super) fn request_settings_delete(&mut self) -> Result<()> {
-        let (catalog, id, name, length) = match self.settings_view.page {
+        let (catalog, id, name, length) = match self.view.settings.page {
             SettingsPage::Profiles => {
                 let p = &self.settings.profiles[self
-                    .settings_view
+                    .view
+                    .settings
                     .profile
                     .min(self.settings.profiles.len() - 1)];
                 (
@@ -229,8 +229,8 @@ impl App {
             }
             _ => return Ok(()),
         };
-        ensure!(length > 1, "Keep at least one item in this catalog");
-        self.dialog = Some(Dialog::ConfirmSettings { catalog, id, name });
+        ensure!(length > 1, AppError::LastCatalogItem);
+        self.view.dialog = Some(Dialog::ConfirmSettings { catalog, id, name });
         Ok(())
     }
     pub(crate) fn delete_settings_item(
@@ -242,37 +242,37 @@ impl App {
             SettingsCatalog::Palette => {
                 ensure!(
                     self.settings.palettes.iter().any(|p| p.id == id),
-                    "Palette no longer exists"
+                    AppError::PaletteMissing
                 );
                 self.settings.remove_palette(id)?;
-                self.settings_view.palette = self
-                    .settings_view
+                self.view.settings.palette = self
+                    .view
+                    .settings
                     .palette
                     .min(self.settings.palettes.len() - 1);
             }
             SettingsCatalog::Preset => {
                 self.settings.remove_preset(id)?;
-                self.settings_view.preset = self
-                    .settings_view
+                self.view.settings.preset = self
+                    .view
+                    .settings
                     .preset
                     .min(self.settings.presets.len() - 1);
             }
             SettingsCatalog::Profile => {
-                ensure!(
-                    self.settings.profiles.len() > 1,
-                    "Keep at least one profile"
-                );
+                ensure!(self.settings.profiles.len() > 1, AppError::LastProfile);
                 ensure!(
                     self.settings.profiles.iter().any(|p| p.id == id),
                     "Profile no longer exists"
                 );
                 self.settings.profiles.retain(|p| p.id != id);
-                self.settings_view.profile = self
-                    .settings_view
+                self.view.settings.profile = self
+                    .view
+                    .settings
                     .profile
                     .min(self.settings.profiles.len() - 1);
                 if self.settings.active_profile == id {
-                    self.settings_view.profile = 0;
+                    self.view.settings.profile = 0;
                     self.apply_selected_profile()?;
                 }
             }

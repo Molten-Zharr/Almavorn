@@ -21,7 +21,7 @@ impl App {
 
     pub(super) fn remember(&mut self, change: Change) -> Result<()> {
         if change.scope != "order" && change.before != change.after {
-            let history = self.histories.entry(change.scope).or_default();
+            let history = self.library.histories.entry(change.scope).or_default();
             history.1.clear();
             // Results can arrive in a different order from commits. Keep only a connected history.
             if history
@@ -40,14 +40,14 @@ impl App {
     }
 
     pub(super) fn validate_history(&mut self) {
-        for (scope, (undo, redo)) in &mut self.histories {
+        for (scope, (undo, redo)) in &mut self.library.histories {
             let expected = undo
                 .last()
                 .map(|change| &change.after)
                 .or_else(|| redo.last().map(|change| &change.before));
-            if expected
-                .is_some_and(|expected| *expected != Snapshot::from_library(&self.playlists, scope))
-            {
+            if expected.is_some_and(|expected| {
+                *expected != Snapshot::from_library(&self.library.playlists, scope)
+            }) {
                 undo.clear();
                 redo.clear();
             }

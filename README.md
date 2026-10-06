@@ -24,13 +24,27 @@ import. The DuckDB application is preserved in the `archive/duckdb` branch.
 Both interfaces share application state and Ratatui rendering:
 
 - `src/app.rs`: shared state, initialization, and the update loop.
+- `src/app/context.rs`: library (`app.library`), playback (`app.playback`), and
+  interface (`app.view`) state. Read the library through `app.playlists()`;
+  library reloads control row-cache invalidation.
+- `src/app/background.rs`: background operations and a latest-request queue
+  for folder reads and audio preparation that discards obsolete results.
 - `src/app/`: actions and input, library and undo history, background database
   operations and import,
   playback, dialogs, and command-line options.
 - `src/ui.rs`: main-screen layout.
 - `src/ui/`: library and player panels, themes, shared widgets, and dialogs.
+- `src/ui/buttons.rs`: shared measurement, shortcuts, and hit registration,
+  with separate visual variants for dialog and command buttons.
 - `src/store.rs`: SQLite storage with WAL, serialized background writes, and legacy migration.
+- `src/store/queries.rs`: two-query library loading and scoped undo snapshots
+  that do not read track metadata.
+- `src/errors.rs`: typed errors with English and Russian messages.
 - `src/preferences.rs`: profiles, palettes, theme presets, and palette exchange.
+
+Displayed track filtering and sorting are cached until the library, selected
+playlist, query, or sort options change. Short windows pack buttons without
+blank rows between groups.
 
 ## Settings
 
@@ -97,7 +111,9 @@ cargo run --release --example settings_preview
 PPM images are written to `target/settings-preview/`.
 
 Regression tests cover playlist editing, undo/redo, background import, profiles
-and palettes, settings migration, input, and rendering. They do not require
+and palettes, settings migration, input, rendering, row-cache invalidation,
+shared-track protection, isolated undo snapshots, and stale background results.
+They do not require
 an audio output device:
 
 ```sh

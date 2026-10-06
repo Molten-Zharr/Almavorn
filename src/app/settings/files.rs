@@ -1,6 +1,7 @@
 use super::App;
+use crate::errors::AppError;
 use crate::{
-    app::database::{Background, background},
+    app::background::{Background, background, poll},
     preferences::NamedPalette,
 };
 use anyhow::{Context, Result, ensure};
@@ -9,7 +10,6 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
 };
-use tokio::sync::oneshot;
 
 enum FileOutcome {
     Imported(NamedPalette),
@@ -19,7 +19,7 @@ pub(crate) struct SettingsFileJob {
     receiver: Background<FileOutcome>,
 }
 fn file_path(text: &str) -> Result<PathBuf> {
-    ensure!(!text.trim().is_empty(), "Enter a file path");
+    ensure!(!text.trim().is_empty(), AppError::FilePathRequired);
     if let Some(rest) = text.trim().strip_prefix("~/") {
         Ok(dirs::home_dir()
             .context("Home directory is unavailable")?
@@ -30,15 +30,12 @@ fn file_path(text: &str) -> Result<PathBuf> {
 }
 impl App {
     pub fn settings_file_busy(&self) -> bool {
-        self.settings_file.is_some()
+        self.persistence.file.is_some()
     }
     pub(super) fn start_palette_import(&mut self, text: &str) -> Result<()> {
-        ensure!(
-            !self.settings_file_busy(),
-            "Wait for the palette file operation to finish"
-        );
+        ensure!(!self.settings_file_busy(), AppError::PaletteFileBusy);
         let path = file_path(text)?;
-        self.settings_file = Some(SettingsFileJob {
+        self.persistence.file = Some(SettingsFileJob {
             receiver: background(self.runtime(), move || {
                 let file =
                     File::open(&path).with_context(|| format!("Cannot open {}", path.display()))?;
@@ -54,19 +51,16 @@ impl App {
         Ok(())
     }
     pub(super) fn start_palette_export(&mut self, id: &str, text: &str) -> Result<()> {
-        ensure!(
-            !self.settings_file_busy(),
-            "Wait for the palette file operation to finish"
-        );
+        ensure!(!self.settings_file_busy(), AppError::PaletteFileBusy);
         let path = file_path(text)?;
         let bytes = self
             .settings
             .palettes
             .iter()
             .find(|p| p.id == id)
-            .context("Palette no longer exists")?
+            .context(AppError::PaletteMissing)?
             .export_json()?;
-        self.settings_file = Some(SettingsFileJob {
+        self.persistence.file = Some(SettingsFileJob {
             receiver: background(self.runtime(), move || {
                 write_new_file(&path, &bytes)?;
                 Ok(FileOutcome::Exported(path))
@@ -79,18 +73,15 @@ impl App {
         Ok(())
     }
     pub(crate) fn tick_settings_files(&mut self) -> Result<()> {
-        let result = match self
-            .settings_file
+        let Some(result) = self
+            .persistence
+            .file
             .as_mut()
-            .map(|job| job.receiver.try_recv())
-        {
-            Some(Ok(result)) => result,
-            Some(Err(oneshot::error::TryRecvError::Closed)) => {
-                Err(anyhow::anyhow!("Background operation was interrupted"))
-            }
-            _ => return Ok(()),
+            .and_then(|job| poll(&mut job.receiver))
+        else {
+            return Ok(());
         };
-        self.settings_file = None;
+        self.persistence.file = None;
         match result? {
             FileOutcome::Imported(mut palette) => {
                 palette.id = self.settings.fresh_id("palette");
@@ -107,7 +98,7 @@ impl App {
                     suffix += 1;
                 }
                 self.settings.palettes.push(palette);
-                self.settings_view.palette = self.settings.palettes.len() - 1;
+                self.view.settings.palette = self.settings.palettes.len() - 1;
                 self.save_settings()?;
                 self.message(
                     self.text("Palette imported", "Палитра импортирована")

@@ -1,3 +1,4 @@
+use crate::errors::AppError;
 use anyhow::{Context, Result};
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
 use std::{
@@ -19,7 +20,7 @@ pub struct Audio {
 impl Audio {
     pub fn open(volume: f32) -> Result<Self> {
         let mut device =
-            DeviceSinkBuilder::open_default_sink().context("Audio output unavailable")?;
+            DeviceSinkBuilder::open_default_sink().context(AppError::AudioUnavailable)?;
         device.log_on_drop(false);
         let player = Player::connect_new(device.mixer());
         player.set_volume(volume);
@@ -34,7 +35,7 @@ impl Audio {
         Decoder::try_from(
             File::open(path).with_context(|| format!("Cannot open {}", path.display()))?,
         )
-        .context("Unsupported or damaged audio file")
+        .context(AppError::InvalidAudio)
     }
 
     pub fn waveform(path: &Path, cancel: &AtomicBool) -> Result<Vec<f32>> {
@@ -130,7 +131,7 @@ impl Audio {
     pub fn seek(&self, position: Duration) -> Result<()> {
         self.player
             .try_seek(position)
-            .context("Seeking is not available for this file")
+            .context(AppError::SeekingUnavailable)
     }
     pub fn volume(&self, volume: f32) {
         self.player.set_volume(volume);

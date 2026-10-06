@@ -53,20 +53,21 @@ fn submit_text(app: &mut App, text: &str) {
     app.handle(Input::Text(text.into()));
     key(app, Key::Enter);
     wait_for_library(app);
-    assert!(!app.notice_error, "{}", app.notice);
-    assert!(app.dialog.is_none());
+    assert!(!app.view.notice_error, "{}", app.view.notice);
+    assert!(app.view.dialog.is_none());
 }
 
 fn create_playlist(app: &mut App, name: &str) -> i64 {
     app.action(Action::NewPlaylist).unwrap();
     submit_text(app, name);
-    app.selected_playlist.unwrap()
+    app.library.selected_playlist.unwrap()
 }
 
 fn click_action(app: &mut App, action: Action) {
     let mut terminal = Terminal::new(TestBackend::new(120, 50)).unwrap();
     terminal.draw(|frame| ui::render(app, frame)).unwrap();
     let area = app
+        .view
         .hits
         .iter()
         .find(|hit| hit.enabled && matches!(hit.target, Target::Action(value) if value == action))
@@ -85,15 +86,15 @@ fn keyboard_and_mouse_respect_order_editing_and_persist_settings() {
     let mut app = App::new(&directory.0).unwrap();
     key(&mut app, Key::Char('c'));
     submit_text(&mut app, "Keyboard playlist");
-    let first = app.selected_playlist.unwrap();
+    let first = app.library.selected_playlist.unwrap();
     click_action(&mut app, Action::NewPlaylist);
     submit_text(&mut app, "Mouse playlist");
-    assert_ne!(app.selected_playlist.unwrap(), first);
+    assert_ne!(app.library.selected_playlist.unwrap(), first);
 
-    app.focus = Focus::Playlists;
+    app.view.focus = Focus::Playlists;
     assert!(!app.allowed(Action::Rename));
     app.action(Action::Rename).unwrap();
-    assert!(app.dialog.is_none());
+    assert!(app.view.dialog.is_none());
     click_action(&mut app, Action::ToggleEdit);
     assert!(app.allowed(Action::Rename));
     key(&mut app, Key::F(3));
@@ -103,16 +104,16 @@ fn keyboard_and_mouse_respect_order_editing_and_persist_settings() {
     // The Russian-layout key for M must use the same mode-switching action.
     key(&mut app, Key::Char('ь'));
     assert_eq!(app.settings.mode, Mode::Chaos);
-    assert!(!app.editing);
+    assert!(!app.view.editing);
     wait_for_settings(&mut app);
     assert_eq!(app.store.settings().unwrap().mode, Mode::Chaos);
     drop(app);
     let reopened = App::new(&directory.0).unwrap();
     assert_eq!(reopened.settings.mode, Mode::Chaos);
-    assert!(!reopened.editing);
+    assert!(!reopened.view.editing);
     assert!(
         reopened
-            .playlists
+            .playlists()
             .iter()
             .any(|p| p.name == "Renamed playlist")
     );
@@ -126,7 +127,7 @@ fn chaos_undo_and_redo_leave_order_playlists_unchanged() {
     let order = app.store.snapshot("order").unwrap();
     app.set_mode(Mode::Chaos).unwrap();
     let id = create_playlist(&mut app, "Original");
-    app.focus = Focus::Playlists;
+    app.view.focus = Focus::Playlists;
     app.action(Action::Rename).unwrap();
     submit_text(&mut app, "Renamed");
 
@@ -165,7 +166,7 @@ fn filtering_and_sorting_do_not_modify_saved_track_order() {
     app.set_mode(Mode::Chaos).unwrap();
     let before = app.store.snapshot("chaos").unwrap();
     app.action(Action::Sort).unwrap();
-    assert!(app.sort == Sort::Title);
+    assert!(app.library.sort == Sort::Title);
     assert_eq!(
         app.rows()
             .iter()
@@ -180,8 +181,87 @@ fn filtering_and_sorting_do_not_modify_saved_track_order() {
     assert!(!app.allowed(Action::MoveUp));
     assert_eq!(app.store.snapshot("chaos").unwrap(), before);
     key(&mut app, Key::Escape);
-    assert!(app.query.is_empty());
+    assert!(app.library.query.is_empty());
     assert_eq!(app.rows().len(), 3);
+}
+
+#[test]
+fn cached_rows_follow_view_changes_and_background_reloads() {
+    let directory = TestDirectory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    app.set_mode(Mode::Chaos).unwrap();
+    let first = create_playlist(&mut app, "First");
+    let track = |name: &str, file: &str, duration_ms| ImportedTrack {
+        path: directory.0.join(file),
+        title: name.into(),
+        artist: "Артист".into(),
+        album: "Album".into(),
+        duration_ms,
+        tags: String::new(),
+    };
+    app.store
+        .add_tracks(
+            first,
+            &[
+                track("Яблоко", "a.wav", 200),
+                track("Beta", "b.wav", 100),
+                track("Beta", "c.wav", 300),
+            ],
+            false,
+        )
+        .unwrap();
+    wait_for_library(&mut app);
+    let ids = || app.rows().iter().map(|entry| entry.id).collect::<Vec<_>>();
+    assert_eq!(ids(), ids());
+    let original = app.store.snapshot("chaos").unwrap();
+    app.library.query = "АРТИСТ beta".into();
+    app.library.sort = Sort::Duration;
+    assert_eq!(
+        app.rows()
+            .iter()
+            .map(|entry| entry.track.duration_ms)
+            .collect::<Vec<_>>(),
+        [100, 300]
+    );
+    app.library.sort_descending = true;
+    assert_eq!(
+        app.rows()
+            .iter()
+            .map(|entry| entry.track.duration_ms)
+            .collect::<Vec<_>>(),
+        [300, 100]
+    );
+    app.library.sort = Sort::Title;
+    assert_eq!(
+        app.rows()
+            .iter()
+            .map(|entry| entry.position)
+            .collect::<Vec<_>>(),
+        [1, 2]
+    );
+    app.library.query = "ЯБЛОКО".into();
+    let selected = app.rows()[0].track.id;
+    app.store
+        .rename_track(selected, "New title", first, false)
+        .unwrap();
+    wait_for_library(&mut app);
+    assert!(app.rows().is_empty());
+    app.library.query = "new".into();
+    assert_eq!(app.rows()[0].track.title, "New title");
+    // Track title edits do not change playlist-reference snapshots.
+    assert_eq!(app.store.snapshot("chaos").unwrap(), original);
+    app.library.query.clear();
+    let second = create_playlist(&mut app, "Second");
+    assert!(app.rows().is_empty());
+    app.store
+        .add_tracks(second, &[track("Other", "d.wav", 400)], false)
+        .unwrap();
+    wait_for_library(&mut app);
+    assert_eq!(app.rows().len(), 1);
+    app.library.selected_playlist = Some(first);
+    assert_eq!(app.rows().len(), 3);
+    app.library.query = "missing".into();
+    assert!(app.rows().is_empty());
 }
 
 fn write_wave(path: &Path) -> Vec<u8> {
@@ -210,7 +290,7 @@ fn wait_for_library(app: &mut App) {
         assert!(
             Instant::now() < deadline,
             "Library operation did not finish: {}",
-            app.notice
+            app.view.notice
         );
         app.tick();
         std::thread::sleep(Duration::from_millis(5));
@@ -224,7 +304,7 @@ fn wait_for_settings(app: &mut App) {
         assert!(
             Instant::now() < deadline,
             "Settings were not saved: {}",
-            app.notice
+            app.view.notice
         );
         app.tick();
         std::thread::sleep(Duration::from_millis(5));
@@ -252,7 +332,7 @@ fn background_import_routes_to_desk_skips_duplicates_and_supports_undo() {
     assert_eq!(app.settings.mode, Mode::Chaos);
     wait_for_library(&mut app);
 
-    assert!(app.notice_error);
+    assert!(app.view.notice_error);
     assert_eq!(app.settings.mode, Mode::Order);
     assert_eq!(app.playlist().unwrap().kind, PlaylistKind::SortingDesk);
     assert_eq!(app.rows().len(), 1);
@@ -265,7 +345,7 @@ fn background_import_routes_to_desk_skips_duplicates_and_supports_undo() {
     assert_eq!(app.store.snapshot("desk").unwrap(), imported);
     app.start_import(vec![path]).unwrap();
     wait_for_library(&mut app);
-    assert!(!app.notice_error, "{}", app.notice);
+    assert!(!app.view.notice_error, "{}", app.view.notice);
     assert_eq!(app.rows().len(), 1);
 }
 
@@ -280,15 +360,15 @@ fn shortcut_capture_rejects_reserved_and_duplicate_keys() {
         .position(|b| b.action == Action::Quit)
         .unwrap();
     let original = app.settings.bindings[index].key;
-    app.dialog = Some(Dialog::CaptureBinding { index });
+    app.view.dialog = Some(Dialog::CaptureBinding { index });
     key(&mut app, Key::Down);
-    assert!(app.notice_error);
+    assert!(app.view.notice_error);
     assert_eq!(app.settings.bindings[index].key, original);
     key(&mut app, Key::Char(' '));
-    assert!(app.notice_error);
+    assert!(app.view.notice_error);
     assert_eq!(app.settings.bindings[index].key, original);
     control(&mut app, 'j');
-    assert!(matches!(app.dialog, Some(Dialog::Settings { .. })));
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     wait_for_settings(&mut app);
     assert_eq!(
         app.store.settings().unwrap().bindings[index].key,
@@ -296,7 +376,7 @@ fn shortcut_capture_rejects_reserved_and_duplicate_keys() {
     );
     key(&mut app, Key::Escape);
     control(&mut app, 'j');
-    assert!(app.quit);
+    assert!(app.view.quit);
 }
 
 #[test]
@@ -322,19 +402,20 @@ fn dialogs_capture_clicks_and_render_across_languages_and_panel_positions() {
             app.action(action).unwrap();
             let mut terminal = Terminal::new(TestBackend::new(120, 50)).unwrap();
             terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
-            assert!(app.dialog.is_some());
-            assert!(!app.hits.iter().any(|hit| matches!(
+            assert!(app.view.dialog.is_some());
+            assert!(!app.view.hits.iter().any(|hit| matches!(
                 hit.target,
                 Target::Playlist(_) | Target::Track(_) | Target::Mode(_)
             )));
             assert!(
-                app.hits
+                app.view
+                    .hits
                     .iter()
                     .any(|hit| matches!(hit.target, Target::CloseDialog))
             );
             key(&mut app, Key::Escape);
         }
-        let playlist = app.selected_playlist.unwrap();
+        let playlist = app.library.selected_playlist.unwrap();
         let track = Track {
             id: 1,
             path: directory.0.join("example.wav"),
@@ -368,11 +449,12 @@ fn dialogs_capture_clicks_and_render_across_languages_and_panel_positions() {
             Dialog::Metadata { track, offset: 0 },
             Dialog::CaptureBinding { index: 0 },
         ] {
-            app.dialog = Some(dialog);
+            app.view.dialog = Some(dialog);
             let mut terminal = Terminal::new(TestBackend::new(120, 50)).unwrap();
             terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
             assert!(
-                app.hits
+                app.view
+                    .hits
                     .iter()
                     .any(|hit| matches!(hit.target, Target::CloseDialog))
             );
@@ -392,18 +474,34 @@ fn rendering_uses_the_palette_selected_for_each_mode() {
         (Mode::Chaos, Color::Rgb(188, 125, 228)),
     ] {
         app.set_mode(mode).unwrap();
-        let mut terminal = Terminal::new(TestBackend::new(80, 30)).unwrap();
-        terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
-        let buffer = terminal.backend().buffer();
-        assert!(
-            buffer.content.iter().any(|cell| cell.fg == accent),
-            "Active mode must use its own palette"
-        );
-        assert_eq!(buffer[(0, 0)].bg, Color::Rgb(18, 22, 29));
-        assert!(
-            app.hits
-                .iter()
-                .any(|hit| hit.enabled && matches!(hit.target, Target::Action(Action::Settings)))
-        );
+        for (language, width, height) in [
+            (Language::Russian, 80, 30),
+            (Language::English, 80, 30),
+            (Language::Russian, 120, 50),
+            (Language::English, 120, 50),
+        ] {
+            app.settings.language = language;
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
+            let buffer = terminal.backend().buffer();
+            assert!(
+                buffer.content.iter().any(|cell| cell.fg == accent),
+                "Active mode must use its own palette"
+            );
+            assert_eq!(buffer[(0, 0)].bg, Color::Rgb(18, 22, 29));
+            assert!(
+                app.view.hits.iter().any(
+                    |hit| hit.enabled && matches!(hit.target, Target::Action(Action::Settings))
+                ),
+                "{}",
+                buffer
+                    .content
+                    .iter()
+                    .map(|cell| cell.symbol())
+                    .collect::<String>()
+            );
+            assert!(app.view.tracks_area.width > 0 && app.view.tracks_area.height > 0);
+            assert!(app.view.playlist_area.width > 0 && app.view.playlist_area.height > 0);
+        }
     }
 }

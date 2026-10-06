@@ -78,7 +78,12 @@ pub(super) fn player(
     }
     let title = if app.preparing_playback() && !app.playback_active() {
         app.text("Preparing audio…", "Подготовка аудио…").to_owned()
-    } else if let Some(track) = app.current.as_ref().filter(|_| app.playback_active()) {
+    } else if let Some(track) = app
+        .playback
+        .current
+        .as_ref()
+        .filter(|_| app.playback_active())
+    {
         format!(
             "[{}] {}{}",
             if app.current_paused() {
@@ -113,7 +118,11 @@ pub(super) fn player(
     if y + 4 >= inner.bottom() {
         return;
     }
-    let duration = app.current.as_ref().map_or(0, |track| track.duration_ms);
+    let duration = app
+        .playback
+        .current
+        .as_ref()
+        .map_or(0, |track| track.duration_ms);
     let position = app.position_ms();
     let ratio = if duration > 0 {
         (position as f64 / duration as f64).clamp(0.0, 1.0)
@@ -146,7 +155,7 @@ pub(super) fn player(
         Rect::new(inner.x, y + 3, inner.width, 1),
     );
     let seek = Rect::new(inner.x, y, inner.width, 3);
-    app.hits.push(Hit {
+    app.view.hits.push(Hit {
         area: seek,
         target: Target::Seek(seek),
         enabled: app.playback_active() && duration > 0,
@@ -160,8 +169,13 @@ pub(super) fn player(
 }
 
 fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palette) {
-    let Some(values) = app.waveform.as_deref().filter(|values| !values.is_empty()) else {
-        let text = if app.current.is_none() {
+    let Some(values) = app
+        .playback
+        .waveform
+        .as_deref()
+        .filter(|values| !values.is_empty())
+    else {
+        let text = if app.playback.current.is_none() {
             "─".repeat(usize::from(area.width))
         } else if app.preparing_waveform() || app.preparing_playback() {
             app.text("Building waveform…", "Обработка аудиоволны…")
@@ -252,7 +266,7 @@ fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         Paragraph::new(format!("{percent:>3}%")).style(palette.text().fg(palette.accent)),
         Rect::new(bar.right() + 1, area.y, 4, 1).intersection(area),
     );
-    app.hits.push(Hit {
+    app.view.hits.push(Hit {
         area: bar,
         target: Target::PlaybackVolume(bar),
         enabled: bar.width > 0,

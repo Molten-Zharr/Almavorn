@@ -1,7 +1,8 @@
 use super::{
     App,
-    database::{Background, background},
+    background::{Background, background, poll},
 };
+use crate::errors::AppError;
 use crate::{
     media,
     model::{Mode, PlaylistKind},
@@ -16,7 +17,6 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
-use tokio::sync::oneshot;
 
 struct ImportOutcome {
     change: Change,
@@ -32,38 +32,41 @@ pub(super) struct ImportJob {
 
 impl App {
     pub fn busy(&self) -> bool {
-        self.import.is_some() || self.database_busy()
+        self.library.import.is_some() || self.database_busy()
     }
 
     pub fn importing(&self) -> bool {
-        self.import.is_some()
+        self.library.import.is_some()
     }
 
     pub fn progress(&self) -> usize {
-        self.import
+        self.library
+            .import
             .as_ref()
             .map_or(0, |job| job.progress.load(Ordering::Relaxed))
     }
 
     pub(super) fn import_target(&self) -> Option<i64> {
         if self.settings.sorting_desk {
-            self.playlists
+            self.library
+                .playlists
                 .iter()
                 .find(|playlist| playlist.kind == PlaylistKind::SortingDesk)
                 .map(|playlist| playlist.id)
         } else {
             self.playlist()
-                .filter(|playlist| playlist.can_edit(self.editing))
+                .filter(|playlist| playlist.can_edit(self.view.editing))
                 .map(|playlist| playlist.id)
         }
     }
 
     pub fn start_import(&mut self, paths: Vec<PathBuf>) -> Result<()> {
-        ensure!(self.import.is_none(), "Music import is already running");
+        ensure!(self.library.import.is_none(), AppError::ImportBusy);
         let target = self
             .import_target()
             .context("Select an editable playlist or enable the sorting desk")?;
         let existing: HashSet<PathBuf> = self
+            .library
             .playlists
             .iter()
             .find(|playlist| playlist.id == target)
@@ -72,7 +75,7 @@ impl App {
             .map(|entry| entry.track.path.clone())
             .collect();
         let mut worker_store = self.store.try_clone()?;
-        let unlocked = self.editing;
+        let unlocked = self.view.editing;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let progress = Arc::new(AtomicUsize::new(0));
@@ -84,7 +87,7 @@ impl App {
             let mut candidates = Vec::new();
             for path in paths {
                 if worker_cancel.load(Ordering::Relaxed) {
-                    anyhow::bail!("Music import was interrupted");
+                    anyhow::bail!(AppError::ImportInterrupted);
                 }
                 if path.is_dir() {
                     match media::audio_files(&path) {
@@ -103,7 +106,7 @@ impl App {
             let mut seen = existing;
             for path in candidates {
                 if worker_cancel.load(Ordering::Relaxed) {
-                    anyhow::bail!("Music import was interrupted");
+                    anyhow::bail!(AppError::ImportInterrupted);
                 }
                 if path
                     .canonicalize()
@@ -131,7 +134,7 @@ impl App {
                 worker_progress.fetch_add(1, Ordering::Relaxed);
             }
             if worker_cancel.load(Ordering::Relaxed) {
-                anyhow::bail!("Music import was interrupted");
+                anyhow::bail!(AppError::ImportInterrupted);
             }
             let change = worker_store.add_tracks(target, &tracks, unlocked)?;
             Ok(ImportOutcome {
@@ -140,7 +143,7 @@ impl App {
                 skipped,
             })
         });
-        self.import = Some(ImportJob {
+        self.library.import = Some(ImportJob {
             receiver,
             target,
             cancel,
@@ -156,69 +159,66 @@ impl App {
 
 impl App {
     pub(super) fn poll_import(&mut self) -> Result<()> {
-        let outcome = self.import.as_mut().map(|job| job.receiver.try_recv());
-        match outcome {
-            Some(Ok(outcome)) => {
-                let job = self.import.take().expect("import is present");
-                let outcome = outcome?;
-                let change = outcome.change;
-                let mode = change
-                    .after
-                    .playlists
-                    .iter()
-                    .find(|playlist| playlist.id == job.target)
-                    .map(|playlist| {
-                        if playlist.mode == "chaos" {
-                            Mode::Chaos
-                        } else {
-                            Mode::Order
-                        }
-                    });
-                let added = change
-                    .after
-                    .playlists
-                    .iter()
-                    .map(|playlist| playlist.entries.len())
-                    .sum::<usize>()
-                    .saturating_sub(
-                        change
-                            .before
-                            .playlists
-                            .iter()
-                            .map(|playlist| playlist.entries.len())
-                            .sum(),
-                    );
-                self.remember(change)?;
-                if self.pending_selection.is_none()
-                    && let Some(mode) = mode
-                {
-                    self.settings.mode = mode;
-                    self.pending_selection = Some((job.target, mode));
-                }
-                self.save_settings()?;
-                let mut message = format!(
-                    "{}: {added}. {}: {}",
-                    self.text("Added", "Добавлено"),
-                    self.text("Skipped", "Пропущено"),
-                    outcome.skipped
+        let outcome = self
+            .library
+            .import
+            .as_mut()
+            .and_then(|job| poll(&mut job.receiver));
+        if let Some(outcome) = outcome {
+            let job = self.library.import.take().expect("import is present");
+            let outcome = outcome?;
+            let change = outcome.change;
+            let mode = change
+                .after
+                .playlists
+                .iter()
+                .find(|playlist| playlist.id == job.target)
+                .map(|playlist| {
+                    if playlist.mode == "chaos" {
+                        Mode::Chaos
+                    } else {
+                        Mode::Order
+                    }
+                });
+            let added = change
+                .after
+                .playlists
+                .iter()
+                .map(|playlist| playlist.entries.len())
+                .sum::<usize>()
+                .saturating_sub(
+                    change
+                        .before
+                        .playlists
+                        .iter()
+                        .map(|playlist| playlist.entries.len())
+                        .sum(),
                 );
-                if let Some(error) = outcome.errors.first() {
-                    message.push_str(&format!(
-                        ". {}: {error}",
-                        self.text("Import warning", "Ошибка добавления")
-                    ));
-                }
-                self.message(message);
-                self.notice_error = !outcome.errors.is_empty();
-                if self.library_revision == self.store.revision() && self.database.is_none() {
-                    self.validate_history();
-                }
+            self.remember(change)?;
+            if self.library.pending_selection.is_none()
+                && let Some(mode) = mode
+            {
+                self.settings.mode = mode;
+                self.library.pending_selection = Some((job.target, mode));
             }
-            Some(Err(oneshot::error::TryRecvError::Closed)) => {
-                self.import = None;
-                anyhow::bail!("Music import was interrupted");
+            self.save_settings()?;
+            let mut message = format!(
+                "{}: {added}. {}: {}",
+                self.text("Added", "Добавлено"),
+                self.text("Skipped", "Пропущено"),
+                outcome.skipped
+            );
+            if let Some(error) = outcome.errors.first() {
+                message.push_str(&format!(
+                    ". {}: {error}",
+                    self.text("Import warning", "Ошибка добавления")
+                ));
             }
-            _ => {}
+            self.message(message);
+            self.view.notice_error = !outcome.errors.is_empty();
+            if self.library.revision == self.store.revision() && self.library.database.is_none() {
+                self.validate_history();
+            }
         }
         Ok(())
     }

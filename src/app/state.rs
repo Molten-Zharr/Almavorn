@@ -5,9 +5,10 @@ use crate::{
 };
 use ratatui::layout::Rect;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub enum Focus {
     Playlists,
+    #[default]
     Tracks,
 }
 

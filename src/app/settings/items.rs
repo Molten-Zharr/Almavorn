@@ -63,7 +63,7 @@ impl App {
         };
         let action = lang.text("Open", "Открыть").to_owned();
         let run = lang.text("Apply", "Применить").to_owned();
-        match self.settings_view.page {
+        match self.view.settings.page {
             SettingsPage::General => vec![
                 make(lang.text("Language", "Язык"), if lang == crate::model::Language::English { "English" } else { "Русский" }.into(), lang.text("Language of menus, descriptions, notices and keyboard hints.", "Язык меню, описаний, уведомлений и подсказок клавиш."), SettingControl::Language, true),
                 make(lang.text("Volume", "Громкость"), format!("{}%", (self.settings.volume*100.0).round() as u32), lang.text("Playback volume. Changes immediately; step: 5%.", "Громкость воспроизведения. Меняется сразу; шаг: 5%."), SettingControl::Volume, true),
@@ -72,7 +72,7 @@ impl App {
                 make(lang.text("Player panel", "Панель проигрывателя"), self.settings.player_placement.name(lang).into(), lang.text("Position of playback controls relative to the library.", "Расположение управления воспроизведением относительно библиотеки."), SettingControl::PlayerPlacement, true),
             ],
             SettingsPage::Profiles => {
-                let profile = &self.settings.profiles[self.settings_view.profile.min(self.settings.profiles.len()-1)];
+                let profile = &self.settings.profiles[self.view.settings.profile.min(self.settings.profiles.len()-1)];
                 let mut rows = vec![
                     make(lang.text("Profile", "Профиль"), format!("{}{}", profile.name, if profile.id == self.settings.active_profile { lang.text(" (active)", " (активный)") } else { "" }), lang.text("Browse saved configurations. Applying a profile keeps your music library and current mode.", "Выбор сохранённой конфигурации. Применение сохраняет музыкальную библиотеку и текущий режим."), SettingControl::ProfilePick, true),
                     make(lang.text("Use selected profile", "Использовать профиль"), run.clone(), lang.text("Restore its language, volume, layout, appearance and shortcuts. Later changes save into this profile automatically.", "Восстановить язык, громкость, расположение, оформление и клавиши. Последующие изменения сохраняются в этом профиле автоматически."), SettingControl::ProfileApply, false),
@@ -98,7 +98,7 @@ impl App {
             SettingsPage::Palettes => {
                 let palette = self.selected_settings_palette();
                 let mut rows = vec![
-                    make(lang.text("Palette", "Палитра"), format!("{} ({}/{})", palette.name, self.settings_view.palette.min(self.settings.palettes.len()-1)+1, self.settings.palettes.len()), lang.text("Browse all palettes. Color edits update every theme and profile using this palette.", "Выбор палитры. Изменения цветов отражаются во всех темах и профилях, использующих эту палитру."), SettingControl::PalettePick, true),
+                    make(lang.text("Palette", "Палитра"), format!("{} ({}/{})", palette.name, self.view.settings.palette.min(self.settings.palettes.len()-1)+1, self.settings.palettes.len()), lang.text("Browse all palettes. Color edits update every theme and profile using this palette.", "Выбор палитры. Изменения цветов отражаются во всех темах и профилях, использующих эту палитру."), SettingControl::PalettePick, true),
                     make(lang.text("Use in current mode", "Использовать в текущем режиме"), run.clone(), lang.text("Set this palette for the current mode; keep font and geometry.", "Включить палитру в текущем режиме, сохранив шрифт и геометрию."), SettingControl::PaletteApply, false),
                     make(lang.text("Rename palette", "Переименовать палитру"), action.clone(), lang.text("Change the name without breaking theme or profile references.", "Изменить имя, сохранив связи с темами и профилями."), SettingControl::PaletteRename, false),
                 ];

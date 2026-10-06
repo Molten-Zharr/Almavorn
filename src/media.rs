@@ -1,3 +1,4 @@
+use crate::errors::AppError;
 use crate::model::ImportedTrack;
 use anyhow::{Context, Result};
 use lofty::{
@@ -27,7 +28,7 @@ pub fn read_track(path: &Path) -> Result<ImportedTrack> {
         .canonicalize()
         .with_context(|| format!("File unavailable: {}", path.display()))?;
     anyhow::ensure!(path.is_file(), "Not a file: {}", path.display());
-    anyhow::ensure!(path.to_str().is_some(), "File path is not valid Unicode");
+    anyhow::ensure!(path.to_str().is_some(), AppError::InvalidPathEncoding);
     let decoder = Decoder::try_from(std::fs::File::open(&path)?)
         .with_context(|| format!("Unsupported or damaged audio: {}", path.display()))?;
     let decoded_duration = decoder.total_duration().map_or(0, |duration| {

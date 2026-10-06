@@ -1,20 +1,12 @@
-use super::{
-    App, Dialog,
-    database::{Background, background},
-};
+use super::{App, Dialog, background::background};
+use crate::errors::AppError;
 use crate::media;
 use anyhow::{Context, Result, ensure};
 use std::{collections::HashSet, path::PathBuf};
-use tokio::sync::oneshot;
 
-pub(super) struct BrowserJob {
-    receiver: Background<Browser>,
-    generation: u64,
-}
 pub(super) struct BrowserRequest {
     directory: PathBuf,
     folder: bool,
-    generation: u64,
     initial: bool,
 }
 
@@ -77,93 +69,82 @@ impl Browser {
 
 impl App {
     pub(super) fn show_browser(&mut self, directory: PathBuf, folder: bool) {
-        self.dialog = Some(Dialog::Browser(Browser::unloaded(
+        self.view.dialog = Some(Dialog::Browser(Browser::unloaded(
             directory.clone(),
             folder,
         )));
         self.queue_browser(directory, folder, true);
     }
     fn queue_browser(&mut self, directory: PathBuf, folder: bool, initial: bool) {
-        self.browser_generation = self.browser_generation.wrapping_add(1);
-        self.browser_ready = false;
-        if let Some(Dialog::Browser(browser)) = &mut self.dialog {
+        self.browser_state.ready = false;
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
             browser.directory = directory.clone();
             browser.entries.clear();
             browser.selected = 0;
             browser.offset = 0;
         }
-        self.pending_browser = Some(BrowserRequest {
+        self.browser_state.job.request(BrowserRequest {
             directory,
             folder,
             initial,
-            generation: self.browser_generation,
         });
         self.start_browser_job();
         self.message(self.text("Reading folder...", "Чтение папки...").into());
     }
     fn start_browser_job(&mut self) {
-        if self.browser_job.is_none()
-            && let Some(request) = self.pending_browser.take()
-        {
-            let generation = request.generation;
-            self.browser_job = Some(BrowserJob {
-                generation,
-                receiver: background(self.runtime(), move || {
-                    let directory = if request.initial && !request.directory.is_dir() {
-                        dirs::home_dir().unwrap_or(request.directory)
-                    } else {
-                        request.directory
-                    };
-                    Browser::open(directory, request.folder)
-                }),
-            });
-        }
+        let runtime = self.runtime.as_ref().expect("runtime is alive");
+        self.browser_state.job.start(|request| {
+            let BrowserRequest {
+                directory,
+                folder,
+                initial,
+            } = request;
+            let (directory, folder, initial) = (directory.clone(), *folder, *initial);
+            background(runtime, move || {
+                let directory = if initial && !directory.is_dir() {
+                    dirs::home_dir().unwrap_or(directory)
+                } else {
+                    directory
+                };
+                Browser::open(directory, folder)
+            })
+        });
     }
     pub fn browser_loading(&self) -> bool {
-        self.pending_browser.is_some()
-            || self
-                .browser_job
-                .as_ref()
-                .is_some_and(|job| job.generation == self.browser_generation)
+        self.browser_state.job.requested().is_some()
     }
     pub fn browser_ready(&self) -> bool {
-        self.browser_ready
+        self.browser_state.ready
     }
     pub(super) fn cancel_browser(&mut self) {
-        self.browser_generation = self.browser_generation.wrapping_add(1);
-        self.pending_browser = None;
-        self.browser_ready = false;
+        self.browser_state.job.cancel();
+        self.browser_state.ready = false;
     }
     pub(super) fn tick_browser(&mut self) -> Result<()> {
-        let result = match self.browser_job.as_mut().map(|job| job.receiver.try_recv()) {
-            Some(Ok(result)) => result,
-            Some(Err(oneshot::error::TryRecvError::Closed)) => {
-                Err(anyhow::anyhow!("Background operation was interrupted"))
-            }
-            _ => return Ok(()),
+        let Some(completed) = self.browser_state.job.poll() else {
+            return Ok(());
         };
-        let job = self.browser_job.take().expect("folder read is present");
         self.start_browser_job();
-        if job.generation == self.browser_generation
-            && let Some(Dialog::Browser(browser)) = &mut self.dialog
+        if completed.current
+            && let Some(Dialog::Browser(browser)) = &mut self.view.dialog
         {
-            let loaded = result?;
+            let loaded = completed.result?;
             browser.directory = loaded.directory;
             browser.entries = loaded.entries;
-            self.browser_ready = true;
+            self.browser_state.ready = true;
             self.message(self.text("Folder loaded", "Папка прочитана").into());
         }
         Ok(())
     }
     pub(super) fn browser_parent(&mut self) {
-        if let Some(Dialog::Browser(browser)) = &self.dialog
+        if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(parent) = browser.directory.parent()
         {
             self.queue_browser(parent.to_owned(), browser.folder, false);
         }
     }
     pub(super) fn browser_open(&mut self) -> Result<()> {
-        let directory = if let Some(Dialog::Browser(browser)) = &mut self.dialog
+        let directory = if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
             && let Some(entry) = browser.entries.get(browser.selected)
         {
             if entry.directory {
@@ -184,11 +165,8 @@ impl App {
     }
 
     pub(super) fn browser_add(&mut self) -> Result<()> {
-        ensure!(
-            self.browser_ready,
-            "Choose an available folder before adding music"
-        );
-        let paths = if let Some(Dialog::Browser(browser)) = &self.dialog {
+        ensure!(self.browser_state.ready, AppError::FolderNotReady);
+        let paths = if let Some(Dialog::Browser(browser)) = &self.view.dialog {
             if browser.folder {
                 vec![browser.directory.clone()]
             } else if !browser.marked.is_empty() {
@@ -206,10 +184,10 @@ impl App {
         } else {
             return Ok(());
         };
-        ensure!(!paths.is_empty(), "Select music files first");
+        ensure!(!paths.is_empty(), AppError::MusicSelectionRequired);
         self.start_import(paths)?;
         self.cancel_browser();
-        self.dialog = None;
+        self.view.dialog = None;
         Ok(())
     }
 }

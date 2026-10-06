@@ -1,4 +1,5 @@
 use super::{App, Dialog, Focus, Target};
+use crate::errors::AppError;
 use crate::{
     input::{Input, Key, KeyPress},
     model::Language,
@@ -9,15 +10,16 @@ use std::time::Duration;
 
 impl App {
     pub fn accepts_text(&self) -> bool {
-        matches!(self.dialog, Some(Dialog::Text(_)))
+        matches!(self.view.dialog, Some(Dialog::Text(_)))
     }
 
     pub fn hovered(&self, area: Rect) -> bool {
-        area.contains(self.pointer)
+        area.contains(self.view.pointer)
     }
 
     pub fn target_at(&self, point: Position) -> Option<&Target> {
-        self.hits
+        self.view
+            .hits
             .iter()
             .enumerate()
             .filter(|(_, hit)| hit.enabled && hit.area.contains(point))
@@ -42,22 +44,22 @@ impl App {
     fn handle_inner(&mut self, input: Input) -> Result<()> {
         match input {
             Input::Move { x, y } => {
-                self.pointer = Position::new(x, y);
+                self.view.pointer = Position::new(x, y);
                 self.hover_settings();
             }
             Input::Click { x, y, double } => {
-                self.pointer = Position::new(x, y);
-                if self.dialog.is_none() {
-                    self.focus_point(self.pointer);
+                self.view.pointer = Position::new(x, y);
+                if self.view.dialog.is_none() {
+                    self.focus_point(self.view.pointer);
                 }
-                let hit = self.target_at(self.pointer).cloned();
+                let hit = self.target_at(self.view.pointer).cloned();
                 if let Some(target) = hit {
                     self.target(target, double)?;
                 }
             }
             Input::Drag { x, y } => {
-                self.pointer = Position::new(x, y);
-                self.drag_workspace(self.pointer)?;
+                self.view.pointer = Position::new(x, y);
+                self.drag_workspace(self.view.pointer)?;
             }
             Input::Release { x, y } => self.release_workspace(Position::new(x, y))?,
             Input::CancelPointer => {
@@ -68,31 +70,31 @@ impl App {
                 if delta == 0 {
                     return Ok(());
                 }
-                if matches!(self.dialog, Some(Dialog::Settings { .. })) {
+                if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
                     let position = Position::new(x, y);
-                    self.settings_view.focus = if self.settings_view.menu_area.contains(position) {
+                    self.view.settings.focus = if self.view.settings.menu_area.contains(position) {
                         super::SettingsFocus::Menu
-                    } else if self.settings_view.subtab_area.contains(position) {
+                    } else if self.view.settings.subtab_area.contains(position) {
                         super::SettingsFocus::Subtabs
-                    } else if self.settings_view.parameters_area.contains(position) {
+                    } else if self.view.settings.parameters_area.contains(position) {
                         super::SettingsFocus::Parameters
                     } else {
                         return Ok(());
                     };
-                    self.pointer = Position::new(u16::MAX, u16::MAX);
+                    self.view.pointer = Position::new(u16::MAX, u16::MAX);
                 }
-                if self.dialog.is_some() {
+                if self.view.dialog.is_some() {
                     self.scroll_dialog(delta);
-                } else if self.playlist_area.contains(Position::new(x, y)) {
-                    self.focus = Focus::Playlists;
+                } else if self.view.playlist_area.contains(Position::new(x, y)) {
+                    self.view.focus = Focus::Playlists;
                     self.navigate(delta as i64);
-                } else if self.tracks_area.contains(Position::new(x, y)) {
-                    self.focus = Focus::Tracks;
+                } else if self.view.tracks_area.contains(Position::new(x, y)) {
+                    self.view.focus = Focus::Tracks;
                     self.navigate(delta as i64);
                 }
             }
             Input::Text(text) => {
-                if let Some(Dialog::Text(dialog)) = &mut self.dialog {
+                if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
@@ -104,13 +106,14 @@ impl App {
                 }
             }
             Input::SecondaryClick { x, y } => {
-                self.pointer = Position::new(x, y);
-                if self.dialog.as_ref().is_some_and(Dialog::is_settings) {
+                self.view.pointer = Position::new(x, y);
+                if self.view.dialog.as_ref().is_some_and(Dialog::is_settings) {
                     let target = self
+                        .view
                         .hits
                         .iter()
                         .rev()
-                        .find(|hit| hit.enabled && hit.area.contains(self.pointer))
+                        .find(|hit| hit.enabled && hit.area.contains(self.view.pointer))
                         .map(|hit| hit.target.clone());
                     if let Some(target) = target {
                         self.reverse_target(target)?;
@@ -118,10 +121,10 @@ impl App {
                 }
             }
             Input::Key(key) => {
-                let was_settings = self.dialog.as_ref().is_some_and(Dialog::is_settings);
+                let was_settings = self.view.dialog.as_ref().is_some_and(Dialog::is_settings);
                 let result = self.key(key);
-                if was_settings || self.dialog.as_ref().is_some_and(Dialog::is_settings) {
-                    self.pointer = Position::new(u16::MAX, u16::MAX);
+                if was_settings || self.view.dialog.as_ref().is_some_and(Dialog::is_settings) {
+                    self.view.pointer = Position::new(u16::MAX, u16::MAX);
                 }
                 result?;
             }
@@ -135,28 +138,28 @@ impl App {
                 return Ok(());
             }
             if !self.close_dialog() {
-                self.query.clear();
+                self.library.query.clear();
                 self.refresh()?;
             }
             return Ok(());
         }
         let normalized = key.normalized();
-        if let Some(action) = self.dialog.as_ref().and_then(Dialog::opening_action)
+        if let Some(action) = self.view.dialog.as_ref().and_then(Dialog::opening_action)
             && (self
                 .settings
                 .bindings
                 .iter()
                 .any(|binding| binding.action == action && binding.key == normalized)
-                || (matches!(self.dialog, Some(Dialog::SettingsHelp { .. }))
+                || (matches!(self.view.dialog, Some(Dialog::SettingsHelp { .. }))
                     && key == KeyPress::plain(Key::F(1))))
         {
             self.close_dialog();
             return Ok(());
         }
-        if matches!(self.dialog, Some(Dialog::Settings { .. })) {
+        if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
             return self.settings_key(key);
         }
-        if let Some(Dialog::CaptureBinding { index }) = self.dialog.as_ref() {
+        if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref() {
             let index = *index;
             let key = key.normalized();
             ensure!(
@@ -173,7 +176,7 @@ impl App {
                         | Key::PageDown
                 ) || key.ctrl
                     || key.alt,
-                "Navigation keys are reserved"
+                AppError::ReservedShortcut
             );
             ensure!(
                 !self
@@ -182,20 +185,20 @@ impl App {
                     .iter()
                     .enumerate()
                     .any(|(other, binding)| other != index && binding.key == key),
-                "This shortcut is already assigned"
+                AppError::ShortcutConflict
             );
             self.settings.bindings[index].key = key;
             self.save_settings()?;
-            self.settings_view.page = super::SettingsPage::Shortcuts;
-            self.settings_view.selected = 1 + index;
-            self.settings_view.focus = super::SettingsFocus::Parameters;
+            self.view.settings.page = super::SettingsPage::Shortcuts;
+            self.view.settings.selected = 1 + index;
+            self.view.settings.focus = super::SettingsFocus::Parameters;
             self.show_settings();
             return Ok(());
         }
-        if self.dialog.is_some() {
+        if self.view.dialog.is_some() {
             if !key.ctrl
                 && !key.alt
-                && let Some(Dialog::Panels { selected, .. }) = &self.dialog
+                && let Some(Dialog::Panels { selected, .. }) = &self.view.dialog
             {
                 let selected = *selected;
                 match key.key {
@@ -210,7 +213,7 @@ impl App {
                     _ => {}
                 }
             }
-            if matches!(self.dialog, Some(Dialog::Browser(_))) {
+            if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
                 if key.key == Key::Char('a') && key.ctrl {
                     return self.target(Target::BrowserMarkAll, false);
                 }
@@ -223,7 +226,7 @@ impl App {
             }
             if key.ctrl
                 && key.key == Key::Char('a')
-                && let Some(Dialog::Text(dialog)) = &mut self.dialog
+                && let Some(Dialog::Text(dialog)) = &mut self.view.dialog
             {
                 dialog.selected_all = true;
                 return Ok(());
@@ -231,7 +234,7 @@ impl App {
             match key.key {
                 Key::Enter => self.submit()?,
                 Key::Backspace => {
-                    if let Some(Dialog::Text(dialog)) = &mut self.dialog {
+                    if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                         if dialog.selected_all {
                             dialog.text.clear();
                             dialog.selected_all = false;
@@ -245,7 +248,7 @@ impl App {
                 Key::PageUp => self.scroll_dialog(-8),
                 Key::PageDown => self.scroll_dialog(8),
                 Key::Char(' ') => {
-                    if let Some(Dialog::Browser(browser)) = &mut self.dialog
+                    if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
                         && let Some(entry) = browser.entries.get(browser.selected)
                         && !entry.directory
                         && !browser.marked.insert(entry.path.clone())
@@ -257,7 +260,7 @@ impl App {
             }
             return Ok(());
         }
-        if matches!(self.workspace.focus, crate::workspace::Panel::Player)
+        if matches!(self.view.workspace.focus, crate::workspace::Panel::Player)
             && !key.ctrl
             && !key.alt
             && !key.shift
@@ -290,7 +293,7 @@ impl App {
             Key::Home => self.navigate(i64::MIN),
             Key::End => self.navigate(i64::MAX),
             Key::Enter => {
-                if self.focus == Focus::Playlists {
+                if self.view.focus == Focus::Playlists {
                     self.focus_panel(crate::workspace::Panel::Tracks);
                 } else {
                     self.play_selected()?;
@@ -306,9 +309,9 @@ impl App {
             Target::PanelFocus(panel) => self.focus_panel(panel),
             Target::PanelMove(panel) => {
                 self.focus_panel(panel);
-                self.workspace.gesture = Some(crate::workspace::Gesture::Move {
+                self.view.workspace.gesture = Some(crate::workspace::Gesture::Move {
                     panel,
-                    origin: self.pointer,
+                    origin: self.view.pointer,
                 });
             }
             Target::PanelCollapse(panel) => self.toggle_panel(panel)?,
@@ -316,10 +319,11 @@ impl App {
             Target::PanelVisibility(panel) => self.show_panel(panel)?,
             Target::PanelRow(index) => self.activate_panel_row(index, false)?,
             Target::PanelResize(index) => {
-                if let (Some(split), Some(root)) =
-                    (self.workspace.splits.get(index), &self.workspace.root)
-                {
-                    self.workspace.gesture = Some(crate::workspace::Gesture::Resize {
+                if let (Some(split), Some(root)) = (
+                    self.view.workspace.splits.get(index),
+                    &self.view.workspace.root,
+                ) {
+                    self.view.workspace.gesture = Some(crate::workspace::Gesture::Resize {
                         split: split.clone(),
                         before: root.clone(),
                     });
@@ -330,32 +334,34 @@ impl App {
             Target::Mode(mode) => self.set_mode(mode)?,
             Target::Playlist(id) => {
                 self.select_playlist(id);
-                self.focus = Focus::Playlists;
+                self.view.focus = Focus::Playlists;
             }
             Target::Track(id) => {
-                self.selected_entry = Some(id);
-                self.focus = Focus::Tracks;
+                self.library.selected_entry = Some(id);
+                self.view.focus = Focus::Tracks;
                 if double {
                     self.play_selected()?;
                 }
             }
             Target::Mark(id) => {
-                self.selected_entry = Some(id);
-                self.focus = Focus::Tracks;
-                if !self.marked.insert(id) {
-                    self.marked.remove(&id);
+                self.library.selected_entry = Some(id);
+                self.view.focus = Focus::Tracks;
+                if !self.library.marked.insert(id) {
+                    self.library.marked.remove(&id);
                 }
             }
             Target::SortColumn(sort) => {
-                self.sort_descending = self.sort == sort && !self.sort_descending;
-                self.sort = sort;
-                self.track_offset = 0;
-                self.focus = Focus::Tracks;
+                self.library.sort_descending =
+                    self.library.sort == sort && !self.library.sort_descending;
+                self.library.sort = sort;
+                self.view.track_offset = 0;
+                self.view.focus = Focus::Tracks;
                 self.refresh()?;
             }
             Target::PlaybackVolume(area) => {
-                if self.workspace.gesture.is_none() {
-                    self.workspace.gesture = Some(crate::workspace::Gesture::PlaybackVolume(area));
+                if self.view.workspace.gesture.is_none() {
+                    self.view.workspace.gesture =
+                        Some(crate::workspace::Gesture::PlaybackVolume(area));
                 }
                 let percent = (u32::from(self.last_pointer_x(area)) * 100
                     / u32::from(area.width.saturating_sub(1).max(1)))
@@ -363,10 +369,11 @@ impl App {
                 self.adjust_volume(percent - (self.settings.volume * 100.0).round() as i16)?;
             }
             Target::Seek(area) => {
-                if self.workspace.gesture.is_none() {
-                    self.workspace.gesture = Some(crate::workspace::Gesture::Seek(area));
+                if self.view.workspace.gesture.is_none() {
+                    self.view.workspace.gesture = Some(crate::workspace::Gesture::Seek(area));
                 }
-                if let (Some(audio), Some(current)) = (&self.audio, &self.current) {
+                if let (Some(audio), Some(current)) = (&self.playback.audio, &self.playback.current)
+                {
                     let duration = current.duration_ms;
                     if duration > 0 && area.width > 0 {
                         let point = self.last_pointer_x(area);
@@ -382,7 +389,7 @@ impl App {
             }
             Target::Submit => self.submit()?,
             Target::Text(c) => {
-                if let Some(Dialog::Text(dialog)) = &mut self.dialog {
+                if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
@@ -393,7 +400,7 @@ impl App {
                 }
             }
             Target::Backspace => {
-                if let Some(Dialog::Text(dialog)) = &mut self.dialog {
+                if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
@@ -403,7 +410,7 @@ impl App {
                 }
             }
             Target::KeyboardLanguage => {
-                if let Some(Dialog::Text(dialog)) = &mut self.dialog {
+                if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     dialog.keyboard = if dialog.keyboard == Language::Russian {
                         Language::English
                     } else {
@@ -412,12 +419,12 @@ impl App {
                 }
             }
             Target::KeyboardCase => {
-                if let Some(Dialog::Text(dialog)) = &mut self.dialog {
+                if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     dialog.upper = !dialog.upper;
                 }
             }
             Target::BrowserRow(index) => {
-                if let Some(Dialog::Browser(browser)) = &mut self.dialog {
+                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
                     browser.selected = index;
                     if let Some(entry) = browser.entries.get(index)
                         && !entry.directory
@@ -434,7 +441,7 @@ impl App {
                 self.browser_parent();
             }
             Target::BrowserMarkAll => {
-                if let Some(Dialog::Browser(browser)) = &mut self.dialog {
+                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
                     for entry in &browser.entries {
                         if !entry.directory {
                             browser.marked.insert(entry.path.clone());
@@ -445,7 +452,7 @@ impl App {
             Target::BrowserOpen => self.browser_open()?,
             Target::BrowserAdd => self.browser_add()?,
             Target::TransferRow(index) => {
-                if let Some(Dialog::Transfer { selected, .. }) = &mut self.dialog {
+                if let Some(Dialog::Transfer { selected, .. }) = &mut self.view.dialog {
                     *selected = index;
                 }
                 if double {
@@ -467,8 +474,8 @@ impl App {
             Target::SettingsTab(page) => self.select_settings_tab(page),
             Target::SettingsVolume(index, area) => {
                 if area.width > 0 {
-                    if self.workspace.gesture.is_none() {
-                        self.workspace.gesture =
+                    if self.view.workspace.gesture.is_none() {
+                        self.view.workspace.gesture =
                             Some(crate::workspace::Gesture::Volume(index, area));
                     }
                     self.select_setting(index);
@@ -480,15 +487,15 @@ impl App {
             }
             Target::SettingHelp(index) => self.settings_help(index),
             Target::BindingModifier(index) => {
-                if matches!(self.dialog, Some(Dialog::CaptureBinding { .. }))
-                    && let Some(value) = self.settings_view.binding_modifiers.get_mut(index)
+                if matches!(self.view.dialog, Some(Dialog::CaptureBinding { .. }))
+                    && let Some(value) = self.view.settings.binding_modifiers.get_mut(index)
                 {
                     *value = !*value;
                 }
             }
             Target::BindingKey(key) => {
-                if matches!(self.dialog, Some(Dialog::CaptureBinding { .. })) {
-                    let [ctrl, alt, shift] = self.settings_view.binding_modifiers;
+                if matches!(self.view.dialog, Some(Dialog::CaptureBinding { .. })) {
+                    let [ctrl, alt, shift] = self.view.settings.binding_modifiers;
                     self.key(KeyPress {
                         key,
                         ctrl,
@@ -508,13 +515,13 @@ impl App {
             | Target::SettingsVolume(index, _) => self.adjust_setting(index, -1)?,
             Target::SettingAdjust(index, direction) => self.adjust_setting(index, -direction)?,
             Target::SettingsPage(_) => {
-                self.pointer = Position::new(u16::MAX, u16::MAX);
-                self.settings_view.focus = super::SettingsFocus::Menu;
+                self.view.pointer = Position::new(u16::MAX, u16::MAX);
+                self.view.settings.focus = super::SettingsFocus::Menu;
                 self.settings_scroll(-1);
             }
             Target::SettingsTab(_) => {
-                self.pointer = Position::new(u16::MAX, u16::MAX);
-                self.settings_view.focus = super::SettingsFocus::Subtabs;
+                self.view.pointer = Position::new(u16::MAX, u16::MAX);
+                self.view.settings.focus = super::SettingsFocus::Subtabs;
                 self.settings_scroll(-1);
             }
             Target::DialogScroll(delta) => self.scroll_dialog(-delta),
@@ -527,6 +534,6 @@ impl App {
     }
 
     fn last_pointer_x(&self, area: Rect) -> u16 {
-        self.pointer.x.saturating_sub(area.x).min(area.width)
+        self.view.pointer.x.saturating_sub(area.x).min(area.width)
     }
 }

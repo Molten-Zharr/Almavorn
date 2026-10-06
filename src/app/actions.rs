@@ -1,4 +1,5 @@
 use super::{App, Dialog, Focus, TextPurpose, database::DatabaseOutcome};
+use crate::errors::AppError;
 use crate::{
     input::Action,
     model::{Mode, PlaylistKind},
@@ -44,19 +45,19 @@ impl App {
         }
         let editable = self
             .playlist()
-            .is_some_and(|playlist| playlist.can_edit(self.editing));
+            .is_some_and(|playlist| playlist.can_edit(self.view.editing));
         match action {
             ToggleEdit => self.settings.mode == Mode::Order,
             Rename | Delete => {
                 editable
-                    && match self.focus {
+                    && match self.view.focus {
                         Focus::Playlists => self
                             .playlist()
                             .is_some_and(|playlist| playlist.kind == PlaylistKind::Normal),
                         Focus::Tracks => self.entry().is_some_and(|entry| {
                             action == Delete
-                                || self.editing
-                                || !self.playlists.iter().any(|playlist| {
+                                || self.view.editing
+                                || !self.library.playlists.iter().any(|playlist| {
                                     playlist.mode == Mode::Order
                                         && playlist.kind == PlaylistKind::Normal
                                         && playlist
@@ -71,32 +72,31 @@ impl App {
                 if !editable {
                     return false;
                 }
-                let (index, length) = if self.focus == Focus::Playlists {
+                let (index, length) = if self.view.focus == Focus::Playlists {
                     let lists: Vec<_> = self
                         .visible_playlists()
                         .into_iter()
                         .filter(|playlist| playlist.kind == PlaylistKind::Normal)
                         .collect();
                     (
-                        lists
-                            .iter()
-                            .position(|playlist| Some(playlist.id) == self.selected_playlist),
+                        lists.iter().position(|playlist| {
+                            Some(playlist.id) == self.library.selected_playlist
+                        }),
                         lists.len(),
                     )
                 } else {
-                    if self.sort != crate::app::Sort::Position
-                        || self.sort_descending
-                        || !self.query.is_empty()
+                    if self.library.sort != crate::app::Sort::Position
+                        || self.library.sort_descending
+                        || !self.library.query.is_empty()
                     {
                         return false;
                     }
                     self.playlist()
                         .map(|playlist| {
                             (
-                                playlist
-                                    .entries
-                                    .iter()
-                                    .position(|entry| Some(entry.id) == self.selected_entry),
+                                playlist.entries.iter().position(|entry| {
+                                    Some(entry.id) == self.library.selected_entry
+                                }),
                                 playlist.entries.len(),
                             )
                         })
@@ -111,12 +111,14 @@ impl App {
                 })
             }
             TogglePlay => {
-                self.current.is_some() || self.preparing_playback() || self.entry().is_some()
+                self.playback.current.is_some()
+                    || self.preparing_playback()
+                    || self.entry().is_some()
             }
             Next => self.can_step_playback(1),
             Previous => self.can_step_playback(-1),
-            Stop => self.current.is_some() || self.preparing_playback(),
-            SeekForward | SeekBackward => self.current.is_some(),
+            Stop => self.playback.current.is_some() || self.preparing_playback(),
+            SeekForward | SeekBackward => self.playback.current.is_some(),
             VolumeUp => self.settings.volume < 1.0,
             VolumeDown => self.settings.volume > 0.0,
             Transfer | Metadata | Mark => self.entry().is_some(),
@@ -128,13 +130,16 @@ impl App {
                         .is_some_and(|playlist| !playlist.entries.is_empty())
             }
             Undo | Redo => self.scope().is_some_and(|scope| {
-                self.histories.get(scope).is_some_and(|(undo, redo)| {
-                    if action == Undo {
-                        !undo.is_empty()
-                    } else {
-                        !redo.is_empty()
-                    }
-                })
+                self.library
+                    .histories
+                    .get(scope)
+                    .is_some_and(|(undo, redo)| {
+                        if action == Undo {
+                            !undo.is_empty()
+                        } else {
+                            !redo.is_empty()
+                        }
+                    })
             }),
             _ => true,
         }
@@ -153,8 +158,8 @@ impl App {
         }
         use Action::*;
         match action {
-            Quit => self.quit = true,
-            Help => self.dialog = Some(Dialog::Help { offset: 0 }),
+            Quit => self.view.quit = true,
+            Help => self.view.dialog = Some(Dialog::Help { offset: 0 }),
             Settings => self.open_settings_page(super::SettingsPage::General),
             TogglePlay => self.toggle_playback()?,
             Stop => {
@@ -166,7 +171,7 @@ impl App {
                 self.adjust_volume(if action == VolumeUp { 5 } else { -5 })?;
             }
             SeekForward | SeekBackward => {
-                if let Some(audio) = &self.audio {
+                if let Some(audio) = &self.playback.audio {
                     let position = audio.position();
                     audio.seek(if action == SeekForward {
                         position.saturating_add(Duration::from_secs(5))
@@ -181,7 +186,7 @@ impl App {
                 Mode::Order
             })?,
             ToggleEdit => {
-                self.editing = !self.editing;
+                self.view.editing = !self.view.editing;
                 self.message(
                     self.text("Order editing changed", "Редактирование Порядка изменено")
                         .into(),
@@ -212,7 +217,7 @@ impl App {
                 let mut number = 1;
                 let name = loop {
                     let name = format!("{} {number}", self.text("Playlist", "Плейлист"));
-                    if !self.playlists.iter().any(|playlist| {
+                    if !self.library.playlists.iter().any(|playlist| {
                         playlist.mode == self.settings.mode
                             && playlist.name.to_lowercase() == name.to_lowercase()
                     }) {
@@ -223,7 +228,7 @@ impl App {
                 self.text_dialog(TextPurpose::Create, name);
             }
             Rename => {
-                if self.focus == Focus::Playlists {
+                if self.view.focus == Focus::Playlists {
                     if let Some(playlist) = self.playlist() {
                         self.text_dialog(
                             TextPurpose::RenamePlaylist(playlist.id),
@@ -238,7 +243,7 @@ impl App {
                 }
             }
             Delete => {
-                if self.focus == Focus::Playlists {
+                if self.view.focus == Focus::Playlists {
                     if let Some(playlist) = self.playlist() {
                         self.text_dialog(
                             TextPurpose::DeletePlaylist(playlist.id, playlist.name.clone()),
@@ -246,7 +251,7 @@ impl App {
                         );
                     }
                 } else if let (Some(playlist), Some(entry)) = (self.playlist(), self.entry()) {
-                    self.dialog = Some(Dialog::RemoveEntry {
+                    self.view.dialog = Some(Dialog::RemoveEntry {
                         playlist: playlist.id,
                         entry: entry.id,
                         title: entry.track.title.clone(),
@@ -255,17 +260,17 @@ impl App {
             }
             MoveUp | MoveDown => {
                 let direction = if action == MoveUp { -1 } else { 1 };
-                if let Some(playlist) = self.selected_playlist {
-                    let focus = self.focus;
-                    let entry = self.selected_entry;
-                    let unlocked = self.editing;
+                if let Some(playlist) = self.library.selected_playlist {
+                    let focus = self.view.focus;
+                    let entry = self.library.selected_entry;
+                    let unlocked = self.view.editing;
                     self.start_database(None, move |store| {
                         let change = if focus == Focus::Playlists {
                             store.move_playlist(playlist, direction, unlocked)?
                         } else {
                             store.move_entry(
                                 playlist,
-                                entry.context("Select a track first")?,
+                                entry.context(AppError::TrackSelectionRequired)?,
                                 direction,
                                 unlocked,
                             )?
@@ -280,29 +285,34 @@ impl App {
                     .into_iter()
                     .flat_map(|playlist| &playlist.entries)
                     .filter(|entry| {
-                        self.marked.contains(&entry.id)
-                            || (self.marked.is_empty() && Some(entry.id) == self.selected_entry)
+                        self.library.marked.contains(&entry.id)
+                            || (self.library.marked.is_empty()
+                                && Some(entry.id) == self.library.selected_entry)
                     })
                     .map(|entry| entry.track.id)
                     .collect();
-                self.dialog = Some(Dialog::Transfer { ids, selected: 0 });
+                self.view.dialog = Some(Dialog::Transfer { ids, selected: 0 });
             }
-            Search => self.text_dialog(TextPurpose::Search, self.query.clone()),
+            Search => self.text_dialog(TextPurpose::Search, self.library.query.clone()),
             Sort => {
-                self.sort = self.sort.next();
-                self.sort_descending = false;
-                self.track_offset = 0;
+                self.library.sort = self.library.sort.next();
+                self.library.sort_descending = false;
+                self.view.track_offset = 0;
                 self.refresh()?;
             }
             Undo | Redo => {
                 if let Some(scope) = self.scope() {
-                    let change = self.histories.get_mut(scope).and_then(|(undo, redo)| {
-                        if action == Undo {
-                            undo.pop()
-                        } else {
-                            redo.pop()
-                        }
-                    });
+                    let change = self
+                        .library
+                        .histories
+                        .get_mut(scope)
+                        .and_then(|(undo, redo)| {
+                            if action == Undo {
+                                undo.pop()
+                            } else {
+                                redo.pop()
+                            }
+                        });
                     if let Some(change) = change {
                         let redo = action == Redo;
                         let recovery = change.clone();
@@ -317,13 +327,14 @@ impl App {
                         });
                         match result {
                             Ok(()) => {
-                                self.database
+                                self.library
+                                    .database
                                     .as_mut()
                                     .expect("database request is present")
                                     .undo = Some((recovery, redo))
                             }
                             Err(error) => {
-                                let history = self.histories.entry(scope).or_default();
+                                let history = self.library.histories.entry(scope).or_default();
                                 if redo {
                                     history.1.push(recovery);
                                 } else {
@@ -337,17 +348,17 @@ impl App {
             }
             Metadata => {
                 if let Some(entry) = self.entry() {
-                    self.dialog = Some(Dialog::Metadata {
+                    self.view.dialog = Some(Dialog::Metadata {
                         track: entry.track.clone(),
                         offset: 0,
                     });
                 }
             }
             Mark => {
-                if let Some(id) = self.selected_entry
-                    && !self.marked.insert(id)
+                if let Some(id) = self.library.selected_entry
+                    && !self.library.marked.insert(id)
                 {
-                    self.marked.remove(&id);
+                    self.library.marked.remove(&id);
                 }
             }
             PlaylistPanel => {
@@ -361,7 +372,7 @@ impl App {
                 self.save_settings()?;
             }
             Panels => {
-                self.dialog = Some(Dialog::Panels {
+                self.view.dialog = Some(Dialog::Panels {
                     selected: 0,
                     expanded: Vec::new(),
                 })

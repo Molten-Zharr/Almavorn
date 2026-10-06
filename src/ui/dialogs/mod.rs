@@ -145,7 +145,7 @@ pub(super) fn render_dialog(
                     }),
                     rect,
                 );
-                app.hits.push(Hit {
+                app.view.hits.push(Hit {
                     area: rect,
                     target: Target::TransferRow(row),
                     enabled: true,
