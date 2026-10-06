@@ -189,7 +189,7 @@ impl Action {
             Self::MoveDown => language.text("Move the selection one position later in stored order.", "Переместить выбранный элемент на одну позицию ниже в сохранённом порядке."),
             Self::Transfer => language.text("Copy selected tracks to another editable playlist.", "Копировать отмеченные композиции в другой доступный для правки плейлист."),
             Self::Search => language.text("Filter tracks by title, artist, album or path.", "Отфильтровать композиции по названию, исполнителю, альбому либо пути."),
-            Self::Sort => language.text("Change visible sorting; keep saved track positions.", "Изменить сортировку на экране, сохранив порядок композиций в базе."),
+            Self::Sort => language.text("Cycle view sorting; click a column header to sort, click again to reverse. Saved positions stay unchanged.", "Менять сортировку вида; клик по заголовку сортирует, повторный клик меняет направление. Позиции в базе сохраняются."),
             Self::Undo => language.text("Undo a library change in Chaos or the sorting desk.", "Отменить правку библиотеки в Хаосе либо на сортировочном столе."),
             Self::Redo => language.text("Repeat a library change that was undone.", "Повторить отменённую правку библиотеки."),
             Self::Metadata => language.text("Show saved metadata and original imported tags.", "Показать сохранённые сведения и исходные импортированные теги."),

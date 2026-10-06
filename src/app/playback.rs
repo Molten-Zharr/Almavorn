@@ -4,14 +4,19 @@ use super::{
 };
 use crate::{
     audio::{Audio, PreparedAudio},
-    model::Track,
+    model::Entry,
 };
 use anyhow::{Context, Result, ensure};
-use std::sync::Arc;
+use rodio::Source;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use tokio::sync::oneshot;
 
 pub(super) struct PlaybackRequest {
-    queue: Arc<[Track]>,
+    queue: Arc<[Entry]>,
+    playlist_id: i64,
     index: usize,
     generation: u64,
     paused: bool,
@@ -19,6 +24,12 @@ pub(super) struct PlaybackRequest {
 pub(super) struct PlaybackJob {
     receiver: Background<PreparedAudio>,
     request: PlaybackRequest,
+}
+
+pub(super) struct WaveformJob {
+    receiver: Background<Vec<f32>>,
+    generation: u64,
+    pub(super) cancel: Arc<AtomicBool>,
 }
 
 impl App {
@@ -50,6 +61,12 @@ impl App {
             |request| request.paused,
         )
     }
+    pub fn playback_active(&self) -> bool {
+        self.current.is_some() && self.audio.as_ref().is_some_and(Audio::has_track)
+    }
+    pub fn current_paused(&self) -> bool {
+        self.audio.as_ref().is_none_or(Audio::paused)
+    }
     fn requested_playback(&self) -> Option<&PlaybackRequest> {
         self.pending_playback.as_ref().or_else(|| {
             self.playback_job
@@ -75,26 +92,28 @@ impl App {
 
     pub(super) fn play_selected(&mut self) -> Result<()> {
         let entry = self.entry().context("Select a track first")?;
-        let queue: Arc<[Track]> = self
-            .playlist()
-            .context("Select a playlist first")?
-            .entries
-            .iter()
-            .map(|entry| entry.track.clone())
-            .collect::<Vec<_>>()
-            .into();
+        let playlist = self.playlist().context("Select a playlist first")?;
+        let playlist_id = playlist.id;
+        let queue: Arc<[Entry]> = playlist.entries.clone().into();
         let index = queue
             .iter()
-            .position(|track| track.id == entry.track.id)
+            .position(|queued| queued.id == entry.id)
             .context("Track no longer exists")?;
-        self.prepare_playback(queue, index)
+        self.prepare_playback(queue, playlist_id, index)
     }
-    fn prepare_playback(&mut self, queue: Arc<[Track]>, index: usize) -> Result<()> {
+    fn prepare_playback(
+        &mut self,
+        queue: Arc<[Entry]>,
+        playlist_id: i64,
+        index: usize,
+    ) -> Result<()> {
         ensure!(index < queue.len(), "Select a track first");
-        let title = queue[index].title.clone();
+        let title = queue[index].track.title.clone();
         self.playback_generation = self.playback_generation.wrapping_add(1);
+        self.cancel_waveform();
         self.pending_playback = Some(PlaybackRequest {
             queue,
+            playlist_id,
             index,
             generation: self.playback_generation,
             paused: false,
@@ -111,7 +130,7 @@ impl App {
         if self.playback_job.is_none()
             && let Some(request) = self.pending_playback.take()
         {
-            let path = request.queue[request.index].path.clone();
+            let path = request.queue[request.index].track.path.clone();
             self.playback_job = Some(PlaybackJob {
                 receiver: background(self.runtime(), move || Audio::prepare(&path)),
                 request,
@@ -138,7 +157,16 @@ impl App {
         if job.request.generation != self.playback_generation {
             return Ok(());
         }
-        let source = result?;
+        let source = match result {
+            Ok(source) => source,
+            Err(error) => {
+                if !self.audio.as_ref().is_some_and(Audio::has_track) {
+                    self.stop_playback();
+                }
+                return Err(error);
+            }
+        };
+        let duration = source.total_duration();
         // Keep the platform audio device on its owning thread; only file access
         // and decoder preparation run in a blocking worker.
         if self.audio.is_none() {
@@ -146,10 +174,19 @@ impl App {
         }
         let audio = self.audio.as_mut().context("Audio output unavailable")?;
         audio.play_prepared(source, job.request.paused);
-        let track = job.request.queue[job.request.index].clone();
+        let entry = &job.request.queue[job.request.index];
+        let mut track = entry.track.clone();
+        if let Some(duration) = duration {
+            track.duration_ms = duration.as_millis().min(u128::from(u64::MAX)) as u64;
+        }
+        self.playing_entry = Some(entry.id);
+        self.playing_playlist = Some(job.request.playlist_id);
         self.queue = job.request.queue;
         self.queue_index = job.request.index;
         self.current = Some(track.clone());
+        self.waveform = None;
+        self.pending_waveform = Some((track.path.clone(), self.playback_generation));
+        self.start_waveform_job();
         self.message(format!(
             "{}: {}",
             self.text("Playing", "Воспроизведение"),
@@ -186,6 +223,10 @@ impl App {
             audio.stop();
         }
         self.current = None;
+        self.playing_entry = None;
+        self.playing_playlist = None;
+        self.waveform = None;
+        self.cancel_waveform();
         self.queue = Arc::from([]);
         self.queue_index = 0;
         self.message(
@@ -195,10 +236,16 @@ impl App {
     }
 
     pub(super) fn next(&mut self, direction: i64, explicit: bool) -> Result<()> {
-        let (queue, index) = self
+        let Some((queue, playlist_id, index)) = self
             .requested_playback()
-            .map(|request| (request.queue.clone(), request.index))
-            .unwrap_or_else(|| (self.queue.clone(), self.queue_index));
+            .map(|request| (request.queue.clone(), request.playlist_id, request.index))
+            .or_else(|| {
+                self.playing_playlist
+                    .map(|id| (self.queue.clone(), id, self.queue_index))
+            })
+        else {
+            return Ok(());
+        };
         if direction > 0 && index + 1 >= queue.len() {
             if !explicit {
                 self.stop_playback();
@@ -209,6 +256,66 @@ impl App {
             return Ok(());
         }
         let index = bounded(index, direction, queue.len());
-        self.prepare_playback(queue, index)
+        self.prepare_playback(queue, playlist_id, index)
+    }
+
+    pub(super) fn cancel_waveform(&mut self) {
+        self.pending_waveform = None;
+        if let Some(job) = &self.waveform_job {
+            job.cancel.store(true, Ordering::Relaxed);
+        }
+    }
+
+    fn start_waveform_job(&mut self) {
+        if self.waveform_job.is_none()
+            && let Some((path, generation)) = self.pending_waveform.take()
+        {
+            let cancel = Arc::new(AtomicBool::new(false));
+            let worker_cancel = cancel.clone();
+            self.waveform_job = Some(WaveformJob {
+                receiver: background(self.runtime(), move || {
+                    Audio::waveform(&path, &worker_cancel)
+                }),
+                generation,
+                cancel,
+            });
+        }
+    }
+
+    pub fn preparing_waveform(&self) -> bool {
+        self.pending_waveform.is_some()
+            || self.waveform_job.as_ref().is_some_and(|job| {
+                job.generation == self.playback_generation && !job.cancel.load(Ordering::Relaxed)
+            })
+    }
+
+    pub(super) fn tick_waveform(&mut self) {
+        let result = match self
+            .waveform_job
+            .as_mut()
+            .map(|job| job.receiver.try_recv())
+        {
+            Some(Ok(result)) => result,
+            Some(Err(oneshot::error::TryRecvError::Closed)) => {
+                Err(anyhow::anyhow!("Waveform worker was interrupted"))
+            }
+            _ => return,
+        };
+        let job = self.waveform_job.take().expect("waveform job exists");
+        if job.generation == self.playback_generation
+            && self.current.is_some()
+            && !job.cancel.load(Ordering::Relaxed)
+        {
+            match result {
+                Ok(waveform) => self.waveform = Some(waveform),
+                Err(error) => {
+                    self.waveform = Some(Vec::new());
+                    self.failure(
+                        error.context(self.text("Waveform unavailable", "Аудиоволна недоступна")),
+                    );
+                }
+            }
+        }
+        self.start_waveform_job();
     }
 }

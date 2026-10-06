@@ -57,7 +57,9 @@ pub enum Target {
     Playlist(i64),
     Track(i64),
     Mark(i64),
+    SortColumn(Sort),
     Seek(Rect),
+    PlaybackVolume(Rect),
     CloseDialog,
     Submit,
     Text(char),
@@ -90,5 +92,6 @@ pub struct Hit {
 
 pub struct Keycap {
     pub area: Rect,
+    pub clear_area: Rect,
     pub label: String,
 }

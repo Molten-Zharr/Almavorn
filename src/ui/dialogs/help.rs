@@ -239,7 +239,14 @@ pub(super) fn help_dialog(
     for (index, key, delta) in [(0, Key::Up, -1), (1, Key::Down, 1)] {
         let rect =
             Rect::new(footer.x + close_width + 2 + index * 4, footer.y, 3, 2).intersection(footer);
-        keycaps::render(frame, app, KeyPress::plain(key), rect, palette);
+        keycaps::render(
+            frame,
+            app,
+            KeyPress::plain(key),
+            Rect::new(rect.x, rect.y, rect.width.saturating_add(1), rect.height)
+                .intersection(footer),
+            palette,
+        );
         app.hits.push(Hit {
             area: rect,
             target: Target::DialogScroll(delta),

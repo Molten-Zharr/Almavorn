@@ -39,7 +39,7 @@ impl App {
             })
             .collect();
         entries.sort_by(|a, b| {
-            match self.sort {
+            let order = match self.sort {
                 Sort::Position => a.position.cmp(&b.position),
                 Sort::Title => a
                     .track
@@ -57,7 +57,12 @@ impl App {
                     .to_lowercase()
                     .cmp(&b.track.album.to_lowercase()),
                 Sort::Duration => a.track.duration_ms.cmp(&b.track.duration_ms),
-            }
+            };
+            (if self.sort_descending {
+                order.reverse()
+            } else {
+                order
+            })
             .then_with(|| a.position.cmp(&b.position))
         });
         entries

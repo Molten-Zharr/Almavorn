@@ -3,13 +3,15 @@ use super::{
     widgets::{clean, visible_offset},
 };
 use crate::{
-    app::{App, Hit, Target},
+    app::{App, Hit, Sort, Target},
     model::duration_text,
 };
 use ratatui::{
     Frame,
-    layout::{Constraint, Rect},
-    widgets::{Paragraph, Row, Table, Wrap},
+    layout::{Constraint, Flex, Layout, Rect},
+    style::Modifier,
+    text::{Line, Span},
+    widgets::{Cell, Paragraph, Row, Table, Wrap},
 };
 
 pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -52,21 +54,40 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
     {
         let rect = Rect::new(inner.x, inner.y + row as u16, inner.width, 1);
         let selected = Some(*id) == app.selected_playlist;
-        frame.render_widget(
-            Paragraph::new(format!(
-                "{} {name} · {count}",
-                if selected { ">" } else { " " }
-            ))
-            .style(if selected {
-                palette
-                    .text()
-                    .bg(palette.sidebar_selection)
+        let style = if selected {
+            palette
+                .text()
+                .bg(palette.sidebar_selection)
+                .fg(palette.background)
+        } else {
+            palette.text()
+        };
+        let playing = app.playback_active() && app.playing_playlist == Some(*id);
+        let mut content = Vec::new();
+        if playing {
+            content.push(Span::styled(
+                format!(
+                    "[{}] ",
+                    if app.current_paused() {
+                        app.text("PAUSED", "ПАУЗА")
+                    } else {
+                        app.text("PLAYING", "ИГРАЕТ")
+                    }
+                ),
+                style
+                    .bg(if app.current_paused() {
+                        palette.muted
+                    } else {
+                        palette.accent
+                    })
                     .fg(palette.background)
-            } else {
-                palette.text()
-            }),
-            rect,
-        );
+                    .add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            content.push(Span::styled("  ", style));
+        }
+        content.push(Span::styled(format!("{name} · {count}"), style));
+        frame.render_widget(Paragraph::new(Line::from(content)).style(style), rect);
         app.hits.push(Hit {
             area: rect,
             target: Target::Playlist(*id),
@@ -86,8 +107,9 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         .map(|playlist| playlist.display_name(app.settings.language))
         .unwrap_or(app.text("Tracks", "Композиции"));
     let title = format!(
-        "{name} · {}{}",
+        "{name} · {} {}{}",
         app.sort.name(app.settings.language),
+        if app.sort_descending { "↓" } else { "↑" },
         if app.query.is_empty() {
             String::new()
         } else {
@@ -118,30 +140,52 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         .take(capacity)
         .map(|entry| {
             let selected = Some(entry.id) == app.selected_entry;
-            let playing = app
-                .current
-                .as_ref()
-                .is_some_and(|track| track.id == entry.track.id);
+            let playing = app.playback_active()
+                && app.playing_playlist == app.selected_playlist
+                && app.playing_entry == Some(entry.id);
             let mark = if app.marked.contains(&entry.id) {
                 "[x]"
             } else {
                 "[ ]"
             };
-            Row::new(vec![
-                mark.to_owned(),
-                format!("{}{}", if playing { ">" } else { "" }, entry.position + 1),
-                clean(&entry.track.title),
-                clean(&entry.track.artist),
-                duration_text(entry.track.duration_ms),
-            ])
-            .style(if selected {
+            let style = if selected {
                 palette
                     .text()
                     .bg(palette.selection)
                     .fg(palette.selection_text)
             } else {
                 palette.text()
-            })
+            };
+            let mut title = Vec::new();
+            if playing {
+                title.push(Span::styled(
+                    format!(
+                        "[{}] ",
+                        if app.current_paused() {
+                            app.text("PAUSED", "ПАУЗА")
+                        } else {
+                            app.text("PLAYING", "ИГРАЕТ")
+                        }
+                    ),
+                    style
+                        .bg(if app.current_paused() {
+                            palette.muted
+                        } else {
+                            palette.accent
+                        })
+                        .fg(palette.background)
+                        .add_modifier(Modifier::BOLD),
+                ));
+            }
+            title.push(Span::styled(clean(&entry.track.title), style));
+            Row::new(vec![
+                Cell::from(mark),
+                Cell::from((entry.position + 1).to_string()),
+                Cell::from(Line::from(title)),
+                Cell::from(clean(&entry.track.artist)),
+                Cell::from(duration_text(entry.track.duration_ms)),
+            ])
+            .style(style)
         })
         .collect();
     let empty = entries.is_empty();
@@ -152,7 +196,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             Constraint::Length(4),
             Constraint::Min(10),
             Constraint::Length(0),
-            Constraint::Length(5),
+            Constraint::Length(7),
         ]
     } else {
         vec![
@@ -160,19 +204,61 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             Constraint::Length(4),
             Constraint::Percentage(52),
             Constraint::Min(8),
-            Constraint::Length(6),
+            Constraint::Length(8),
         ]
     };
-    let header = Row::new(vec![
-        "".to_owned(),
-        "#".to_owned(),
-        app.text("Title", "Название").to_owned(),
-        app.text("Artist", "Исполнитель").to_owned(),
-        app.text("Time", "Время").to_owned(),
-    ])
-    .style(palette.text().fg(palette.muted));
+    let column_areas = Layout::horizontal(columns.clone())
+        .spacing(1)
+        .flex(Flex::Start)
+        .split(Rect::new(inner.x, inner.y, inner.width, 1));
+    let labels = [
+        "",
+        "#",
+        app.text("Title", "Название"),
+        app.text("Artist", "Исполнитель"),
+        app.text("Time", "Время"),
+    ];
+    let sorts = [
+        None,
+        Some(Sort::Position),
+        Some(Sort::Title),
+        Some(Sort::Artist),
+        Some(Sort::Duration),
+    ];
+    let mut header_cells = Vec::new();
+    for (index, (label, sort)) in labels.into_iter().zip(sorts).enumerate() {
+        let rect = column_areas[index];
+        let active = sort == Some(app.sort);
+        let mut style = palette.text().fg(if active {
+            palette.accent
+        } else {
+            palette.muted
+        });
+        if sort.is_some() && app.hovered(rect) {
+            style = style.bg(palette.selection).add_modifier(Modifier::BOLD);
+        }
+        let label = if active {
+            format!("{} {label}", if app.sort_descending { "↓" } else { "↑" })
+        } else {
+            label.to_owned()
+        };
+        header_cells.push(Cell::from(label).style(style));
+        if let Some(sort) = sort
+            && rect.width > 0
+        {
+            app.hits.push(Hit {
+                area: rect,
+                target: Target::SortColumn(sort),
+                enabled: true,
+            });
+        }
+    }
+    let header = Row::new(header_cells).style(palette.text().fg(palette.muted));
     frame.render_widget(
-        Table::new(rows, columns).header(header).column_spacing(1),
+        Table::new(rows, columns)
+            .header(header)
+            .column_spacing(1)
+            .flex(Flex::Start),
         inner,
     );
     if empty {

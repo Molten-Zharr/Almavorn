@@ -410,6 +410,13 @@ fn chrome(
         }));
     let inner = outer.inner(area);
     frame.render_widget(outer, area);
+    if palette.borders != crate::preferences::BorderWeight::None {
+        for x in area.x..area.right() {
+            if let Some(cell) = frame.buffer_mut().cell_mut((x, area.y)) {
+                cell.set_fg(palette.accent);
+            }
+        }
+    }
     app.hits.push(Hit {
         area,
         target: Target::PanelFocus(panel),
@@ -434,7 +441,7 @@ fn chrome(
                 })
                 .add_modifier(Modifier::BOLD),
         ),
-        title_area,
+        title_hit,
     );
     app.hits.push(Hit {
         area: title_hit,

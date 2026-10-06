@@ -8,7 +8,7 @@ use crate::{
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier},
+    style::Modifier,
     text::{Line, Span},
     widgets::Paragraph,
 };
@@ -369,19 +369,12 @@ fn command_button(
         Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
         _ => false,
     };
-    let hovered = enabled && app.hovered(area);
-    let surface = match (palette.background, palette.selection) {
-        (Color::Rgb(r, g, b), Color::Rgb(sr, sg, sb)) => {
-            let blend = |background: u8, selection: u8| {
-                ((u16::from(background) * 4 + u16::from(selection)) / 5) as u8
-            };
-            Color::Rgb(blend(r, sr), blend(g, sg), blend(b, sb))
-        }
-        (background, _) => background,
-    };
-    let mut style = palette.text().bg(surface);
-    if active || hovered {
+    let hovered = app.hovered(area);
+    let mut style = palette.text();
+    if hovered {
         style = style.bg(palette.selection).add_modifier(Modifier::BOLD);
+    } else if active {
+        style = style.add_modifier(Modifier::BOLD);
     }
     if !enabled {
         style = style.fg(palette.muted);
@@ -391,7 +384,7 @@ fn command_button(
         style.fg(palette.accent),
     )];
     if let Some(shortcut) = button_shortcut(app, &target) {
-        let key_style = style.bg(palette.selection).fg(if enabled {
+        let key_style = style.fg(if enabled {
             palette.button_text
         } else {
             palette.muted

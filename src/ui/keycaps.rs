@@ -77,6 +77,11 @@ pub(super) fn render(
             Paragraph::new("▔".repeat(usize::from(width))).style(palette.text().fg(palette.muted)),
             Rect::new(x, y + 1, width, 1),
         );
-        app.keycaps.push(Keycap { area: rect, label });
+        app.keycaps.push(Keycap {
+            area: rect,
+            // Block-edge glyphs can occupy one extra raster cell in the GUI.
+            clear_area: Rect::new(x, y, width.saturating_add(1), 2).intersection(area),
+            label,
+        });
     }
 }

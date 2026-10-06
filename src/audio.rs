@@ -1,6 +1,12 @@
 use anyhow::{Context, Result};
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
-use std::{fs::File, io::BufReader, path::Path, time::Duration};
+use std::{
+    fs::File,
+    io::BufReader,
+    path::Path,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 pub type PreparedAudio = Decoder<BufReader<File>>;
 
@@ -29,6 +35,44 @@ impl Audio {
             File::open(path).with_context(|| format!("Cannot open {}", path.display()))?,
         )
         .context("Unsupported or damaged audio file")
+    }
+
+    pub fn waveform(path: &Path, cancel: &AtomicBool) -> Result<Vec<f32>> {
+        let source = Self::prepare(path)?;
+        // Keep an energy envelope of the whole file in bounded memory. When the
+        // buffer fills, merge neighboring windows instead of retaining samples.
+        let mut windows: Vec<(f64, u64)> = Vec::with_capacity(1024);
+        let mut window_size = 4096u64;
+        let (mut energy, mut count) = (0.0f64, 0u64);
+        for sample in source {
+            if count.is_multiple_of(4096) && cancel.load(Ordering::Relaxed) {
+                return Ok(Vec::new());
+            }
+            let sample = f64::from(sample);
+            if sample.is_finite() {
+                energy += sample * sample;
+            }
+            count += 1;
+            if count == window_size {
+                windows.push((energy, count));
+                (energy, count) = (0.0, 0);
+                if windows.len() == 1024 {
+                    for index in 0..512 {
+                        let (a, b) = (windows[index * 2], windows[index * 2 + 1]);
+                        windows[index] = (a.0 + b.0, a.1 + b.1);
+                    }
+                    windows.truncate(512);
+                    window_size = window_size.saturating_mul(2);
+                }
+            }
+        }
+        if count > 0 {
+            windows.push((energy, count));
+        }
+        Ok(windows
+            .into_iter()
+            .map(|(energy, count)| (energy / count as f64).sqrt() as f32)
+            .collect())
     }
 
     pub fn play(&mut self, path: &Path) -> Result<()> {
@@ -68,6 +112,9 @@ impl Audio {
     }
     pub fn paused(&self) -> bool {
         self.player.is_paused()
+    }
+    pub fn has_track(&self) -> bool {
+        self.started && !self.player.empty()
     }
     pub fn finished(&mut self) -> bool {
         if self.started && self.player.empty() {

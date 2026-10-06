@@ -25,14 +25,14 @@ use self::{
 };
 use crate::{
     audio::Audio,
-    model::{Language, Mode, Playlist, Settings, Track},
+    model::{Entry, Language, Mode, Playlist, Settings, Track},
     store::{Change, Store},
 };
 use anyhow::{Context, Result};
 use ratatui::layout::{Position, Rect};
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, atomic::Ordering},
     time::Duration,
 };
@@ -55,6 +55,7 @@ pub struct App {
     pub focus: Focus,
     pub workspace: crate::workspace::Workspace,
     pub sort: Sort,
+    pub sort_descending: bool,
     pub query: String,
     pub dialog: Option<Dialog>,
     pub hits: Vec<Hit>,
@@ -68,7 +69,12 @@ pub struct App {
     pub quit: bool,
     pub editing: bool,
     pub current: Option<Track>,
-    queue: Arc<[Track]>,
+    pub playing_playlist: Option<i64>,
+    pub playing_entry: Option<i64>,
+    pub waveform: Option<Vec<f32>>,
+    waveform_job: Option<playback::WaveformJob>,
+    pending_waveform: Option<(PathBuf, u64)>,
+    queue: Arc<[Entry]>,
     queue_index: usize,
     audio: Option<Audio>,
     playback_job: Option<playback::PlaybackJob>,
@@ -137,6 +143,7 @@ impl App {
             focus: Focus::Tracks,
             workspace: Default::default(),
             sort: Sort::Position,
+            sort_descending: false,
             query: String::new(),
             dialog: None,
             hits: Vec::new(),
@@ -155,6 +162,11 @@ impl App {
             quit: false,
             editing: false,
             current: None,
+            playing_playlist: None,
+            playing_entry: None,
+            waveform: None,
+            waveform_job: None,
+            pending_waveform: None,
             queue: Arc::from([]),
             queue_index: 0,
             audio: None,
@@ -311,6 +323,7 @@ impl App {
         self.tick_settings_files()?;
         self.tick_browser()?;
         self.tick_playback()?;
+        self.tick_waveform();
         self.poll_import()?;
         self.tick_library()?;
         if !self.preparing_playback()
@@ -326,6 +339,7 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        self.cancel_waveform();
         if let Some(job) = &self.import {
             job.cancel.store(true, Ordering::Relaxed);
         }

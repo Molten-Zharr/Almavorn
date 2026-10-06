@@ -224,8 +224,19 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         );
         // The GUI key covers the terminal key, including its edge glyphs.
         let [r, g, b] = palette.color("background");
+        let clear_rect = egui::Rect::from_min_size(
+            image.min
+                + egui::vec2(
+                    f32::from(cap.clear_area.x) * scale.x,
+                    f32::from(cap.clear_area.y) * scale.y,
+                ),
+            egui::vec2(
+                f32::from(cap.clear_area.width) * scale.x,
+                f32::from(cap.clear_area.height) * scale.y,
+            ),
+        );
         ui.painter()
-            .rect_filled(cell_rect, 0, egui::Color32::from_rgb(r, g, b));
+            .rect_filled(clear_rect, 0, egui::Color32::from_rgb(r, g, b));
         let rect = cell_rect.shrink(1.0);
         let bevel = (rect.height() * 0.13).max(2.0);
         let face = egui::Rect::from_min_max(

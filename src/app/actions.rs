@@ -84,7 +84,10 @@ impl App {
                         lists.len(),
                     )
                 } else {
-                    if self.sort != crate::app::Sort::Position || !self.query.is_empty() {
+                    if self.sort != crate::app::Sort::Position
+                        || self.sort_descending
+                        || !self.query.is_empty()
+                    {
                         return false;
                     }
                     self.playlist()
@@ -287,6 +290,7 @@ impl App {
             Search => self.text_dialog(TextPurpose::Search, self.query.clone()),
             Sort => {
                 self.sort = self.sort.next();
+                self.sort_descending = false;
                 self.track_offset = 0;
                 self.refresh()?;
             }

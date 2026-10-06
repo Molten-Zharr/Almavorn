@@ -139,6 +139,12 @@ fn run() -> Result<()> {
                     .floor() as u16;
                     let target = app.target_at(ratatui::layout::Position::new(x, y));
                     let cursor = match target {
+                        Some(Target::PlaybackVolume(_) | Target::Seek(_)) => {
+                            egui::CursorIcon::ResizeHorizontal
+                        }
+                        Some(Target::SortColumn(_) | Target::Action(_) | Target::Mode(_)) => {
+                            egui::CursorIcon::PointingHand
+                        }
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
                         Some(Target::PanelResize(index)) => match app.workspace.splits[*index].axis
                         {

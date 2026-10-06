@@ -7,9 +7,10 @@ use crate::{
 };
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Rect},
     style::Style,
-    widgets::{Gauge, Paragraph},
+    text::{Line, Span},
+    widgets::{Gauge, Paragraph, Sparkline},
 };
 
 pub(super) fn controls(app: &App) -> Vec<Group> {
@@ -61,7 +62,7 @@ pub(super) fn content_height(app: &App, width: u16, controls: &Group) -> u16 {
     } else {
         super::toolbar::rows(app, width, controls)
     };
-    rows.saturating_add(4)
+    rows.saturating_add(7)
 }
 
 pub(super) fn player(
@@ -72,22 +73,35 @@ pub(super) fn player(
     palette: Palette,
 ) {
     let inner = area;
-    if inner.height < 4 {
+    if inner.height < 7 {
         return;
     }
-    let title = app
-        .current
-        .as_ref()
-        .map(|track| format!("{} — {}", track.title, track.artist))
-        .unwrap_or_else(|| {
-            app.text("No track playing", "Ничего не воспроизводится")
-                .into()
-        });
+    let title = if app.preparing_playback() && !app.playback_active() {
+        app.text("Preparing audio…", "Подготовка аудио…").to_owned()
+    } else if let Some(track) = app.current.as_ref().filter(|_| app.playback_active()) {
+        format!(
+            "[{}] {}{}",
+            if app.current_paused() {
+                app.text("PAUSED", "ПАУЗА")
+            } else {
+                app.text("PLAYING", "ИГРАЕТ")
+            },
+            track.title,
+            if track.artist.is_empty() {
+                String::new()
+            } else {
+                format!(" — {}", track.artist)
+            }
+        )
+    } else {
+        app.text("No track playing", "Ничего не воспроизводится")
+            .to_owned()
+    };
     frame.render_widget(
         Paragraph::new(clean(&title)).style(palette.text().fg(palette.accent)),
         Rect::new(inner.x, inner.y, inner.width, 1),
     );
-    let rows = content_height(app, inner.width, controls).saturating_sub(4);
+    let rows = super::toolbar::rows(app, inner.width, controls);
     super::toolbar::contents(
         frame,
         app,
@@ -96,7 +110,7 @@ pub(super) fn player(
         palette,
     );
     let y = inner.y + rows + 2;
-    if y >= inner.bottom() {
+    if y + 4 >= inner.bottom() {
         return;
     }
     let duration = app.current.as_ref().map_or(0, |track| track.duration_ms);
@@ -106,22 +120,141 @@ pub(super) fn player(
     } else {
         0.0
     };
-    let rect = Rect::new(inner.x, y, inner.width, 1);
+    let wave = Rect::new(inner.x, y, inner.width, 2);
+    waveform(frame, app, wave, ratio, palette);
+    let rect = Rect::new(inner.x, y + 2, inner.width, 1);
     frame.render_widget(
         Gauge::default()
             .ratio(ratio)
-            .gauge_style(Style::default().fg(palette.accent).bg(palette.selection))
-            .label(format!(
-                "{} / {} · {}%",
-                duration_text(position),
-                duration_text(duration),
-                (app.settings.volume * 100.0).round()
-            )),
+            .gauge_style(
+                Style::default()
+                    .fg(palette.accent)
+                    .bg(palette.inactive_panel_border),
+            )
+            .use_unicode(true)
+            .label(""),
         rect,
     );
+    frame.render_widget(
+        Paragraph::new(format!(
+            "{} / {}",
+            duration_text(position),
+            duration_text(duration)
+        ))
+        .alignment(Alignment::Center)
+        .style(palette.text().fg(palette.muted)),
+        Rect::new(inner.x, y + 3, inner.width, 1),
+    );
+    let seek = Rect::new(inner.x, y, inner.width, 3);
     app.hits.push(Hit {
-        area: rect,
-        target: Target::Seek(rect),
-        enabled: duration > 0,
+        area: seek,
+        target: Target::Seek(seek),
+        enabled: app.playback_active() && duration > 0,
+    });
+    volume(
+        frame,
+        app,
+        Rect::new(inner.x, y + 4, inner.width, 1),
+        palette,
+    );
+}
+
+fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palette) {
+    let Some(values) = app.waveform.as_deref().filter(|values| !values.is_empty()) else {
+        let text = if app.current.is_none() {
+            "─".repeat(usize::from(area.width))
+        } else if app.preparing_waveform() || app.preparing_playback() {
+            app.text("Building waveform…", "Обработка аудиоволны…")
+                .to_owned()
+        } else {
+            app.text("Waveform unavailable", "Аудиоволна недоступна")
+                .to_owned()
+        };
+        frame.render_widget(
+            Paragraph::new(text).style(palette.text().fg(palette.inactive_panel_border)),
+            area,
+        );
+        return;
+    };
+    let peak = values
+        .iter()
+        .copied()
+        .fold(0.0f32, f32::max)
+        .max(f32::EPSILON);
+    let width = usize::from(area.width.max(1));
+    let data: Vec<u64> = (0..width)
+        .map(|column| {
+            let start = column * values.len() / width;
+            let end = ((column + 1) * values.len() / width)
+                .max(start + 1)
+                .min(values.len());
+            let value = values[start..end].iter().copied().fold(0.0f32, f32::max);
+            (f64::from(value / peak).clamp(0.0, 1.0) * 1000.0).round() as u64
+        })
+        .collect();
+    frame.render_widget(
+        Sparkline::default()
+            .data(&data)
+            .max(1000)
+            .style(palette.text().fg(palette.inactive_panel_border)),
+        area,
+    );
+    let played = (ratio * f64::from(area.width)).floor() as u16;
+    for x in area.x..area.x.saturating_add(played).min(area.right()) {
+        for y in area.y..area.bottom() {
+            if let Some(cell) = frame.buffer_mut().cell_mut((x, y)) {
+                cell.set_fg(palette.accent);
+            }
+        }
+    }
+    if app.playback_active() && area.width > 0 {
+        let x = area.x + played.min(area.width - 1);
+        frame.render_widget(
+            Paragraph::new("│\n│").style(palette.text().fg(palette.accent)),
+            Rect::new(x, area.y, 1, area.height),
+        );
+    }
+}
+
+fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
+    let label = app.text("Volume", "Громкость");
+    let label_width = Span::raw(label).width() as u16;
+    let segments = (area.width.saturating_sub(label_width + 7) / 2).clamp(1, 30);
+    let bar_width = segments * 2 - 1;
+    let total = label_width + bar_width + 7;
+    let start = area.x + area.width.saturating_sub(total);
+    let bar = Rect::new(start + label_width + 2, area.y, bar_width, 1).intersection(area);
+    let percent = (app.settings.volume.clamp(0.0, 1.0) * 100.0).round() as u16;
+    let filled = (f32::from(percent) * f32::from(segments) / 100.0).round() as u16;
+    frame.render_widget(
+        Paragraph::new(label).style(palette.text().fg(palette.muted)),
+        Rect::new(start, area.y, label_width, 1).intersection(area),
+    );
+    let mut content = Vec::new();
+    for segment in 0..segments {
+        if segment > 0 {
+            content.push(Span::styled(" ", palette.text()));
+        }
+        content.push(Span::styled(
+            "█",
+            palette.text().fg(if segment < filled {
+                palette.accent
+            } else {
+                palette.inactive_panel_border
+            }),
+        ));
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(content)).style(palette.text()),
+        bar,
+    );
+    frame.render_widget(
+        Paragraph::new(format!("{percent:>3}%")).style(palette.text().fg(palette.accent)),
+        Rect::new(bar.right() + 1, area.y, 4, 1).intersection(area),
+    );
+    app.hits.push(Hit {
+        area: bar,
+        target: Target::PlaybackVolume(bar),
+        enabled: bar.width > 0,
     });
 }

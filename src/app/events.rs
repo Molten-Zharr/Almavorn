@@ -346,6 +346,22 @@ impl App {
                     self.marked.remove(&id);
                 }
             }
+            Target::SortColumn(sort) => {
+                self.sort_descending = self.sort == sort && !self.sort_descending;
+                self.sort = sort;
+                self.track_offset = 0;
+                self.focus = Focus::Tracks;
+                self.refresh()?;
+            }
+            Target::PlaybackVolume(area) => {
+                if self.workspace.gesture.is_none() {
+                    self.workspace.gesture = Some(crate::workspace::Gesture::PlaybackVolume(area));
+                }
+                let percent = (u32::from(self.last_pointer_x(area)) * 100
+                    / u32::from(area.width.saturating_sub(1).max(1)))
+                    as i16;
+                self.adjust_volume(percent - (self.settings.volume * 100.0).round() as i16)?;
+            }
             Target::Seek(area) => {
                 if self.workspace.gesture.is_none() {
                     self.workspace.gesture = Some(crate::workspace::Gesture::Seek(area));

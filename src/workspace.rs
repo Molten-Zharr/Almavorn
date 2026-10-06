@@ -477,6 +477,7 @@ pub enum Gesture {
     Move { panel: Panel, origin: Position },
     Resize { split: SplitArea, before: Dock },
     Seek(Rect),
+    PlaybackVolume(Rect),
     Volume(usize, Rect),
 }
 
