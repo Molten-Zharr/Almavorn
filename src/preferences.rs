@@ -76,6 +76,7 @@ pub struct Appearance {
     pub font_size: u16,
     pub borders: BorderWeight,
     pub corners: Corners,
+    pub playback_timeline: PlaybackTimeline,
 }
 impl Default for Appearance {
     fn default() -> Self {
@@ -86,6 +87,23 @@ impl Default for Appearance {
             font_size: 16,
             borders: BorderWeight::Single,
             corners: Corners::Square,
+            playback_timeline: PlaybackTimeline::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlaybackTimeline {
+    #[default]
+    Waveform,
+    Progress,
+}
+
+impl PlaybackTimeline {
+    pub fn name(self, language: Language) -> &'static str {
+        match self {
+            Self::Waveform => language.text("Waveform", "Аудиоволна"),
+            Self::Progress => language.text("Progress bar", "Обычная полоса"),
         }
     }
 }

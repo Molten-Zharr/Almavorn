@@ -3,6 +3,7 @@ use crate::{
     app::{App, Hit, Target},
     input::Action,
     model::duration_text,
+    preferences::PlaybackTimeline,
     workspace::Panel,
 };
 use ratatui::{
@@ -62,7 +63,14 @@ pub(super) fn content_height(app: &App, width: u16, controls: &Group) -> u16 {
     } else {
         super::toolbar::rows(app, width, controls)
     };
-    rows.saturating_add(9)
+    rows.saturating_add(4 + timeline_height(app))
+}
+
+fn timeline_height(app: &App) -> u16 {
+    match app.settings.appearance.playback_timeline {
+        PlaybackTimeline::Waveform => 4,
+        PlaybackTimeline::Progress => 1,
+    }
 }
 
 pub(super) fn player(
@@ -73,7 +81,7 @@ pub(super) fn player(
     palette: Palette,
 ) {
     let inner = area;
-    if inner.height < 9 {
+    if inner.height < content_height(app, inner.width, controls) {
         return;
     }
     let title = if app.preparing_playback() && !app.playback_active() {
@@ -115,9 +123,6 @@ pub(super) fn player(
         palette,
     );
     let y = inner.y + rows + 2;
-    if y + 6 >= inner.bottom() {
-        return;
-    }
     let duration = app
         .playback
         .current
@@ -129,23 +134,28 @@ pub(super) fn player(
     } else {
         0.0
     };
-    let wave = Rect::new(inner.x, y, inner.width, 4);
-    app.view.waveform_area = wave;
-    waveform(frame, app, wave, ratio, palette);
-    let rect = Rect::new(inner.x, y + 4, inner.width, 1);
-    app.view.progress_area = rect;
-    frame.render_widget(
-        Gauge::default()
-            .ratio(ratio)
-            .gauge_style(
-                Style::default()
-                    .fg(palette.accent)
-                    .bg(palette.inactive_panel_border),
-            )
-            .use_unicode(true)
-            .label(""),
-        rect,
-    );
+    let seek = Rect::new(inner.x, y, inner.width, timeline_height(app));
+    match app.settings.appearance.playback_timeline {
+        PlaybackTimeline::Waveform => {
+            app.view.waveform_area = seek;
+            waveform(frame, app, seek, ratio, palette);
+        }
+        PlaybackTimeline::Progress => {
+            app.view.progress_area = seek;
+            frame.render_widget(
+                Gauge::default()
+                    .ratio(ratio)
+                    .gauge_style(
+                        Style::default()
+                            .fg(palette.accent)
+                            .bg(palette.inactive_panel_border),
+                    )
+                    .use_unicode(true)
+                    .label(""),
+                seek,
+            );
+        }
+    }
     frame.render_widget(
         Paragraph::new(format!(
             "{} / {}",
@@ -154,9 +164,8 @@ pub(super) fn player(
         ))
         .alignment(Alignment::Center)
         .style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, y + 5, inner.width, 1),
+        Rect::new(inner.x, seek.bottom(), inner.width, 1),
     );
-    let seek = Rect::new(inner.x, y, inner.width, 5);
     app.view.hits.push(Hit {
         area: seek,
         target: Target::Seek(seek),
@@ -165,7 +174,7 @@ pub(super) fn player(
     volume(
         frame,
         app,
-        Rect::new(inner.x, y + 6, inner.width, 1),
+        Rect::new(inner.x, seek.bottom() + 1, inner.width, 1),
         palette,
     );
 }
@@ -178,7 +187,7 @@ fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palet
         .filter(|values| !values.is_empty())
     else {
         let text = if app.playback.current.is_none() {
-            "─".repeat(usize::from(area.width))
+            String::new()
         } else if app.preparing_waveform() || app.preparing_playback() {
             app.text("Building waveform…", "Обработка аудиоволны…")
                 .to_owned()

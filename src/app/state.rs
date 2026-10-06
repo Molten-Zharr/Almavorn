@@ -86,6 +86,7 @@ pub enum Target {
     SettingsPage(SettingsPage),
     SettingsTab(SettingsPage),
     SettingsVolume(usize, Rect),
+    SettingsTimeline(usize, crate::preferences::PlaybackTimeline),
     SettingSelect(usize),
     SettingAdjust(usize, i64),
     SettingHelp(usize),

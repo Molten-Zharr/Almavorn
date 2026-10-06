@@ -3,6 +3,7 @@ use super::{
     widgets::{block, button, button_width, buttons, visible_offset},
 };
 use crate::app::{App, Hit, SettingControl, SettingsFocus, SettingsPage, Target};
+use crate::preferences::PlaybackTimeline;
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
@@ -167,6 +168,48 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         });
         if matches!(item.control, SettingControl::Volume) {
             volume(frame, app, row, index, &item.label, style, palette);
+            continue;
+        }
+        if matches!(item.control, SettingControl::PlaybackTimeline) {
+            frame.render_widget(
+                Paragraph::new(format!(
+                    "{}{}",
+                    if selected { "> " } else { "" },
+                    item.label
+                ))
+                .style(style.add_modifier(Modifier::BOLD)),
+                Rect::new(row.x, row.y, row.width, 1),
+            );
+            let used = buttons(
+                frame,
+                app,
+                Rect::new(row.x, row.y + 1, row.width, height.saturating_sub(1).min(2)),
+                [PlaybackTimeline::Waveform, PlaybackTimeline::Progress]
+                    .into_iter()
+                    .map(|choice| {
+                        let current = app.settings.appearance.playback_timeline == choice;
+                        (
+                            format!(
+                                "{} {}",
+                                if current { "●" } else { "○" },
+                                choice.name(app.settings.language)
+                            ),
+                            Target::SettingsTimeline(index, choice),
+                            true,
+                        )
+                    })
+                    .collect(),
+                palette,
+            );
+            let description_height = height.saturating_sub(used + 1);
+            if description_height > 0 {
+                frame.render_widget(
+                    Paragraph::new(item.description.clone())
+                        .style(style.fg(palette.muted))
+                        .wrap(Wrap { trim: false }),
+                    Rect::new(row.x, row.y + used + 1, row.width, description_height),
+                );
+            }
             continue;
         }
         let value_width = ((item.value.chars().count() + if item.adjustable { 10 } else { 4 })

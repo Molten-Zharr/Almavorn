@@ -25,7 +25,7 @@ impl PlaybackPainter {
         size: ratatui::layout::Size,
     ) {
         if (app.view.dialog.is_some() && app.view.search_area.is_empty())
-            || app.view.progress_area.is_empty()
+            || (app.view.progress_area.is_empty() && app.view.waveform_area.is_empty())
         {
             return;
         }
@@ -42,8 +42,12 @@ impl PlaybackPainter {
                 ),
             )
         };
-        let wave = map(app.view.waveform_area);
-        let progress = map(app.view.progress_area);
+        let waveform = !app.view.waveform_area.is_empty();
+        let wave = map(if waveform {
+            app.view.waveform_area
+        } else {
+            app.view.progress_area
+        });
         let palette = app.settings.current_palette();
         let color = |key| {
             let [r, g, b] = palette.color(key);
@@ -68,7 +72,7 @@ impl PlaybackPainter {
             .playback
             .waveform
             .as_deref()
-            .filter(|values| !values.is_empty())
+            .filter(|values| waveform && !values.is_empty())
         {
             painter.rect_filled(wave, 0, background);
             let key = (values.as_ptr() as usize, values.len(), wave, active, future);
@@ -128,24 +132,29 @@ impl PlaybackPainter {
             self.waveform_key = None;
             self.waveform_meshes = None;
         }
-        painter.rect_filled(progress, 0, future);
-        if ratio > 0.0 {
-            painter.rect_filled(
-                egui::Rect::from_min_max(progress.min, egui::pos2(x, progress.bottom())),
-                0,
-                active,
-            );
+        if !waveform {
+            painter.rect_filled(wave, 0, future);
+            if ratio > 0.0 {
+                painter.rect_filled(
+                    egui::Rect::from_min_max(wave.min, egui::pos2(x, wave.bottom())),
+                    0,
+                    active,
+                );
+            }
         }
-        if app.playback_active() {
+        if app.playback_active() && (!waveform || self.waveform_meshes.is_some()) {
             let x = x.clamp(wave.left() + 0.5, wave.right() - 0.5);
-            painter.line_segment(
-                [
-                    egui::pos2(x, wave.top() + 2.0),
-                    egui::pos2(x, progress.bottom()),
-                ],
-                egui::Stroke::new(1.0 / ui.painter().pixels_per_point(), active),
-            );
-            painter.circle_filled(egui::pos2(x, progress.center().y), 2.5, active);
+            let painter = painter.with_clip_rect(wave.intersect(painter.clip_rect()));
+            if waveform {
+                painter.line_segment(
+                    [
+                        egui::pos2(x, wave.top() + 2.0),
+                        egui::pos2(x, wave.bottom() - 2.0),
+                    ],
+                    egui::Stroke::new(1.0 / ui.painter().pixels_per_point(), active),
+                );
+            }
+            painter.circle_filled(egui::pos2(x, wave.center().y), 2.5, active);
         }
     }
 }
@@ -303,6 +312,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
                     | Target::DialogScroll(_)
                     | Target::Setting(_)
                     | Target::SettingAdjust(_, _)
+                    | Target::SettingsTimeline(_, _)
                     | Target::SettingHelp(_)
                     | Target::BindingModifier(_)
                     | Target::BindingKey(_)

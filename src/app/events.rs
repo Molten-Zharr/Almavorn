@@ -632,6 +632,10 @@ impl App {
                 }
             }
             Target::SettingHelp(index) => self.settings_help(index),
+            Target::SettingsTimeline(index, choice) => {
+                self.select_setting(index);
+                self.set_playback_timeline(choice)?;
+            }
             Target::BindingModifier(index) => {
                 if matches!(self.view.dialog, Some(Dialog::CaptureBinding { .. }))
                     && let Some(value) = self.view.settings.binding_modifiers.get_mut(index)

@@ -4,7 +4,7 @@ use super::{
     bounded,
 };
 use crate::errors::AppError;
-use crate::{audio::Audio, model::Entry};
+use crate::{audio::Audio, model::Entry, preferences::PlaybackTimeline};
 use anyhow::{Context, Result, ensure};
 use rodio::Source;
 use std::sync::{
@@ -30,6 +30,15 @@ pub(super) struct WaveformJob {
 }
 
 impl App {
+    pub(super) fn set_playback_timeline(&mut self, choice: PlaybackTimeline) -> Result<()> {
+        if self.settings.appearance.playback_timeline != choice {
+            self.cancel_workspace_drag();
+            self.settings.appearance.playback_timeline = choice;
+            self.save_settings()?;
+        }
+        Ok(())
+    }
+
     pub(super) fn adjust_volume(&mut self, step: i16) -> Result<()> {
         let percent = (self.settings.volume * 100.0).round() as i16;
         let volume = (percent + step).clamp(0, 100) as f32 / 100.0;
@@ -179,9 +188,11 @@ impl App {
         self.playback.queue_index = request.index;
         self.playback.current = Some(track.clone());
         self.playback.waveform = None;
-        self.playback.pending_waveform =
-            Some((track.path.clone(), self.playback.preparation.generation()));
-        self.start_waveform_job();
+        if self.settings.appearance.playback_timeline == PlaybackTimeline::Waveform {
+            self.playback.pending_waveform =
+                Some((track.path.clone(), self.playback.preparation.generation()));
+            self.start_waveform_job();
+        }
         self.message(format!(
             "{}: {}",
             self.text("Playing", "Воспроизведение"),
@@ -397,6 +408,17 @@ impl App {
     }
 
     pub(super) fn tick_waveform(&mut self) {
+        if self.settings.appearance.playback_timeline == PlaybackTimeline::Progress {
+            self.cancel_waveform();
+        } else if self.playback.waveform.is_none()
+            && !self.preparing_playback()
+            && !self.preparing_waveform()
+            && let Some(track) = &self.playback.current
+        {
+            self.playback.pending_waveform =
+                Some((track.path.clone(), self.playback.preparation.generation()));
+            self.start_waveform_job();
+        }
         let Some(result) = self
             .playback
             .waveform_job

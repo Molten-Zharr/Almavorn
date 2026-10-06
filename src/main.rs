@@ -161,7 +161,8 @@ fn run() -> Result<()> {
                             | Target::SearchPlaylist(_)
                             | Target::SearchAll(_)
                             | Target::QueryKeyboard
-                            | Target::ClearFilter,
+                            | Target::ClearFilter
+                            | Target::SettingsTimeline(_, _),
                         ) => egui::CursorIcon::PointingHand,
                         Some(Target::SearchInput | Target::FilterInput) => egui::CursorIcon::Text,
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
