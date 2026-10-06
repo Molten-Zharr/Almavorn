@@ -1,6 +1,6 @@
 use super::super::{
     theme::Palette,
-    widgets::{button, button_width, buttons, clean, modal, modal_rect, visible_offset},
+    widgets::{button, button_width, buttons, clean, modal, visible_offset},
 };
 use crate::{
     app::{App, Hit, SearchDialog, SearchFocus, Target},
@@ -21,9 +21,9 @@ pub(super) fn render(
     area: Rect,
     palette: Palette,
 ) {
-    app.view.overlay_area = modal_rect(area, 46);
     let inner = modal(
         frame,
+        app,
         area,
         app.text("Search · selected playlists", "Поиск · выбранные плейлисты")
             .into(),

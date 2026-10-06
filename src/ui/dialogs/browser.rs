@@ -18,6 +18,7 @@ pub(super) fn browser_dialog(
 ) {
     let inner = modal(
         frame,
+        app,
         area,
         app.text(
             if browser.folder {

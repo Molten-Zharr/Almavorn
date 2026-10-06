@@ -77,12 +77,14 @@ pub(super) fn modal_rect(area: Rect, height: u16) -> Rect {
 
 pub(super) fn modal(
     frame: &mut Frame,
+    app: &mut App,
     area: Rect,
     title: String,
     height: u16,
     palette: Palette,
 ) -> Rect {
     let rect = modal_rect(area, height);
+    app.view.overlay_area = rect;
     frame.render_widget(Clear, rect);
     let outer = block(title, palette, true);
     let inner = outer.inner(rect);

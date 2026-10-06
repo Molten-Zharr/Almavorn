@@ -38,7 +38,7 @@ pub(super) fn text_dialog(
         TextPurpose::Accent => app.text("Accent color · RRGGBB", "Цвет акцента · RRGGBB"),
         TextPurpose::Settings(edit) => edit.title(app.settings.language),
     };
-    let inner = modal(frame, area, title.into(), 27, palette);
+    let inner = modal(frame, app, area, title.into(), 27, palette);
     let hint = if let TextPurpose::DeletePlaylist(_, name) = &dialog.purpose {
         format!(
             "{}: {name}",

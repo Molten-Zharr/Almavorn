@@ -311,25 +311,16 @@ fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         area.width.saturating_sub(label_width + 5),
         1,
     );
-    let segments = bar.width.div_ceil(2);
+    let segments = bar.width;
     let filled = f32::from(percent) * f32::from(segments) / 100.0;
-    let blocks = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
+    let blocks = [" ", "▏", "▎", "▍", "▌"];
     let bars: Vec<_> = (0..bar.width)
         .map(|column| {
-            if column % 2 != 0 {
-                return Span::styled(" ", palette.text());
-            }
-            let fill = ((filled - f32::from(column / 2)).clamp(0.0, 1.0) * 8.0).round() as usize;
+            let fill = ((filled - f32::from(column)).clamp(0.0, 1.0) * 4.0).round() as usize;
             if fill == 0 {
-                Span::styled("█", palette.text().fg(palette.inactive_panel_border))
+                Span::styled("▌", palette.text().fg(palette.inactive_panel_border))
             } else {
-                Span::styled(
-                    blocks[fill],
-                    palette
-                        .text()
-                        .fg(palette.accent)
-                        .bg(palette.inactive_panel_border),
-                )
+                Span::styled(blocks[fill], palette.text().fg(palette.accent))
             }
         })
         .collect();

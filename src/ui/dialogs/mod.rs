@@ -74,6 +74,7 @@ pub(super) fn render_dialog(
         Dialog::RemoveEntry { title, .. } => {
             let inner = modal(
                 frame,
+                app,
                 area,
                 app.text("Remove track?", "Убрать композицию?").into(),
                 10,
@@ -115,6 +116,7 @@ pub(super) fn render_dialog(
         Dialog::Transfer { selected, .. } => {
             let inner = modal(
                 frame,
+                app,
                 area,
                 app.text("Copy tracks to playlist", "Копировать в плейлист")
                     .into(),
@@ -184,6 +186,7 @@ pub(super) fn render_dialog(
         Dialog::ConfirmSettings { catalog, name, .. } => {
             let inner = modal(
                 frame,
+                app,
                 area,
                 app.text("Delete settings item?", "Удалить элемент настроек?")
                     .into(),
@@ -232,7 +235,7 @@ pub(super) fn render_dialog(
             description,
             offset,
         } => {
-            let inner = modal(frame, area, title.clone(), 22, palette);
+            let inner = modal(frame, app, area, title.clone(), 22, palette);
             help::scroll_text(frame, app, offset,
                 Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)),
                 format!("{description}\n\n{}", app.text("Tab: switch panel. Arrows: select/change. Enter: edit/apply. Esc: return to settings.", "Tab: сменить панель. Стрелки: выбор и значение. Enter: изменить/применить. Esc: вернуться в настройки.")),
@@ -242,6 +245,7 @@ pub(super) fn render_dialog(
         Dialog::Help { offset } => {
             let inner = modal(
                 frame,
+                app,
                 area,
                 app.text("Guide and shortcuts", "Гайд и горячие клавиши")
                     .into(),
@@ -269,6 +273,7 @@ pub(super) fn render_dialog(
         Dialog::Metadata { track, offset } => {
             let inner = modal(
                 frame,
+                app,
                 area,
                 app.text(
                     "Saved track information",

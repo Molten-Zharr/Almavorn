@@ -27,6 +27,7 @@ pub(super) fn binding_dialog(
         .unwrap_or("");
     let inner = modal(
         frame,
+        app,
         area,
         app.text("Set shortcut", "Назначить сочетание").into(),
         27,
