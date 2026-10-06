@@ -338,6 +338,39 @@ impl Store {
         })
     }
 
+    pub fn move_playlist_to(&mut self, id: i64, target: i64, unlocked: bool) -> Result<Change> {
+        self.mutate(Some(id), Mode::Order, unlocked, |connection| {
+            let (mode, kind) = playlist_access(connection, id)?;
+            ensure!(kind == PlaylistKind::Normal, AppError::DeskPositionFixed);
+            let mut statement = connection.prepare(
+                "SELECT id FROM playlists WHERE mode=?1 AND kind='normal' ORDER BY position,id",
+            )?;
+            let mut ids = statement
+                .query_map([mode.key()], |row| row.get::<_, i64>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            let from = ids
+                .iter()
+                .position(|value| *value == id)
+                .context(AppError::PlaylistMissing)?;
+            let to = ids
+                .iter()
+                .position(|value| *value == target)
+                .context(AppError::PlaylistMissing)?;
+            if from != to {
+                lock_ordering(connection, mode.key())?;
+                ids.remove(from);
+                ids.insert(to, id);
+                for (position, id) in ids.into_iter().enumerate() {
+                    connection.execute(
+                        "UPDATE playlists SET position=?1 WHERE id=?2",
+                        params![position as i64, id],
+                    )?;
+                }
+            }
+            Ok(())
+        })
+    }
+
     pub fn rename_track(
         &mut self,
         id: i64,

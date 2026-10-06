@@ -139,6 +139,16 @@ fn run() -> Result<()> {
                     .floor() as u16;
                     let target = app.target_at(ratatui::layout::Position::new(x, y));
                     let cursor = match target {
+                        _ if matches!(
+                            app.view.workspace.gesture,
+                            Some(almavorn::workspace::Gesture::Playlist { .. })
+                        ) =>
+                        {
+                            egui::CursorIcon::Grabbing
+                        }
+                        Some(Target::Playlist(id)) if app.playlist_movable(*id) => {
+                            egui::CursorIcon::Grab
+                        }
                         Some(Target::PlaybackVolume(_) | Target::Seek(_)) => {
                             egui::CursorIcon::ResizeHorizontal
                         }

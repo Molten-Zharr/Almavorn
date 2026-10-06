@@ -24,6 +24,8 @@ impl App {
                     | Delete
                     | MoveUp
                     | MoveDown
+                    | PlaylistUp
+                    | PlaylistDown
                     | Transfer
                     | Undo
                     | Redo
@@ -67,11 +69,13 @@ impl App {
                         }),
                     }
             }
-            MoveUp | MoveDown => {
+            MoveUp | MoveDown | PlaylistUp | PlaylistDown => {
                 if !editable {
                     return false;
                 }
-                let (index, length) = if self.view.focus == Focus::Playlists {
+                let (index, length) = if self.view.focus == Focus::Playlists
+                    || matches!(action, PlaylistUp | PlaylistDown)
+                {
                     let lists: Vec<_> = self
                         .visible_playlists()
                         .into_iter()
@@ -102,7 +106,7 @@ impl App {
                         .unwrap_or((None, 0))
                 };
                 index.is_some_and(|index| {
-                    if action == MoveUp {
+                    if matches!(action, MoveUp | PlaylistUp) {
                         index > 0
                     } else {
                         index + 1 < length
@@ -256,8 +260,16 @@ impl App {
                     });
                 }
             }
-            MoveUp | MoveDown => {
-                let direction = if action == MoveUp { -1 } else { 1 };
+            MoveUp | MoveDown | PlaylistUp | PlaylistDown => {
+                let direction = if matches!(action, MoveUp | PlaylistUp) {
+                    -1
+                } else {
+                    1
+                };
+                if matches!(action, PlaylistUp | PlaylistDown) {
+                    self.focus_panel(crate::workspace::Panel::Playlists);
+                }
+                self.cancel_workspace_drag();
                 if let Some(playlist) = self.library.selected_playlist {
                     let focus = self.view.focus;
                     let entry = self.library.selected_entry;

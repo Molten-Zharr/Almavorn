@@ -339,8 +339,12 @@ impl Settings {
             {
                 continue;
             }
-            if binding.action == crate::input::Action::Filter
-                && self.bindings.iter().any(|value| value.key == binding.key)
+            if matches!(
+                binding.action,
+                crate::input::Action::Filter
+                    | crate::input::Action::PlaylistUp
+                    | crate::input::Action::PlaylistDown
+            ) && self.bindings.iter().any(|value| value.key == binding.key)
                 && let Some(key) =
                     std::iter::once(crate::input::KeyPress::plain(crate::input::Key::F(4)))
                         .chain(crate::input::Key::shortcut_choices().map(|key| {

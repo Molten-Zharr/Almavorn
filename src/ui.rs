@@ -145,6 +145,11 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             "↑↓ volume 1% · ←→ seek · Tab panel · Space pause · F1 help · Q quit",
             "↑↓ громкость 1% · ←→ перемотка · Tab панель · Space пауза · F1 помощь · Q выход",
         )
+    } else if matches!(app.view.workspace.focus, crate::workspace::Panel::Playlists) {
+        app.text(
+            "↑↓ select · Ctrl+↑↓ reorder playlists · drag with LMB · Tab panel · F1 help",
+            "↑↓ выбор · Ctrl+↑↓ порядок плейлистов · ЛКМ перенос · Tab панель · F1 помощь",
+        )
     } else {
         app.text(
             "↑↓ navigate · Tab panel · Enter play · Space pause · F1 help · Q quit",

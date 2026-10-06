@@ -117,6 +117,21 @@ impl App {
                 ) {
                     self.adjust_volume(-delta)?;
                 } else if self.view.playlist_area.contains(Position::new(x, y)) {
+                    if matches!(
+                        self.view.workspace.gesture,
+                        Some(crate::workspace::Gesture::Playlist { .. })
+                    ) {
+                        let maximum = self
+                            .visible_playlists()
+                            .len()
+                            .saturating_sub(usize::from(self.view.playlist_area.height));
+                        self.view.playlist_offset = super::bounded(
+                            self.view.playlist_offset,
+                            i64::from(delta),
+                            maximum + 1,
+                        );
+                        return self.drag_workspace(Position::new(x, y));
+                    }
                     self.view.focus = Focus::Playlists;
                     self.navigate(delta as i64);
                 } else if self.view.tracks_area.contains(Position::new(x, y)) {
@@ -375,6 +390,10 @@ impl App {
             Target::Playlist(id) => {
                 self.select_playlist(id);
                 self.view.focus = Focus::Playlists;
+                if self.playlist_movable(id) {
+                    self.view.workspace.gesture =
+                        Some(crate::workspace::Gesture::Playlist { id, target: None });
+                }
             }
             Target::Track(id) => {
                 self.library.selected_entry = Some(id);

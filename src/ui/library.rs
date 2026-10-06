@@ -5,6 +5,7 @@ use super::{
 use crate::{
     app::{App, Hit, Sort, Target},
     model::duration_text,
+    workspace::Gesture,
 };
 use ratatui::{
     Frame,
@@ -32,12 +33,24 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .iter()
         .position(|(id, _, _)| Some(*id) == app.library.selected_playlist)
         .unwrap_or(0);
-    app.view.playlist_offset = visible_offset(
-        app.view.playlist_offset,
-        selected,
-        inner.height as usize,
-        items.len(),
-    );
+    let dragging = matches!(app.view.workspace.gesture, Some(Gesture::Playlist { .. }));
+    app.view.playlist_offset = if dragging {
+        app.view
+            .playlist_offset
+            .min(items.len().saturating_sub(usize::from(inner.height)))
+    } else {
+        visible_offset(
+            app.view.playlist_offset,
+            selected,
+            inner.height as usize,
+            items.len(),
+        )
+    };
+    let destination = match &app.view.workspace.gesture {
+        Some(Gesture::Playlist { target, .. }) => *target,
+        _ => None,
+    };
+    let position_width = items.len().max(1).to_string().len();
     if items.is_empty() {
         frame.render_widget(
             Paragraph::new(app.text("Create a playlist", "Создайте плейлист"))
@@ -46,12 +59,13 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
             inner,
         );
     }
-    for (row, (id, name, count)) in items
+    for (index, (id, name, count)) in items
         .iter()
+        .enumerate()
         .skip(app.view.playlist_offset)
         .take(inner.height as usize)
-        .enumerate()
     {
+        let row = index - app.view.playlist_offset;
         let rect = Rect::new(inner.x, inner.y + row as u16, inner.width, 1);
         let selected = Some(*id) == app.library.selected_playlist;
         let style = if selected {
@@ -59,11 +73,22 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
                 .text()
                 .bg(palette.sidebar_selection)
                 .fg(palette.background)
+        } else if destination == Some(*id) {
+            palette.text().bg(palette.selection)
         } else {
             palette.text()
         };
         let playing = app.playback_active() && app.playback.playing_playlist == Some(*id);
-        let mut content = Vec::new();
+        let mut content = vec![Span::styled(
+            format!("{:>position_width$}. ", index + 1),
+            style
+                .fg(if selected {
+                    palette.background
+                } else {
+                    palette.accent
+                })
+                .add_modifier(Modifier::BOLD),
+        )];
         if playing {
             content.push(Span::styled(
                 format!(
@@ -83,8 +108,6 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
                     .fg(palette.background)
                     .add_modifier(Modifier::BOLD),
             ));
-        } else {
-            content.push(Span::styled("  ", style));
         }
         content.push(Span::styled(format!("{name} · {count}"), style));
         frame.render_widget(Paragraph::new(Line::from(content)).style(style), rect);

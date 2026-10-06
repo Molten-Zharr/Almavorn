@@ -100,6 +100,20 @@ pub(super) fn command_button(
 
 pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::Action(action @ (Action::MoveUp | Action::MoveDown))
+            if app.view.focus == crate::app::Focus::Playlists =>
+        {
+            let action = if *action == Action::MoveUp {
+                Action::PlaylistUp
+            } else {
+                Action::PlaylistDown
+            };
+            app.settings
+                .bindings
+                .iter()
+                .find(|binding| binding.action == action)
+                .map(|binding| binding.key.label())
+        }
         Target::Action(action) => app
             .settings
             .bindings

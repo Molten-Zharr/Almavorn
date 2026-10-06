@@ -475,6 +475,7 @@ pub struct SplitArea {
 }
 
 pub enum Gesture {
+    Playlist { id: i64, target: Option<i64> },
     Move { panel: Panel, origin: Position },
     Resize { split: SplitArea, before: Dock },
     Seek(Rect),
