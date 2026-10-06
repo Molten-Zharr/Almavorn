@@ -152,21 +152,35 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
 }
 
 pub(super) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
+    let label = button_caption(label, target);
     let shortcut = displayed_shortcut(app, target);
     (Span::raw(label).width()
-        + shortcut
-            .as_ref()
-            .map_or(0, |key| Span::raw(key).width() + 3)
+        + shortcut.as_ref().map_or(0, |key| {
+            Span::raw(key).width() + if label.is_empty() { 0 } else { 3 }
+        })
         + 2)
     .min(usize::from(u16::MAX)) as u16
 }
 
 fn displayed_shortcut(app: &App, target: &Target) -> Option<String> {
-    if app.settings.appearance.show_button_shortcuts {
+    if help_button(target) {
+        Some("F1".into())
+    } else if app.settings.appearance.show_button_shortcuts {
         button_shortcut(app, target)
     } else {
         None
     }
+}
+
+fn help_button(target: &Target) -> bool {
+    matches!(
+        target,
+        Target::Action(crate::input::Action::Help) | Target::SettingHelp(_)
+    )
+}
+
+fn button_caption<'a>(label: &'a str, target: &Target) -> &'a str {
+    if help_button(target) { "" } else { label }
 }
 
 fn standard(
@@ -178,6 +192,7 @@ fn standard(
     enabled: bool,
     palette: Palette,
 ) {
+    let label = button_caption(label, &target);
     let mut style = if enabled {
         palette
             .text()
@@ -203,7 +218,9 @@ fn standard(
                 palette.muted
             }),
         ));
-        content.push(Span::styled(" · ", style.fg(palette.muted)));
+        if !label.is_empty() {
+            content.push(Span::styled(" · ", style.fg(palette.muted)));
+        }
     }
     content.push(Span::styled(label, style));
     let border_style = style.bg(palette.background).fg(if !enabled {
@@ -266,6 +283,7 @@ fn quiet(
     enabled: bool,
     palette: Palette,
 ) {
+    let label = button_caption(label, &target);
     let active = match target {
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
@@ -308,7 +326,9 @@ fn quiet(
                 palette.accent
             }),
         ));
-        content.push(Span::styled(" ", style));
+        if !label.is_empty() {
+            content.push(Span::styled(" ", style));
+        }
     }
     content.push(Span::styled(label, style));
     frame.render_widget(
