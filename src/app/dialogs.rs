@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 #[derive(Clone)]
 pub enum TextPurpose {
     Create,
+    ComposePlaylist(Vec<i64>),
     RenamePlaylist(i64),
     PlaylistFolder(i64, Option<String>),
     RemovePlaylistFolder(i64, String),
@@ -42,6 +43,10 @@ pub enum Dialog {
     Folders {
         playlist: i64,
         selected: usize,
+    },
+    ComposePlaylists {
+        selected: usize,
+        ids: Vec<i64>,
     },
     RemoveEntry {
         playlist: i64,
@@ -91,6 +96,7 @@ impl Dialog {
             }),
             Self::Metadata { .. } => Some(Action::Metadata),
             Self::Folders { .. } => Some(Action::PlaylistFolders),
+            Self::ComposePlaylists { .. } => Some(Action::ComposePlaylists),
             Self::Transfer { .. } => Some(Action::Transfer),
             Self::RemoveEntry { .. } | Self::ConfirmSettings { .. } => Some(Action::Delete),
             Self::Text(_) | Self::CaptureBinding { .. } | Self::Commands { .. } => None,
@@ -142,6 +148,7 @@ impl App {
             return;
         }
         let transfer_length = self.transfer_destinations().len();
+        let compose_length = self.compose_choices().len();
         let folder_length = if let Some(Dialog::Folders { playlist, .. }) = &self.view.dialog {
             self.library
                 .playlists
@@ -156,6 +163,9 @@ impl App {
             return;
         }
         match &mut self.view.dialog {
+            Some(Dialog::ComposePlaylists { selected, .. }) => {
+                *selected = bounded(*selected, i64::from(direction), compose_length)
+            }
             Some(Dialog::Folders { selected, .. }) => {
                 *selected = bounded(*selected, i64::from(direction), folder_length)
             }
@@ -212,6 +222,20 @@ impl App {
             return self.play_search_result();
         }
         match self.view.dialog.take() {
+            Some(Dialog::ComposePlaylists { selected, ids }) => {
+                if ids.len() < 2 {
+                    self.view.dialog = Some(Dialog::ComposePlaylists { selected, ids });
+                    anyhow::bail!(
+                        "{}",
+                        self.text(
+                            "Select at least two playlists",
+                            "Отметьте минимум два плейлиста."
+                        )
+                    );
+                }
+                let name = self.fresh_playlist_name(self.text("Compilation", "Сборка"));
+                self.text_dialog(TextPurpose::ComposePlaylist(ids), name);
+            }
             Some(Dialog::Panels { selected, expanded }) => {
                 self.view.dialog = Some(Dialog::Panels { selected, expanded });
                 self.activate_panel_row(selected, false)?;
@@ -227,6 +251,14 @@ impl App {
                             store.create_playlist(&text, mode)?,
                         ))
                     }),
+                    TextPurpose::ComposePlaylist(ids) => {
+                        let ids = ids.clone();
+                        self.start_database(recovery, move |store| {
+                            Ok(DatabaseOutcome::Created(
+                                store.compose_playlists(&ids, &text, mode, unlocked)?,
+                            ))
+                        })
+                    }
                     TextPurpose::RenamePlaylist(id) => {
                         let id = *id;
                         self.start_database(recovery, move |store| {

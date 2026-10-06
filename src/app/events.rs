@@ -294,6 +294,25 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if let Some(Dialog::ComposePlaylists { selected, .. }) = &self.view.dialog {
+                let selected = *selected;
+                if key.ctrl && !key.alt && matches!(key.key, Key::Up | Key::Down) {
+                    self.move_composition_source(if key.key == Key::Up { -1 } else { 1 });
+                    return Ok(());
+                }
+                if !key.ctrl && !key.alt && key.key == Key::Char(' ') {
+                    self.toggle_compose_row(selected);
+                    return Ok(());
+                }
+                if key.key == Key::Home {
+                    self.scroll_dialog(i16::MIN);
+                    return Ok(());
+                }
+                if key.key == Key::End {
+                    self.scroll_dialog(i16::MAX);
+                    return Ok(());
+                }
+            }
             if matches!(self.view.dialog, Some(Dialog::Folders { .. })) && !key.ctrl && !key.alt {
                 let target = match key.key {
                     Key::Insert => Some(Target::FolderAdd),
@@ -618,6 +637,8 @@ impl App {
                 self.close_dialog();
             }
             Target::Submit => self.submit()?,
+            Target::ComposeRow(index) => self.toggle_compose_row(index),
+            Target::ComposeMove(direction) => self.move_composition_source(direction),
             Target::FolderRow(index) => {
                 if let Some(Dialog::Folders { selected, .. }) = &mut self.view.dialog {
                     *selected = index;

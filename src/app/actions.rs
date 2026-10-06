@@ -45,6 +45,14 @@ impl App {
             .is_some_and(|playlist| playlist.can_edit(self.view.editing));
         match action {
             PlaylistFolders => self.playlist().is_some(),
+            CopyPlaylist => {
+                !self.busy() && (self.settings.mode != Mode::Order || self.view.editing) && editable
+            }
+            ComposePlaylists => {
+                !self.busy()
+                    && (self.settings.mode != Mode::Order || self.view.editing)
+                    && self.compose_choices().len() >= 2
+            }
             ToggleEdit => self.settings.mode == Mode::Order,
             Rename | Delete => {
                 editable
@@ -286,6 +294,36 @@ impl App {
                     playlist,
                     selected: 0,
                 });
+            }
+            CopyPlaylist => {
+                let source = self
+                    .playlist()
+                    .context(AppError::PlaylistSelectionRequired)?;
+                let id = source.id;
+                let base = format!(
+                    "{} — {}",
+                    source
+                        .display_name(self.settings.language)
+                        .chars()
+                        .take(130)
+                        .collect::<String>(),
+                    self.text("copy", "копия")
+                );
+                let name = self.fresh_playlist_name(&base);
+                self.text_dialog(TextPurpose::ComposePlaylist(vec![id]), name);
+            }
+            ComposePlaylists => {
+                let selected = self
+                    .compose_choices()
+                    .iter()
+                    .position(|item| Some(item.id) == self.library.selected_playlist)
+                    .unwrap_or(0);
+                let ids = self
+                    .compose_choices()
+                    .get(selected)
+                    .map(|item| vec![item.id])
+                    .unwrap_or_default();
+                self.view.dialog = Some(Dialog::ComposePlaylists { selected, ids });
             }
             NewPlaylist => {
                 let mut number = 1;

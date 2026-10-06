@@ -152,6 +152,8 @@ impl App {
                 Panel::PlaylistActions,
                 &[
                     NewPlaylist,
+                    CopyPlaylist,
+                    ComposePlaylists,
                     PlaylistFolders,
                     Rename,
                     Delete,

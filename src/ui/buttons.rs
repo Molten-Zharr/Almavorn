@@ -139,6 +139,14 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::FolderRemove => Some("Delete".into()),
         Target::FolderScan => Some("R".into()),
         Target::ScanSubfolders => Some("Space".into()),
+        Target::ComposeMove(direction) => Some(
+            if *direction < 0 {
+                "Ctrl+Up"
+            } else {
+                "Ctrl+Down"
+            }
+            .into(),
+        ),
         _ => None,
     }
 }

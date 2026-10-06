@@ -90,6 +90,8 @@ pub enum Target {
     FolderRemove,
     FolderScan,
     ScanSubfolders,
+    ComposeRow(usize),
+    ComposeMove(i64),
     DialogScroll(i16),
     Setting(usize),
     SettingsPage(SettingsPage),

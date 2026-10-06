@@ -22,6 +22,13 @@ pub(super) fn text_dialog(
 ) {
     let title = match &dialog.purpose {
         TextPurpose::Create => app.text("Create playlist", "Создать плейлист"),
+        TextPurpose::ComposePlaylist(ids) => {
+            if ids.len() == 1 {
+                app.text("Copy playlist", "Копия плейлиста")
+            } else {
+                app.text("Compose playlists", "Собрать плейлист")
+            }
+        }
         TextPurpose::RenamePlaylist(_) => app.text("Rename playlist", "Переименовать плейлист"),
         TextPurpose::PlaylistFolder(_, _) => app.text(
             "Playlist folder · full path",

@@ -368,6 +368,8 @@ impl Settings {
                 binding.action,
                 crate::input::Action::Filter
                     | crate::input::Action::PlaylistFolders
+                    | crate::input::Action::CopyPlaylist
+                    | crate::input::Action::ComposePlaylists
                     | crate::input::Action::PlaylistUp
                     | crate::input::Action::PlaylistDown
             ) && self.bindings.iter().any(|value| value.key == binding.key)

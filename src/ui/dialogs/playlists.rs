@@ -171,3 +171,156 @@ fn action_rows(app: &App, width: u16, actions: &[(String, Target, bool)]) -> u16
     }
     rows
 }
+
+pub(super) fn compose(
+    frame: &mut Frame,
+    app: &mut App,
+    selected: &mut usize,
+    ids: &[i64],
+    area: Rect,
+    palette: Palette,
+) {
+    let choices: Vec<_> = app
+        .compose_choices()
+        .into_iter()
+        .map(|item| {
+            (
+                item.id,
+                item.display_name(app.settings.language).to_owned(),
+                item.entries.len(),
+            )
+        })
+        .collect();
+    *selected = (*selected).min(choices.len().saturating_sub(1));
+    let selected_order = choices
+        .get(*selected)
+        .and_then(|(id, _, _)| ids.iter().position(|value| value == id));
+    let inner = modal(
+        frame,
+        app,
+        area,
+        app.text("Compose playlists", "Собрать плейлист").into(),
+        30,
+        palette,
+    );
+    let actions = vec![
+        (
+            app.text("Earlier", "Раньше").into(),
+            Target::ComposeMove(-1),
+            selected_order.is_some_and(|index| index > 0),
+        ),
+        (
+            app.text("Later", "Позже").into(),
+            Target::ComposeMove(1),
+            selected_order.is_some_and(|index| index + 1 < ids.len()),
+        ),
+        (
+            app.text("Create", "Создать").into(),
+            Target::Submit,
+            ids.len() >= 2 && !app.busy(),
+        ),
+        (
+            app.text("Cancel", "Отмена").into(),
+            Target::CloseDialog,
+            true,
+        ),
+    ];
+    let footer = action_rows(app, inner.width, &actions).min(inner.height);
+    let hint = app.text("Space or click: select. Numbers show the chosen order; Ctrl+Up/Down changes it. Enter: name the new playlist. Tracks keep their order, repeats are skipped, original playlists are kept.", "Space или клик: отметить. Номера показывают порядок сборки; Ctrl+↑↓ меняет его. Enter: имя нового плейлиста. Порядок композиций сохраняется, повторы пропускаются, исходные плейлисты остаются.");
+    let hints =
+        super::help::wrapped_height(hint, inner.width).min(inner.height.saturating_sub(footer + 3));
+    frame.render_widget(
+        Paragraph::new(hint)
+            .style(palette.text().fg(palette.muted))
+            .wrap(Wrap { trim: false }),
+        Rect::new(inner.x, inner.y, inner.width, hints),
+    );
+    let list = Rect::new(
+        inner.x,
+        inner.y + hints + 1,
+        inner.width,
+        inner.height.saturating_sub(hints + footer + 2),
+    );
+    let rows: Vec<_> = choices
+        .iter()
+        .map(|(id, name, count)| {
+            let rank = ids.iter().position(|value| value == id);
+            let label = format!(
+                "[{}] {} {}",
+                if rank.is_some() { 'x' } else { ' ' },
+                rank.map(|index| format!("{}.", index + 1))
+                    .unwrap_or_else(|| "  ".into()),
+                clean(name)
+            );
+            let count = format!(" · {count}");
+            let count_width = (ratatui::text::Span::raw(&count).width() as u16).min(list.width);
+            let height =
+                super::help::wrapped_height(&label, list.width.saturating_sub(count_width))
+                    .min(list.height)
+                    .max(1);
+            (label, count, count_width, height)
+        })
+        .collect();
+    let mut offset = 0;
+    let mut used: usize = rows
+        .iter()
+        .take(*selected + 1)
+        .map(|row| usize::from(row.3))
+        .sum();
+    while used > usize::from(list.height) && offset < *selected {
+        used -= usize::from(rows[offset].3);
+        offset += 1;
+    }
+    let mut y = list.y;
+    for (index, (label, count, count_width, height)) in rows.iter().enumerate().skip(offset) {
+        if y.saturating_add(*height) > list.bottom() {
+            break;
+        }
+        let rect = Rect::new(list.x, y, list.width, *height);
+        y += height;
+        let style = if index == *selected {
+            palette.text().bg(palette.selection)
+        } else if app.hovered(rect) {
+            palette.text().fg(palette.accent)
+        } else {
+            palette.text()
+        };
+        frame.render_widget(
+            Paragraph::new(label.as_str())
+                .style(style)
+                .wrap(Wrap { trim: false }),
+            Rect::new(
+                rect.x,
+                rect.y,
+                rect.width.saturating_sub(*count_width),
+                *height,
+            ),
+        );
+        frame.render_widget(
+            Paragraph::new(count.as_str()).style(style),
+            Rect::new(
+                rect.right().saturating_sub(*count_width),
+                rect.y,
+                *count_width,
+                *height,
+            ),
+        );
+        app.view.hits.push(Hit {
+            area: rect,
+            target: Target::ComposeRow(index),
+            enabled: true,
+        });
+    }
+    buttons(
+        frame,
+        app,
+        Rect::new(
+            inner.x,
+            inner.bottom().saturating_sub(footer),
+            inner.width,
+            footer,
+        ),
+        actions,
+        palette,
+    );
+}

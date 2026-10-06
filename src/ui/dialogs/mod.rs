@@ -75,6 +75,9 @@ pub(super) fn render_dialog(
         Dialog::Folders { playlist, selected } => {
             playlists::folders(frame, app, *playlist, selected, area, palette)
         }
+        Dialog::ComposePlaylists { selected, ids } => {
+            playlists::compose(frame, app, selected, ids, area, palette)
+        }
         Dialog::RemoveEntry { title, .. } => {
             let inner = modal(
                 frame,
