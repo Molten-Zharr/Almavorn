@@ -73,7 +73,7 @@ pub(super) fn button(
     content.push(Span::styled(label, style));
     let border_style = style.bg(palette.background).fg(if !enabled {
         palette.muted
-    } else if app.hovered(area) {
+    } else if app.hovered(area) || matches!(target, Target::Action(crate::input::Action::Panels)) {
         palette.accent
     } else {
         palette.inactive_panel_border

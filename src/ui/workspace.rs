@@ -13,6 +13,7 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::{Modifier, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
 
@@ -459,21 +460,23 @@ fn chrome(
             1,
         )
         .intersection(area);
+        let style = palette.text().bg(if app.hovered(rect) {
+            palette.selection
+        } else {
+            palette.background
+        });
+        let symbol_style = style.fg(if active || app.hovered(rect) {
+            palette.accent
+        } else {
+            palette.muted
+        });
         frame.render_widget(
-            Paragraph::new(label).style(
-                palette
-                    .text()
-                    .fg(if active || app.hovered(rect) {
-                        palette.accent
-                    } else {
-                        palette.muted
-                    })
-                    .bg(if app.hovered(rect) {
-                        palette.selection
-                    } else {
-                        palette.background
-                    }),
-            ),
+            Paragraph::new(Line::from(vec![
+                Span::styled("[", style.fg(palette.accent)),
+                Span::styled(label.trim_matches(['[', ']']), symbol_style),
+                Span::styled("]", style.fg(palette.accent)),
+            ]))
+            .style(style),
             rect,
         );
         app.hits.push(Hit {

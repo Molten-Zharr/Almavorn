@@ -181,7 +181,9 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         .shrink(1.0 / ui.painter().pixels_per_point());
         let [r, g, b] = palette.color(if !hit.enabled {
             "folder_path"
-        } else if app.hovered(hit.area) {
+        } else if app.hovered(hit.area)
+            || matches!(hit.target, Target::Action(almavorn::input::Action::Panels))
+        {
             "active"
         } else {
             "inactive_panel_border"

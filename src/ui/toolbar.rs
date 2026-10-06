@@ -396,15 +396,25 @@ fn command_button(
         } else {
             palette.muted
         });
-        content.push(Span::styled("[", key_style.fg(palette.muted)));
+        content.push(Span::styled("[", key_style.fg(palette.accent)));
         content.push(Span::styled(
             shortcut,
             key_style.add_modifier(Modifier::BOLD),
         ));
-        content.push(Span::styled("]", key_style.fg(palette.muted)));
+        content.push(Span::styled("]", key_style.fg(palette.accent)));
         content.push(Span::styled(" ", style));
     }
-    content.push(Span::styled(label.to_owned(), style));
+    if let Some((state, text)) = label
+        .strip_prefix('[')
+        .and_then(|label| label.split_once(']'))
+    {
+        content.push(Span::styled("[", style.fg(palette.accent)));
+        content.push(Span::styled(state, style));
+        content.push(Span::styled("]", style.fg(palette.accent)));
+        content.push(Span::styled(text, style));
+    } else {
+        content.push(Span::styled(label, style));
+    }
     frame.render_widget(Paragraph::new(Line::from(content)).style(style), area);
     app.hits.push(Hit {
         area,
