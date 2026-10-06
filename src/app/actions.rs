@@ -149,15 +149,82 @@ impl App {
         }
     }
 
+    fn playlist_move_unavailable(&self, action: Action) -> String {
+        let language = self.settings.language;
+        if self.database_busy() {
+            return AppError::LibraryBusy.message(language).into();
+        }
+        let Some(playlist) = self.playlist() else {
+            return AppError::PlaylistSelectionRequired.message(language).into();
+        };
+        if playlist.kind != PlaylistKind::Normal {
+            return self
+                .text(
+                    "The sorting desk stays first. Select a regular playlist to reorder.",
+                    "Сортировочный стол закреплен первым. Для перестановки выберите обычный плейлист.",
+                )
+                .into();
+        }
+        if self
+            .visible_playlists()
+            .iter()
+            .filter(|playlist| playlist.kind == PlaylistKind::Normal)
+            .count()
+            < 2
+        {
+            return self
+                .text(
+                    "Reordering requires at least two regular playlists. The sorting desk stays first.",
+                    "Для перестановки нужны хотя бы два обычных плейлиста. Сортировочный стол закреплен первым.",
+                )
+                .into();
+        }
+        if !playlist.can_edit(self.view.editing) {
+            let shortcut = self
+                .settings
+                .bindings
+                .iter()
+                .find(|binding| binding.action == Action::ToggleEdit)
+                .map(|binding| format!(" ({})", binding.key.label()))
+                .unwrap_or_default();
+            return format!(
+                "{}{shortcut}.",
+                self.text(
+                    "Enable Edit to reorder Order playlists",
+                    "Для перестановки плейлистов Порядка включите Правку",
+                ),
+            );
+        }
+        self.text(
+            if matches!(action, Action::MoveUp | Action::PlaylistUp) {
+                "This playlist is already the first regular playlist."
+            } else {
+                "This playlist is already the last regular playlist."
+            },
+            if matches!(action, Action::MoveUp | Action::PlaylistUp) {
+                "Этот плейлист уже первый среди обычных плейлистов."
+            } else {
+                "Этот плейлист уже последний среди обычных плейлистов."
+            },
+        )
+        .into()
+    }
+
     pub fn action(&mut self, action: Action) -> Result<()> {
         if !self.allowed(action) {
-            self.message(
+            let message = if matches!(action, Action::PlaylistUp | Action::PlaylistDown)
+                || (self.view.focus == Focus::Playlists
+                    && matches!(action, Action::MoveUp | Action::MoveDown))
+            {
+                self.playlist_move_unavailable(action)
+            } else {
                 self.text(
                     "Action unavailable. Check selection and Order editing.",
                     "Действие недоступно. Проверьте выбор и редактирование Порядка.",
                 )
-                .into(),
-            );
+                .into()
+            };
+            self.message(message);
             return Ok(());
         }
         use Action::*;

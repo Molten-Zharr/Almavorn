@@ -9,8 +9,8 @@ use crate::{
 };
 use ratatui::{
     Frame,
-    layout::{Constraint, Flex, Layout, Rect},
-    style::Modifier,
+    layout::{Alignment, Constraint, Flex, Layout, Rect},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Cell, Clear, Paragraph, Row, Table, Wrap},
 };
@@ -24,7 +24,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .map(|playlist| {
             (
                 playlist.id,
-                playlist.display_name(app.settings.language).to_owned(),
+                clean(playlist.display_name(app.settings.language)),
                 playlist.entries.len(),
             )
         })
@@ -91,14 +91,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         )];
         if playing {
             content.push(Span::styled(
-                format!(
-                    "[{}] ",
-                    if app.current_paused() {
-                        app.text("PAUSED", "ПАУЗА")
-                    } else {
-                        app.text("PLAYING", "ИГРАЕТ")
-                    }
-                ),
+                format!("[{}] ", if app.current_paused() { "‖" } else { "▶" }),
                 style
                     .bg(if app.current_paused() {
                         palette.muted
@@ -109,14 +102,57 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
                     .add_modifier(Modifier::BOLD),
             ));
         }
-        content.push(Span::styled(format!("{name} · {count}"), style));
-        frame.render_widget(Paragraph::new(Line::from(content)).style(style), rect);
+        let count = count.to_string();
+        let counter = if usize::from(rect.width) > count.len() + 3 {
+            format!(" · {count}")
+        } else {
+            count
+        };
+        let count_width = (Span::raw(counter.as_str()).width() as u16).min(rect.width);
+        let name_area = Rect::new(rect.x, rect.y, rect.width - count_width, 1);
+        let prefix_width: usize = content.iter().map(Span::width).sum();
+        content.push(Span::styled(
+            ellipsize_name(
+                name,
+                usize::from(name_area.width).saturating_sub(prefix_width),
+            ),
+            style,
+        ));
+        frame.render_widget(Paragraph::new(Line::from(content)).style(style), name_area);
+        frame.render_widget(
+            Paragraph::new(counter)
+                .style(style)
+                .alignment(Alignment::Right),
+            Rect::new(name_area.right(), rect.y, count_width, 1),
+        );
         app.view.hits.push(Hit {
             area: rect,
             target: Target::Playlist(*id),
             enabled: true,
         });
     }
+}
+
+fn ellipsize_name(name: &str, width: usize) -> String {
+    let line = Line::raw(name);
+    if line.width() <= width {
+        return name.to_owned();
+    }
+    if width == 0 {
+        return String::new();
+    }
+    let mut remaining = width - 1;
+    let mut truncated = String::new();
+    for grapheme in line.styled_graphemes(Style::default()) {
+        let width = Span::raw(grapheme.symbol).width();
+        if width > remaining {
+            break;
+        }
+        truncated.push_str(grapheme.symbol);
+        remaining -= width;
+    }
+    truncated.push('…');
+    truncated
 }
 
 pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -254,14 +290,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             let mut title = Vec::new();
             if playing {
                 title.push(Span::styled(
-                    format!(
-                        "[{}] ",
-                        if app.current_paused() {
-                            app.text("PAUSED", "ПАУЗА")
-                        } else {
-                            app.text("PLAYING", "ИГРАЕТ")
-                        }
-                    ),
+                    format!("[{}] ", if app.current_paused() { "‖" } else { "▶" }),
                     style
                         .bg(if app.current_paused() {
                             palette.muted

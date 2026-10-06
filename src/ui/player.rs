@@ -19,14 +19,10 @@ pub(super) fn controls(app: &App) -> Vec<Group> {
         (Action::Previous, "<<", "<<"),
         (
             Action::TogglePlay,
-            if app.paused() { "Play" } else { "Pause" },
-            if app.paused() {
-                "Играть"
-            } else {
-                "Пауза"
-            },
+            if app.paused() { "[▶]" } else { "[‖]" },
+            if app.paused() { "[▶]" } else { "[‖]" },
         ),
-        (Action::Stop, "Stop", "Стоп"),
+        (Action::Stop, "[■]", "[■]"),
         (Action::Next, ">>", ">>"),
     ];
     let volume = [
@@ -94,11 +90,7 @@ pub(super) fn player(
     {
         format!(
             "[{}] {}{}",
-            if app.current_paused() {
-                app.text("PAUSED", "ПАУЗА")
-            } else {
-                app.text("PLAYING", "ИГРАЕТ")
-            },
+            if app.current_paused() { "‖" } else { "▶" },
             track.title,
             if track.artist.is_empty() {
                 String::new()

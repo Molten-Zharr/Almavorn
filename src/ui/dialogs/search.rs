@@ -148,14 +148,7 @@ pub(super) fn render(
             && app.playback.playing_entry == Some(entry.id);
         let name = clean(playlist.display_name(app.settings.language));
         let prefix = if playing {
-            format!(
-                "[{}] ",
-                if app.current_paused() {
-                    app.text("PAUSED", "ПАУЗА")
-                } else {
-                    app.text("PLAYING", "ИГРАЕТ")
-                }
-            )
+            format!("[{}] ", if app.current_paused() { "‖" } else { "▶" })
         } else {
             String::new()
         };
