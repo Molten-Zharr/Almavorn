@@ -77,6 +77,7 @@ pub struct Appearance {
     pub borders: BorderWeight,
     pub corners: Corners,
     pub playback_timeline: PlaybackTimeline,
+    pub show_button_shortcuts: bool,
 }
 impl Default for Appearance {
     fn default() -> Self {
@@ -88,6 +89,7 @@ impl Default for Appearance {
             borders: BorderWeight::Single,
             corners: Corners::Square,
             playback_timeline: PlaybackTimeline::default(),
+            show_button_shortcuts: true,
         }
     }
 }

@@ -1,5 +1,5 @@
 use super::{
-    buttons::{quiet_button, quiet_width},
+    buttons::{button_width, quiet_button},
     theme::Palette,
     widgets::clean,
 };
@@ -45,28 +45,50 @@ pub(super) fn content_height(app: &App, width: u16) -> u16 {
 }
 
 fn volume_width(width: u16) -> u16 {
-    if width >= 70 {
-        22
-    } else {
-        (width / 2).clamp(8, 22)
-    }
+    (width / 3).clamp(32, 80).min(width)
 }
 
 fn stack_volume(app: &App, width: u16) -> bool {
     let controls_width: u16 = controls(app)
         .iter()
-        .map(|(_, label)| quiet_width(label).saturating_add(1))
+        .map(|(action, label)| button_width(app, label, &Target::Action(*action)).saturating_add(1))
         .sum();
-    controls_width.saturating_add(volume_width(width)) > width
+    width < 70
+        || controls_width
+            .saturating_add(volume_width(width))
+            .saturating_add(15)
+            > width
+}
+
+fn control_cells(app: &App, width: u16) -> Vec<(Rect, Action, &'static str)> {
+    let mut x: u16 = 0;
+    let mut y = 0;
+    controls(app)
+        .into_iter()
+        .map(|(action, label)| {
+            let size = button_width(app, label, &Target::Action(action)).min(width);
+            if x > 0 && x.saturating_add(size) > width {
+                x = 0;
+                y += 1;
+            }
+            let rect = Rect::new(x, y, size, 1);
+            x = x.saturating_add(size + 1);
+            (rect, action, label)
+        })
+        .collect()
+}
+
+fn control_rows(app: &App, width: u16) -> u16 {
+    control_cells(app, width)
+        .last()
+        .map_or(1, |(area, ..)| area.bottom())
 }
 
 fn base_height(app: &App, width: u16) -> u16 {
     if stack_volume(app, width) {
-        4
-    } else if width >= 70 {
-        2
+        control_rows(app, width).saturating_add(3)
     } else {
-        3
+        2
     }
 }
 
@@ -108,36 +130,38 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         Rect::new(area.x, area.y, area.width, 1),
     );
     let row = Rect::new(area.x, area.y + 1, area.width, 1);
-    let volume_width = volume_width(area.width).min(area.width);
     let stacked = stack_volume(app, area.width);
+    let control_rows = control_rows(app, area.width);
+    let volume_width = if stacked {
+        area.width
+    } else {
+        volume_width(area.width)
+    };
     let volume_area = Rect::new(
         row.right().saturating_sub(volume_width),
-        row.y + u16::from(stacked),
+        row.y + if stacked { control_rows } else { 0 },
         volume_width,
         1,
     );
     let mut x = row.x;
-    for (action, label) in controls(app) {
-        let width = quiet_width(label);
-        if x + width > if stacked { row.right() } else { volume_area.x } {
-            break;
-        }
+    for (cell, action, label) in control_cells(app, area.width) {
+        let rect = Rect::new(row.x + cell.x, row.y + cell.y, cell.width, cell.height);
         quiet_button(
             frame,
             app,
-            Rect::new(x, row.y, width, 1),
+            rect,
             label,
             Target::Action(action),
             app.allowed(action),
             palette,
         );
-        x += width + 1;
+        x = rect.right() + 1;
     }
     volume(frame, app, volume_area, palette);
-    let progress = if area.width >= 70 && !stacked {
+    let progress = if !stacked {
         Rect::new(x + 1, row.y, volume_area.x.saturating_sub(x + 2), 1)
     } else if area.height >= base_height(app, area.width) {
-        Rect::new(area.x, area.y + 2 + u16::from(stacked), area.width, 1)
+        Rect::new(area.x, volume_area.bottom(), area.width, 1)
     } else {
         Rect::default()
     };
@@ -288,17 +312,25 @@ fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         1,
     );
     let segments = bar.width.div_ceil(2);
-    let filled = (f32::from(percent) * f32::from(segments) / 100.0).round() as u16;
+    let filled = f32::from(percent) * f32::from(segments) / 100.0;
+    let blocks = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
     let bars: Vec<_> = (0..bar.width)
         .map(|column| {
-            Span::styled(
-                if column % 2 == 0 { "█" } else { " " },
-                palette.text().fg(if column / 2 < filled {
-                    palette.accent
-                } else {
-                    palette.inactive_panel_border
-                }),
-            )
+            if column % 2 != 0 {
+                return Span::styled(" ", palette.text());
+            }
+            let fill = ((filled - f32::from(column / 2)).clamp(0.0, 1.0) * 8.0).round() as usize;
+            if fill == 0 {
+                Span::styled("█", palette.text().fg(palette.inactive_panel_border))
+            } else {
+                Span::styled(
+                    blocks[fill],
+                    palette
+                        .text()
+                        .fg(palette.accent)
+                        .bg(palette.inactive_panel_border),
+                )
+            }
         })
         .collect();
     frame.render_widget(Paragraph::new(Line::from(bars)), bar);

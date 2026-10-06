@@ -1,5 +1,5 @@
 use super::{
-    buttons::{quiet_button, quiet_width},
+    buttons::{button_width, quiet_button, quiet_width},
     theme::Palette,
     widgets::{block, visible_offset},
 };
@@ -51,7 +51,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
                 inner.width,
                 inner.height.min(1),
             ),
-            app.text("Esc: back", "Esc: назад"),
+            app.text("Back", "Назад"),
             Target::CloseDialog,
             true,
             palette,
@@ -302,16 +302,16 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     ];
     if footer.width >= 65 {
         actions.push((
-            app.text("Enter: edit", "Enter: изменить").into(),
+            app.text("Edit", "Изменить").into(),
             Target::Setting(selected),
             rows.get(selected).is_some_and(|item| item.enabled),
         ));
     }
     actions.push((
         if footer.width < 40 {
-            "F1"
+            "?"
         } else {
-            app.text("F1: info", "F1: описание")
+            app.text("Info", "Описание")
         }
         .into(),
         Target::SettingHelp(selected),
@@ -319,9 +319,9 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     ));
     actions.push((
         if footer.width < 40 {
-            "Esc"
+            "←"
         } else {
-            app.text("Esc: back", "Esc: назад")
+            app.text("Back", "Назад")
         }
         .into(),
         Target::CloseDialog,
@@ -329,7 +329,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     ));
     let action_width = actions
         .iter()
-        .map(|(label, ..)| quiet_width(label) + 1)
+        .map(|(label, target, _)| button_width(app, label, target) + 1)
         .sum::<u16>()
         .saturating_sub(1);
     let mut x = footer.right().saturating_sub(action_width).max(footer.x);
@@ -350,7 +350,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         Rect::new(footer.x, footer.bottom() - 1, x.saturating_sub(footer.x), 1),
     );
     for (label, target, enabled) in actions {
-        let width = quiet_width(&label).min(footer.right().saturating_sub(x));
+        let width = button_width(app, &label, &target).min(footer.right().saturating_sub(x));
         quiet_button(
             frame,
             app,
@@ -527,13 +527,16 @@ fn volume(
     palette: Palette,
 ) {
     if area.width < 12 {
-        quiet_button(
+        setting_value(
             frame,
             app,
-            area,
+            Hit {
+                area,
+                target: Target::Setting(index),
+                enabled: true,
+            },
             &format!("{}%", (app.settings.volume * 100.0).round() as u16),
-            Target::Setting(index),
-            true,
+            style,
             palette,
         );
         return;

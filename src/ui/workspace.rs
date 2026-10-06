@@ -1,4 +1,9 @@
-use super::{buttons::quiet_button, library, player, theme::Palette, widgets::block};
+use super::{
+    buttons::{button_width, quiet_button},
+    library, player,
+    theme::Palette,
+    widgets::block,
+};
 use crate::{
     app::{App, CommandMenu, Hit, Target},
     input::Action,
@@ -91,7 +96,9 @@ fn min_width(app: &App, node: &Dock) -> u16 {
                 0
             } else {
                 match panel {
-                    Panel::Playlists => 18,
+                    Panel::Playlists => (title_reserved(app, *panel)
+                        + Span::raw(panel.name(app.settings.language)).width() as u16)
+                        .max(18),
                     Panel::Tracks => 30,
                     _ => 20,
                 }
@@ -110,6 +117,18 @@ fn min_width(app: &App, node: &Dock) -> u16 {
                 left.max(right)
             }
         }
+    }
+}
+
+fn title_reserved(app: &App, panel: Panel) -> u16 {
+    if app.view.layout_editing {
+        13
+    } else if panel == Panel::Playlists
+        && app.control_visible(Panel::PlaylistActions, Action::NewPlaylist)
+    {
+        button_width(app, "+", &Target::Action(Action::NewPlaylist)).saturating_add(6)
+    } else {
+        9
     }
 }
 
@@ -332,9 +351,7 @@ fn chrome(
         target: Target::PanelFocus(panel),
         enabled: true,
     });
-    let title_width = area
-        .width
-        .saturating_sub(if app.view.layout_editing { 13 } else { 9 });
+    let title_width = area.width.saturating_sub(title_reserved(app, panel));
     let heading = if panel == Panel::Tracks {
         app.playlist()
             .map(|playlist| playlist.display_name(app.settings.language))
@@ -366,12 +383,15 @@ fn chrome(
         if panel == Panel::Playlists
             && app.control_visible(Panel::PlaylistActions, Action::NewPlaylist)
         {
+            let target = Target::Action(Action::NewPlaylist);
+            let width = button_width(app, "+", &target);
             quiet_button(
                 frame,
                 app,
-                Rect::new(area.right().saturating_sub(8), area.y, 3, 1).intersection(area),
+                Rect::new(area.right().saturating_sub(width + 5), area.y, width, 1)
+                    .intersection(area),
                 "+",
-                Target::Action(Action::NewPlaylist),
+                target,
                 app.allowed(Action::NewPlaylist),
                 palette,
             );

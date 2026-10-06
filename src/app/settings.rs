@@ -470,6 +470,10 @@ impl App {
                 return self.set_settings_volume(self.settings.volume + direction as f32 * 0.05);
             }
             SettingControl::Desk => self.settings.sorting_desk = !self.settings.sorting_desk,
+            SettingControl::ButtonShortcuts => {
+                self.settings.appearance.show_button_shortcuts =
+                    !self.settings.appearance.show_button_shortcuts;
+            }
             SettingControl::PlaybackTimeline => {
                 return self.set_playback_timeline(cycle(
                     self.settings.appearance.playback_timeline,

@@ -128,6 +128,8 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
             .map(|binding| binding.key.label()),
         Target::Submit | Target::BrowserOpen => Some("Enter".into()),
         Target::SearchPlay => Some("Enter".into()),
+        Target::Setting(_) => Some("Enter".into()),
+        Target::SettingHelp(_) => Some("F1".into()),
         Target::CloseDialog => Some("Esc".into()),
         Target::BrowserParent => Some("Backspace".into()),
         Target::BrowserMarkAll => Some("Ctrl+A".into()),
@@ -137,13 +139,21 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
 }
 
 pub(super) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
-    let shortcut = button_shortcut(app, target);
+    let shortcut = displayed_shortcut(app, target);
     (Span::raw(label).width()
         + shortcut
             .as_ref()
             .map_or(0, |key| Span::raw(key).width() + 3)
         + 2)
     .min(usize::from(u16::MAX)) as u16
+}
+
+fn displayed_shortcut(app: &App, target: &Target) -> Option<String> {
+    if app.settings.appearance.show_button_shortcuts {
+        button_shortcut(app, target)
+    } else {
+        None
+    }
 }
 
 fn standard(
@@ -169,7 +179,7 @@ fn standard(
     if enabled && matches!(target, Target::Submit) {
         style = style.bg(palette.confirm_background);
     }
-    let shortcut = button_shortcut(app, &target);
+    let shortcut = displayed_shortcut(app, &target);
     let mut content = Vec::new();
     if let Some(shortcut) = &shortcut {
         content.push(Span::styled(
@@ -260,8 +270,36 @@ fn quiet(
     if enabled && (hovered || active) {
         style = style.bg(palette.selection).fg(palette.accent);
     }
+    let focused = !app
+        .view
+        .dialog
+        .as_ref()
+        .is_some_and(crate::app::Dialog::is_settings)
+        && app
+            .view
+            .toolbar_selected
+            .and_then(|index| app.view.toolbar_areas.get(index))
+            .is_some_and(|rect| *rect == area);
+    if enabled && focused {
+        style = style.bg(palette.sidebar_selection).fg(palette.background);
+    }
+    let mut content = Vec::new();
+    if let Some(shortcut) = displayed_shortcut(app, &target) {
+        content.push(Span::styled(
+            format!("[{shortcut}]"),
+            style.fg(if !enabled {
+                palette.muted
+            } else if focused {
+                palette.background
+            } else {
+                palette.accent
+            }),
+        ));
+        content.push(Span::styled(" ", style));
+    }
+    content.push(Span::styled(label, style));
     frame.render_widget(
-        Paragraph::new(label)
+        Paragraph::new(Line::from(content))
             .style(style)
             .alignment(Alignment::Center),
         area,

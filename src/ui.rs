@@ -120,12 +120,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         tooltip.unwrap_or(notice)
     };
     let help_target = Target::Action(Action::Help);
-    let help = format!(
-        "{} {}",
-        buttons::button_shortcut(app, &help_target).unwrap_or_default(),
-        app.text("Help", "Справка")
-    );
-    let help_width = (Span::raw(&help).width() as u16 + 2).min(parts[2].width);
+    let help = app.text("Help", "Справка");
+    let help_width = buttons::button_width(app, help, &help_target).min(parts[2].width);
     let navigation = if area.width >= 80 {
         app.text("Tab: panels / menu", "Tab: панели / меню")
     } else {
@@ -171,7 +167,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             help_width,
             1,
         ),
-        &help,
+        help,
         help_target,
         true,
         palette,

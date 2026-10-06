@@ -1,14 +1,9 @@
 use super::{
-    buttons::{quiet_button, quiet_width},
+    buttons::{button_width, quiet_button},
     theme::Palette,
 };
 use crate::app::{App, CommandItem, Target};
-use ratatui::{
-    Frame,
-    layout::{Alignment, Rect},
-    style::Modifier,
-    widgets::Paragraph,
-};
+use ratatui::{Frame, layout::Rect, style::Modifier, widgets::Paragraph};
 
 fn cells(app: &App, width: u16) -> Vec<(Rect, String, Target, bool)> {
     let mut x = 11u16.min(width);
@@ -21,7 +16,7 @@ fn cells(app: &App, width: u16) -> Vec<(Rect, String, Target, bool)> {
                  target,
                  enabled,
              }| {
-                let size = quiet_width(&label).min(width);
+                let size = button_width(app, &label, &target).min(width);
                 if x > 0 && x.saturating_add(size) > width {
                     x = 0;
                     y += 1;
@@ -59,20 +54,9 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         ),
         Rect::new(area.x, area.y, area.width.min(10), 1),
     );
-    for (index, (cell, label, target, enabled)) in cells(app, area.width).into_iter().enumerate() {
+    for (cell, label, target, enabled) in cells(app, area.width) {
         let rect = Rect::new(area.x + cell.x, area.y + cell.y, cell.width, 1).intersection(area);
         app.view.toolbar_areas.push(rect);
         quiet_button(frame, app, rect, &label, target, enabled, palette);
-        if app.view.toolbar_selected == Some(index) {
-            frame.render_widget(
-                Paragraph::new(label).alignment(Alignment::Center).style(
-                    palette
-                        .text()
-                        .bg(palette.sidebar_selection)
-                        .fg(palette.background),
-                ),
-                rect,
-            );
-        }
     }
 }
