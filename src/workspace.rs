@@ -21,6 +21,7 @@ pub enum Panel {
 }
 
 impl Panel {
+    pub const CONTENT: [Self; 3] = [Self::Playlists, Self::Tracks, Self::Player];
     pub const ALL: [Self; 6] = [
         Self::Application,
         Self::Add,
@@ -167,6 +168,30 @@ pub enum Dock {
 }
 
 impl Dock {
+    pub fn content_only(self) -> Option<Self> {
+        self.consolidate(&Panel::CONTENT.map(|panel| (panel, panel)))
+    }
+
+    fn compact_player(&mut self) {
+        if let Self::Split {
+            axis,
+            ratio,
+            first,
+            second,
+        } = self
+        {
+            if *axis == Axis::Vertical {
+                if matches!(**first, Self::Panel(Panel::Player)) {
+                    *ratio = (*ratio).min(100);
+                }
+                if matches!(**second, Self::Panel(Panel::Player)) {
+                    *ratio = (*ratio).max(900);
+                }
+            }
+            first.compact_player();
+            second.compact_player();
+        }
+    }
     fn consolidate(self, retained: &[(Panel, Panel)]) -> Option<Self> {
         match self {
             Self::Panel(panel) => retained
@@ -313,7 +338,7 @@ pub struct WorkspaceLayout {
 impl Default for WorkspaceLayout {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 3,
             root: None,
             hidden: Vec::new(),
             collapsed: Vec::new(),
@@ -414,11 +439,18 @@ impl WorkspaceLayout {
                 .collect();
             self.version = 2;
         }
+        if self.version < 3 {
+            self.root = self.root.take().and_then(Dock::content_only);
+            if let Some(root) = &mut self.root {
+                root.compact_player();
+            }
+            self.version = 3;
+        }
         if let Some(root) = &self.root {
             let mut panels = Vec::new();
             root.panels(&mut panels);
-            if panels.len() != Panel::ALL.len()
-                || Panel::ALL
+            if panels.len() != Panel::CONTENT.len()
+                || Panel::CONTENT
                     .iter()
                     .any(|panel| panels.iter().filter(|value| *value == panel).count() != 1)
             {

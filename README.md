@@ -43,17 +43,54 @@ Both interfaces share application state and Ratatui rendering:
 - `src/preferences.rs`: profiles, palettes, theme presets, and palette exchange.
 
 Displayed track filtering and sorting are cached until the library, selected
-playlist, query, or sort options change. Short windows pack buttons without
-blank rows between groups.
+playlist, query, or sort options change. The command bar wraps to fit narrow windows.
+
+## Main screen
+
+The command bar provides Add, Playlist, undo/redo, search, Settings, and the
+current mode's menu. `Tab` and `Shift+Tab` cycle through the panels and command
+bar. On the bar, arrows select an enabled button and `Enter` opens it; `Esc`
+returns to the library. The focused button is highlighted, and keyboard menus
+open below it. The `+` beside Playlists creates a playlist. The `...` in
+panel headings and right click open actions for the selected playlist, track,
+or player. `F10` opens the focused panel's menu; use arrows, Enter, and Esc to
+navigate. Clicking outside dismisses it. Shortcuts appear in menus and the
+status line when hovering over a button.
+Menu navigation skips unavailable commands and stops at the first or last
+available command. Help scrolls by rendered lines and stops at the last full
+page, including after resizing. GUI keycaps are painted separately from the
+text raster; TUI shows bracketed key labels.
+
+`Ctrl+B` or Layout enables arranging: move, collapse, and close controls
+appear, and borders become draggable. Visibility opens the existing panel
+and individual command choices. `Ctrl+B`, Esc, or Done finishes arranging.
+Older layouts migrate to three content panels; command blocks become menus
+while hidden command preferences are preserved.
+
+The idle player is compact; playback reveals the waveform. Position and
+volume sliders support dragging. Main panels use subdued border colors; border type and corners follow
+Themes → Font and geometry. Color highlights selection and active headings. New configurations default
+to regular Fira Code; existing font choices remain intact.
+
+Render the main screen, menus, and layout editor without a window:
+
+```sh
+cargo run --release --example interface_preview
+```
+
+PPM images are written to `target/interface-preview/`.
 
 ## Settings
 
 Open Settings from the application menu. Sections appear on the left,
-parameters and descriptions on the right, and keyboard hints and buttons
-at the bottom. Sections cover general settings, profiles, themes, and shortcuts.
+compact parameter rows on the right, and the selected description,
+keyboard hints, and autosave state at the bottom. Volume uses a single-line
+slider. Values share a column at the right edge; narrow windows put them below
+their labels. Clicking a value or pressing Enter changes it or opens its editor;
+arrows adjust it. Sections cover general settings, profiles, themes, and shortcuts.
 Themes contain three tabs: Presets, Palettes, and Font and geometry.
 Open a full parameter description
-with `F1`, the `?` button, or a double click on its row.
+with `F1`, the info button, or a double click on its row.
 
 - `Tab` moves focus between sections, theme tabs, and parameters; `Shift+Tab`
   moves backwards. `↑`/`↓` select a row,

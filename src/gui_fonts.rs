@@ -34,7 +34,7 @@ mod tests {
             let large = backend(face, 24, 2, 2);
             assert!(small.char_width > 0 && small.char_height > 0);
             assert!(large.char_height > small.char_height);
-            for c in "Настройки ABC 0123 ↑↓ ←→ ─│┌┐╭╮"
+            for c in "Настройки ABC 0123 ↑↓ ←→ ─│┌┐╭╮ ▶■‹›●…"
                 .chars()
                 .filter(|c| !c.is_whitespace())
             {

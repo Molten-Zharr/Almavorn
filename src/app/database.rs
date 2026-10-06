@@ -38,6 +38,10 @@ impl App {
         self.start_settings()
     }
 
+    pub fn settings_saving(&self) -> bool {
+        self.persistence.job.is_some() || self.persistence.pending.is_some()
+    }
+
     pub(super) fn runtime(&self) -> &Runtime {
         self.runtime
             .as_ref()

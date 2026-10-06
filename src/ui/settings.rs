@@ -1,20 +1,22 @@
 use super::{
+    buttons::{quiet_button, quiet_width},
     theme::Palette,
-    widgets::{block, button, button_width, buttons, visible_offset},
+    widgets::{block, visible_offset},
 };
 use crate::app::{App, Hit, SettingControl, SettingsFocus, SettingsPage, Target};
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Color, Modifier},
-    text::Span,
-    widgets::{Clear, Gauge, Paragraph, Wrap},
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{Clear, Paragraph, Wrap},
 };
 
 pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette) {
     let area = frame.area();
     frame.render_widget(Clear, area);
-    let outer = block(String::new(), palette, true);
+    let outer =
+        block(String::new(), palette, false).border_style(palette.text().fg(palette.separator));
     let mut inner = outer.inner(area);
     frame.render_widget(outer, area);
     breadcrumbs(frame, app, area, palette);
@@ -22,26 +24,57 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         inner.y += 1;
         inner.height -= 1;
     }
-    let footer_height = inner.height.min(6);
+    app.view.settings.menu_area = Rect::default();
+    app.view.settings.subtab_area = Rect::default();
+    app.view.settings.parameters_area = Rect::default();
+    if area.width < 32 || area.height < 14 {
+        frame.render_widget(
+            Paragraph::new(app.text(
+                "Enlarge the window to edit settings.",
+                "Увеличьте окно для редактирования настроек.",
+            ))
+            .style(palette.text().fg(palette.muted))
+            .wrap(Wrap { trim: false }),
+            Rect::new(
+                inner.x,
+                inner.y,
+                inner.width,
+                inner.height.saturating_sub(1),
+            ),
+        );
+        quiet_button(
+            frame,
+            app,
+            Rect::new(
+                inner.x,
+                inner.bottom().saturating_sub(1),
+                inner.width,
+                inner.height.min(1),
+            ),
+            app.text("Esc: back", "Esc: назад"),
+            Target::CloseDialog,
+            true,
+            palette,
+        );
+        return;
+    }
+    let footer_height = inner.height.min(3);
     let body_height = inner.height.saturating_sub(footer_height);
-    let menu_width = (inner.width / 4).clamp(1, 24);
+    let min_menu_width = if inner.width < 45 { 10 } else { 12 };
+    let menu_width = (inner.width / 5)
+        .clamp(min_menu_width, 20)
+        .min(inner.width / 2);
     let menu = Rect::new(inner.x, inner.y, menu_width, body_height);
     let mut content = Rect::new(
-        menu.right().saturating_add(1).min(inner.right()),
+        menu.right() + 2,
         inner.y,
-        inner.width.saturating_sub(menu_width + 1),
+        inner.width.saturating_sub(menu_width + 3),
         body_height,
     );
     app.view.settings.menu_area = menu;
-    app.view.settings.subtab_area = Rect::default();
     frame.render_widget(
-        Paragraph::new(app.text("Sections", "Разделы")).style(
-            palette
-                .text()
-                .fg(palette.sidebar_title)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Rect::new(menu.x, menu.y, menu.width, 1.min(menu.height)),
+        Paragraph::new(app.text("Sections", "Разделы")).style(palette.text().fg(palette.muted)),
+        Rect::new(menu.x, menu.y, menu.width, 1),
     );
     let page_index = SettingsPage::SECTIONS
         .iter()
@@ -58,18 +91,17 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         .enumerate()
         .skip(menu_offset)
     {
-        let y = menu.y.saturating_add((index - menu_offset) as u16 + 2);
+        let y = menu.y + (index - menu_offset) as u16 + 2;
         if y >= menu.bottom() {
             break;
         }
-        let selected = app.view.settings.page.section() == page;
         let row = Rect::new(menu.x, y, menu.width, 1);
+        let selected = app.view.settings.page.section() == page;
         let style = if selected {
             palette
                 .text()
                 .bg(palette.sidebar_selection)
                 .fg(palette.background)
-                .add_modifier(Modifier::BOLD)
         } else if app.hovered(row) {
             palette.text().bg(palette.selection)
         } else {
@@ -77,12 +109,8 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         };
         frame.render_widget(
             Paragraph::new(format!(
-                "{} {}",
-                if selected && app.view.settings.focus == SettingsFocus::Menu {
-                    ">"
-                } else {
-                    " "
-                },
+                "{}{}",
+                if menu.width < 12 { " " } else { "  " },
                 page.name(app.settings.language)
             ))
             .style(style),
@@ -94,49 +122,58 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             enabled: true,
         });
     }
-    if menu.width > 0 && body_height > 0 {
-        frame.render_widget(
-            Paragraph::new("│\n".repeat(usize::from(body_height)))
-                .style(palette.text().fg(palette.separator)),
-            Rect::new(
-                menu.right(),
-                menu.y,
-                1.min(inner.right().saturating_sub(menu.right())),
-                body_height,
-            ),
-        );
-    }
+    frame.render_widget(
+        Paragraph::new("│\n".repeat(usize::from(body_height)))
+            .style(palette.text().fg(palette.separator)),
+        Rect::new(menu.right(), menu.y, 1, body_height),
+    );
     if app.view.settings.page.section() == SettingsPage::Themes {
         let height = theme_tabs(frame, app, content, palette);
         app.view.settings.subtab_area = Rect::new(content.x, content.y, content.width, height);
         let reserved = (height + 1).min(content.height);
         content.y += reserved;
         content.height -= reserved;
+    } else {
+        frame.render_widget(
+            Paragraph::new(app.view.settings.page.name(app.settings.language))
+                .style(palette.text().fg(palette.sidebar_title)),
+            Rect::new(content.x, content.y, content.width, 1),
+        );
+        content.y += 2;
+        content.height = content.height.saturating_sub(2);
     }
     app.view.settings.parameters_area = content;
     let rows = app.settings_rows();
     app.view.settings.selected = app.view.settings.selected.min(rows.len().saturating_sub(1));
-    let capacity = (content.height.saturating_sub(2) / 4).max(1) as usize;
+    let stacked = content.width < 40;
+    let step = 2;
+    let capacity = if stacked {
+        content.height / step
+    } else {
+        content.height.div_ceil(step)
+    } as usize;
+    let value_width = rows
+        .iter()
+        .map(|item| {
+            if matches!(item.control, SettingControl::Volume) {
+                36
+            } else {
+                Span::raw(&item.value).width() as u16 + 8
+            }
+        })
+        .max()
+        .unwrap_or(24)
+        .max(24)
+        .min(if stacked {
+            content.width
+        } else {
+            content.width / 2
+        });
     app.view.settings.offset = visible_offset(
         app.view.settings.offset,
         app.view.settings.selected,
         capacity,
         rows.len(),
-    );
-    frame.render_widget(
-        Paragraph::new(format!(
-            "{}  {}/{}",
-            app.view.settings.page.tab_name(app.settings.language),
-            app.view.settings.selected + 1,
-            rows.len()
-        ))
-        .style(
-            palette
-                .text()
-                .fg(palette.help_heading)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Rect::new(content.x, content.y, content.width, content.height.min(1)),
     );
     for (index, item) in rows
         .iter()
@@ -144,14 +181,11 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         .skip(app.view.settings.offset)
         .take(capacity)
     {
-        let y = content
-            .y
-            .saturating_add(2 + ((index - app.view.settings.offset) * 4) as u16);
+        let y = content.y + (index - app.view.settings.offset) as u16 * step;
         if y >= content.bottom() {
             break;
         }
-        let height = 4.min(content.bottom() - y);
-        let row = Rect::new(content.x, y, content.width, height);
+        let row = Rect::new(content.x, y, content.width, if stacked { 2 } else { 1 });
         let selected = app.view.settings.selected == index
             && app.view.settings.focus == SettingsFocus::Parameters;
         let style = if selected || (item.enabled && app.hovered(row)) {
@@ -165,193 +199,168 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             target: Target::SettingSelect(index),
             enabled: true,
         });
-        if matches!(item.control, SettingControl::Volume) {
-            volume(frame, app, row, index, &item.label, style, palette);
-            continue;
-        }
-        let value_width = ((item.value.chars().count() + if item.adjustable { 10 } else { 4 })
-            as u16)
-            .min(content.width / 2)
-            .max(1)
-            .min(content.width);
-        let label_width = content.width.saturating_sub(value_width + 1);
+        let label_width = if stacked {
+            content
+                .width
+                .saturating_sub(u16::from(item.color.is_some()))
+        } else {
+            content.width.saturating_sub(value_width + 2)
+        };
         frame.render_widget(
-            Paragraph::new(format!(
-                "{}{}",
-                if selected { "> " } else { "" },
-                item.label
-            ))
-            .style(
-                style
-                    .fg(if item.enabled {
-                        palette.text
-                    } else {
-                        palette.muted
-                    })
-                    .add_modifier(Modifier::BOLD),
-            ),
+            Paragraph::new(item.label.as_str()).style(style.fg(if item.enabled {
+                palette.text
+            } else {
+                palette.muted
+            })),
             Rect::new(row.x, row.y, label_width, 1),
         );
-        let mut value = Rect::new(
-            content.right().saturating_sub(value_width),
-            y,
+        let value = Rect::new(
+            content.right() - value_width,
+            y + u16::from(stacked),
             value_width,
             1,
         );
-        if item.adjustable && value.width >= 7 {
-            button(
-                frame,
-                app,
-                Rect::new(value.x, value.y, 3, 1),
-                "<",
-                Target::SettingAdjust(index, -1),
-                item.enabled,
-                palette,
-            );
-            button(
-                frame,
-                app,
-                Rect::new(value.right() - 3, value.y, 3, 1),
-                ">",
-                Target::SettingAdjust(index, 1),
-                item.enabled,
-                palette,
-            );
-            value.x += 3;
-            value.width -= 6;
+        if matches!(item.control, SettingControl::Volume) {
+            volume(frame, app, value, index, style, palette);
+            continue;
         }
-        button(
+        let mut middle = value;
+        if middle.width >= Span::raw(&item.value).width() as u16 + 8 {
+            if item.adjustable {
+                quiet_button(
+                    frame,
+                    app,
+                    Rect::new(value.x, value.y, 3, 1),
+                    "<",
+                    Target::SettingAdjust(index, -1),
+                    item.enabled,
+                    palette,
+                );
+                quiet_button(
+                    frame,
+                    app,
+                    Rect::new(value.right() - 3, value.y, 3, 1),
+                    ">",
+                    Target::SettingAdjust(index, 1),
+                    item.enabled,
+                    palette,
+                );
+            }
+            middle.x += 3;
+            middle.width -= 6;
+        }
+        setting_value(
             frame,
             app,
-            value,
-            &item.value,
-            if item.adjustable {
-                Target::SettingAdjust(index, 1)
-            } else {
-                Target::Setting(index)
+            Hit {
+                area: middle,
+                target: Target::Setting(index),
+                enabled: item.enabled,
             },
-            item.enabled,
+            &item.value,
+            style,
             palette,
         );
         if let Some([r, g, b]) = item.color {
-            let swatch_x = row.x + label_width;
             frame.render_widget(
                 Paragraph::new("■").style(style.fg(Color::Rgb(r, g, b))),
-                Rect::new(
-                    swatch_x.min(row.right()),
-                    y,
-                    u16::from(swatch_x < row.right()),
-                    1,
-                ),
-            );
-        }
-        if height > 1 {
-            frame.render_widget(
-                Paragraph::new(item.description.clone())
-                    .style(style.fg(palette.muted))
-                    .wrap(Wrap { trim: false }),
-                Rect::new(row.x, y + 1, row.width, (height - 1).min(2)),
+                Rect::new(row.x + label_width, y, 1, 1),
             );
         }
     }
     let footer = Rect::new(
         inner.x,
-        inner.bottom().saturating_sub(footer_height),
+        inner.bottom() - footer_height,
         inner.width,
         footer_height,
     );
-    if footer.height > 0 {
-        frame.render_widget(
-            Paragraph::new(app.view.notice.clone()).style(palette.text().fg(
-                if app.view.notice_error {
-                    palette.error
-                } else {
-                    palette.muted
-                },
-            )),
-            Rect::new(footer.x, footer.y, footer.width, 1),
-        );
+    let description = if app.view.notice_error {
+        app.view.notice.as_str()
+    } else {
+        rows.get(app.view.settings.selected)
+            .map_or("", |item| item.description.as_str())
+    };
+    frame.render_widget(
+        Paragraph::new(description)
+            .style(palette.text().fg(if app.view.notice_error {
+                palette.error
+            } else {
+                palette.muted
+            }))
+            .wrap(Wrap { trim: false }),
+        Rect::new(
+            content.x,
+            footer.y,
+            inner.right().saturating_sub(content.x),
+            footer.height.saturating_sub(1),
+        ),
+    );
+    let selected = app.view.settings.selected;
+    let mut actions = vec![
+        ("↑".to_owned(), Target::DialogScroll(-1), true),
+        ("↓".to_owned(), Target::DialogScroll(1), true),
+    ];
+    if footer.width >= 65 {
+        actions.push((
+            app.text("Enter: edit", "Enter: изменить").into(),
+            Target::Setting(selected),
+            rows.get(selected).is_some_and(|item| item.enabled),
+        ));
     }
-    if footer.height > 2 {
-        let mut legend = app
-            .text(
-                "Tab: panel  ↑↓: select  ←→: change\nEnter: edit/apply  F1: help  Esc: back",
-                "Tab: панель  ↑↓: выбор  ←→: значение\nEnter: изменить  F1: описание  Esc: назад",
-            )
-            .to_owned();
-        if matches!(
-            app.view.settings.page,
-            SettingsPage::Profiles | SettingsPage::Themes | SettingsPage::Palettes
-        ) {
-            legend.push_str(app.text(
-                "\nIns: create  F3: rename  Del: delete",
-                "\nIns: создать  F3: имя  Del: удалить",
-            ));
+    actions.push((
+        if footer.width < 40 {
+            "F1"
+        } else {
+            app.text("F1: info", "F1: описание")
         }
-        if app.view.settings.page == SettingsPage::Palettes {
-            legend.push_str(app.text(
-                "  Ctrl+I: import  Ctrl+E: export",
-                "  Ctrl+I: импорт  Ctrl+E: экспорт",
-            ));
+        .into(),
+        Target::SettingHelp(selected),
+        true,
+    ));
+    actions.push((
+        if footer.width < 40 {
+            "Esc"
+        } else {
+            app.text("Esc: back", "Esc: назад")
         }
-        frame.render_widget(
-            Paragraph::new(legend)
-                .style(palette.text().fg(palette.selection_text))
-                .wrap(Wrap { trim: false }),
-            Rect::new(
-                footer.x,
-                footer.y + 1,
-                footer.width,
-                footer.height.saturating_sub(3),
-            ),
-        );
+        .into(),
+        Target::CloseDialog,
+        true,
+    ));
+    let action_width = actions
+        .iter()
+        .map(|(label, ..)| quiet_width(label) + 1)
+        .sum::<u16>()
+        .saturating_sub(1);
+    let mut x = footer.right().saturating_sub(action_width).max(footer.x);
+    let mut status = app.text("Tab: panels", "Tab: панели").to_owned();
+    if footer.width >= 100 {
+        status.push_str(" · ");
+        status.push_str(if app.settings_saving() {
+            app.text("Saving…", "Сохранение…")
+        } else {
+            app.text("Autosave", "Автосохранение")
+        });
     }
-    if footer.height >= 2 {
-        let selected = app.view.settings.selected;
-        let enabled = rows.get(selected).is_some_and(|row| row.enabled);
-        let adjustable = rows
-            .get(selected)
-            .is_some_and(|row| row.adjustable && row.enabled);
-        let close_width =
-            super::widgets::button_width(app, app.text("Close", "Закрыть"), &Target::CloseDialog)
-                .min(footer.width);
-        button(
+    if x.saturating_sub(footer.x) < Span::raw(&status).width() as u16 {
+        status = "Tab".into();
+    }
+    frame.render_widget(
+        Paragraph::new(status).style(palette.text().fg(palette.muted)),
+        Rect::new(footer.x, footer.bottom() - 1, x.saturating_sub(footer.x), 1),
+    );
+    for (label, target, enabled) in actions {
+        let width = quiet_width(&label).min(footer.right().saturating_sub(x));
+        quiet_button(
             frame,
             app,
-            Rect::new(
-                footer.right() - close_width,
-                footer.bottom() - 1,
-                close_width,
-                1,
-            ),
-            app.text("Close", "Закрыть"),
-            Target::CloseDialog,
-            true,
+            Rect::new(x, footer.bottom() - 1, width, 1),
+            &label,
+            target,
+            enabled,
             palette,
         );
-        buttons(
-            frame,
-            app,
-            Rect::new(
-                footer.x,
-                footer.bottom() - 2,
-                footer.width.saturating_sub(close_width),
-                2,
-            ),
-            vec![
-                ("<".into(), Target::SettingAdjust(selected, -1), adjustable),
-                (">".into(), Target::SettingAdjust(selected, 1), adjustable),
-                ("↑".into(), Target::DialogScroll(-1), true),
-                ("↓".into(), Target::DialogScroll(1), true),
-                (
-                    app.text("Edit/apply", "Изменить").into(),
-                    Target::Setting(selected),
-                    enabled,
-                ),
-                ("?".into(), Target::SettingHelp(selected), true),
-            ],
-            palette,
-        );
+        x = x.saturating_add(width + 1);
     }
 }
 
@@ -411,10 +420,11 @@ fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
             (Span::raw(&label).width() as u16).min(right - x),
             1,
         );
-        let mut style = palette
-            .text()
-            .fg(palette.accent)
-            .add_modifier(Modifier::BOLD);
+        let mut style = palette.text().fg(if index == 0 {
+            palette.accent
+        } else {
+            palette.muted
+        });
         if app.hovered(row) {
             style = style.bg(palette.selection);
         }
@@ -432,8 +442,14 @@ fn theme_tabs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) ->
     let mut x = area.x;
     let mut y = area.y;
     for page in SettingsPage::THEME_TABS {
-        let label = page.tab_name(app.settings.language);
-        let width = button_width(app, label, &Target::SettingsTab(page)).min(area.width);
+        let label = if page == SettingsPage::Typography
+            && area.width < quiet_width(page.tab_name(app.settings.language))
+        {
+            app.text("Font", "Шрифт")
+        } else {
+            page.tab_name(app.settings.language)
+        };
+        let width = quiet_width(label).min(area.width);
         if x > area.x && x + width > area.right() {
             x = area.x;
             y += 1;
@@ -442,7 +458,7 @@ fn theme_tabs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) ->
             break;
         }
         let row = Rect::new(x, y, width, 1);
-        button(
+        quiet_button(
             frame,
             app,
             row,
@@ -453,69 +469,126 @@ fn theme_tabs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) ->
         );
         if page == app.view.settings.page {
             frame.render_widget(
-                Paragraph::new(format!("│{label}│")).style(
+                Paragraph::new(format!(" {label} ")).style(
                     palette
                         .text()
                         .bg(palette.sidebar_selection)
-                        .fg(palette.background)
-                        .add_modifier(Modifier::BOLD),
+                        .fg(palette.background),
                 ),
                 row,
             );
         }
-        x = x.saturating_add(width).saturating_add(1);
+        x = x.saturating_add(width + 1);
     }
     if area.width == 0 || area.height == 0 {
         0
     } else {
-        (y.saturating_sub(area.y) + 1).min(area.height)
+        (y - area.y + 1).min(area.height)
     }
+}
+
+fn setting_value(
+    frame: &mut Frame,
+    app: &mut App,
+    hit: Hit,
+    label: &str,
+    style: Style,
+    palette: Palette,
+) {
+    let style = if hit.enabled && app.hovered(hit.area) {
+        style.bg(palette.selection).fg(palette.accent)
+    } else {
+        style.fg(if hit.enabled {
+            palette.button_text
+        } else {
+            palette.muted
+        })
+    };
+    let text = if hit.area.width > Span::raw(label).width() as u16 {
+        format!("{label} ")
+    } else {
+        label.to_owned()
+    };
+    frame.render_widget(
+        Paragraph::new(text)
+            .alignment(Alignment::Right)
+            .style(style),
+        hit.area,
+    );
+    app.view.hits.push(hit);
 }
 
 fn volume(
     frame: &mut Frame,
     app: &mut App,
-    row: Rect,
+    area: Rect,
     index: usize,
-    label: &str,
-    style: ratatui::style::Style,
+    style: Style,
     palette: Palette,
 ) {
-    frame.render_widget(
-        Paragraph::new(label).style(style.fg(palette.text).add_modifier(Modifier::BOLD)),
-        Rect::new(row.x, row.y, row.width, row.height.min(1)),
-    );
-    if row.height < 3 {
+    if area.width < 12 {
+        quiet_button(
+            frame,
+            app,
+            area,
+            &format!("{}%", (app.settings.volume * 100.0).round() as u16),
+            Target::Setting(index),
+            true,
+            palette,
+        );
         return;
     }
-    let scale = Rect::new(
-        row.x,
-        row.y + 1,
-        row.width,
-        row.height.saturating_sub(2).min(2),
+    quiet_button(
+        frame,
+        app,
+        Rect::new(area.x, area.y, 3, 1),
+        "<",
+        Target::SettingAdjust(index, -1),
+        true,
+        palette,
     );
-    frame.render_widget(
-        Gauge::default()
-            .ratio(f64::from(app.settings.volume).clamp(0.0, 1.0))
-            .label("")
-            .gauge_style(style.fg(palette.accent).bg(palette.selection)),
-        scale,
+    quiet_button(
+        frame,
+        app,
+        Rect::new(area.right() - 3, area.y, 3, 1),
+        ">",
+        Target::SettingAdjust(index, 1),
+        true,
+        palette,
     );
-    app.view.hits.push(Hit {
-        area: scale,
-        target: Target::SettingsVolume(index, scale),
-        enabled: true,
-    });
-    let percentage = Rect::new(row.x, scale.bottom(), row.width, 1);
-    frame.render_widget(
-        Paragraph::new(format!("{}%", (app.settings.volume * 100.0).round() as u32))
-            .alignment(Alignment::Center)
-            .style(style.fg(palette.text)),
-        percentage,
+    let scale = Rect::new(area.x + 3, area.y, area.width.saturating_sub(12).min(24), 1);
+    if scale.width > 0 {
+        let point = (app.settings.volume.clamp(0.0, 1.0) * f32::from(scale.width.saturating_sub(1)))
+            .round() as u16;
+        let spans: Vec<_> = (0..scale.width)
+            .map(|column| {
+                Span::styled(
+                    if column == point { "●" } else { "─" },
+                    style.fg(if column <= point {
+                        palette.accent
+                    } else {
+                        palette.separator
+                    }),
+                )
+            })
+            .collect();
+        frame.render_widget(Paragraph::new(Line::from(spans)), scale);
+        app.view.hits.push(Hit {
+            area: scale,
+            target: Target::SettingsVolume(index, scale),
+            enabled: true,
+        });
+    }
+    setting_value(
+        frame,
+        app,
+        Hit {
+            area: Rect::new(area.right() - 8, area.y, 5, 1),
+            target: Target::Setting(index),
+            enabled: true,
+        },
+        &format!("{}%", (app.settings.volume * 100.0).round() as u16),
+        style,
+        palette,
     );
-    app.view.hits.push(Hit {
-        area: percentage,
-        target: Target::SettingAdjust(index, 1),
-        enabled: true,
-    });
 }

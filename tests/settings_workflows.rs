@@ -159,7 +159,7 @@ fn brand_palette_is_first_and_applies_all_approved_colors() {
         app.settings.appearance.palette_ids,
         [BRAND_PALETTE, BRAND_PALETTE]
     );
-    assert_eq!(app.settings.appearance.font, FontFace::FiraCodeBold);
+    assert_eq!(app.settings.appearance.font, FontFace::FiraCode);
     let palette = app.settings.current_palette();
     assert_eq!(palette.colors.len(), 16);
     assert_eq!(color_roles().len(), 16);
@@ -177,7 +177,13 @@ fn brand_palette_is_first_and_applies_all_approved_colors() {
     let terminal = rendered(&mut app, 120, 50);
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(0, 0)].bg, Color::Rgb(0, 0, 0));
-    assert_eq!(buffer[(0, 0)].fg, Color::Rgb(255, 0, 0));
+    assert_eq!(buffer[(0, 0)].fg, Color::Rgb(97, 82, 80));
+    assert!(
+        buffer
+            .content
+            .iter()
+            .any(|cell| cell.fg == Color::Rgb(255, 0, 0))
+    );
     assert_eq!(buffer[(0, 0)].symbol(), "┌");
 }
 
@@ -483,7 +489,7 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
             _ => None,
         })
         .unwrap();
-    assert!(scale.width > 50 && scale.height == 2);
+    assert!((8..=24).contains(&scale.width) && scale.height == 1);
     for (x, expected) in [(scale.x, 0.0), (scale.right() - 1, 1.0)] {
         app.handle(Input::Click {
             x,
@@ -532,7 +538,7 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
         .find(|hit| matches!(hit.target, Target::SettingAdjust(1, 1)))
         .unwrap()
         .area;
-    assert_eq!(percentage.y, scale.bottom());
+    assert_eq!(percentage.y, scale.y);
     assert!(screen_text(&terminal).contains(&format!("{}%", (expected * 100.0).round() as u32)));
     saved(&mut app);
     drop(app);
@@ -1185,7 +1191,7 @@ fn theme_presets_store_font_geometry_and_palette_with_full_crud() {
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::Typography);
     click_row(&mut app, 0);
-    assert_eq!(app.settings.appearance.font, FontFace::FiraCode);
+    assert_eq!(app.settings.appearance.font, FontFace::FiraCodeBold);
     click_row(&mut app, 1);
     submit(&mut app, "24");
     select_row(&mut app, 2);

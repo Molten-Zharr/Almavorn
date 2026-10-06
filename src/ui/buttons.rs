@@ -15,7 +15,7 @@ use ratatui::{
 #[derive(Clone, Copy)]
 pub(super) enum ButtonKind {
     Standard,
-    Command,
+    Quiet,
 }
 
 pub(super) struct Button<'a> {
@@ -43,7 +43,7 @@ pub(super) fn render(
     } = button;
     match kind {
         ButtonKind::Standard => standard(frame, app, area, label, target.clone(), enabled, palette),
-        ButtonKind::Command => command(frame, app, area, label, target.clone(), enabled, palette),
+        ButtonKind::Quiet => quiet(frame, app, area, label, target.clone(), enabled, palette),
     }
     app.view.hits.push(Hit {
         area,
@@ -75,7 +75,7 @@ pub(super) fn button(
     );
 }
 
-pub(super) fn command_button(
+pub(super) fn quiet_button(
     frame: &mut Frame,
     app: &mut App,
     area: Rect,
@@ -92,7 +92,7 @@ pub(super) fn command_button(
             label,
             target,
             enabled,
-            kind: ButtonKind::Command,
+            kind: ButtonKind::Quiet,
         },
         palette,
     );
@@ -215,7 +215,11 @@ fn standard(
     }
 }
 
-fn command(
+pub(super) fn quiet_width(label: &str) -> u16 {
+    (Span::raw(label).width() + 2).min(usize::from(u16::MAX)) as u16
+}
+
+fn quiet(
     frame: &mut Frame,
     app: &mut App,
     area: Rect,
@@ -226,48 +230,22 @@ fn command(
 ) {
     let active = match target {
         Target::Mode(mode) => app.settings.mode == mode,
-        Target::Action(Action::ToggleEdit) => app.view.editing,
-        Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
+        Target::Action(Action::Panels) => app.view.layout_editing,
         _ => false,
     };
     let hovered = app.hovered(area);
-    let mut style = palette.text();
-    if hovered {
-        style = style.bg(palette.selection).add_modifier(Modifier::BOLD);
-    } else if active {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-    if !enabled {
-        style = style.fg(palette.muted);
-    }
-    let mut content = vec![Span::styled(
-        if active || hovered { "│" } else { " " },
-        style.fg(palette.accent),
-    )];
-    if let Some(shortcut) = button_shortcut(app, &target) {
-        let key_style = style.fg(if enabled {
-            palette.button_text
-        } else {
-            palette.muted
-        });
-        content.push(Span::styled("[", key_style.fg(palette.accent)));
-        content.push(Span::styled(
-            shortcut,
-            key_style.add_modifier(Modifier::BOLD),
-        ));
-        content.push(Span::styled("]", key_style.fg(palette.accent)));
-        content.push(Span::styled(" ", style));
-    }
-    if let Some((state, text)) = label
-        .strip_prefix('[')
-        .and_then(|label| label.split_once(']'))
-    {
-        content.push(Span::styled("[", style.fg(palette.accent)));
-        content.push(Span::styled(state, style));
-        content.push(Span::styled("]", style.fg(palette.accent)));
-        content.push(Span::styled(text, style));
+    let mut style = palette.text().fg(if enabled {
+        palette.button_text
     } else {
-        content.push(Span::styled(label, style));
+        palette.muted
+    });
+    if enabled && (hovered || active) {
+        style = style.bg(palette.selection).fg(palette.accent);
     }
-    frame.render_widget(Paragraph::new(Line::from(content)).style(style), area);
+    frame.render_widget(
+        Paragraph::new(label)
+            .style(style)
+            .alignment(Alignment::Center),
+        area,
+    );
 }

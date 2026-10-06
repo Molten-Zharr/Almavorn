@@ -372,10 +372,8 @@ impl App {
                 self.save_settings()?;
             }
             Panels => {
-                self.view.dialog = Some(Dialog::Panels {
-                    selected: 0,
-                    expanded: Vec::new(),
-                })
+                self.cancel_workspace_drag();
+                self.view.layout_editing = !self.view.layout_editing;
             }
         }
         Ok(())

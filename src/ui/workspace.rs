@@ -1,56 +1,20 @@
-use super::{
-    library, player,
-    theme::Palette,
-    toolbar::{self, Group},
-    widgets::block,
-};
+use super::{buttons::quiet_button, library, player, theme::Palette, widgets::block};
 use crate::{
-    app::{App, Hit, Target},
+    app::{App, CommandMenu, Hit, Target},
+    input::Action,
     model::Placement,
     workspace::{Axis, Dock, Edge, Panel, SplitArea},
 };
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
 
-type ToolbarRow = (Vec<(Dock, u16)>, u16, u16);
-
-fn join(axis: Axis, mut nodes: Vec<(Dock, u16)>) -> Dock {
-    if nodes.len() == 1 {
-        return nodes.remove(0).0;
-    }
-    let total: u32 = nodes.iter().map(|(_, size)| u32::from(*size)).sum();
-    let (first, size) = nodes.remove(0);
-    Dock::split(
-        axis,
-        (u32::from(size) * 1000 / total.max(1)) as u16,
-        first,
-        join(axis, nodes),
-    )
-}
-
-fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
-    let (rects, height) = toolbar::layout(app, &groups[..3], area.width, compact);
-    let mut rows: Vec<ToolbarRow> = Vec::new();
-    for (index, rect) in rects.iter().enumerate() {
-        if rows.last().is_none_or(|(_, y, _)| *y != rect.y) {
-            rows.push((Vec::new(), rect.y, rect.height));
-        }
-        let row = rows.last_mut().expect("Toolbar row");
-        row.0.push((Dock::Panel(groups[index].panel), rect.width));
-        row.2 = row.2.max(rect.height);
-    }
-    let toolbar = join(
-        Axis::Vertical,
-        rows.into_iter()
-            .map(|(nodes, _, size)| (join(Axis::Horizontal, nodes), size))
-            .collect(),
-    );
-    let list_horizontal = area.width >= 70
+fn automatic(app: &App, area: Rect) -> Dock {
+    let list_horizontal = area.width >= 55
         && matches!(
             app.settings.playlist_placement,
             Placement::Left | Placement::Right
@@ -59,7 +23,7 @@ fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
         app.settings.playlist_placement,
         Placement::Left | Placement::Top
     );
-    let list_ratio = if list_horizontal { 240 } else { 250 };
+    let list_ratio = if list_horizontal { 220 } else { 200 };
     let (first, second) = if list_first {
         (Panel::Playlists, Panel::Tracks)
     } else {
@@ -92,10 +56,10 @@ fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
         250
     } else {
         (u32::from(player::preferred_height(app, area.width)) * 1000
-            / u32::from(area.height.saturating_sub(height).max(1))) as u16
+            / u32::from(area.height.max(1))) as u16
     };
     let player = Dock::Panel(Panel::Player);
-    let content = if player_first {
+    if player_first {
         Dock::split(
             if side_player {
                 Axis::Horizontal
@@ -117,41 +81,20 @@ fn automatic(app: &App, groups: &[Group], area: Rect, compact: bool) -> Dock {
             library,
             player,
         )
-    };
-    Dock::split(
-        Axis::Vertical,
-        (u32::from(height) * 1000 / u32::from(area.height.max(1))) as u16,
-        toolbar,
-        content,
-    )
+    }
 }
 
-fn group(groups: &[Group], panel: Panel) -> Option<&Group> {
-    groups.iter().find(|group| group.panel == panel)
-}
-
-fn min_width(app: &App, groups: &[Group], node: &Dock) -> u16 {
+fn min_width(app: &App, node: &Dock) -> u16 {
     match node {
         Dock::Panel(panel) => {
             if app.settings.workspace.hidden.contains(panel) {
                 0
-            } else if let Some(group) = group(groups, *panel) {
-                group
-                    .entries
-                    .iter()
-                    .map(|(label, target, _)| {
-                        toolbar::command_width(app, label, target).saturating_add(4)
-                    })
-                    .max()
-                    .unwrap_or(20)
-                    .max(20)
-                    .max(panel.name(app.settings.language).chars().count() as u16 + 13)
-            } else if *panel == Panel::Playlists {
-                28
-            } else if *panel == Panel::Tracks {
-                42
             } else {
-                20
+                match panel {
+                    Panel::Playlists => 18,
+                    Panel::Tracks => 30,
+                    _ => 20,
+                }
             }
         }
         Dock::Split {
@@ -160,10 +103,7 @@ fn min_width(app: &App, groups: &[Group], node: &Dock) -> u16 {
             second,
             ..
         } => {
-            let (left, right) = (
-                min_width(app, groups, first),
-                min_width(app, groups, second),
-            );
+            let (left, right) = (min_width(app, first), min_width(app, second));
             if *axis == Axis::Horizontal {
                 left.saturating_add(right)
             } else {
@@ -173,16 +113,9 @@ fn min_width(app: &App, groups: &[Group], node: &Dock) -> u16 {
     }
 }
 
-fn axis(
-    app: &App,
-    groups: &[Group],
-    desired: Axis,
-    first: &Dock,
-    second: &Dock,
-    width: u16,
-) -> Axis {
+fn axis(app: &App, desired: Axis, first: &Dock, second: &Dock, width: u16) -> Axis {
     if desired == Axis::Horizontal
-        && min_width(app, groups, first).saturating_add(min_width(app, groups, second)) > width
+        && min_width(app, first).saturating_add(min_width(app, second)) > width
     {
         Axis::Vertical
     } else {
@@ -190,7 +123,7 @@ fn axis(
     }
 }
 
-fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) -> u16 {
+fn minimum(app: &App, node: &Dock, width: u16, compact: bool) -> u16 {
     match node {
         Dock::Panel(panel) => {
             if app.settings.workspace.hidden.contains(panel) {
@@ -199,27 +132,23 @@ fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) 
             if app.settings.workspace.collapsed.contains(panel) {
                 return if compact { 1 } else { 2 };
             }
-            if let Some(group) = group(groups, *panel) {
-                if *panel == Panel::Player {
-                    return player::content_height(app, width.saturating_sub(2), group)
-                        + if compact { 1 } else { 2 };
-                }
-                return toolbar::rows(app, width.saturating_sub(2), group)
+            if *panel == Panel::Player {
+                return player::content_height(app, width.saturating_sub(2))
                     + if compact { 1 } else { 2 };
             }
             match panel {
                 Panel::Playlists => {
                     if compact {
-                        4
+                        3
                     } else {
-                        5
+                        4
                     }
                 }
                 Panel::Tracks => {
                     if compact {
-                        6
+                        4
                     } else {
-                        7
+                        5
                     }
                 }
                 Panel::Player => {
@@ -238,20 +167,19 @@ fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) 
             first,
             second,
         } => {
-            if min_width(app, groups, first) == 0 {
-                return minimum(app, groups, second, width, compact);
+            if min_width(app, first) == 0 {
+                return minimum(app, second, width, compact);
             }
-            if min_width(app, groups, second) == 0 {
-                return minimum(app, groups, first, width, compact);
+            if min_width(app, second) == 0 {
+                return minimum(app, first, width, compact);
             }
-            if axis(app, groups, *desired, first, second, width) == Axis::Vertical {
-                minimum(app, groups, first, width, compact)
-                    .saturating_add(minimum(app, groups, second, width, compact))
+            if axis(app, *desired, first, second, width) == Axis::Vertical {
+                minimum(app, first, width, compact)
+                    .saturating_add(minimum(app, second, width, compact))
             } else {
-                let cut = width_cut(app, groups, width, *ratio, first, second);
-                minimum(app, groups, first, cut, compact).max(minimum(
+                let cut = width_cut(app, width, *ratio, first, second);
+                minimum(app, first, cut, compact).max(minimum(
                     app,
-                    groups,
                     second,
                     width.saturating_sub(cut),
                     compact,
@@ -261,30 +189,16 @@ fn minimum(app: &App, groups: &[Group], node: &Dock, width: u16, compact: bool) 
     }
 }
 
-fn width_cut(
-    app: &App,
-    groups: &[Group],
-    width: u16,
-    ratio: u16,
-    first: &Dock,
-    second: &Dock,
-) -> u16 {
-    let left = min_width(app, groups, first);
-    let right = min_width(app, groups, second);
+fn width_cut(app: &App, width: u16, ratio: u16, first: &Dock, second: &Dock) -> u16 {
+    let left = min_width(app, first);
+    let right = min_width(app, second);
     ((u32::from(width) * u32::from(ratio) / 1000) as u16).clamp(
         left.min(width),
         width.saturating_sub(right).max(left.min(width)),
     )
 }
 
-fn arrange(
-    app: &mut App,
-    groups: &[Group],
-    node: &Dock,
-    area: Rect,
-    compact: bool,
-    path: &mut Vec<bool>,
-) {
+fn arrange(app: &mut App, node: &Dock, area: Rect, compact: bool, path: &mut Vec<bool>) {
     match node {
         Dock::Panel(panel) => {
             if !app.settings.workspace.hidden.contains(panel) {
@@ -297,30 +211,26 @@ fn arrange(
             first,
             second,
         } => {
-            if min_width(app, groups, first) == 0 {
+            if min_width(app, first) == 0 {
                 path.push(true);
-                arrange(app, groups, second, area, compact, path);
+                arrange(app, second, area, compact, path);
                 path.pop();
                 return;
             }
-            if min_width(app, groups, second) == 0 {
+            if min_width(app, second) == 0 {
                 path.push(false);
-                arrange(app, groups, first, area, compact, path);
+                arrange(app, first, area, compact, path);
                 path.pop();
                 return;
             }
-            let axis = axis(app, groups, *desired, first, second, area.width);
+            let axis = axis(app, *desired, first, second, area.width);
             let (length, left, right) = if axis == Axis::Horizontal {
-                (
-                    area.width,
-                    min_width(app, groups, first),
-                    min_width(app, groups, second),
-                )
+                (area.width, min_width(app, first), min_width(app, second))
             } else {
                 (
                     area.height,
-                    minimum(app, groups, first, area.width, compact),
-                    minimum(app, groups, second, area.width, compact),
+                    minimum(app, first, area.width, compact),
+                    minimum(app, second, area.width, compact),
                 )
             };
             let first_collapsed = all_collapsed(app, first);
@@ -365,10 +275,10 @@ fn arrange(
                 )
             };
             path.push(false);
-            arrange(app, groups, first, a, compact, path);
+            arrange(app, first, a, compact, path);
             path.pop();
             path.push(true);
-            arrange(app, groups, second, b, compact, path);
+            arrange(app, second, b, compact, path);
             path.pop();
         }
     }
@@ -394,60 +304,95 @@ fn chrome(
     compact: bool,
     palette: Palette,
 ) -> Rect {
-    let active = app.view.workspace.focus == panel;
-    let outer = block(String::new(), palette, active)
-        .borders(if compact {
-            Borders::TOP | Borders::LEFT | Borders::RIGHT
-        } else {
-            Borders::ALL
-        })
-        .border_style(Style::default().fg(if active {
-            palette.accent
-        } else if panel == Panel::Tracks {
-            palette.inactive_file_border
-        } else {
-            palette.inactive_panel_border
-        }));
-    let inner = outer.inner(area);
+    let active = app.view.toolbar_selected.is_none() && app.view.workspace.focus == panel;
+    let outer = block(String::new(), palette, false)
+        .borders(
+            if palette.borders == crate::preferences::BorderWeight::None {
+                Borders::NONE
+            } else if compact {
+                Borders::TOP | Borders::LEFT | Borders::RIGHT
+            } else {
+                Borders::ALL
+            },
+        )
+        .border_style(Style::default().fg(palette.separator));
+    let inner = if palette.borders == crate::preferences::BorderWeight::None {
+        Rect::new(
+            area.x,
+            area.y.saturating_add(1),
+            area.width,
+            area.height.saturating_sub(1),
+        )
+    } else {
+        outer.inner(area)
+    };
     frame.render_widget(outer, area);
-    if palette.borders != crate::preferences::BorderWeight::None {
-        for x in area.x..area.right() {
-            if let Some(cell) = frame.buffer_mut().cell_mut((x, area.y)) {
-                cell.set_fg(palette.accent);
-            }
-        }
-    }
     app.view.hits.push(Hit {
         area,
         target: Target::PanelFocus(panel),
         enabled: true,
     });
-    let title_width = area.width.saturating_sub(13);
-    let title = panel
-        .name(app.settings.language)
+    let title_width = area
+        .width
+        .saturating_sub(if app.view.layout_editing { 13 } else { 9 });
+    let heading = if panel == Panel::Tracks {
+        app.playlist()
+            .map(|playlist| playlist.display_name(app.settings.language))
+            .unwrap_or(panel.name(app.settings.language))
+    } else {
+        panel.name(app.settings.language)
+    };
+    let title = heading
         .chars()
         .take(usize::from(title_width))
         .collect::<String>();
     let title_area = Rect::new(area.x + 1, area.y, title_width, 1);
     let title_hit = Rect::new(title_area.x, title_area.y, title.chars().count() as u16, 1);
     frame.render_widget(
-        Paragraph::new(title).style(
-            palette
-                .text()
-                .fg(if active {
-                    palette.accent
-                } else {
-                    palette.muted
-                })
-                .add_modifier(Modifier::BOLD),
-        ),
+        Paragraph::new(title).style(palette.text().fg(if active {
+            palette.accent
+        } else {
+            palette.muted
+        })),
         title_hit,
     );
-    app.view.hits.push(Hit {
-        area: title_hit,
-        target: Target::PanelMove(panel),
-        enabled: true,
-    });
+    if app.view.layout_editing {
+        app.view.hits.push(Hit {
+            area: title_hit,
+            target: Target::PanelMove(panel),
+            enabled: true,
+        });
+    } else {
+        if panel == Panel::Playlists
+            && app.control_visible(Panel::PlaylistActions, Action::NewPlaylist)
+        {
+            quiet_button(
+                frame,
+                app,
+                Rect::new(area.right().saturating_sub(8), area.y, 3, 1).intersection(area),
+                "+",
+                Target::Action(Action::NewPlaylist),
+                app.allowed(Action::NewPlaylist),
+                palette,
+            );
+        }
+        if matches!(panel, Panel::Playlists | Panel::Tracks | Panel::Player) {
+            quiet_button(
+                frame,
+                app,
+                Rect::new(area.right().saturating_sub(4), area.y, 3, 1).intersection(area),
+                "...",
+                Target::CommandMenu(match panel {
+                    Panel::Playlists => CommandMenu::Playlist,
+                    Panel::Player => CommandMenu::Player,
+                    _ => CommandMenu::Tracks,
+                }),
+                true,
+                palette,
+            );
+        }
+        return inner;
+    }
     let collapsed = app.settings.workspace.collapsed.contains(&panel);
     for (index, (label, target)) in [
         ("[↕]", Target::PanelMove(panel)),
@@ -501,19 +446,15 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     app.view.workspace.splits.clear();
     app.view.playlist_area = Rect::default();
     app.view.tracks_area = Rect::default();
-    let mut groups = toolbar::commands(app);
-    groups.extend(player::controls(app));
-    let mut root = app
+    let root = app
         .settings
         .workspace
         .root
         .clone()
-        .unwrap_or_else(|| automatic(app, &groups, area, false));
-    let compact = minimum(app, &groups, &root, area.width, false) > area.height;
-    if compact && app.settings.workspace.root.is_none() {
-        root = automatic(app, &groups, area, true);
-    }
-    if minimum(app, &groups, &root, area.width, compact) > area.height {
+        .and_then(Dock::content_only)
+        .unwrap_or_else(|| automatic(app, area));
+    let compact = minimum(app, &root, area.width, false) > area.height;
+    if minimum(app, &root, area.width, compact) > area.height {
         frame.render_widget(
             Paragraph::new(app.text(
                 "Enlarge the window, reduce zoom, or hide blocks via Ctrl+B.",
@@ -525,29 +466,29 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         app.view.workspace.root = Some(root);
         return;
     }
-    arrange(app, &groups, &root, area, compact, &mut Vec::new());
+    arrange(app, &root, area, compact, &mut Vec::new());
     app.view.workspace.root = Some(root);
     for (panel, rect) in app.view.workspace.areas.clone() {
         let inner = chrome(frame, app, panel, rect, compact, palette);
         if app.settings.workspace.collapsed.contains(&panel) {
             continue;
         }
-        if panel == Panel::Player {
-            if let Some(controls) = group(&groups, panel) {
-                player::player(frame, app, inner, controls, palette);
-            }
-        } else if let Some(group) = group(&groups, panel) {
-            toolbar::contents(frame, app, inner, group, palette);
-        } else {
-            match panel {
-                Panel::Playlists => library::playlists(frame, app, inner, palette),
-                Panel::Tracks => library::tracks_table(frame, app, inner, palette),
-                _ => {}
-            }
+        match panel {
+            Panel::Player => player::player(frame, app, inner, palette),
+            Panel::Playlists => library::playlists(frame, app, inner, palette),
+            Panel::Tracks => library::tracks_table(frame, app, inner, palette),
+            _ => {}
         }
     }
     // Register shared borders after content; leave the title buttons usable at intersections.
-    for (index, split) in app.view.workspace.splits.iter().enumerate() {
+    for (index, split) in app
+        .view
+        .workspace
+        .splits
+        .iter()
+        .enumerate()
+        .filter(|_| app.view.layout_editing)
+    {
         let rect = match split.axis {
             Axis::Horizontal => Rect::new(
                 split.area.x + split.cut.saturating_sub(1),
@@ -610,8 +551,5 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
 }
 
 pub(super) fn fits(app: &App, root: &Dock) -> bool {
-    let mut groups = toolbar::commands(app);
-    groups.extend(player::controls(app));
-    minimum(app, &groups, root, app.view.workspace.bounds.width, true)
-        <= app.view.workspace.bounds.height
+    minimum(app, root, app.view.workspace.bounds.width, true) <= app.view.workspace.bounds.height
 }

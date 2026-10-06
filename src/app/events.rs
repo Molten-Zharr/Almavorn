@@ -17,6 +17,10 @@ impl App {
         area.contains(self.view.pointer)
     }
 
+    pub fn hovered_target(&self) -> Option<&Target> {
+        self.target_at(self.view.pointer)
+    }
+
     pub fn target_at(&self, point: Position) -> Option<&Target> {
         self.view
             .hits
@@ -46,10 +50,16 @@ impl App {
             Input::Move { x, y } => {
                 self.view.pointer = Position::new(x, y);
                 self.hover_settings();
+                if let Some(Target::CommandRow(index)) = self.target_at(self.view.pointer).cloned()
+                    && let Some(Dialog::Commands { selected, .. }) = &mut self.view.dialog
+                {
+                    *selected = index;
+                }
             }
             Input::Click { x, y, double } => {
                 self.view.pointer = Position::new(x, y);
                 if self.view.dialog.is_none() {
+                    self.view.toolbar_selected = None;
                     self.focus_point(self.view.pointer);
                 }
                 let hit = self.target_at(self.view.pointer).cloned();
@@ -86,10 +96,10 @@ impl App {
                 if self.view.dialog.is_some() {
                     self.scroll_dialog(delta);
                 } else if self.view.playlist_area.contains(Position::new(x, y)) {
-                    self.view.focus = Focus::Playlists;
+                    self.focus_panel(crate::workspace::Panel::Playlists);
                     self.navigate(delta as i64);
                 } else if self.view.tracks_area.contains(Position::new(x, y)) {
-                    self.view.focus = Focus::Tracks;
+                    self.focus_panel(crate::workspace::Panel::Tracks);
                     self.navigate(delta as i64);
                 }
             }
@@ -118,6 +128,35 @@ impl App {
                     if let Some(target) = target {
                         self.reverse_target(target)?;
                     }
+                } else if self.view.dialog.is_none() {
+                    let target = self.target_at(self.view.pointer).cloned();
+                    let menu = match target {
+                        Some(Target::Playlist(id)) => {
+                            self.select_playlist(id);
+                            Some(super::CommandMenu::Playlist)
+                        }
+                        Some(Target::Track(id) | Target::Mark(id)) => {
+                            self.library.selected_entry = Some(id);
+                            Some(super::CommandMenu::Tracks)
+                        }
+                        _ if self.view.playlist_area.contains(self.view.pointer) => {
+                            Some(super::CommandMenu::Playlist)
+                        }
+                        _ if self.view.tracks_area.contains(self.view.pointer) => {
+                            Some(super::CommandMenu::Tracks)
+                        }
+                        _ if self.view.workspace.areas.iter().any(|(panel, area)| {
+                            *panel == crate::workspace::Panel::Player
+                                && area.contains(self.view.pointer)
+                        }) =>
+                        {
+                            Some(super::CommandMenu::Player)
+                        }
+                        _ => None,
+                    };
+                    if let Some(menu) = menu {
+                        self.open_commands(menu);
+                    }
                 }
             }
             Input::Key(key) => {
@@ -138,6 +177,13 @@ impl App {
                 return Ok(());
             }
             if !self.close_dialog() {
+                if self.view.toolbar_selected.take().is_some() {
+                    return Ok(());
+                }
+                if self.view.layout_editing {
+                    self.view.layout_editing = false;
+                    return Ok(());
+                }
                 self.library.query.clear();
                 self.refresh()?;
             }
@@ -196,6 +242,41 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if matches!(self.view.dialog, Some(Dialog::Commands { .. }))
+                && self.view.toolbar_selected.is_some()
+                && !key.ctrl
+                && !key.alt
+            {
+                if key.key == Key::Tab {
+                    self.close_dialog();
+                    self.workspace_key(key)?;
+                    return Ok(());
+                }
+                if matches!(key.key, Key::Left | Key::Right) {
+                    self.close_dialog();
+                    self.toolbar_key(key)?;
+                    if let Some(Target::CommandMenu(menu)) = self
+                        .view
+                        .toolbar_selected
+                        .and_then(|index| self.toolbar_items().into_iter().nth(index))
+                        .map(|item| item.target)
+                    {
+                        self.open_commands(menu);
+                    }
+                    return Ok(());
+                }
+            }
+            if matches!(self.view.dialog, Some(Dialog::Commands { .. }))
+                && let Some(action) = self
+                    .settings
+                    .bindings
+                    .iter()
+                    .find(|binding| binding.key == normalized)
+                    .map(|binding| binding.action)
+            {
+                self.view.dialog = None;
+                return self.action(action);
+            }
             if !key.ctrl
                 && !key.alt
                 && let Some(Dialog::Panels { selected, .. }) = &self.view.dialog
@@ -260,6 +341,9 @@ impl App {
             }
             return Ok(());
         }
+        if self.toolbar_key(key)? {
+            return Ok(());
+        }
         if matches!(self.view.workspace.focus, crate::workspace::Panel::Player)
             && !key.ctrl
             && !key.alt
@@ -267,6 +351,19 @@ impl App {
             && matches!(key.key, Key::Up | Key::Down)
         {
             self.adjust_volume(if key.key == Key::Up { 1 } else { -1 })?;
+            return Ok(());
+        }
+        if key.key == Key::F(10) && !key.ctrl && !key.alt {
+            self.view.pointer = Position::new(u16::MAX, u16::MAX);
+            self.open_commands(
+                if self.view.workspace.focus == crate::workspace::Panel::Player {
+                    super::CommandMenu::Player
+                } else if self.view.focus == Focus::Playlists {
+                    super::CommandMenu::Playlist
+                } else {
+                    super::CommandMenu::Tracks
+                },
+            );
             return Ok(());
         }
         if let Some(action) = self
@@ -306,6 +403,14 @@ impl App {
 
     pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
         match target {
+            Target::CommandMenu(menu) => self.open_commands(menu),
+            Target::CommandRow(index) => self.activate_command(index)?,
+            Target::ManagePanels => {
+                self.view.dialog = Some(Dialog::Panels {
+                    selected: 0,
+                    expanded: Vec::new(),
+                });
+            }
             Target::PanelFocus(panel) => self.focus_panel(panel),
             Target::PanelMove(panel) => {
                 self.focus_panel(panel);

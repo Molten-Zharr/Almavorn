@@ -196,7 +196,7 @@ impl Action {
             Self::Mark => language.text("Toggle the selected track's copy checkbox.", "Изменить отметку выбранной композиции для копирования."),
             Self::PlaylistPanel => language.text("Move the playlist panel around the library.", "Изменить расположение панели плейлистов."),
             Self::PlayerPanel => language.text("Move playback controls around the library.", "Изменить расположение панели проигрывателя."),
-            Self::Panels => language.text("Expand categories to choose visible buttons; show or hide whole blocks and restore the layout.", "Раскрыть категории и выбрать видимые кнопки; показать или скрыть блоки целиком и вернуть раскладку."),
+            Self::Panels => language.text("Toggle layout editing: drag titles and borders. Visibility and button choices are available in the layout toolbar.", "Включить компоновку: тянуть заголовки и границы. Видимость блоков и кнопок настраивается в верхней строке."),
         }
     }
     pub fn name(self, language: Language) -> &'static str {

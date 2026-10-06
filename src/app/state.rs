@@ -45,6 +45,9 @@ impl Sort {
 
 #[derive(Clone)]
 pub enum Target {
+    CommandMenu(super::CommandMenu),
+    CommandRow(usize),
+    ManagePanels,
     PanelFocus(crate::workspace::Panel),
     PanelMove(crate::workspace::Panel),
     PanelCollapse(crate::workspace::Panel),
@@ -93,6 +96,5 @@ pub struct Hit {
 
 pub struct Keycap {
     pub area: Rect,
-    pub clear_area: Rect,
     pub label: String,
 }

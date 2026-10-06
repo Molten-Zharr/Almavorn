@@ -3,7 +3,13 @@ use crate::{
     app::{App, Keycap},
     input::KeyPress,
 };
-use ratatui::{Frame, layout::Rect, style::Modifier, text::Span, widgets::Paragraph};
+use ratatui::{
+    Frame,
+    layout::Rect,
+    style::Modifier,
+    text::Span,
+    widgets::{Block, Paragraph},
+};
 
 pub(super) fn width(key: KeyPress) -> u16 {
     let labels = key.key_labels();
@@ -63,25 +69,26 @@ pub(super) fn render(
         if rect.width != width || rect.height != 2 {
             break;
         }
-        frame.render_widget(
-            Paragraph::new(format!("▏{label}▕")).style(
-                palette
-                    .text()
-                    .bg(palette.selection)
-                    .fg(palette.button_text)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Rect::new(x, y, width, 1),
-        );
-        frame.render_widget(
-            Paragraph::new("▔".repeat(usize::from(width))).style(palette.text().fg(palette.muted)),
-            Rect::new(x, y + 1, width, 1),
-        );
-        app.view.keycaps.push(Keycap {
-            area: rect,
-            // Block-edge glyphs can occupy one extra raster cell in the GUI.
-            clear_area: Rect::new(x, y, width.saturating_add(1), 2).intersection(area),
-            label,
-        });
+        if app.view.graphical_keycaps {
+            // The GUI paints its own key faces. Keep the backing raster blank:
+            // font backgrounds can extend beyond a cell during incremental redraws.
+            frame.render_widget(Block::default().style(palette.text()), rect);
+        } else {
+            frame.render_widget(
+                Paragraph::new(format!("[{label}]")).style(
+                    palette
+                        .text()
+                        .bg(palette.selection)
+                        .fg(palette.button_text)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Rect::new(x, y, width, 1),
+            );
+            frame.render_widget(
+                Paragraph::new(" ".repeat(usize::from(width))).style(palette.text()),
+                Rect::new(x, y + 1, width, 1),
+            );
+        }
+        app.view.keycaps.push(Keycap { area: rect, label });
     }
 }

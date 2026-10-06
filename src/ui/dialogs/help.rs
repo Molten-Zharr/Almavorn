@@ -12,26 +12,29 @@ use ratatui::{
 };
 
 pub(super) fn wrapped_height(text: &str, width: u16) -> u16 {
-    let width = usize::from(width.max(1));
-    let mut total = 0usize;
-    for line in text.lines() {
-        let (mut rows, mut used) = (1usize, 0usize);
-        for word in line.split_whitespace() {
-            let length = Span::raw(word).width();
-            if used > 0 && used + 1 + length > width {
-                rows += 1;
-                used = 0;
-            }
-            if length > width {
-                rows += (length - 1) / width;
-                used = (length - 1) % width + 1;
-            } else {
-                used += usize::from(used > 0) + length;
-            }
-        }
-        total += rows;
-    }
-    total.max(1).min(usize::from(u16::MAX)) as u16
+    Paragraph::new(text)
+        .wrap(Wrap { trim: true })
+        .line_count(width.max(1))
+        .min(usize::from(u16::MAX)) as u16
+}
+
+pub(super) fn scroll_text(
+    frame: &mut Frame,
+    app: &mut App,
+    offset: &mut usize,
+    body: Rect,
+    text: String,
+    palette: Palette,
+) {
+    let paragraph = Paragraph::new(text)
+        .style(palette.text())
+        .wrap(Wrap { trim: false });
+    app.view.dialog_scroll_max = paragraph
+        .line_count(body.width)
+        .saturating_sub(usize::from(body.height))
+        .min(usize::from(u16::MAX));
+    *offset = (*offset).min(app.view.dialog_scroll_max);
+    frame.render_widget(paragraph.scroll((*offset as u16, 0)), body);
 }
 
 pub(super) fn help_dialog(
@@ -49,13 +52,18 @@ pub(super) fn help_dialog(
     for (key, en, ru) in [
         (
             Key::Escape,
-            "Close the window or cancel dragging.",
-            "Закрыть окно или отменить перетаскивание.",
+            "Close a menu or dialog, cancel dragging, or finish arranging blocks.",
+            "Закрыть меню или диалог, отменить перетаскивание или завершить компоновку.",
+        ),
+        (
+            Key::F(10),
+            "Open the focused panel's context menu; right click does the same.",
+            "Открыть меню активной панели; также доступно правой кнопкой мыши.",
         ),
         (
             Key::Tab,
-            "Focus the next block.",
-            "Перейти к следующему блоку.",
+            "Focus the next panel or the command bar. On the bar use Left/Right to select, Enter to open, Esc to return to the library.",
+            "Перейти к следующей панели или строке команд. В строке: ←→ — выбрать кнопку, Enter — открыть, Esc — вернуться в библиотеку.",
         ),
         (
             Key::Enter,
@@ -104,8 +112,8 @@ pub(super) fn help_dialog(
             false,
             true,
             Key::Tab,
-            "Focus the previous block.",
-            "Перейти к предыдущему блоку.",
+            "Focus the previous panel or the command bar.",
+            "Перейти к предыдущей панели или строке команд.",
         ),
         (
             true,
@@ -172,6 +180,7 @@ pub(super) fn help_dialog(
             .into(),
         ));
     }
+    let guide_heading = entries.len();
     entries.push((None, app.text("Guide", "Руководство").into()));
     entries.extend(
         guide
@@ -179,48 +188,88 @@ pub(super) fn help_dialog(
             .filter(|text| !text.is_empty())
             .map(|text| (None, text)),
     );
-    *offset = (*offset).min(entries.len().saturating_sub(1));
     let body = Rect::new(
         inner.x,
         inner.y,
         inner.width,
         inner.height.saturating_sub(3),
     );
-    let mut y = body.y;
-    for (key, text) in entries.iter().skip(*offset) {
-        let cap_width = key.map_or(0, keycaps::width);
-        let cap_height = key.map_or(0, |key| keycaps::height(key, body.width));
-        let stacked = key.is_some() && cap_width.saturating_add(22) > body.width;
-        let text_x = if key.is_some() && !stacked {
-            body.x + cap_width + 2
-        } else {
-            body.x
-        };
-        let text_y = y + if stacked { cap_height } else { 0 };
-        let width = body.right().saturating_sub(text_x);
-        let paragraph = Paragraph::new(text.as_str())
-            .style(palette.text())
-            .wrap(Wrap { trim: true });
-        let text_height = wrapped_height(text, width);
-        let height = if stacked {
-            text_height + cap_height
-        } else {
-            text_height.max(cap_height)
-        };
-        if y.saturating_add(height) > body.bottom() {
+    // Offset is measured in rendered lines, including wrapped descriptions and keycaps.
+    let layouts: Vec<_> = entries
+        .iter()
+        .map(|(key, text)| {
+            let cap_width = key.map_or(0, keycaps::width);
+            let cap_height = key.map_or(0, |key| keycaps::height(key, body.width));
+            let stacked = key.is_some() && cap_width.saturating_add(22) > body.width;
+            let text_x = if key.is_some() && !stacked {
+                cap_width + 2
+            } else {
+                0
+            };
+            let text_y = if stacked { cap_height } else { 0 };
+            let text_height = wrapped_height(text, body.width.saturating_sub(text_x));
+            let height = (text_y + text_height).max(cap_height);
+            (text_x, text_y, text_height, cap_height, height)
+        })
+        .collect();
+    let total_height = layouts
+        .iter()
+        .map(|(.., height)| usize::from(*height) + 1)
+        .sum::<usize>()
+        .saturating_sub(1);
+    app.view.dialog_scroll_max = total_height.saturating_sub(usize::from(body.height));
+    *offset = (*offset).min(app.view.dialog_scroll_max);
+    let mut cursor = 0;
+    let visible_end = *offset + usize::from(body.height);
+    for (index, ((key, text), &(text_x, text_y, text_height, cap_height, height))) in
+        entries.iter().zip(&layouts).enumerate()
+    {
+        let start = cursor;
+        cursor += usize::from(height) + 1;
+        if start >= visible_end {
             break;
         }
-        if let Some(key) = key {
+        if start + usize::from(height) <= *offset {
+            continue;
+        }
+        if let Some(key) = key
+            && start >= *offset
+            && start + usize::from(cap_height) <= visible_end
+        {
             keycaps::render(
                 frame,
                 app,
                 *key,
-                Rect::new(body.x, y, body.width, cap_height),
+                Rect::new(
+                    body.x,
+                    body.y + (start - *offset) as u16,
+                    body.width,
+                    cap_height,
+                ),
                 palette,
             );
         }
-        frame.render_widget(paragraph, Rect::new(text_x, text_y, width, text_height));
-        y = y.saturating_add(height).saturating_add(1);
+        let text_start = start + usize::from(text_y);
+        let top = text_start.max(*offset);
+        let bottom = (text_start + usize::from(text_height)).min(visible_end);
+        if top < bottom {
+            frame.render_widget(
+                Paragraph::new(text.as_str())
+                    .style(palette.text().fg(if index == 0 || index == guide_heading {
+                        palette.help_heading
+                    } else {
+                        palette.text
+                    }))
+                    .wrap(Wrap { trim: true })
+                    .scroll(((top - text_start) as u16, 0)),
+                Rect::new(
+                    body.x + text_x,
+                    body.y + (top - *offset) as u16,
+                    body.width.saturating_sub(text_x),
+                    (bottom - top) as u16,
+                ),
+            );
+        }
     }
     let footer = Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2);
     keycaps::render(frame, app, KeyPress::plain(Key::Escape), footer, palette);

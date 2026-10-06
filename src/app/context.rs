@@ -58,6 +58,7 @@ pub struct UiState {
     pub dialog: Option<Dialog>,
     pub hits: Vec<Hit>,
     pub keycaps: Vec<Keycap>,
+    pub graphical_keycaps: bool,
     pub playlist_area: Rect,
     pub tracks_area: Rect,
     pub playlist_offset: usize,
@@ -66,6 +67,10 @@ pub struct UiState {
     pub notice_error: bool,
     pub quit: bool,
     pub editing: bool,
+    pub layout_editing: bool,
+    pub toolbar_selected: Option<usize>,
+    pub(crate) toolbar_areas: Vec<Rect>,
+    pub(crate) dialog_scroll_max: usize,
     pub(super) pointer: Position,
 }
 
@@ -105,8 +110,8 @@ impl UiState {
         Self {
             notice: language
                 .text(
-                    "Ready. Add music or create a playlist. F1: help.",
-                    "Готово. Добавьте музыку или создайте плейлист. F1: помощь.",
+                    "Ready. Add music or create a playlist.",
+                    "Готово. Добавьте музыку или создайте плейлист.",
                 )
                 .into(),
             ..Default::default()

@@ -56,6 +56,13 @@ pub(super) fn render_dialog(
         return;
     }
     match dialog {
+        Dialog::Commands {
+            menu,
+            selected,
+            anchor,
+        } => {
+            super::menus::render(frame, app, *menu, selected, *anchor, palette);
+        }
         Dialog::Panels { selected, expanded } => {
             panels::render(frame, app, selected, expanded, area, palette);
         }
@@ -223,7 +230,10 @@ pub(super) fn render_dialog(
             offset,
         } => {
             let inner = modal(frame, area, title.clone(), 22, palette);
-            frame.render_widget(Paragraph::new(format!("{description}\n\n{}", app.text("Tab: switch panel. Arrows: select/change. Enter: edit/apply. Esc: return to settings.", "Tab: сменить панель. Стрелки: выбор и значение. Enter: изменить/применить. Esc: вернуться в настройки."))).style(palette.text()).wrap(Wrap {trim:false}).scroll(((*offset).min(u16::MAX as usize) as u16, 0)), Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)));
+            help::scroll_text(frame, app, offset,
+                Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)),
+                format!("{description}\n\n{}", app.text("Tab: switch panel. Arrows: select/change. Enter: edit/apply. Esc: return to settings.", "Tab: сменить панель. Стрелки: выбор и значение. Enter: изменить/применить. Esc: вернуться в настройки.")),
+                palette);
             dialog_footer(frame, app, inner, palette);
         }
         Dialog::Help { offset } => {
@@ -287,18 +297,18 @@ pub(super) fn render_dialog(
                         .map(|(key, values)| format!("{key}: {}", values.join("; "))),
                 );
             }
-            *offset = (*offset).min(lines.len().saturating_sub(1));
-            frame.render_widget(
-                Paragraph::new(lines.join("\n"))
-                    .scroll((*offset as u16, 0))
-                    .style(palette.text())
-                    .wrap(Wrap { trim: false }),
+            help::scroll_text(
+                frame,
+                app,
+                offset,
                 Rect::new(
                     inner.x,
                     inner.y,
                     inner.width,
                     inner.height.saturating_sub(3),
                 ),
+                lines.join("\n"),
+                palette,
             );
             dialog_footer(frame, app, inner, palette);
         }

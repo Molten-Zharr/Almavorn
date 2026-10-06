@@ -1,6 +1,7 @@
 mod actions;
 mod background;
 mod browser;
+mod commands;
 mod context;
 mod database;
 mod dialogs;
@@ -15,6 +16,7 @@ mod state;
 mod workspace;
 
 pub use browser::{Browser, BrowserEntry};
+pub use commands::{CommandItem, CommandMenu};
 use context::{BrowserState, SettingsPersistence};
 pub use context::{LibraryState, PlaybackState, UiState};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};

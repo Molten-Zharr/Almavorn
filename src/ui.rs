@@ -2,6 +2,7 @@ mod buttons;
 mod dialogs;
 mod keycaps;
 mod library;
+mod menus;
 mod player;
 mod settings;
 mod theme;
@@ -21,7 +22,7 @@ use crate::{
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Paragraph, Wrap},
 };
@@ -31,6 +32,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let palette = Palette::new(app);
     app.view.hits.clear();
     app.view.keycaps.clear();
+    app.view.dialog_scroll_max = 0;
     if app
         .view
         .dialog
@@ -64,52 +66,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         );
         return;
     }
-    let footer_height = if area.width < 80 { 4 } else { 3 };
     let parts = Layout::vertical([
-        Constraint::Length(1),
+        Constraint::Length(toolbar::height(app, area.width)),
         Constraint::Min(9),
-        Constraint::Length(footer_height),
+        Constraint::Length(1),
     ])
     .split(area);
-    let panel_label = app.text("Blocks", "Блоки");
-    let panel_button_width =
-        widgets::button_width(app, panel_label, &Target::Action(Action::Panels))
-            .min(parts[0].width);
-    let header = Line::from(vec![
-        Span::styled(
-            " ALMAVORN ",
-            Style::default()
-                .fg(palette.accent)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" · {}", app.text("Music player", "Музыкальный плеер")),
-            Style::default().fg(palette.muted),
-        ),
-    ]);
-    frame.render_widget(
-        Paragraph::new(header),
-        Rect::new(
-            parts[0].x,
-            parts[0].y,
-            parts[0].width.saturating_sub(panel_button_width),
-            1,
-        ),
-    );
-    widgets::button(
-        frame,
-        app,
-        Rect::new(
-            parts[0].right().saturating_sub(panel_button_width),
-            parts[0].y,
-            panel_button_width,
-            1,
-        ),
-        panel_label,
-        Target::Action(Action::Panels),
-        true,
-        palette,
-    );
+    toolbar::render(frame, app, parts[0], palette);
     workspace::render(frame, app, parts[1], palette);
     let notice = if app.view.notice_error {
         app.view.notice.clone()
@@ -125,42 +88,102 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     } else {
         app.view.notice.clone()
     };
-    frame.render_widget(
-        Paragraph::new(notice)
-            .style(Style::default().fg(if app.view.notice_error {
-                palette.error
-            } else {
-                palette.muted
-            }))
-            .wrap(Wrap { trim: false }),
-        Rect::new(parts[2].x, parts[2].y, parts[2].width, 2),
-    );
-    let hint = if matches!(app.view.workspace.focus, crate::workspace::Panel::Player) {
+    let tooltip = app.hovered_target().and_then(|target| match target {
+        Target::Action(action) => Some(format!(
+            "{}{}",
+            buttons::button_shortcut(app, target).map_or(String::new(), |key| format!("{key} · ")),
+            action.description(app.settings.language)
+        )),
+        Target::CommandMenu(menu) => Some(menu.title(app.settings.language).to_owned()),
+        _ => None,
+    });
+    let message = if app.view.notice_error || app.busy() || app.importing() {
+        notice
+    } else if app.view.layout_editing {
         app.text(
-            "↑↓ volume 1% · ←→ seek · Tab panel · Space pause · F1 help · Q quit",
-            "↑↓ громкость 1% · ←→ перемотка · Tab панель · Space пауза · F1 помощь · Q выход",
+            "Drag a title or border · Ctrl+B / Esc: done",
+            "Тяните заголовок или границу · Ctrl+B / Esc: готово",
         )
+        .into()
+    } else if app.view.toolbar_selected.is_some() {
+        app.text(
+            "←→: select · Enter: open · Esc: library",
+            "←→: выбор · Enter: открыть · Esc: библиотека",
+        )
+        .into()
     } else {
-        app.text(
-            "↑↓ navigate · Tab panel · Enter play · Space pause · F1 help · Q quit",
-            "↑↓ выбор · Tab панель · Enter играть · Space пауза · F1 помощь · Q выход",
-        )
+        tooltip.unwrap_or(notice)
     };
+    let help_target = Target::Action(Action::Help);
+    let help = format!(
+        "{} {}",
+        buttons::button_shortcut(app, &help_target).unwrap_or_default(),
+        app.text("Help", "Справка")
+    );
+    let help_width = (Span::raw(&help).width() as u16 + 2).min(parts[2].width);
+    let navigation = if area.width >= 80 {
+        app.text("Tab: panels / menu", "Tab: панели / меню")
+    } else {
+        ""
+    };
+    let navigation_width = Span::raw(navigation).width() as u16;
     frame.render_widget(
-        Paragraph::new(hint)
-            .style(Style::default().fg(palette.muted))
-            .wrap(Wrap { trim: false }),
+        Paragraph::new(Line::from(message)).style(
+            Style::default()
+                .fg(if app.view.notice_error {
+                    palette.error
+                } else {
+                    palette.muted
+                })
+                .bg(palette.background),
+        ),
         Rect::new(
             parts[2].x,
-            parts[2].y + 2,
-            parts[2].width,
-            footer_height - 2,
+            parts[2].y,
+            parts[2]
+                .width
+                .saturating_sub(help_width + navigation_width + 2),
+            1,
         ),
+    );
+    frame.render_widget(
+        Paragraph::new(navigation).style(palette.text().fg(palette.muted)),
+        Rect::new(
+            parts[2]
+                .right()
+                .saturating_sub(help_width + navigation_width + 1),
+            parts[2].y,
+            navigation_width,
+            1,
+        ),
+    );
+    buttons::quiet_button(
+        frame,
+        app,
+        Rect::new(
+            parts[2].right().saturating_sub(help_width),
+            parts[2].y,
+            help_width,
+            1,
+        ),
+        &help,
+        help_target,
+        true,
+        palette,
     );
     if let Some(mut dialog) = app.view.dialog.take() {
         app.view.hits.clear();
         app.view.keycaps.clear();
-        render_dialog(frame, app, &mut dialog, palette);
+        if let crate::app::Dialog::Commands {
+            menu,
+            selected,
+            anchor,
+        } = &mut dialog
+        {
+            menus::render(frame, app, *menu, selected, *anchor, palette);
+        } else {
+            render_dialog(frame, app, &mut dialog, palette);
+        }
         app.view.dialog = Some(dialog);
     }
 }

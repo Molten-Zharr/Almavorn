@@ -1,5 +1,5 @@
 use almavorn::{
-    app::{App, Browser, BrowserEntry, Dialog, Focus, Sort, Target},
+    app::{App, Browser, BrowserEntry, CommandMenu, Dialog, Focus, Sort, Target},
     input::{Action, Input, Key, KeyPress},
     model::{ImportedTrack, Language, Mode, Placement, PlaylistKind, Track},
     ui,
@@ -66,6 +66,41 @@ fn create_playlist(app: &mut App, name: &str) -> i64 {
 fn click_action(app: &mut App, action: Action) {
     let mut terminal = Terminal::new(TestBackend::new(120, 50)).unwrap();
     terminal.draw(|frame| ui::render(app, frame)).unwrap();
+    if action == Action::ToggleEdit {
+        let menu = app
+            .view
+            .hits
+            .iter()
+            .find(|hit| matches!(hit.target, Target::CommandMenu(CommandMenu::Application)))
+            .unwrap()
+            .area;
+        app.handle(Input::Click {
+            x: menu.x,
+            y: menu.y,
+            double: false,
+        });
+        terminal.draw(|frame| ui::render(app, frame)).unwrap();
+        let index = app
+            .command_items(CommandMenu::Application)
+            .iter()
+            .position(|item| matches!(item.target, Target::Action(value) if value == action))
+            .unwrap();
+        let row = app
+            .view
+            .hits
+            .iter()
+            .find(|hit| {
+                hit.enabled && matches!(hit.target, Target::CommandRow(value) if value == index)
+            })
+            .unwrap()
+            .area;
+        app.handle(Input::Click {
+            x: row.x,
+            y: row.y,
+            double: false,
+        });
+        return;
+    }
     let area = app
         .view
         .hits

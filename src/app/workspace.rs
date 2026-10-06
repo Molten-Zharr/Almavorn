@@ -72,6 +72,7 @@ impl App {
         }
     }
     pub(crate) fn focus_panel(&mut self, panel: Panel) {
+        self.view.toolbar_selected = None;
         self.view.workspace.focus = panel;
         match panel {
             Panel::Playlists => self.view.focus = Focus::Playlists,
@@ -262,7 +263,8 @@ impl App {
     }
 
     pub(crate) fn workspace_key(&mut self, key: KeyPress) -> Result<bool> {
-        if key.key == Key::Tab {
+        if key.key == Key::Tab && !key.ctrl && !key.alt {
+            self.view.pointer = Position::new(u16::MAX, u16::MAX);
             let panels: Vec<_> = self
                 .view
                 .workspace
@@ -270,18 +272,32 @@ impl App {
                 .iter()
                 .map(|(panel, _)| *panel)
                 .collect();
-            if let Some(index) = panels
+            if self.view.toolbar_selected.is_some() {
+                let next = if key.shift {
+                    panels.last()
+                } else {
+                    panels.first()
+                };
+                if let Some(panel) = next {
+                    self.focus_panel(*panel);
+                }
+            } else if let Some(index) = panels
                 .iter()
                 .position(|panel| *panel == self.view.workspace.focus)
             {
-                let next = if key.shift {
-                    (index + panels.len() - 1) % panels.len()
+                if (key.shift && index == 0) || (!key.shift && index + 1 == panels.len()) {
+                    self.focus_toolbar(key.shift);
                 } else {
-                    (index + 1) % panels.len()
-                };
-                self.focus_panel(panels[next]);
+                    let next = if key.shift { index - 1 } else { index + 1 };
+                    self.focus_panel(panels[next]);
+                }
+            } else {
+                self.focus_toolbar(key.shift);
             }
             return Ok(true);
+        }
+        if self.view.toolbar_selected.is_some() {
+            return Ok(false);
         }
         if key.ctrl && key.alt && key.key == Key::Char(' ') {
             self.toggle_panel(self.view.workspace.focus)?;

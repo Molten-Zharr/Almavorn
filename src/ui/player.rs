@@ -1,4 +1,8 @@
-use super::{theme::Palette, toolbar::Group, widgets::clean};
+use super::{
+    buttons::{quiet_button, quiet_width},
+    theme::Palette,
+    widgets::clean,
+};
 use crate::{
     app::{App, Hit, Target},
     input::Action,
@@ -7,73 +11,33 @@ use crate::{
 };
 use ratatui::{
     Frame,
-    layout::{Alignment, Rect},
-    style::Style,
+    layout::Rect,
     text::{Line, Span},
-    widgets::{Gauge, Paragraph, Sparkline},
+    widgets::{Paragraph, Sparkline},
 };
 
-pub(super) fn controls(app: &App) -> Vec<Group> {
-    let playback = [
-        (Action::Previous, "<<", "<<"),
-        (
-            Action::TogglePlay,
-            if app.paused() { "Play" } else { "Pause" },
-            if app.paused() {
-                "Играть"
-            } else {
-                "Пауза"
-            },
-        ),
-        (Action::Stop, "Stop", "Стоп"),
-        (Action::Next, ">>", ">>"),
-    ];
-    let volume = [
-        (Action::VolumeDown, "Vol -", "Громк -"),
-        (Action::VolumeUp, "Vol +", "Громк +"),
-    ];
-    let mut group = Group {
-        panel: Panel::Player,
-        title: app.text("Player", "Проигрыватель").into(),
-        entries: playback
-            .iter()
-            .chain(volume.iter())
-            .map(|(action, en, ru)| {
-                (
-                    app.text(en, ru).into(),
-                    Target::Action(*action),
-                    app.allowed(*action),
-                )
-            })
-            .collect(),
-    };
-    group.retain_visible(app);
-    vec![group]
+fn controls(app: &App) -> Vec<(Action, &'static str)> {
+    [
+        (Action::Previous, "‹"),
+        (Action::TogglePlay, if app.paused() { "▶" } else { "II" }),
+        (Action::Stop, "■"),
+        (Action::Next, "›"),
+    ]
+    .into_iter()
+    .filter(|(action, _)| app.control_visible(Panel::Player, *action))
+    .collect()
 }
 
 pub(super) fn preferred_height(app: &App, width: u16) -> u16 {
-    let groups = controls(app);
-    content_height(app, width.saturating_sub(2), &groups[0]).saturating_add(2)
+    content_height(app, width.saturating_sub(2)) + 2
 }
 
-pub(super) fn content_height(app: &App, width: u16, controls: &Group) -> u16 {
-    let rows = if controls.entries.is_empty() {
-        0
-    } else {
-        super::toolbar::rows(app, width, controls)
-    };
-    rows.saturating_add(7)
+pub(super) fn content_height(app: &App, width: u16) -> u16 {
+    (if width >= 70 { 2 } else { 3 }) + if app.playback_active() { 2 } else { 0 }
 }
 
-pub(super) fn player(
-    frame: &mut Frame,
-    app: &mut App,
-    area: Rect,
-    controls: &Group,
-    palette: Palette,
-) {
-    let inner = area;
-    if inner.height < 7 {
+pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
+    if area.height < 2 || area.width < 8 {
         return;
     }
     let title = if app.preparing_playback() && !app.playback_active() {
@@ -85,12 +49,8 @@ pub(super) fn player(
         .filter(|_| app.playback_active())
     {
         format!(
-            "[{}] {}{}",
-            if app.current_paused() {
-                app.text("PAUSED", "ПАУЗА")
-            } else {
-                app.text("PLAYING", "ИГРАЕТ")
-            },
+            "{}{}{}",
+            if app.current_paused() { "II " } else { "▶ " },
             track.title,
             if track.artist.is_empty() {
                 String::new()
@@ -99,25 +59,57 @@ pub(super) fn player(
             }
         )
     } else {
-        app.text("No track playing", "Ничего не воспроизводится")
-            .to_owned()
+        app.text(
+            "Choose a track to play",
+            "Выберите композицию для воспроизведения",
+        )
+        .to_owned()
     };
     frame.render_widget(
-        Paragraph::new(clean(&title)).style(palette.text().fg(palette.accent)),
-        Rect::new(inner.x, inner.y, inner.width, 1),
+        Paragraph::new(clean(&title)).style(palette.text().fg(if app.playback_active() {
+            palette.accent
+        } else {
+            palette.muted
+        })),
+        Rect::new(area.x, area.y, area.width, 1),
     );
-    let rows = super::toolbar::rows(app, inner.width, controls);
-    super::toolbar::contents(
-        frame,
-        app,
-        Rect::new(inner.x, inner.y + 1, inner.width, rows),
-        controls,
-        palette,
+    let row = Rect::new(area.x, area.y + 1, area.width, 1);
+    let volume_width = if area.width >= 70 {
+        22
+    } else {
+        (area.width / 2).clamp(8, 22)
+    };
+    let volume_area = Rect::new(
+        row.right().saturating_sub(volume_width),
+        row.y,
+        volume_width,
+        1,
     );
-    let y = inner.y + rows + 2;
-    if y + 4 >= inner.bottom() {
-        return;
+    let mut x = row.x;
+    for (action, label) in controls(app) {
+        let width = quiet_width(label);
+        if x + width > volume_area.x {
+            break;
+        }
+        quiet_button(
+            frame,
+            app,
+            Rect::new(x, row.y, width, 1),
+            label,
+            Target::Action(action),
+            app.allowed(action),
+            palette,
+        );
+        x += width + 1;
     }
+    volume(frame, app, volume_area, palette);
+    let progress = if area.width >= 70 {
+        Rect::new(x + 1, row.y, volume_area.x.saturating_sub(x + 2), 1)
+    } else if area.height >= 3 {
+        Rect::new(area.x, area.y + 2, area.width, 1)
+    } else {
+        Rect::default()
+    };
     let duration = app
         .playback
         .current
@@ -129,43 +121,59 @@ pub(super) fn player(
     } else {
         0.0
     };
-    let wave = Rect::new(inner.x, y, inner.width, 2);
-    waveform(frame, app, wave, ratio, palette);
-    let rect = Rect::new(inner.x, y + 2, inner.width, 1);
-    frame.render_widget(
-        Gauge::default()
-            .ratio(ratio)
-            .gauge_style(
-                Style::default()
-                    .fg(palette.accent)
-                    .bg(palette.inactive_panel_border),
-            )
-            .use_unicode(true)
-            .label(""),
-        rect,
+    let time = format!("{} / {}", duration_text(position), duration_text(duration));
+    let time_width = (Span::raw(&time).width() as u16).min(progress.width);
+    let seek = Rect::new(
+        progress.x,
+        progress.y,
+        progress.width.saturating_sub(time_width + 1),
+        1,
     );
+    slider(frame, seek, ratio, palette);
     frame.render_widget(
-        Paragraph::new(format!(
-            "{} / {}",
-            duration_text(position),
-            duration_text(duration)
-        ))
-        .alignment(Alignment::Center)
-        .style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, y + 3, inner.width, 1),
+        Paragraph::new(time).style(palette.text().fg(palette.muted)),
+        Rect::new(
+            progress.right().saturating_sub(time_width),
+            progress.y,
+            time_width,
+            1,
+        ),
     );
-    let seek = Rect::new(inner.x, y, inner.width, 3);
     app.view.hits.push(Hit {
         area: seek,
         target: Target::Seek(seek),
-        enabled: app.playback_active() && duration > 0,
+        enabled: app.playback_active() && duration > 0 && seek.width > 0,
     });
-    volume(
-        frame,
-        app,
-        Rect::new(inner.x, y + 4, inner.width, 1),
-        palette,
-    );
+    let wave_y = area.y + if area.width >= 70 { 2 } else { 3 };
+    if app.playback_active() && wave_y + 2 <= area.bottom() {
+        let wave = Rect::new(area.x, wave_y, area.width, 2);
+        waveform(frame, app, wave, ratio, palette);
+        app.view.hits.push(Hit {
+            area: wave,
+            target: Target::Seek(wave),
+            enabled: duration > 0,
+        });
+    }
+}
+
+fn slider(frame: &mut Frame, area: Rect, ratio: f64, palette: Palette) {
+    if area.width == 0 {
+        return;
+    }
+    let filled = (ratio * f64::from(area.width.saturating_sub(1))).round() as u16;
+    let spans: Vec<_> = (0..area.width)
+        .map(|index| {
+            Span::styled(
+                if index == filled { "●" } else { "─" },
+                palette.text().fg(if index <= filled && ratio > 0.0 {
+                    palette.accent
+                } else {
+                    palette.separator
+                }),
+            )
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palette) {
@@ -231,40 +239,27 @@ fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palet
 }
 
 fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    let label = app.text("Volume", "Громкость");
-    let label_width = Span::raw(label).width() as u16;
-    let segments = (area.width.saturating_sub(label_width + 7) / 2).clamp(1, 30);
-    let bar_width = segments * 2 - 1;
-    let total = label_width + bar_width + 7;
-    let start = area.x + area.width.saturating_sub(total);
-    let bar = Rect::new(start + label_width + 2, area.y, bar_width, 1).intersection(area);
     let percent = (app.settings.volume.clamp(0.0, 1.0) * 100.0).round() as u16;
-    let filled = (f32::from(percent) * f32::from(segments) / 100.0).round() as u16;
+    let label = if area.width >= 20 {
+        app.text("Vol", "Громк")
+    } else {
+        ""
+    };
+    let label_width = Span::raw(label).width() as u16 + u16::from(!label.is_empty());
     frame.render_widget(
         Paragraph::new(label).style(palette.text().fg(palette.muted)),
-        Rect::new(start, area.y, label_width, 1).intersection(area),
+        Rect::new(area.x, area.y, label_width, 1),
     );
-    let mut content = Vec::new();
-    for segment in 0..segments {
-        if segment > 0 {
-            content.push(Span::styled(" ", palette.text()));
-        }
-        content.push(Span::styled(
-            "█",
-            palette.text().fg(if segment < filled {
-                palette.accent
-            } else {
-                palette.inactive_panel_border
-            }),
-        ));
-    }
-    frame.render_widget(
-        Paragraph::new(Line::from(content)).style(palette.text()),
-        bar,
+    let bar = Rect::new(
+        area.x + label_width,
+        area.y,
+        area.width.saturating_sub(label_width + 5),
+        1,
     );
+    slider(frame, bar, f64::from(app.settings.volume), palette);
     frame.render_widget(
-        Paragraph::new(format!("{percent:>3}%")).style(palette.text().fg(palette.accent)),
-        Rect::new(bar.right() + 1, area.y, 4, 1).intersection(area),
+        Paragraph::new(format!("{percent:>3}%")).style(palette.text().fg(palette.muted)),
+        Rect::new(area.right().saturating_sub(4), area.y, 4, 1),
     );
     app.view.hits.push(Hit {
         area: bar,

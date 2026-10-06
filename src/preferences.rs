@@ -17,13 +17,13 @@ pub const MAX_FONT_SIZE: u16 = 32;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FontFace {
-    #[default]
     FiraCodeBold,
+    #[default]
     FiraCode,
     DejaVuMono,
 }
 impl FontFace {
-    pub const ALL: [Self; 3] = [Self::FiraCodeBold, Self::FiraCode, Self::DejaVuMono];
+    pub const ALL: [Self; 3] = [Self::FiraCode, Self::FiraCodeBold, Self::DejaVuMono];
     pub fn name(self) -> &'static str {
         match self {
             Self::FiraCodeBold => "Fira Code Bold",

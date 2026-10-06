@@ -28,8 +28,12 @@ required-features = ["tui"]
 name = "settings_preview"
 required-features = ["guitui"]
 
+[[example]]
+name = "interface_preview"
+required-features = ["guitui"]
+
 [dependencies]
-ratatui = { version = "0.30.2", default-features = false, features = ["std"] }
+ratatui = { version = "0.30.2", default-features = false, features = ["std", "unstable-rendered-line-info"] }
 crossterm = { version = "0.29", optional = true }
 eframe = { version = "~0.34.0", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"], optional = true }
 egui_ratatui = { version = "2.2.0", optional = true }

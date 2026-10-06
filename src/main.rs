@@ -24,6 +24,7 @@ fn run() -> Result<()> {
         return Ok(());
     };
     let mut app = App::new(&options.directory)?;
+    app.view.graphical_keycaps = true;
     if !options.files.is_empty() {
         app.start_import(options.files)?;
     }
@@ -139,12 +140,28 @@ fn run() -> Result<()> {
                     .floor() as u16;
                     let target = app.target_at(ratatui::layout::Position::new(x, y));
                     let cursor = match target {
-                        Some(Target::PlaybackVolume(_) | Target::Seek(_)) => {
-                            egui::CursorIcon::ResizeHorizontal
-                        }
-                        Some(Target::SortColumn(_) | Target::Action(_) | Target::Mode(_)) => {
-                            egui::CursorIcon::PointingHand
-                        }
+                        Some(
+                            Target::PlaybackVolume(_)
+                            | Target::Seek(_)
+                            | Target::SettingsVolume(_, _),
+                        ) => egui::CursorIcon::ResizeHorizontal,
+                        Some(
+                            Target::SortColumn(_)
+                            | Target::Action(_)
+                            | Target::Mode(_)
+                            | Target::CommandMenu(_)
+                            | Target::CommandRow(_)
+                            | Target::ManagePanels
+                            | Target::PanelCollapse(_)
+                            | Target::PanelClose(_)
+                            | Target::Setting(_)
+                            | Target::SettingSelect(_)
+                            | Target::SettingAdjust(_, _)
+                            | Target::SettingHelp(_)
+                            | Target::SettingsPage(_)
+                            | Target::SettingsTab(_)
+                            | Target::CloseDialog,
+                        ) => egui::CursorIcon::PointingHand,
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
                         Some(Target::PanelResize(index)) => match app.view.workspace.splits[*index]
                             .axis

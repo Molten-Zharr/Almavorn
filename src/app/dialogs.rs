@@ -25,6 +25,11 @@ pub struct TextDialog {
 
 #[derive(Clone)]
 pub enum Dialog {
+    Commands {
+        menu: super::CommandMenu,
+        selected: usize,
+        anchor: ratatui::layout::Position,
+    },
     Panels {
         selected: usize,
         expanded: Vec<crate::workspace::Panel>,
@@ -80,7 +85,7 @@ impl Dialog {
             Self::Metadata { .. } => Some(Action::Metadata),
             Self::Transfer { .. } => Some(Action::Transfer),
             Self::RemoveEntry { .. } | Self::ConfirmSettings { .. } => Some(Action::Delete),
-            Self::Text(_) | Self::CaptureBinding { .. } => None,
+            Self::Text(_) | Self::CaptureBinding { .. } | Self::Commands { .. } => None,
         }
     }
 
@@ -112,6 +117,17 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if let Some(Dialog::Commands { menu, selected, .. }) = &self.view.dialog {
+            let next = Self::command_selection(
+                &self.command_items(*menu),
+                *selected,
+                i64::from(direction),
+            );
+            if let Some(Dialog::Commands { selected, .. }) = &mut self.view.dialog {
+                *selected = next;
+            }
+            return;
+        }
         let transfer_length = self.transfer_destinations().len();
         if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
             self.settings_scroll(i64::from(direction));
@@ -142,7 +158,11 @@ impl App {
             Some(Dialog::Help { offset })
             | Some(Dialog::Metadata { offset, .. })
             | Some(Dialog::SettingsHelp { offset, .. }) => {
-                *offset = bounded(*offset, direction as i64, 1000)
+                *offset = bounded(
+                    *offset,
+                    direction as i64,
+                    self.view.dialog_scroll_max.saturating_add(1),
+                )
             }
             _ => {}
         }
@@ -160,6 +180,9 @@ impl App {
     }
 
     pub(super) fn submit(&mut self) -> Result<()> {
+        if let Some(Dialog::Commands { selected, .. }) = &self.view.dialog {
+            return self.activate_command(*selected);
+        }
         match self.view.dialog.take() {
             Some(Dialog::Panels { selected, expanded }) => {
                 self.view.dialog = Some(Dialog::Panels { selected, expanded });

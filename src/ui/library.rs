@@ -66,14 +66,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         let mut content = Vec::new();
         if playing {
             content.push(Span::styled(
-                format!(
-                    "[{}] ",
-                    if app.current_paused() {
-                        app.text("PAUSED", "ПАУЗА")
-                    } else {
-                        app.text("PLAYING", "ИГРАЕТ")
-                    }
-                ),
+                if app.current_paused() { "II " } else { "▶ " },
                 style
                     .bg(if app.current_paused() {
                         palette.muted
@@ -102,29 +95,6 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     if inner.height < 2 {
         return;
     }
-    let name = app
-        .playlist()
-        .map(|playlist| playlist.display_name(app.settings.language))
-        .unwrap_or(app.text("Tracks", "Композиции"));
-    let title = format!(
-        "{name} · {} {}{}",
-        app.library.sort.name(app.settings.language),
-        if app.library.sort_descending {
-            "↓"
-        } else {
-            "↑"
-        },
-        if app.library.query.is_empty() {
-            String::new()
-        } else {
-            format!(" · {}", app.library.query)
-        }
-    );
-    frame.render_widget(
-        Paragraph::new(title).style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, inner.y, inner.width, 1),
-    );
-    let inner = Rect::new(inner.x, inner.y + 1, inner.width, inner.height - 1);
     let capacity = inner.height.saturating_sub(1) as usize;
     let entries = app.rows();
     let selected = entries
@@ -149,8 +119,10 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
                 && app.playback.playing_entry == Some(entry.id);
             let mark = if app.library.marked.contains(&entry.id) {
                 "[x]"
-            } else {
+            } else if selected {
                 "[ ]"
+            } else {
+                "   "
             };
             let style = if selected {
                 palette
@@ -163,14 +135,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             let mut title = Vec::new();
             if playing {
                 title.push(Span::styled(
-                    format!(
-                        "[{}] ",
-                        if app.current_paused() {
-                            app.text("PAUSED", "ПАУЗА")
-                        } else {
-                            app.text("PLAYING", "ИГРАЕТ")
-                        }
-                    ),
+                    if app.current_paused() { "II " } else { "▶ " },
                     style
                         .bg(if app.current_paused() {
                             palette.muted
@@ -275,8 +240,8 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     if empty {
         frame.render_widget(
             Paragraph::new(app.text(
-                "Add files, a folder, or copy tracks from the sorting desk.",
-                "Добавьте файлы, папку или скопируйте композиции из сортировочного стола.",
+                "Add music with Add ↓ or drop files here.",
+                "Добавьте музыку через «Добавить ↓» или перетащите файлы сюда.",
             ))
             .style(palette.text().fg(palette.muted))
             .wrap(Wrap { trim: false }),
