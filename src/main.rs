@@ -142,18 +142,29 @@ fn run() -> Result<()> {
                         Some(Target::PlaybackVolume(_) | Target::Seek(_)) => {
                             egui::CursorIcon::ResizeHorizontal
                         }
-                        Some(Target::SortColumn(_) | Target::Action(_) | Target::Mode(_)) => {
-                            egui::CursorIcon::PointingHand
-                        }
+                        Some(
+                            Target::SortColumn(_)
+                            | Target::Action(_)
+                            | Target::Mode(_)
+                            | Target::SearchResult(_)
+                            | Target::SearchPlay
+                            | Target::SearchPlaylist(_)
+                            | Target::SearchAll(_)
+                            | Target::QueryKeyboard
+                            | Target::ClearFilter,
+                        ) => egui::CursorIcon::PointingHand,
+                        Some(Target::SearchInput | Target::FilterInput) => egui::CursorIcon::Text,
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
-                        Some(Target::PanelResize(index)) => match app.view.workspace.splits[*index]
-                            .axis
-                        {
-                            almavorn::workspace::Axis::Horizontal => {
-                                egui::CursorIcon::ResizeHorizontal
+                        Some(Target::PanelResize(index)) => {
+                            match app.view.workspace.splits[*index].axis {
+                                almavorn::workspace::Axis::Horizontal => {
+                                    egui::CursorIcon::ResizeHorizontal
+                                }
+                                almavorn::workspace::Axis::Vertical => {
+                                    egui::CursorIcon::ResizeVertical
+                                }
                             }
-                            almavorn::workspace::Axis::Vertical => egui::CursorIcon::ResizeVertical,
-                        },
+                        }
                         _ => egui::CursorIcon::Default,
                     };
                     ui.ctx().set_cursor_icon(cursor);
@@ -301,6 +312,32 @@ fn run() -> Result<()> {
                     app.view.notice_error = true;
                 }
                 playback_painter.paint(ui, image_rect, &app, dimensions);
+                let overlay = if app.view.dialog.is_some() {
+                    app.view.search_area
+                } else if app.view.filter_keyboard {
+                    app.view.filter_keyboard_area
+                } else {
+                    ratatui::layout::Rect::default()
+                };
+                if !overlay.is_empty() {
+                    let area = overlay;
+                    let uv = egui::Rect::from_min_max(
+                        egui::pos2(
+                            f32::from(area.x) / f32::from(dimensions.width),
+                            f32::from(area.y) / f32::from(dimensions.height),
+                        ),
+                        egui::pos2(
+                            f32::from(area.right()) / f32::from(dimensions.width),
+                            f32::from(area.bottom()) / f32::from(dimensions.height),
+                        ),
+                    );
+                    let popup = egui::Rect::from_min_max(
+                        image_rect.min + uv.min.to_vec2() * image_rect.size(),
+                        image_rect.min + uv.max.to_vec2() * image_rect.size(),
+                    );
+                    ui.painter()
+                        .image(texture_id, popup, uv, egui::Color32::WHITE);
+                }
                 gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
             });
         if app.view.quit {

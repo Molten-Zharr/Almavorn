@@ -330,6 +330,34 @@ pub struct SettingsProfile {
     pub preferences: ProfilePreferences,
 }
 impl Settings {
+    pub(crate) fn ensure_bindings(&mut self) {
+        for mut binding in crate::input::default_bindings() {
+            if self
+                .bindings
+                .iter()
+                .any(|value| value.action == binding.action)
+            {
+                continue;
+            }
+            if binding.action == crate::input::Action::Filter
+                && self.bindings.iter().any(|value| value.key == binding.key)
+                && let Some(key) =
+                    std::iter::once(crate::input::KeyPress::plain(crate::input::Key::F(4)))
+                        .chain(crate::input::Key::shortcut_choices().map(|key| {
+                            crate::input::KeyPress {
+                                key,
+                                ctrl: true,
+                                alt: false,
+                                shift: false,
+                            }
+                        }))
+                        .find(|key| !self.bindings.iter().any(|value| value.key == *key))
+            {
+                binding.key = key;
+            }
+            self.bindings.push(binding);
+        }
+    }
     pub fn profile_preferences(&self) -> ProfilePreferences {
         ProfilePreferences {
             language: self.language,
@@ -353,6 +381,7 @@ impl Settings {
         self.workspace.normalize();
         self.themes = preferences.themes;
         self.bindings = preferences.bindings;
+        self.ensure_bindings();
         self.appearance = preferences.appearance;
     }
     pub fn sync_active_profile(&mut self) {

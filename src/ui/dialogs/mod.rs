@@ -2,7 +2,9 @@ mod bindings;
 mod browser;
 mod help;
 mod panels;
+mod search;
 mod text;
+pub(crate) use text::keyboard;
 
 use self::{bindings::binding_dialog, browser::browser_dialog, text::text_dialog};
 use super::{
@@ -60,6 +62,7 @@ pub(super) fn render_dialog(
             panels::render(frame, app, selected, expanded, area, palette);
         }
         Dialog::Text(dialog) => text_dialog(frame, app, dialog, area, palette),
+        Dialog::Search(search) => self::search::render(frame, app, search, area, palette),
         Dialog::Browser(browser) => browser_dialog(frame, app, browser, area, palette),
         Dialog::RemoveEntry { title, .. } => {
             let inner = modal(
@@ -247,6 +250,7 @@ pub(super) fn render_dialog(
             );
             lines.push(app.text("Hold the waveform or progress bar to choose a position silently; release to seek and keep the previous play/pause state. Esc cancels dragging. Click or drag the divided volume bar; Up/Down in the player changes volume by 1%.", "Зажмите аудиоволну или дорожку для тихого выбора позиции; отпустите для перемотки с сохранением воспроизведения или паузы. Esc отменяет перетаскивание. Полоска громкости управляется мышью; стрелки вверх/вниз в плеере меняют громкость на 1%.").into());
             lines.push(app.text("PLAYING and PAUSED mark the actual playing playlist and track. The selected row is highlighted separately.", "Метки ИГРАЕТ и ПАУЗА показывают воспроизводящийся плейлист и композицию. Выбранная строка выделяется отдельно.").into());
+            lines.push(app.text("Search opens a window with live results and playlist checkboxes below. Ctrl+Enter or double-click plays a result. Tab switches sections; Space/Enter toggles a playlist, Ctrl+A selects all, Ctrl+D clears the selection. Filter edits the current playlist header immediately. Enter keeps it, Esc restores it, x clears it. Keyboard buttons allow mouse-only typing.", "Поиск открывает окно с живыми результатами и выбором плейлистов снизу. Ctrl+Enter или двойной клик играет найденное. Tab переключает разделы; Space/Enter меняет отметку плейлиста, Ctrl+A выбирает все, Ctrl+D снимает все отметки. Фильтр сразу меняет вид текущего плейлиста в строке Композиций. Enter сохраняет его, Esc возвращает прежний, x очищает. Кнопки клавиатуры позволяют вводить мышью.").into());
             help::help_dialog(frame, app, offset, inner, lines, palette);
         }
 

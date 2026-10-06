@@ -30,6 +30,7 @@ pub enum Dialog {
         expanded: Vec<crate::workspace::Panel>,
     },
     Text(TextDialog),
+    Search(super::search::SearchDialog),
     Browser(Browser),
     RemoveEntry {
         playlist: i64,
@@ -81,6 +82,7 @@ impl Dialog {
             Self::Transfer { .. } => Some(Action::Transfer),
             Self::RemoveEntry { .. } | Self::ConfirmSettings { .. } => Some(Action::Delete),
             Self::Text(_) | Self::CaptureBinding { .. } => None,
+            Self::Search(_) => None,
         }
     }
 
@@ -112,6 +114,10 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if matches!(self.view.dialog, Some(Dialog::Search(_))) {
+            self.search_navigate(i64::from(direction));
+            return;
+        }
         let transfer_length = self.transfer_destinations().len();
         if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
             self.settings_scroll(i64::from(direction));
@@ -160,6 +166,9 @@ impl App {
     }
 
     pub(super) fn submit(&mut self) -> Result<()> {
+        if matches!(self.view.dialog, Some(Dialog::Search(_))) {
+            return self.play_search_result();
+        }
         match self.view.dialog.take() {
             Some(Dialog::Panels { selected, expanded }) => {
                 self.view.dialog = Some(Dialog::Panels { selected, expanded });

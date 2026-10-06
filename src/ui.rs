@@ -33,6 +33,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     app.view.keycaps.clear();
     app.view.waveform_area = Rect::default();
     app.view.progress_area = Rect::default();
+    app.view.filter_field = Rect::default();
+    app.view.filter_keyboard_area = Rect::default();
+    app.view.search_area = Rect::default();
     if app
         .view
         .dialog
@@ -159,6 +162,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             footer_height - 2,
         ),
     );
+    if app.view.dialog.is_none() && app.view.filter_keyboard {
+        library::filter_keyboard(frame, app, palette);
+    }
     if let Some(mut dialog) = app.view.dialog.take() {
         app.view.hits.clear();
         app.view.keycaps.clear();

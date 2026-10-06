@@ -1,6 +1,6 @@
 use super::{
     theme::Palette,
-    widgets::{clean, visible_offset},
+    widgets::{block, button, clean, visible_offset},
 };
 use crate::{
     app::{App, Hit, Sort, Target},
@@ -11,7 +11,7 @@ use ratatui::{
     layout::{Constraint, Flex, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Cell, Paragraph, Row, Table, Wrap},
+    widgets::{Cell, Clear, Paragraph, Row, Table, Wrap},
 };
 
 pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -107,23 +107,91 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         .map(|playlist| playlist.display_name(app.settings.language))
         .unwrap_or(app.text("Tracks", "Композиции"));
     let title = format!(
-        "{name} · {} {}{}",
+        "{name} · {} {}",
         app.library.sort.name(app.settings.language),
         if app.library.sort_descending {
             "↓"
         } else {
             "↑"
-        },
-        if app.library.query.is_empty() {
-            String::new()
-        } else {
-            format!(" · {}", app.library.query)
         }
     );
+    let filtering = app.view.filter_editing || !app.library.query.is_empty();
+    let title_width = if filtering {
+        (inner.width / 3).max(1)
+    } else {
+        inner.width
+    };
     frame.render_widget(
         Paragraph::new(title).style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, inner.y, inner.width, 1),
+        Rect::new(inner.x, inner.y, title_width, 1),
     );
+    if filtering {
+        let right = 10u16.min(inner.width.saturating_sub(title_width));
+        let field = Rect::new(
+            inner.x + title_width,
+            inner.y,
+            inner.width.saturating_sub(title_width + right),
+            1,
+        );
+        app.view.filter_field = field;
+        let label = app.text("Filter: ", "Фильтр: ");
+        let label_width = (Span::raw(label).width() as u16).min(field.width);
+        frame.render_widget(
+            Paragraph::new(label).style(palette.text().fg(palette.accent)),
+            Rect::new(field.x, field.y, label_width, 1),
+        );
+        let input = Rect::new(
+            field.x + label_width,
+            field.y,
+            field.width.saturating_sub(label_width),
+            1,
+        );
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{}{}",
+                clean(&app.library.query),
+                if app.view.filter_editing { "│" } else { "" }
+            ))
+            .scroll((
+                0,
+                Span::raw(&app.library.query)
+                    .width()
+                    .saturating_sub(usize::from(input.width.saturating_sub(1)))
+                    as u16,
+            ))
+            .style(palette.text().bg(
+                if app.view.filter_selected_all && app.view.filter_editing {
+                    palette.selection
+                } else {
+                    palette.background
+                },
+            )),
+            input,
+        );
+        app.view.hits.push(Hit {
+            area: field,
+            target: Target::FilterInput,
+            enabled: true,
+        });
+        button(
+            frame,
+            app,
+            Rect::new(inner.right() - right, inner.y, right.saturating_sub(3), 1),
+            app.text("Keys", "Клав."),
+            Target::QueryKeyboard,
+            true,
+            palette,
+        );
+        button(
+            frame,
+            app,
+            Rect::new(inner.right().saturating_sub(3), inner.y, 3, 1),
+            "x",
+            Target::ClearFilter,
+            true,
+            palette,
+        );
+    }
     let inner = Rect::new(inner.x, inner.y + 1, inner.width, inner.height - 1);
     let capacity = inner.height.saturating_sub(1) as usize;
     let entries = app.rows();
@@ -274,10 +342,17 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     );
     if empty {
         frame.render_widget(
-            Paragraph::new(app.text(
-                "Add files, a folder, or copy tracks from the sorting desk.",
-                "Добавьте файлы, папку или скопируйте композиции из сортировочного стола.",
-            ))
+            Paragraph::new(if !app.library.query.is_empty() {
+                app.text(
+                    "No matches. Clear the filter to show all tracks.",
+                    "Ничего не найдено. Очистите фильтр для показа всех композиций.",
+                )
+            } else {
+                app.text(
+                    "Add files, a folder, or copy tracks from the sorting desk.",
+                    "Добавьте файлы, папку или скопируйте композиции из сортировочного стола.",
+                )
+            })
             .style(palette.text().fg(palette.muted))
             .wrap(Wrap { trim: false }),
             Rect::new(
@@ -301,4 +376,50 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             enabled: true,
         });
     }
+}
+
+pub(super) fn filter_keyboard(frame: &mut Frame, app: &mut App, palette: Palette) {
+    let field = app.view.filter_field;
+    if field.is_empty() {
+        return;
+    }
+    let area = frame.area();
+    let width = 41u16.min(area.width);
+    let height = 9u16.min(area.height.saturating_sub(3));
+    let y = if field.bottom() + height <= area.bottom().saturating_sub(3) {
+        field.bottom()
+    } else {
+        field.y.saturating_sub(height).max(area.y)
+    };
+    let rect = Rect::new(
+        field.x.min(area.right().saturating_sub(width)),
+        y,
+        width,
+        height,
+    );
+    app.view.filter_keyboard_area = rect;
+    app.view
+        .hits
+        .retain(|hit| hit.area.intersection(rect).is_empty());
+    frame.render_widget(Clear, rect);
+    let outer = block(app.text("Keyboard", "Клавиатура").into(), palette, true);
+    let inner = outer.inner(rect);
+    frame.render_widget(outer, rect);
+    super::dialogs::keyboard(
+        frame,
+        app,
+        inner,
+        app.view.filter_keyboard_language,
+        app.view.filter_keyboard_upper,
+        palette,
+    );
+    button(
+        frame,
+        app,
+        Rect::new(rect.right() - 4, rect.y, 3, 1),
+        "x",
+        Target::QueryKeyboard,
+        true,
+        palette,
+    );
 }

@@ -152,6 +152,7 @@ pub enum Action {
     MoveDown,
     Transfer,
     Search,
+    Filter,
     Sort,
     Undo,
     Redo,
@@ -188,7 +189,8 @@ impl Action {
             Self::MoveUp => language.text("Move the selection one position earlier in stored order.", "Переместить выбранный элемент на одну позицию выше в сохранённом порядке."),
             Self::MoveDown => language.text("Move the selection one position later in stored order.", "Переместить выбранный элемент на одну позицию ниже в сохранённом порядке."),
             Self::Transfer => language.text("Copy selected tracks to another editable playlist.", "Копировать отмеченные композиции в другой доступный для правки плейлист."),
-            Self::Search => language.text("Filter tracks by title, artist, album or path.", "Отфильтровать композиции по названию, исполнителю, альбому либо пути."),
+            Self::Search => language.text("Search selected playlists in a separate window with live results.", "Искать по выбранным плейлистам в отдельном окне с живыми результатами."),
+            Self::Filter => language.text("Type in the Tracks header to filter only the current playlist.", "Вводить в строке Композиций для фильтрации только текущего плейлиста."),
             Self::Sort => language.text("Cycle view sorting; click a column header to sort, click again to reverse. Saved positions stay unchanged.", "Менять сортировку вида; клик по заголовку сортирует, повторный клик меняет направление. Позиции в базе сохраняются."),
             Self::Undo => language.text("Undo a library change in Chaos or the sorting desk.", "Отменить правку библиотеки в Хаосе либо на сортировочном столе."),
             Self::Redo => language.text("Repeat a library change that was undone.", "Повторить отменённую правку библиотеки."),
@@ -227,6 +229,7 @@ impl Action {
             Self::MoveDown => language.text("Move down", "Переместить ниже"),
             Self::Transfer => language.text("Copy tracks to playlist", "Копировать в плейлист"),
             Self::Search => language.text("Search", "Поиск"),
+            Self::Filter => language.text("Filter", "Фильтр"),
             Self::Sort => language.text("Sort view", "Сортировка вида"),
             Self::Undo => language.text("Undo", "Отменить"),
             Self::Redo => language.text("Redo", "Повторить"),
@@ -291,6 +294,7 @@ pub fn default_bindings() -> Vec<Binding> {
         (PlaylistPanel, Key::Char('l'), true, false),
         (PlayerPanel, Key::Char('p'), true, false),
         (Panels, Key::Char('b'), true, false),
+        (Filter, Key::Char('f'), true, false),
     ] {
         bindings.push(Binding {
             action,

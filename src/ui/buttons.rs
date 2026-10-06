@@ -113,6 +113,7 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
             .find(|binding| binding.action == crate::input::Action::SwitchMode)
             .map(|binding| binding.key.label()),
         Target::Submit | Target::BrowserOpen => Some("Enter".into()),
+        Target::SearchPlay => Some("Ctrl+Enter".into()),
         Target::CloseDialog => Some("Esc".into()),
         Target::BrowserParent => Some("Backspace".into()),
         Target::BrowserMarkAll => Some("Ctrl+A".into()),
@@ -228,6 +229,7 @@ fn command(
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::ToggleEdit) => app.view.editing,
         Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
+        Target::Action(Action::Filter) => app.view.filter_editing || !app.library.query.is_empty(),
         _ => false,
     };
     let hovered = app.hovered(area);

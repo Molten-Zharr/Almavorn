@@ -71,6 +71,15 @@ pub struct UiState {
     pub notice_error: bool,
     pub quit: bool,
     pub editing: bool,
+    pub filter_editing: bool,
+    pub filter_keyboard: bool,
+    pub(crate) filter_field: Rect,
+    pub(crate) filter_keyboard_language: Language,
+    pub(crate) filter_keyboard_upper: bool,
+    pub(super) filter_before: String,
+    pub(crate) filter_selected_all: bool,
+    pub filter_keyboard_area: Rect,
+    pub search_area: Rect,
     pub(super) pointer: Position,
 }
 

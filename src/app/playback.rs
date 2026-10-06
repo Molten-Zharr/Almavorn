@@ -107,7 +107,7 @@ impl App {
             .context(AppError::TrackMissing)?;
         self.prepare_playback(queue, playlist_id, index)
     }
-    fn prepare_playback(
+    pub(super) fn prepare_playback(
         &mut self,
         queue: Arc<[Entry]>,
         playlist_id: i64,

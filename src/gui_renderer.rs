@@ -24,7 +24,9 @@ impl PlaybackPainter {
         app: &App,
         size: ratatui::layout::Size,
     ) {
-        if app.view.dialog.is_some() || app.view.progress_area.is_empty() {
+        if (app.view.dialog.is_some() && app.view.search_area.is_empty())
+            || app.view.progress_area.is_empty()
+        {
             return;
         }
         let scale = egui::vec2(
@@ -288,6 +290,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
                 Target::Action(_)
                     | Target::Mode(_)
                     | Target::Submit
+                    | Target::SearchPlay
                     | Target::CloseDialog
                     | Target::Text(_)
                     | Target::Backspace

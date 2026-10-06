@@ -10,6 +10,8 @@ use ratatui::layout::{Position, Rect};
 impl App {
     pub fn accepts_text(&self) -> bool {
         matches!(self.view.dialog, Some(Dialog::Text(_)))
+            || matches!(&self.view.dialog, Some(Dialog::Search(search)) if search.focus == super::SearchFocus::Input)
+            || (self.view.dialog.is_none() && self.view.filter_editing)
     }
 
     pub fn hovered(&self, area: Rect) -> bool {
@@ -52,6 +54,24 @@ impl App {
                     self.focus_point(self.view.pointer);
                 }
                 let hit = self.target_at(self.view.pointer).cloned();
+                if self.view.dialog.is_none()
+                    && self.view.filter_editing
+                    && !matches!(
+                        hit,
+                        Some(
+                            Target::Action(crate::input::Action::Filter)
+                                | Target::FilterInput
+                                | Target::QueryKeyboard
+                                | Target::Text(_)
+                                | Target::Backspace
+                                | Target::KeyboardLanguage
+                                | Target::KeyboardCase
+                        )
+                    )
+                {
+                    self.view.filter_editing = false;
+                    self.view.filter_keyboard = false;
+                }
                 if let Some(target) = hit {
                     self.target(target, double)?;
                 }
@@ -83,6 +103,13 @@ impl App {
                     self.view.pointer = Position::new(u16::MAX, u16::MAX);
                 }
                 if self.view.dialog.is_some() {
+                    if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                        search.focus = if search.playlists_area.contains(Position::new(x, y)) {
+                            super::SearchFocus::Playlists
+                        } else {
+                            super::SearchFocus::Results
+                        };
+                    }
                     self.scroll_dialog(delta);
                 } else if self.view.playlist_area.contains(Position::new(x, y)) {
                     self.view.focus = Focus::Playlists;
@@ -93,6 +120,9 @@ impl App {
                 }
             }
             Input::Text(text) => {
+                if self.query_text(&text)? {
+                    return self.tick_search();
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
@@ -128,10 +158,13 @@ impl App {
                 result?;
             }
         }
-        Ok(())
+        self.tick_search()
     }
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
+        if self.view.dialog.is_none() && self.view.filter_editing {
+            return self.filter_key(key);
+        }
         if key.key == Key::Escape {
             if self.cancel_workspace_drag() {
                 return Ok(());
@@ -195,6 +228,9 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if matches!(self.view.dialog, Some(Dialog::Search(_))) {
+                return self.search_key(key);
+            }
             if !key.ctrl
                 && !key.alt
                 && let Some(Dialog::Panels { selected, .. }) = &self.view.dialog
@@ -357,6 +393,55 @@ impl App {
                 self.view.focus = Focus::Tracks;
                 self.refresh()?;
             }
+            Target::FilterInput => {
+                if !self.view.filter_editing {
+                    self.edit_filter()?;
+                }
+            }
+            Target::ClearFilter => {
+                self.library.query.clear();
+                self.view.filter_editing = false;
+                self.view.filter_keyboard = false;
+                self.view.track_offset = 0;
+                self.refresh()?;
+            }
+            Target::SearchInput => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.focus = super::SearchFocus::Input;
+                }
+            }
+            Target::SearchResult(index) => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.selected = index.min(search.results.len().saturating_sub(1));
+                    search.focus = super::SearchFocus::Results;
+                }
+                if double {
+                    self.play_search_result()?;
+                }
+            }
+            Target::SearchPlaylist(id) => self.toggle_search_playlist(id),
+            Target::SearchPlay => self.play_search_result()?,
+            Target::SearchAll(all) => {
+                let ids = if all {
+                    self.playlists().iter().map(|p| p.id).collect()
+                } else {
+                    Default::default()
+                };
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.playlists = ids;
+                }
+            }
+            Target::QueryKeyboard => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.keyboard_visible = !search.keyboard_visible;
+                    search.focus = super::SearchFocus::Input;
+                } else {
+                    if !self.view.filter_editing {
+                        self.edit_filter()?;
+                    }
+                    self.view.filter_keyboard = !self.view.filter_keyboard;
+                }
+            }
             Target::PlaybackVolume(area) => {
                 if self.view.workspace.gesture.is_none() {
                     self.view.workspace.gesture =
@@ -387,6 +472,12 @@ impl App {
             }
             Target::Submit => self.submit()?,
             Target::Text(c) => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.focus = super::SearchFocus::Input;
+                }
+                if self.query_text(&c.to_string())? {
+                    return Ok(());
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
@@ -398,6 +489,14 @@ impl App {
                 }
             }
             Target::Backspace => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.focus = super::SearchFocus::Input;
+                    self.search_key(KeyPress::plain(Key::Backspace))?;
+                    return Ok(());
+                }
+                if self.view.dialog.is_none() && self.view.filter_editing {
+                    return self.filter_key(KeyPress::plain(Key::Backspace));
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     if dialog.selected_all {
                         dialog.text.clear();
@@ -408,6 +507,23 @@ impl App {
                 }
             }
             Target::KeyboardLanguage => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.keyboard = if search.keyboard == Language::Russian {
+                        Language::English
+                    } else {
+                        Language::Russian
+                    };
+                    return Ok(());
+                }
+                if self.view.dialog.is_none() && self.view.filter_editing {
+                    self.view.filter_keyboard_language =
+                        if self.view.filter_keyboard_language == Language::Russian {
+                            Language::English
+                        } else {
+                            Language::Russian
+                        };
+                    return Ok(());
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     dialog.keyboard = if dialog.keyboard == Language::Russian {
                         Language::English
@@ -417,6 +533,14 @@ impl App {
                 }
             }
             Target::KeyboardCase => {
+                if let Some(Dialog::Search(search)) = &mut self.view.dialog {
+                    search.upper = !search.upper;
+                    return Ok(());
+                }
+                if self.view.dialog.is_none() && self.view.filter_editing {
+                    self.view.filter_keyboard_upper = !self.view.filter_keyboard_upper;
+                    return Ok(());
+                }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
                     dialog.upper = !dialog.upper;
                 }

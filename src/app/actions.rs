@@ -118,6 +118,7 @@ impl App {
             Previous => self.can_step_playback(-1),
             Stop => self.playback.current.is_some() || self.preparing_playback(),
             SeekForward | SeekBackward => self.playback.current.is_some(),
+            Filter => self.playlist().is_some(),
             VolumeUp => self.settings.volume < 1.0,
             VolumeDown => self.settings.volume > 0.0,
             Transfer | Metadata | Mark => self.entry().is_some(),
@@ -290,7 +291,8 @@ impl App {
                     .collect();
                 self.view.dialog = Some(Dialog::Transfer { ids, selected: 0 });
             }
-            Search => self.text_dialog(TextPurpose::Search, self.library.query.clone()),
+            Search => self.open_search(),
+            Filter => self.edit_filter()?,
             Sort => {
                 self.library.sort = self.library.sort.next();
                 self.library.sort_descending = false;

@@ -82,6 +82,7 @@ impl Panel {
                 Button(MoveUp),
                 Button(MoveDown),
                 Button(Search),
+                Button(Filter),
                 Button(Sort),
                 Button(Metadata),
                 Button(Mark),

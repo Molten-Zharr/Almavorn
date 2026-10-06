@@ -178,6 +178,11 @@ impl App {
     }
 
     pub(super) fn select_playlist(&mut self, id: i64) {
+        if self.library.selected_playlist != Some(id) {
+            self.library.query.clear();
+            self.view.filter_editing = false;
+            self.view.filter_keyboard = false;
+        }
         self.library.selected_playlist = Some(id);
         self.library.selected_entry = self
             .playlist()
@@ -194,6 +199,8 @@ impl App {
         self.settings.mode = mode;
         self.view.editing = false;
         self.library.query.clear();
+        self.view.filter_editing = false;
+        self.view.filter_keyboard = false;
         self.library.marked.clear();
         self.library.selected_playlist =
             self.visible_playlists().first().map(|playlist| playlist.id);
