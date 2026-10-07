@@ -32,6 +32,7 @@ impl App {
     }
 
     pub(super) fn save_settings(&mut self) -> Result<()> {
+        self.sync_tuner()?;
         if let Some(audio) = &self.playback.audio {
             audio.equalizer(&self.settings.equalizer);
         }

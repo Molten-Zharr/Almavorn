@@ -250,6 +250,14 @@ impl App {
                     vertical,
                 })?;
             }
+            Some(Gesture::TunerSlider(index, area)) => {
+                let (index, area) = (*index, *area);
+                self.view.pointer = Position::new(
+                    point.x.clamp(area.x, area.right().saturating_sub(1)),
+                    area.y,
+                );
+                self.tuner_target(super::Target::TunerSlider(index, area))?;
+            }
             None => {}
         }
         Ok(())

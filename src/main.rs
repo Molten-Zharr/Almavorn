@@ -159,6 +159,7 @@ fn run() -> Result<()> {
                             egui::CursorIcon::ResizeVertical
                         }
                         Some(Target::EqualizerGain { .. }) => egui::CursorIcon::ResizeHorizontal,
+                        Some(Target::TunerSlider(_, _)) => egui::CursorIcon::ResizeHorizontal,
                         Some(
                             Target::SortColumn(_)
                             | Target::Action(_)
@@ -186,6 +187,9 @@ fn run() -> Result<()> {
                             | Target::EqualizerPreset(_)
                             | Target::EqualizerSelect(_)
                             | Target::EqualizerReset
+                            | Target::TunerReverse
+                            | Target::TunerReset
+                            | Target::TunerSelect(_)
                             | Target::SettingsTimeline(_, _),
                         ) => egui::CursorIcon::PointingHand,
                         Some(Target::SearchInput | Target::FilterInput) => egui::CursorIcon::Text,

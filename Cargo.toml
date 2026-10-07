@@ -47,3 +47,5 @@ rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 fastrand = "2"
+soundtouch = { version = "0.5.4", default-features = false, features = ["bundled"] }
+tempfile = "3"

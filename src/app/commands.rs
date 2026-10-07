@@ -182,6 +182,7 @@ impl App {
                     CycleRepeat,
                     ToggleShuffle,
                     Equalizer,
+                    PlaybackTuner,
                     VolumeDown,
                     VolumeUp,
                 ],

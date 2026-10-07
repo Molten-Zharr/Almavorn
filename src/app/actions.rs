@@ -241,6 +241,7 @@ impl App {
             Settings => self.open_settings_page(super::SettingsPage::General),
             TogglePlay => self.toggle_playback()?,
             Equalizer => self.open_equalizer(),
+            PlaybackTuner => self.open_tuner(),
             Stop => {
                 self.stop_playback();
             }

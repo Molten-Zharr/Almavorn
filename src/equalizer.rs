@@ -155,7 +155,7 @@ impl EqualizerControl {
 }
 
 #[derive(Clone, Copy)]
-struct Coefficients {
+pub(crate) struct Coefficients {
     b0: f64,
     b1: f64,
     b2: f64,
@@ -164,7 +164,7 @@ struct Coefficients {
 }
 
 impl Coefficients {
-    const IDENTITY: Self = Self {
+    pub(crate) const IDENTITY: Self = Self {
         b0: 1.0,
         b1: 0.0,
         b2: 0.0,
@@ -191,7 +191,27 @@ impl Coefficients {
         }
     }
 
-    fn approach(&mut self, target: Self, fraction: f64) {
+    pub(crate) fn low_shelf(frequency: f64, rate: f64, gain: f64) -> Self {
+        if gain == 0.0 || frequency >= rate / 2.0 {
+            return Self::IDENTITY;
+        }
+        // RBJ low shelf, slope S = 1. Bass is independent of the EQ on/off state.
+        // https://www.w3.org/TR/audio-eq-cookbook/
+        let a = 10.0_f64.powf(gain / 40.0);
+        let omega = TAU * frequency / rate;
+        let c = omega.cos();
+        let beta = omega.sin() * (2.0 * a).sqrt();
+        let a0 = (a + 1.0) + (a - 1.0) * c + beta;
+        Self {
+            b0: a * ((a + 1.0) - (a - 1.0) * c + beta) / a0,
+            b1: 2.0 * a * ((a - 1.0) - (a + 1.0) * c) / a0,
+            b2: a * ((a + 1.0) - (a - 1.0) * c - beta) / a0,
+            a1: -2.0 * ((a - 1.0) + (a + 1.0) * c) / a0,
+            a2: ((a + 1.0) + (a - 1.0) * c - beta) / a0,
+        }
+    }
+
+    pub(crate) fn approach(&mut self, target: Self, fraction: f64) {
         self.b0 += (target.b0 - self.b0) * fraction;
         self.b1 += (target.b1 - self.b1) * fraction;
         self.b2 += (target.b2 - self.b2) * fraction;
@@ -201,13 +221,13 @@ impl Coefficients {
 }
 
 #[derive(Clone, Copy, Default)]
-struct FilterState {
+pub(crate) struct FilterState {
     z1: f64,
     z2: f64,
 }
 
 impl FilterState {
-    fn process(&mut self, input: f64, c: Coefficients) -> f64 {
+    pub(crate) fn process(&mut self, input: f64, c: Coefficients) -> f64 {
         let output = c.b0 * input + self.z1;
         self.z1 = c.b1 * input - c.a1 * output + self.z2;
         self.z2 = c.b2 * input - c.a2 * output;

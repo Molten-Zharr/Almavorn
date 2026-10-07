@@ -99,6 +99,7 @@ impl Panel {
                 Button(CycleRepeat),
                 Button(ToggleShuffle),
                 Button(Equalizer),
+                Button(PlaybackTuner),
                 Button(VolumeDown),
                 Button(VolumeUp),
             ],
@@ -533,6 +534,7 @@ pub enum Gesture {
         area: Rect,
         vertical: bool,
     },
+    TunerSlider(usize, Rect),
 }
 
 pub struct Workspace {

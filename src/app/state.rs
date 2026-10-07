@@ -115,6 +115,10 @@ pub enum Target {
         vertical: bool,
     },
     EqualizerReset,
+    TunerSelect(usize),
+    TunerSlider(usize, Rect),
+    TunerReverse,
+    TunerReset,
 }
 
 pub struct Hit {

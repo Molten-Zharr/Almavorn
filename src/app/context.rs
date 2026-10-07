@@ -52,6 +52,9 @@ pub struct PlaybackState {
     pub(super) seek: LatestJob<playback::SeekRequest, crate::audio::PreparedAudio>,
     pub(super) seek_preview: Option<u64>,
     pub(super) seek_paused: Option<bool>,
+    pub(super) preparation_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pub(super) seek_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pub(super) reverse_cache: Option<(PathBuf, Arc<crate::audio::PcmCache>)>,
 }
 
 #[derive(Default)]

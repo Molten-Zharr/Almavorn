@@ -18,17 +18,20 @@ use std::{collections::VecDeque, path::PathBuf, time::Duration};
 
 const SHUFFLE_HISTORY_LIMIT: usize = 256;
 
+#[derive(Clone)]
 pub(super) struct PlaybackRequest {
     queue: Arc<[Entry]>,
     playlist_id: i64,
     index: usize,
     paused: bool,
     shuffle_history: VecDeque<usize>,
+    reverse: bool,
 }
 
 pub(super) struct SeekRequest {
     path: PathBuf,
     position_ms: u64,
+    pub(super) reverse: bool,
 }
 pub(super) struct WaveformJob {
     receiver: Background<Vec<f32>>,
@@ -152,16 +155,19 @@ impl App {
             index,
             paused: false,
             shuffle_history: VecDeque::new(),
+            reverse: self.settings.tuner.reverse,
         })
     }
 
-    fn request_playback(&mut self, request: PlaybackRequest) -> Result<()> {
+    fn request_playback(&mut self, mut request: PlaybackRequest) -> Result<()> {
         ensure!(
             request.index < request.queue.len(),
             AppError::TrackSelectionRequired
         );
         let title = request.queue[request.index].track.title.clone();
+        request.reverse = self.settings.tuner.reverse;
         self.cancel_seek();
+        self.cancel_audio_preparation();
         self.cancel_waveform();
         self.playback.preparation.request(request);
         self.start_playback_job();
@@ -174,10 +180,32 @@ impl App {
     }
     fn start_playback_job(&mut self) {
         let runtime = self.runtime.as_ref().expect("runtime is alive");
+        let cached = self.playback.reverse_cache.clone();
         self.playback.preparation.start(|request| {
+            let reverse = request.reverse;
             let path = request.queue[request.index].track.path.clone();
-            background(runtime, move || Audio::prepare(&path))
+            let cache = cached
+                .filter(|(cached_path, _)| *cached_path == path)
+                .map(|(_, cache)| cache);
+            let cancel = Arc::new(AtomicBool::new(false));
+            self.playback.preparation_cancel = Some(cancel.clone());
+            background(runtime, move || {
+                Audio::prepare_tuned(&path, None, reverse, cache, &cancel)
+            })
         });
+    }
+    pub(super) fn cancel_audio_preparation(&mut self) {
+        if let Some(cancel) = self.playback.preparation_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+    }
+    pub(super) fn sync_playback_direction(&mut self) -> Result<()> {
+        if let Some(request) = self.requested_playback()
+            && request.reverse != self.settings.tuner.reverse
+        {
+            self.request_playback(request.clone())?;
+        }
+        Ok(())
     }
     pub(super) fn tick_playback(&mut self) -> Result<()> {
         let Some(completed) = self.playback.preparation.poll() else {
@@ -197,6 +225,20 @@ impl App {
                 return Err(error);
             }
         };
+        let path = request.queue[request.index].track.path.clone();
+        if let Some(cache) = &source.cache {
+            self.playback.reverse_cache = Some((path.clone(), cache.clone()));
+        } else if self
+            .playback
+            .reverse_cache
+            .as_ref()
+            .is_some_and(|(cached, _)| *cached != path)
+        {
+            self.playback.reverse_cache = None;
+        }
+        if source.reversed() != self.settings.tuner.reverse {
+            return self.request_playback(request);
+        }
         let duration = source.total_duration();
         // Keep the platform audio device on its owning thread; only file access
         // and decoder preparation run in a blocking worker.
@@ -209,6 +251,7 @@ impl App {
             .as_mut()
             .context(AppError::AudioUnavailable)?;
         audio.equalizer(&self.settings.equalizer);
+        audio.tuner(&self.settings.tuner);
         audio.play_prepared(source, request.paused);
         let entry = &request.queue[request.index];
         let mut track = entry.track.clone();
@@ -256,7 +299,9 @@ impl App {
     }
     pub(super) fn stop_playback(&mut self) {
         self.cancel_seek();
+        self.cancel_audio_preparation();
         self.playback.preparation.cancel();
+        self.playback.reverse_cache = None;
         if let Some(audio) = &mut self.playback.audio {
             audio.stop();
         }
@@ -341,6 +386,7 @@ impl App {
                 index,
                 paused: false,
                 shuffle_history: history,
+                reverse: self.settings.tuner.reverse,
             })
         } else {
             if !explicit {
@@ -382,9 +428,13 @@ impl App {
         if let (Some(position_ms), Some(track)) =
             (self.playback.seek_preview, &self.playback.current)
         {
+            if let Some(cancel) = self.playback.seek_cancel.take() {
+                cancel.store(true, Ordering::Relaxed);
+            }
             self.playback.seek.request(SeekRequest {
                 path: track.path.clone(),
                 position_ms,
+                reverse: self.settings.tuner.reverse,
             });
             self.start_seek_job();
         }
@@ -396,6 +446,9 @@ impl App {
     }
 
     pub(super) fn cancel_seek(&mut self) {
+        if let Some(cancel) = self.playback.seek_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
         self.playback.seek.cancel();
         self.playback.seek_preview = None;
         if let Some(paused) = self.playback.seek_paused.take()
@@ -413,10 +466,19 @@ impl App {
 
     fn start_seek_job(&mut self) {
         let runtime = self.runtime.as_ref().expect("runtime is alive");
+        let cached = self.playback.reverse_cache.clone();
         self.playback.seek.start(|request| {
             let path = request.path.clone();
             let position = Duration::from_millis(request.position_ms);
-            background(runtime, move || Audio::prepare_at(&path, position))
+            let reverse = request.reverse;
+            let cache = cached
+                .filter(|(cached_path, _)| *cached_path == path)
+                .map(|(_, cache)| cache);
+            let cancel = Arc::new(AtomicBool::new(false));
+            self.playback.seek_cancel = Some(cancel.clone());
+            background(runtime, move || {
+                Audio::prepare_tuned(&path, Some(position), reverse, cache, &cancel)
+            })
         });
     }
 
@@ -426,6 +488,10 @@ impl App {
         };
         self.start_seek_job();
         if !completed.current {
+            return Ok(());
+        }
+        if completed.request.reverse != self.settings.tuner.reverse {
+            self.seek_to(completed.request.position_ms);
             return Ok(());
         }
         // A new drag may already be previewing another position. Finish this
@@ -440,12 +506,27 @@ impl App {
         self.playback.seek_preview = None;
         match completed.result {
             Ok(source) => {
+                if let Some(cache) = &source.cache {
+                    self.playback.reverse_cache =
+                        Some((completed.request.path.clone(), cache.clone()));
+                }
                 if let Some(audio) = &mut self.playback.audio {
+                    let changed_direction = audio.reversed() != source.reversed();
                     audio.play_prepared_at(
                         source,
                         paused,
                         Duration::from_millis(completed.request.position_ms),
                     );
+                    if changed_direction {
+                        self.message(
+                            if completed.request.reverse {
+                                self.text("Direction: reverse", "Направление: обратное")
+                            } else {
+                                self.text("Direction: forward", "Направление: прямое")
+                            }
+                            .into(),
+                        );
+                    }
                 }
             }
             Err(error) => {
@@ -763,5 +844,34 @@ mod tests {
         assert!(!app.can_step_playback(-1));
         assert!(!app.can_step_playback(1));
         assert!(app.playback.shuffle_history.is_empty());
+    }
+
+    #[test]
+    fn changing_reverse_while_preparing_cancels_old_work_and_preserves_the_latest_queue_and_pause()
+    {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 3, 1);
+        app.prepare_playback(app.playback.queue.clone(), 42, 1)
+            .unwrap();
+        app.playback.preparation.requested_mut().unwrap().paused = true;
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
+        let generation = app.playback.preparation.generation();
+        app.settings.tuner.reverse = true;
+        app.sync_tuner().unwrap();
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(app.playback.preparation.generation() > generation);
+        let request = app.requested_playback().unwrap();
+        assert!(request.reverse);
+        assert!(request.paused);
+        assert_eq!(request.index, 1);
+        assert_eq!(request.playlist_id, 42);
+        app.settings.tuner.reverse = false;
+        app.sync_tuner().unwrap();
+        assert!(!app.requested_playback().unwrap().reverse);
+        assert!(app.requested_playback().unwrap().paused);
+        app.stop_playback();
+        assert!(!app.preparing_playback());
+        assert!(app.playback.reverse_cache.is_none());
     }
 }

@@ -133,6 +133,12 @@ fn main() -> Result<()> {
     render(&mut app, &output, "equalizer-compact", 70, 30)?;
     app.handle(Input::Key(KeyPress::plain(Key::Enter)));
     render(&mut app, &output, "equalizer-presets", 140, 45)?;
+    app.action(Action::PlaybackTuner)?;
+    app.handle(Input::Key(KeyPress::plain(Key::Right)));
+    app.handle(Input::Key(KeyPress::plain(Key::Down)));
+    app.handle(Input::Key(KeyPress::plain(Key::PageDown)));
+    render(&mut app, &output, "playback-tuner", 140, 45)?;
+    render(&mut app, &output, "playback-tuner-compact", 32, 26)?;
     drop(app);
     fs::remove_dir_all(data)?;
     println!("Interface previews: {}", output.display());

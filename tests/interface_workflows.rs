@@ -167,6 +167,7 @@ fn command_menus_skip_unavailable_rows_and_stop_at_the_last_enabled_action() {
             Action::CycleRepeat,
             Action::ToggleShuffle,
             Action::Equalizer,
+            Action::PlaybackTuner,
         ]
         .map(Control::Action),
     );

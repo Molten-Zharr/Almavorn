@@ -110,6 +110,9 @@ impl App {
                 if matches!(self.view.dialog, Some(Dialog::Equalizer { .. })) {
                     return self.scroll_equalizer(Position::new(x, y), delta);
                 }
+                if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
+                    return self.scroll_tuner(Position::new(x, y), delta);
+                }
                 if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
                     let position = Position::new(x, y);
                     self.view.settings.focus = if self.view.settings.menu_area.contains(position) {
@@ -280,6 +283,9 @@ impl App {
         }
         if matches!(self.view.dialog, Some(Dialog::Equalizer { .. })) {
             return self.equalizer_key(normalized);
+        }
+        if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
+            return self.tuner_key(normalized);
         }
         if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref() {
             let index = *index;
@@ -878,6 +884,10 @@ impl App {
             | Target::EqualizerSelect(_)
             | Target::EqualizerGain { .. }
             | Target::EqualizerReset) => self.equalizer_target(target)?,
+            target @ (Target::TunerSelect(_)
+            | Target::TunerSlider(_, _)
+            | Target::TunerReverse
+            | Target::TunerReset) => self.tuner_target(target)?,
         }
         Ok(())
     }
