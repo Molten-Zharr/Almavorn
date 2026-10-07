@@ -208,6 +208,7 @@ impl App {
             .audio
             .as_mut()
             .context(AppError::AudioUnavailable)?;
+        audio.equalizer(&self.settings.equalizer);
         audio.play_prepared(source, request.paused);
         let entry = &request.queue[request.index];
         let mut track = entry.track.clone();

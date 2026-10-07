@@ -181,6 +181,7 @@ impl App {
                     Next,
                     CycleRepeat,
                     ToggleShuffle,
+                    Equalizer,
                     VolumeDown,
                     VolumeUp,
                 ],

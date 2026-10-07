@@ -126,6 +126,13 @@ fn main() -> Result<()> {
         app.handle(Input::Key(KeyPress::plain(Key::PageDown)));
     }
     render(&mut app, &output, "help-bottom", 140, 45)?;
+    app.action(Action::Equalizer)?;
+    app.handle(Input::Key(KeyPress::plain(Key::Char(' '))));
+    app.handle(Input::Key(KeyPress::plain(Key::Char('2'))));
+    render(&mut app, &output, "equalizer", 140, 45)?;
+    render(&mut app, &output, "equalizer-compact", 70, 30)?;
+    app.handle(Input::Key(KeyPress::plain(Key::Enter)));
+    render(&mut app, &output, "equalizer-presets", 140, 45)?;
     drop(app);
     fs::remove_dir_all(data)?;
     println!("Interface previews: {}", output.display());

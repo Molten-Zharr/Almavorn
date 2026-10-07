@@ -81,6 +81,17 @@ through playback history. Track repeat takes priority over shuffle. Shuffle
 with a single track stops unless track repeat is enabled. Modes and shortcuts
 are saved in the active settings profile.
 
+`F4` or the player's EQ button opens the equalizer; the player menu lists
+Equalizer with its assigned shortcut. Ten bands cover 32 Hz to 16 kHz, plus a
+preamp for overall gain, all adjustable from −12 to +12 dB. Drag the sliders
+or use the wheel in 1 dB steps. Left/Right or Tab selects a slider, Up/Down
+changes its gain, Space switches EQ on/off, Enter opens presets, and R resets
+gains. The eight presets (Flat, Dance, Rock, Pop, Classical, Bass boost,
+Treble boost, Vocal) also have shortcuts 1–8. Choosing a preset preserves
+the on/off state. Manual changes display Custom and are saved with the
+active profile. Adjustments affect the playing track without restarting it;
+small windows use horizontal sliders and keyboard navigation scrolls them.
+
 Render the main screen, menus, and layout editor without a window:
 
 ```sh

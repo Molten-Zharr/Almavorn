@@ -5,6 +5,7 @@ mod commands;
 mod context;
 mod database;
 mod dialogs;
+mod equalizer;
 mod events;
 mod history;
 mod import;
@@ -60,6 +61,7 @@ impl App {
         settings.volume = settings.volume.clamp(0.0, 1.0);
         settings.workspace.normalize();
         settings.ensure_bindings();
+        settings.equalizer.normalize();
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
         let view = UiState::new(settings.language);
         Ok(Self {

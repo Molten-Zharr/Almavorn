@@ -240,6 +240,7 @@ impl App {
             Help => self.view.dialog = Some(Dialog::Help { offset: 0 }),
             Settings => self.open_settings_page(super::SettingsPage::General),
             TogglePlay => self.toggle_playback()?,
+            Equalizer => self.open_equalizer(),
             Stop => {
                 self.stop_playback();
             }

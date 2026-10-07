@@ -1,3 +1,4 @@
+use crate::equalizer::{EqualizerControl, EqualizerSettings, EqualizerSource};
 use crate::errors::AppError;
 use anyhow::{Context, Result};
 use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, Source};
@@ -5,7 +6,10 @@ use std::{
     fs::File,
     io::BufReader,
     path::Path,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -16,6 +20,7 @@ pub struct Audio {
     player: Player,
     started: bool,
     position_offset: Duration,
+    equalizer: Arc<EqualizerControl>,
 }
 
 impl Audio {
@@ -30,6 +35,7 @@ impl Audio {
             player,
             started: false,
             position_offset: Duration::ZERO,
+            equalizer: EqualizerControl::new(EqualizerSettings::default()),
         })
     }
 
@@ -101,7 +107,8 @@ impl Audio {
         self.player = Player::connect_new(self.device.mixer());
         self.player.set_volume(volume);
         self.set_paused(paused);
-        self.player.append(source);
+        self.player
+            .append(EqualizerSource::new(source, self.equalizer.clone()));
         self.started = true;
         self.position_offset = position;
     }
@@ -112,6 +119,10 @@ impl Audio {
         } else {
             self.player.play();
         }
+    }
+
+    pub fn equalizer(&self, settings: &EqualizerSettings) {
+        self.equalizer.update(settings);
     }
 
     pub fn toggle(&self) {

@@ -155,6 +155,10 @@ fn run() -> Result<()> {
                             | Target::Seek(_)
                             | Target::SettingsVolume(_, _),
                         ) => egui::CursorIcon::ResizeHorizontal,
+                        Some(Target::EqualizerGain { vertical: true, .. }) => {
+                            egui::CursorIcon::ResizeVertical
+                        }
+                        Some(Target::EqualizerGain { .. }) => egui::CursorIcon::ResizeHorizontal,
                         Some(
                             Target::SortColumn(_)
                             | Target::Action(_)
@@ -177,6 +181,11 @@ fn run() -> Result<()> {
                             | Target::SearchAll(_)
                             | Target::QueryKeyboard
                             | Target::ClearFilter
+                            | Target::EqualizerToggle
+                            | Target::EqualizerPresets
+                            | Target::EqualizerPreset(_)
+                            | Target::EqualizerSelect(_)
+                            | Target::EqualizerReset
                             | Target::SettingsTimeline(_, _),
                         ) => egui::CursorIcon::PointingHand,
                         Some(Target::SearchInput | Target::FilterInput) => egui::CursorIcon::Text,

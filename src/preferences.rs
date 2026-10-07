@@ -338,6 +338,8 @@ pub struct ProfilePreferences {
     pub repeat: RepeatMode,
     #[serde(default)]
     pub shuffle: bool,
+    #[serde(default)]
+    pub equalizer: crate::equalizer::EqualizerSettings,
     pub sorting_desk: bool,
     #[serde(default = "default_scan_subfolders")]
     pub scan_subfolders: bool,
@@ -378,6 +380,7 @@ impl Settings {
                     | crate::input::Action::PlaylistDown
                     | crate::input::Action::CycleRepeat
                     | crate::input::Action::ToggleShuffle
+                    | crate::input::Action::Equalizer
             ) && self.bindings.iter().any(|value| value.key == binding.key)
                 && let Some(key) =
                     std::iter::once(crate::input::KeyPress::plain(crate::input::Key::F(4)))
@@ -402,6 +405,7 @@ impl Settings {
             volume: self.volume,
             repeat: self.repeat,
             shuffle: self.shuffle,
+            equalizer: self.equalizer.clone(),
             sorting_desk: self.sorting_desk,
             scan_subfolders: self.scan_subfolders,
             playlist_placement: self.playlist_placement,
@@ -417,6 +421,8 @@ impl Settings {
         self.volume = preferences.volume.clamp(0.0, 1.0);
         self.repeat = preferences.repeat;
         self.shuffle = preferences.shuffle;
+        self.equalizer = preferences.equalizer;
+        self.equalizer.normalize();
         self.sorting_desk = preferences.sorting_desk;
         self.scan_subfolders = preferences.scan_subfolders;
         self.playlist_placement = preferences.playlist_placement;

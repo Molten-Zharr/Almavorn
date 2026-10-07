@@ -42,6 +42,7 @@ fn controls(app: &App) -> Vec<(Action, &'static str)> {
                 "[↔]"
             },
         ),
+        (Action::Equalizer, "[EQ]"),
     ]
     .into_iter()
     .filter(|(action, _)| app.control_visible(Panel::Player, *action))

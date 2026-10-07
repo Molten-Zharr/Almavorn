@@ -32,6 +32,11 @@ pub struct TextDialog {
 
 #[derive(Clone)]
 pub enum Dialog {
+    Equalizer {
+        selected: usize,
+        presets: bool,
+        preset_selected: usize,
+    },
     Commands {
         menu: super::CommandMenu,
         selected: usize,
@@ -90,6 +95,7 @@ impl Dialog {
     pub(super) fn opening_action(&self) -> Option<crate::input::Action> {
         use crate::input::Action;
         match self {
+            Self::Equalizer { .. } => Some(Action::Equalizer),
             Self::Panels { .. } => Some(Action::Panels),
             Self::Help { .. } | Self::SettingsHelp { .. } => Some(Action::Help),
             Self::Settings { .. } => Some(Action::Settings),
