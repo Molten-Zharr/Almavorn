@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 #[derive(Clone)]
 pub enum TextPurpose {
     Create,
+    CreateFromFolder(std::path::PathBuf),
     ComposePlaylist(Vec<i64>),
     RenamePlaylist(i64),
     PlaylistFolder(i64, Option<String>),
@@ -252,6 +253,9 @@ impl App {
                             store.create_playlist(&text, mode)?,
                         ))
                     }),
+                    TextPurpose::CreateFromFolder(folder) => {
+                        self.start_folder_playlist(text, folder.clone(), recovery)
+                    }
                     TextPurpose::ComposePlaylist(ids) => {
                         let ids = ids.clone();
                         self.start_database(recovery, move |store| {

@@ -297,7 +297,7 @@ impl App {
             if key.ctrl
                 && !key.alt
                 && key.key == Key::Char('f')
-                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::Create))
+                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::Create | super::TextPurpose::CreateFromFolder(_)))
             {
                 return self.choose_playlist_name_folder();
             }

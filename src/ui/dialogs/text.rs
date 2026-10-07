@@ -9,7 +9,6 @@ use crate::{
 use ratatui::{
     Frame,
     layout::Rect,
-    text::Line,
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
@@ -21,7 +20,9 @@ pub(super) fn text_dialog(
     palette: Palette,
 ) {
     let title = match &dialog.purpose {
-        TextPurpose::Create => app.text("Create playlist", "Создать плейлист"),
+        TextPurpose::Create | TextPurpose::CreateFromFolder(_) => {
+            app.text("Create playlist", "Создать плейлист")
+        }
         TextPurpose::ComposePlaylist(ids) => {
             if ids.len() == 1 {
                 app.text("Copy playlist", "Копия плейлиста")
@@ -61,6 +62,16 @@ pub(super) fn text_dialog(
             "{}: {name}",
             app.text("Enter exact name or path", "Введите точное имя или путь")
         )
+    } else if let TextPurpose::CreateFromFolder(folder) = &dialog.purpose {
+        format!(
+            "{}: {}\n{}",
+            app.text("Folder", "Папка"),
+            folder.display(),
+            app.text(
+                "Only files in this folder. Enter: create · Esc: cancel",
+                "Только файлы этой папки. Enter: создать · Esc: отмена"
+            )
+        )
     } else {
         app.text(
             "Enter: save · Esc: cancel",
@@ -68,9 +79,9 @@ pub(super) fn text_dialog(
         )
         .into()
     };
-    let hint_height = (Line::from(hint.clone())
-        .width()
-        .div_ceil(inner.width.max(1) as usize) as u16
+    let hint_height = (Paragraph::new(hint.clone())
+        .wrap(Wrap { trim: false })
+        .line_count(inner.width.max(1)) as u16
         + 1)
     .min(10);
     frame.render_widget(
@@ -104,13 +115,16 @@ pub(super) fn text_dialog(
         field,
     );
     let mut keyboard_top = field.bottom() + 1;
-    if matches!(dialog.purpose, TextPurpose::Create) {
+    if matches!(
+        dialog.purpose,
+        TextPurpose::Create | TextPurpose::CreateFromFolder(_)
+    ) {
         let used = buttons(
             frame,
             app,
             Rect::new(inner.x, keyboard_top, inner.width, 1),
             vec![(
-                app.text("Name from folder", "По имени папки").into(),
+                app.text("From music folder", "Из папки с музыкой").into(),
                 Target::PlaylistAutoName,
                 !app.busy(),
             )],

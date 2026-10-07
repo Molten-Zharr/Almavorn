@@ -22,14 +22,14 @@ pub(super) fn browser_dialog(
         area,
         app.text(
             if browser.playlist_name.is_some() {
-                "Playlist name · choose a folder"
+                "Playlist from folder"
             } else if browser.folder {
                 "Add folder"
             } else {
                 "Add files"
             },
             if browser.playlist_name.is_some() {
-                "Название плейлиста · выберите папку"
+                "Плейлист из папки"
             } else if browser.folder {
                 "Добавить папку"
             } else {
@@ -156,7 +156,7 @@ pub(super) fn browser_dialog(
         });
     }
     let add = if browser.playlist_name.is_some() {
-        app.text("Use folder name", "Использовать имя").into()
+        app.text("Use folder", "Выбрать папку").into()
     } else if browser.folder {
         app.text("Add folder", "Добавить папку").into()
     } else {

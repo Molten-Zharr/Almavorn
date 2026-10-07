@@ -212,11 +212,22 @@ impl Store {
     }
 
     pub fn create_playlist(&mut self, name: &str, mode: Mode) -> Result<Change> {
+        self.create_playlist_with_tracks(name, mode, &[], &[])
+    }
+
+    pub(crate) fn create_playlist_with_tracks(
+        &mut self,
+        name: &str,
+        mode: Mode,
+        tracks: &[ImportedTrack],
+        folders: &[PathBuf],
+    ) -> Result<Change> {
         let name = playlist_name(name)?;
         self.mutate(None, mode, true, |connection| {
             unique_playlist_name(connection, mode.key(), name, None)?;
             lock_ordering(connection, mode.key())?;
             connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3))", params![name, name.to_lowercase(), mode.key()])?;
+            insert_playlist_tracks(connection, connection.last_insert_rowid(), tracks, folders)?;
             Ok(())
         })
     }
@@ -287,18 +298,7 @@ impl Store {
         unlocked: bool,
     ) -> Result<Change> {
         self.mutate(Some(playlist_id), Mode::Order, unlocked, |connection| {
-            for folder in folders {
-                let path = folder.to_str().context(AppError::InvalidPathEncoding)?;
-                ensure!(folder.is_absolute(), AppError::FolderNotReady);
-                connection.execute("INSERT INTO playlist_folders(playlist_id,path) VALUES (?1,?2) ON CONFLICT DO NOTHING", params![playlist_id, path])?;
-            }
-            for track in tracks {
-                let path = track.path.to_str().context(AppError::InvalidPathEncoding)?;
-                connection.execute("INSERT INTO tracks(path,title,artist,album,duration_ms,tags) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(path) DO NOTHING", params![path, track.title, track.artist, track.album, track.duration_ms.min(i64::MAX as u64) as i64, track.tags])?;
-                let track_id: i64 = connection.query_row("SELECT id FROM tracks WHERE path=?1", [path], |row| row.get(0))?;
-                append_track(connection, playlist_id, track_id)?;
-            }
-            Ok(())
+            insert_playlist_tracks(connection, playlist_id, tracks, folders)
         })
     }
 
@@ -572,6 +572,32 @@ fn unique_playlist_name(
         params![mode, name.to_lowercase(), except], |row| row.get(0),
     )?;
     ensure!(!taken, AppError::PlaylistNameConflict);
+    Ok(())
+}
+
+fn insert_playlist_tracks(
+    connection: &Connection,
+    playlist: i64,
+    tracks: &[ImportedTrack],
+    folders: &[PathBuf],
+) -> Result<()> {
+    for folder in folders {
+        let path = folder.to_str().context(AppError::InvalidPathEncoding)?;
+        ensure!(folder.is_absolute(), AppError::FolderNotReady);
+        connection.execute(
+            "INSERT INTO playlist_folders(playlist_id,path) VALUES (?1,?2) ON CONFLICT DO NOTHING",
+            params![playlist, path],
+        )?;
+    }
+    for track in tracks {
+        let path = track.path.to_str().context(AppError::InvalidPathEncoding)?;
+        connection.execute("INSERT INTO tracks(path,title,artist,album,duration_ms,tags) VALUES (?1,?2,?3,?4,?5,?6) ON CONFLICT(path) DO NOTHING", params![path, track.title, track.artist, track.album, track.duration_ms.min(i64::MAX as u64) as i64, track.tags])?;
+        let track_id: i64 =
+            connection.query_row("SELECT id FROM tracks WHERE path=?1", [path], |row| {
+                row.get(0)
+            })?;
+        append_track(connection, playlist, track_id)?;
+    }
     Ok(())
 }
 

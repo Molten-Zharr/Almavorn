@@ -104,8 +104,8 @@ pub(super) fn help_dialog(
             false,
             false,
             Key::Char('f'),
-            "In Create playlist, choose a folder to use its name. Ctrl+Enter accepts the current folder.",
-            "При создании плейлиста выбрать папку для автоназвания. Ctrl+Enter — использовать имя текущей папки.",
+            "In Create playlist, choose a music folder. Its name and direct audio files are used; subfolders are skipped. Ctrl+Enter accepts the current folder.",
+            "При создании плейлиста выбрать папку с музыкой. Используются ее имя и аудиофайлы; подпапки пропускаются. Ctrl+Enter — выбрать текущую папку.",
         ),
         (
             true,

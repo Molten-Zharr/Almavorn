@@ -75,13 +75,20 @@ impl App {
         let Some(Dialog::Text(dialog)) = &self.view.dialog else {
             return Ok(());
         };
-        if !matches!(dialog.purpose, TextPurpose::Create) {
+        if !matches!(
+            dialog.purpose,
+            TextPurpose::Create | TextPurpose::CreateFromFolder(_)
+        ) {
             return Ok(());
         }
         let dialog = dialog.clone();
-        let directory = dirs::audio_dir()
-            .or_else(dirs::home_dir)
-            .unwrap_or(std::env::current_dir()?);
+        let directory = if let TextPurpose::CreateFromFolder(folder) = &dialog.purpose {
+            folder.clone()
+        } else {
+            dirs::audio_dir()
+                .or_else(dirs::home_dir)
+                .unwrap_or(std::env::current_dir()?)
+        };
         self.show_browser(directory, true);
         if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
             browser.playlist_name = Some(dialog);
@@ -210,6 +217,7 @@ impl App {
             };
             let mut dialog = dialog.clone();
             dialog.text = self.fresh_playlist_name(&name);
+            dialog.purpose = TextPurpose::CreateFromFolder(browser.directory.clone());
             dialog.selected_all = true;
             self.cancel_browser();
             self.view.dialog = Some(Dialog::Text(dialog));

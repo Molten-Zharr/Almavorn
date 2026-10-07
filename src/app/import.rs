@@ -1,5 +1,5 @@
 use super::{
-    App,
+    App, Dialog,
     background::{Background, background, poll},
 };
 use crate::errors::AppError;
@@ -23,9 +23,14 @@ struct ImportOutcome {
     errors: Vec<String>,
     skipped: usize,
 }
+enum ImportDestination {
+    Existing(i64),
+    Create { name: String, mode: Mode },
+}
 pub(super) struct ImportJob {
     receiver: Background<ImportOutcome>,
-    target: i64,
+    target: Option<i64>,
+    recovery: Option<Dialog>,
     pub(super) cancel: Arc<AtomicBool>,
     progress: Arc<AtomicUsize>,
 }
@@ -62,6 +67,24 @@ impl App {
 
     pub fn start_import(&mut self, paths: Vec<PathBuf>) -> Result<()> {
         self.start_import_skipping(paths, HashSet::new())
+    }
+
+    pub(super) fn start_folder_playlist(
+        &mut self,
+        name: String,
+        folder: PathBuf,
+        recovery: Option<Dialog>,
+    ) -> Result<()> {
+        self.start_import_into(
+            vec![folder],
+            HashSet::new(),
+            ImportDestination::Create {
+                name,
+                mode: self.settings.mode,
+            },
+            false,
+            recovery,
+        )
     }
 
     pub(super) fn scan_playlist_folders(&mut self, id: i64) -> Result<()> {
@@ -102,9 +125,31 @@ impl App {
                 .flat_map(|playlist| &playlist.entries)
                 .map(|entry| entry.track.path.clone()),
         );
+        self.start_import_into(
+            paths,
+            known,
+            ImportDestination::Existing(target),
+            self.settings.scan_subfolders,
+            None,
+        )
+    }
+
+    fn start_import_into(
+        &mut self,
+        paths: Vec<PathBuf>,
+        known: HashSet<PathBuf>,
+        destination: ImportDestination,
+        recursive: bool,
+        recovery: Option<Dialog>,
+    ) -> Result<()> {
+        ensure!(!self.busy(), AppError::LibraryBusy);
+        let target = match &destination {
+            ImportDestination::Existing(id) => Some(*id),
+            ImportDestination::Create { .. } => None,
+        };
+        let creating = target.is_none();
         let mut worker_store = self.store.try_clone()?;
         let unlocked = self.view.editing;
-        let recursive = self.settings.scan_subfolders;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let progress = Arc::new(AtomicUsize::new(0));
@@ -119,6 +164,10 @@ impl App {
                 if worker_cancel.load(Ordering::Relaxed) {
                     anyhow::bail!(AppError::ImportInterrupted);
                 }
+                if creating {
+                    ensure!(path.is_dir(), AppError::FolderNotReady);
+                    std::fs::read_dir(&path).context(AppError::FolderNotReady)?;
+                }
                 if path.is_dir() {
                     match media::scan_audio_files(&path, &worker_cancel, recursive) {
                         Ok(scan) => {
@@ -129,6 +178,9 @@ impl App {
                             errors.extend(scan.errors.into_iter().take(available));
                         }
                         Err(error) => {
+                            if creating {
+                                return Err(error);
+                            }
                             skipped += 1;
                             if errors.len() < 5 {
                                 errors.push(format!("{}: {error}", path.display()));
@@ -179,8 +231,14 @@ impl App {
             }
             folders.sort();
             folders.dedup();
-            let change =
-                worker_store.add_tracks_from_folders(target, &tracks, &folders, unlocked)?;
+            let change = match destination {
+                ImportDestination::Existing(id) => {
+                    worker_store.add_tracks_from_folders(id, &tracks, &folders, unlocked)?
+                }
+                ImportDestination::Create { name, mode } => {
+                    worker_store.create_playlist_with_tracks(&name, mode, &tracks, &folders)?
+                }
+            };
             Ok(ImportOutcome {
                 change,
                 errors,
@@ -190,6 +248,7 @@ impl App {
         self.library.import = Some(ImportJob {
             receiver,
             target,
+            recovery,
             cancel,
             progress,
         });
@@ -210,13 +269,38 @@ impl App {
             .and_then(|job| poll(&mut job.receiver));
         if let Some(outcome) = outcome {
             let job = self.library.import.take().expect("import is present");
-            let outcome = outcome?;
+            let outcome = match outcome {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    if let Some(dialog) = job.recovery {
+                        self.view.dialog = Some(dialog);
+                    }
+                    return Err(error);
+                }
+            };
             let change = outcome.change;
+            let target = job
+                .target
+                .or_else(|| {
+                    change
+                        .after
+                        .playlists
+                        .iter()
+                        .find(|playlist| {
+                            !change
+                                .before
+                                .playlists
+                                .iter()
+                                .any(|previous| previous.id == playlist.id)
+                        })
+                        .map(|playlist| playlist.id)
+                })
+                .context(AppError::PlaylistMissing)?;
             let mode = change
                 .after
                 .playlists
                 .iter()
-                .find(|playlist| playlist.id == job.target)
+                .find(|playlist| playlist.id == target)
                 .map(|playlist| {
                     if playlist.kind == "desk" {
                         self.settings.mode
@@ -245,7 +329,7 @@ impl App {
                 && let Some(mode) = mode
             {
                 self.settings.mode = mode;
-                self.library.pending_selection = Some((job.target, mode));
+                self.library.pending_selection = Some((target, mode));
             }
             self.save_settings()?;
             let mut message = format!(
