@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Language {
@@ -82,9 +82,37 @@ pub struct Playlist {
     pub position: i64,
     pub entries: Vec<Entry>,
     pub folders: Vec<PathBuf>,
+    pub group_folders: bool,
 }
 
 impl Playlist {
+    pub fn folder_group_name(&self, folder: &Path) -> String {
+        if let Some(root) = self
+            .folders
+            .iter()
+            .filter(|root| folder.starts_with(root))
+            .min_by_key(|root| root.components().count())
+        {
+            let relative = folder.strip_prefix(root).unwrap_or(folder);
+            if !relative.as_os_str().is_empty() {
+                return if self.folders.len() > 1 {
+                    root.file_name()
+                        .map(Path::new)
+                        .unwrap_or(root)
+                        .join(relative)
+                        .display()
+                        .to_string()
+                } else {
+                    relative.display().to_string()
+                };
+            }
+        }
+        folder.file_name().map_or_else(
+            || folder.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        )
+    }
+
     pub fn display_name(&self, language: Language) -> &str {
         match self.kind {
             PlaylistKind::Normal => &self.name,

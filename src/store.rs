@@ -37,6 +37,8 @@ pub struct SavedPlaylist {
     pub entries: Vec<SavedEntry>,
     #[serde(default)]
     pub folders: Vec<PathBuf>,
+    #[serde(default)]
+    pub group_folders: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -212,7 +214,7 @@ impl Store {
     }
 
     pub fn create_playlist(&mut self, name: &str, mode: Mode) -> Result<Change> {
-        self.create_playlist_with_tracks(name, mode, &[], &[])
+        self.create_playlist_with_tracks(name, mode, &[], &[], false)
     }
 
     pub(crate) fn create_playlist_with_tracks(
@@ -221,12 +223,13 @@ impl Store {
         mode: Mode,
         tracks: &[ImportedTrack],
         folders: &[PathBuf],
+        group_folders: bool,
     ) -> Result<Change> {
         let name = playlist_name(name)?;
         self.mutate(None, mode, true, |connection| {
             unique_playlist_name(connection, mode.key(), name, None)?;
             lock_ordering(connection, mode.key())?;
-            connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3))", params![name, name.to_lowercase(), mode.key()])?;
+            connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position,group_folders) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3),?4)", params![name, name.to_lowercase(), mode.key(), group_folders])?;
             insert_playlist_tracks(connection, connection.last_insert_rowid(), tracks, folders)?;
             Ok(())
         })
@@ -473,7 +476,7 @@ impl Store {
             }
             for playlist in &replacement.playlists {
                 transaction.execute(
-                    "INSERT INTO playlists(id,name,name_fold,mode,kind,position,desk) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                    "INSERT INTO playlists(id,name,name_fold,mode,kind,position,desk,group_folders) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
                     params![
                         playlist.id,
                         playlist.name,
@@ -482,6 +485,7 @@ impl Store {
                         playlist.kind,
                         playlist.position,
                         (playlist.kind == "desk").then_some(true),
+                        playlist.group_folders,
                     ],
                 )?;
                 for entry in &playlist.entries {
@@ -635,6 +639,7 @@ impl Snapshot {
                 .to_owned(),
                 position: playlist.position,
                 folders: playlist.folders.clone(),
+                group_folders: playlist.group_folders,
                 entries: playlist
                     .entries
                     .iter()

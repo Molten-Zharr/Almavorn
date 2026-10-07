@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     app::{App, Hit, Sort, Target},
-    model::duration_text,
+    model::{Entry, duration_text},
     workspace::Gesture,
 };
 use ratatui::{
@@ -14,6 +14,12 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Cell, Clear, Paragraph, Row, Table, Wrap},
 };
+use std::path::Path;
+
+enum TrackTableRow<'a> {
+    Group { folder: &'a Path, count: usize },
+    Track(&'a Entry),
+}
 
 pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     app.view.playlist_area = area;
@@ -230,22 +236,76 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     };
     let capacity = inner.height.saturating_sub(1) as usize;
     let entries = app.rows();
-    let selected = entries
+    let grouped = app
+        .playlist()
+        .is_some_and(|playlist| playlist.group_folders);
+    let mut display = Vec::with_capacity(entries.len());
+    let mut index = 0;
+    while index < entries.len() {
+        let folder = entries[index].track.path.parent().unwrap_or(Path::new(""));
+        let end = if grouped {
+            index
+                + entries[index..]
+                    .iter()
+                    .take_while(|entry| {
+                        entry.track.path.parent().unwrap_or(Path::new("")) == folder
+                    })
+                    .count()
+        } else {
+            entries.len()
+        };
+        if grouped {
+            display.push(TrackTableRow::Group {
+                folder,
+                count: end - index,
+            });
+        }
+        display.extend(
+            entries[index..end]
+                .iter()
+                .map(|entry| TrackTableRow::Track(entry)),
+        );
+        index = end;
+    }
+    let selected = display
         .iter()
-        .position(|entry| Some(entry.id) == app.library.selected_entry)
+        .position(|row| matches!(row, TrackTableRow::Track(entry) if Some(entry.id) == app.library.selected_entry))
         .unwrap_or(0);
-    let offset = visible_offset(app.view.track_offset, selected, capacity, entries.len());
-    let ids: Vec<i64> = entries
+    let offset = visible_offset(app.view.track_offset, selected, capacity, display.len());
+    let ids: Vec<Option<i64>> = display
         .iter()
         .skip(offset)
         .take(capacity)
-        .map(|entry| entry.id)
+        .map(|row| match row {
+            TrackTableRow::Track(entry) => Some(entry.id),
+            TrackTableRow::Group { .. } => None,
+        })
         .collect();
-    let rows: Vec<_> = entries
+    let groups: Vec<_> = display
         .iter()
         .skip(offset)
         .take(capacity)
-        .map(|entry| {
+        .enumerate()
+        .filter_map(|(row, item)| {
+            if let TrackTableRow::Group { folder, count } = item {
+                let name = app
+                    .playlist()
+                    .map(|playlist| playlist.folder_group_name(folder))
+                    .unwrap_or_default();
+                Some((row, clean(&name), *count))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let rows: Vec<_> = display
+        .iter()
+        .skip(offset)
+        .take(capacity)
+        .map(|item| {
+            let TrackTableRow::Track(entry) = item else {
+                return Row::new(vec![Cell::default(); 5]).style(palette.text());
+            };
             let selected = Some(entry.id) == app.library.selected_entry;
             let playing = app.playback_active()
                 && app.playback.playing_playlist == app.library.selected_playlist
@@ -394,7 +454,36 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             ),
         );
     }
+    for (row, name, count) in groups {
+        let rect = Rect::new(inner.x, inner.y + 1 + row as u16, inner.width, 1);
+        let counter = format!(" · {count}");
+        let count_width = (Span::raw(&counter).width() as u16).min(rect.width);
+        let style = palette
+            .text()
+            .fg(palette.accent)
+            .add_modifier(Modifier::BOLD);
+        frame.render_widget(
+            Paragraph::new(format!(
+                "── {}",
+                ellipsize_name(
+                    &name,
+                    usize::from(rect.width.saturating_sub(count_width + 3))
+                )
+            ))
+            .style(style),
+            Rect::new(rect.x, rect.y, rect.width - count_width, 1),
+        );
+        frame.render_widget(
+            Paragraph::new(counter)
+                .style(style)
+                .alignment(Alignment::Right),
+            Rect::new(rect.right() - count_width, rect.y, count_width, 1),
+        );
+    }
     for (row, id) in ids.into_iter().enumerate() {
+        let Some(id) = id else {
+            continue;
+        };
         let rect = Rect::new(inner.x, inner.y + 1 + row as u16, inner.width, 1);
         app.view.hits.push(Hit {
             area: rect,

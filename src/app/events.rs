@@ -296,8 +296,15 @@ impl App {
         if self.view.dialog.is_some() {
             if key.ctrl
                 && !key.alt
+                && key.key == Key::Char('g')
+                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::CreateFromFolder { .. }))
+            {
+                return self.target(Target::CreateFolderGroups, false);
+            }
+            if key.ctrl
+                && !key.alt
                 && key.key == Key::Char('f')
-                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::Create | super::TextPurpose::CreateFromFolder(_)))
+                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::Create | super::TextPurpose::CreateFromFolder { .. }))
             {
                 return self.choose_playlist_name_folder();
             }
@@ -774,6 +781,16 @@ impl App {
             Target::BrowserOpen => self.browser_open()?,
             Target::BrowserAdd => self.browser_add()?,
             Target::PlaylistAutoName => self.choose_playlist_name_folder()?,
+            Target::CreateFolderGroups => {
+                ensure!(!self.busy(), AppError::LibraryBusy);
+                if let Some(Dialog::Text(dialog)) = &mut self.view.dialog
+                    && let super::TextPurpose::CreateFromFolder {
+                        group_subfolders, ..
+                    } = &mut dialog.purpose
+                {
+                    *group_subfolders = !*group_subfolders;
+                }
+            }
             Target::TransferRow(index) => {
                 if let Some(Dialog::Transfer { selected, .. }) = &mut self.view.dialog {
                     *selected = index;

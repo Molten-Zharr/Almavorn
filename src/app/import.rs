@@ -25,7 +25,11 @@ struct ImportOutcome {
 }
 enum ImportDestination {
     Existing(i64),
-    Create { name: String, mode: Mode },
+    Create {
+        name: String,
+        mode: Mode,
+        group_folders: bool,
+    },
 }
 pub(super) struct ImportJob {
     receiver: Background<ImportOutcome>,
@@ -73,6 +77,7 @@ impl App {
         &mut self,
         name: String,
         folder: PathBuf,
+        group_subfolders: bool,
         recovery: Option<Dialog>,
     ) -> Result<()> {
         self.start_import_into(
@@ -81,8 +86,9 @@ impl App {
             ImportDestination::Create {
                 name,
                 mode: self.settings.mode,
+                group_folders: group_subfolders,
             },
-            false,
+            group_subfolders,
             recovery,
         )
     }
@@ -148,6 +154,13 @@ impl App {
             ImportDestination::Create { .. } => None,
         };
         let creating = target.is_none();
+        let grouping = matches!(
+            &destination,
+            ImportDestination::Create {
+                group_folders: true,
+                ..
+            }
+        );
         let mut worker_store = self.store.try_clone()?;
         let unlocked = self.view.editing;
         let cancel = Arc::new(AtomicBool::new(false));
@@ -190,6 +203,13 @@ impl App {
                 } else {
                     candidates.push(path);
                 }
+            }
+            if grouping {
+                candidates.sort_by(|left, right| {
+                    left.parent()
+                        .cmp(&right.parent())
+                        .then_with(|| left.cmp(right))
+                });
             }
             let mut seen = known;
             for path in candidates {
@@ -235,9 +255,17 @@ impl App {
                 ImportDestination::Existing(id) => {
                     worker_store.add_tracks_from_folders(id, &tracks, &folders, unlocked)?
                 }
-                ImportDestination::Create { name, mode } => {
-                    worker_store.create_playlist_with_tracks(&name, mode, &tracks, &folders)?
-                }
+                ImportDestination::Create {
+                    name,
+                    mode,
+                    group_folders,
+                } => worker_store.create_playlist_with_tracks(
+                    &name,
+                    mode,
+                    &tracks,
+                    &folders,
+                    group_folders,
+                )?,
             };
             Ok(ImportOutcome {
                 change,

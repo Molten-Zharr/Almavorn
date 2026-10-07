@@ -77,12 +77,12 @@ impl App {
         };
         if !matches!(
             dialog.purpose,
-            TextPurpose::Create | TextPurpose::CreateFromFolder(_)
+            TextPurpose::Create | TextPurpose::CreateFromFolder { .. }
         ) {
             return Ok(());
         }
         let dialog = dialog.clone();
-        let directory = if let TextPurpose::CreateFromFolder(folder) = &dialog.purpose {
+        let directory = if let TextPurpose::CreateFromFolder { folder, .. } = &dialog.purpose {
             folder.clone()
         } else {
             dirs::audio_dir()
@@ -217,7 +217,17 @@ impl App {
             };
             let mut dialog = dialog.clone();
             dialog.text = self.fresh_playlist_name(&name);
-            dialog.purpose = TextPurpose::CreateFromFolder(browser.directory.clone());
+            let group_subfolders = matches!(
+                dialog.purpose,
+                TextPurpose::CreateFromFolder {
+                    group_subfolders: true,
+                    ..
+                }
+            );
+            dialog.purpose = TextPurpose::CreateFromFolder {
+                folder: browser.directory.clone(),
+                group_subfolders,
+            };
             dialog.selected_all = true;
             self.cancel_browser();
             self.view.dialog = Some(Dialog::Text(dialog));

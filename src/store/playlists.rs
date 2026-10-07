@@ -17,13 +17,15 @@ impl Store {
         ensure!(mode != Mode::Order || unlocked, AppError::OrderProtected);
         let name = playlist_name(name)?;
         self.mutate(None, mode, true, |connection| {
+            let mut group_folders = false;
             for &source in sources {
                 let (mode, kind) = playlist_access(connection, source)?;
                 ensure!(mode != Mode::Order || kind == crate::model::PlaylistKind::SortingDesk || unlocked, AppError::OrderProtected);
+                group_folders |= connection.query_row("SELECT group_folders FROM playlists WHERE id=?1", [source], |row| row.get::<_, bool>(0))?;
             }
             unique_playlist_name(connection, mode.key(), name, None)?;
             lock_ordering(connection, mode.key())?;
-            connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3))", params![name, name.to_lowercase(), mode.key()])?;
+            connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position,group_folders) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3),?4)", params![name, name.to_lowercase(), mode.key(), group_folders])?;
             let destination = connection.last_insert_rowid();
             for &source in sources {
                 let mut statement = connection.prepare("SELECT track_id,position FROM entries WHERE playlist_id=?1 ORDER BY position,id")?;

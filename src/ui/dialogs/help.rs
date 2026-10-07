@@ -104,8 +104,16 @@ pub(super) fn help_dialog(
             false,
             false,
             Key::Char('f'),
-            "In Create playlist, choose a music folder. Its name and direct audio files are used; subfolders are skipped. Ctrl+Enter accepts the current folder.",
-            "При создании плейлиста выбрать папку с музыкой. Используются ее имя и аудиофайлы; подпапки пропускаются. Ctrl+Enter — выбрать текущую папку.",
+            "In Create playlist, choose a music folder. Ctrl+Enter accepts the folder. Subfolders are skipped unless Subfolders as groups is on.",
+            "При создании плейлиста выбрать папку с музыкой. Ctrl+Enter — выбрать папку. Подпапки пропускаются, если не включены группы.",
+        ),
+        (
+            true,
+            false,
+            false,
+            Key::Char('g'),
+            "In Create playlist after choosing a folder, include or exclude subfolders as track groups.",
+            "После выбора папки при создании плейлиста включить или выключить подпапки с группами композиций.",
         ),
         (
             true,

@@ -20,7 +20,7 @@ pub(super) fn text_dialog(
     palette: Palette,
 ) {
     let title = match &dialog.purpose {
-        TextPurpose::Create | TextPurpose::CreateFromFolder(_) => {
+        TextPurpose::Create | TextPurpose::CreateFromFolder { .. } => {
             app.text("Create playlist", "Создать плейлист")
         }
         TextPurpose::ComposePlaylist(ids) => {
@@ -62,15 +62,26 @@ pub(super) fn text_dialog(
             "{}: {name}",
             app.text("Enter exact name or path", "Введите точное имя или путь")
         )
-    } else if let TextPurpose::CreateFromFolder(folder) = &dialog.purpose {
+    } else if let TextPurpose::CreateFromFolder {
+        folder,
+        group_subfolders,
+    } = &dialog.purpose
+    {
         format!(
             "{}: {}\n{}",
             app.text("Folder", "Папка"),
             folder.display(),
-            app.text(
-                "Only files in this folder. Enter: create · Esc: cancel",
-                "Только файлы этой папки. Enter: создать · Esc: отмена"
-            )
+            if *group_subfolders {
+                app.text(
+                    "Include subfolders as groups. Enter: create · Esc: cancel",
+                    "Подпапки станут группами. Enter: создать · Esc: отмена",
+                )
+            } else {
+                app.text(
+                    "Only files in this folder. Enter: create · Esc: cancel",
+                    "Только файлы этой папки. Enter: создать · Esc: отмена",
+                )
+            }
         )
     } else {
         app.text(
@@ -117,17 +128,32 @@ pub(super) fn text_dialog(
     let mut keyboard_top = field.bottom() + 1;
     if matches!(
         dialog.purpose,
-        TextPurpose::Create | TextPurpose::CreateFromFolder(_)
+        TextPurpose::Create | TextPurpose::CreateFromFolder { .. }
     ) {
+        let mut controls = vec![(
+            app.text("From music folder", "Из папки с музыкой").into(),
+            Target::PlaylistAutoName,
+            !app.busy(),
+        )];
+        if let TextPurpose::CreateFromFolder {
+            group_subfolders, ..
+        } = &dialog.purpose
+        {
+            controls.push((
+                format!(
+                    "[{}] {}",
+                    if *group_subfolders { 'x' } else { ' ' },
+                    app.text("Group subfolders", "Подпапки в группы")
+                ),
+                Target::CreateFolderGroups,
+                !app.busy(),
+            ));
+        }
         let used = buttons(
             frame,
             app,
-            Rect::new(inner.x, keyboard_top, inner.width, 1),
-            vec![(
-                app.text("From music folder", "Из папки с музыкой").into(),
-                Target::PlaylistAutoName,
-                !app.busy(),
-            )],
+            Rect::new(inner.x, keyboard_top, inner.width, 2),
+            controls,
             palette,
         );
         keyboard_top += used + 1;

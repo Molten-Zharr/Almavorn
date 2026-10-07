@@ -16,6 +16,7 @@ CREATE TABLE playlists (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, name_fold TEXT NOT NULL,
     mode TEXT NOT NULL CHECK(mode IN ('order','chaos')),
     kind TEXT NOT NULL CHECK(kind IN ('normal','desk')), position INTEGER NOT NULL,
+    group_folders INTEGER NOT NULL DEFAULT 0 CHECK(group_folders IN (0,1)),
     revision INTEGER NOT NULL DEFAULT 0, desk INTEGER UNIQUE, UNIQUE(mode,name_fold),
     CHECK ((kind='desk' AND mode='order' AND position=-1 AND desk IS 1)
         OR (kind='normal' AND position>=0 AND desk IS NULL))
@@ -134,11 +135,11 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     if path.try_exists()? {
         let mut connection = connect(path)?;
         let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if matches!(version, 2 | 3) {
-            if version == 2 {
+        if matches!(version, 2..=4) {
+            if version < 4 {
                 let transaction =
                     connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-                upgrade_folders(&transaction)?;
+                upgrade_schema(&transaction)?;
                 transaction.commit()?;
             } else {
                 validate_schema(&connection, version)?;
@@ -181,8 +182,8 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     connection.pragma_update(None, "synchronous", "FULL")?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let version: i64 = transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if matches!(version, 2 | 3) {
-        upgrade_folders(&transaction)?;
+    if matches!(version, 2..=4) {
+        upgrade_schema(&transaction)?;
         transaction.commit()?;
         configure_wal(&connection)?;
         return Ok(connection);
@@ -214,8 +215,8 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
         !broken,
         "Library contains broken references; original databases were preserved"
     );
-    transaction.execute("INSERT INTO almavorn_metadata(key,value) VALUES ('schema_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value", [])?;
-    transaction.pragma_update(None, "user_version", 3)?;
+    transaction.execute("INSERT INTO almavorn_metadata(key,value) VALUES ('schema_version','4') ON CONFLICT(key) DO UPDATE SET value=excluded.value", [])?;
+    transaction.pragma_update(None, "user_version", 4)?;
     transaction.commit()?;
     configure_wal(&connection)?;
     Ok(connection)
@@ -228,7 +229,7 @@ fn empty(connection: &Connection) -> Result<bool> {
         |row| row.get::<_, i64>(0),
     )? == 0)
 }
-fn upgrade_folders(connection: &Connection) -> Result<()> {
+fn upgrade_schema(connection: &Connection) -> Result<()> {
     let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
     validate_schema(connection, version)?;
     if version == 2 {
@@ -239,6 +240,14 @@ fn upgrade_folders(connection: &Connection) -> Result<()> {
             [],
         )?;
         connection.pragma_update(None, "user_version", 3)?;
+    }
+    if version < 4 {
+        connection.execute_batch("ALTER TABLE playlists ADD COLUMN group_folders INTEGER NOT NULL DEFAULT 0 CHECK(group_folders IN (0,1))")?;
+        connection.execute(
+            "UPDATE almavorn_metadata SET value='4' WHERE key='schema_version'",
+            [],
+        )?;
+        connection.pragma_update(None, "user_version", 4)?;
     }
     Ok(())
 }
@@ -273,7 +282,7 @@ fn validate_schema(connection: &Connection, version: i64) -> Result<()> {
         )
         .optional()?;
     ensure!(
-        marker.as_deref() == Some(if version == 2 { "2" } else { "3" }),
+        marker.as_deref() == Some(version.to_string().as_str()),
         "Unrecognized SQLite schema marker; existing data was preserved"
     );
     connection.prepare(
@@ -285,8 +294,11 @@ fn validate_schema(connection: &Connection, version: i64) -> Result<()> {
     connection.prepare("SELECT id,playlist_id,track_id,position FROM entries LIMIT 0")?;
     connection.prepare("SELECT key,value FROM settings LIMIT 0")?;
     connection.prepare("SELECT mode,revision FROM playlist_ordering LIMIT 0")?;
-    if version == 3 {
+    if version >= 3 {
         connection.prepare("SELECT playlist_id,path FROM playlist_folders LIMIT 0")?;
+    }
+    if version >= 4 {
+        connection.prepare("SELECT group_folders FROM playlists LIMIT 0")?;
     }
     Ok(())
 }

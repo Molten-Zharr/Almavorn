@@ -1,7 +1,7 @@
 use super::{App, Focus, Sort, bounded};
 use crate::model::{Entry, Mode, Playlist, PlaylistKind};
 use anyhow::Result;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub(super) struct RowsCache {
     revision: u64,
@@ -113,6 +113,19 @@ impl App {
                 Sort::Duration => sort_rows(&mut indices, entries, descending, |entry| {
                     entry.track.duration_ms
                 }),
+            }
+            if playlist.group_folders {
+                // Sorting stays within each folder; stored playlist positions are untouched.
+                let mut positions = HashMap::new();
+                for entry in entries {
+                    positions
+                        .entry(entry.track.path.parent())
+                        .and_modify(|position: &mut i64| {
+                            *position = (*position).min(entry.position)
+                        })
+                        .or_insert(entry.position);
+                }
+                indices.sort_by_cached_key(|&index| positions[&entries[index].track.path.parent()]);
             }
             *cache = Some(RowsCache {
                 revision: self.library.revision,

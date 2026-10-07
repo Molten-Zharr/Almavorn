@@ -32,8 +32,9 @@ pub(super) fn playlist_access(connection: &Connection, id: i64) -> Result<(Mode,
 }
 
 pub(super) fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
-    let mut statement = connection
-        .prepare("SELECT id,name,mode,kind,position FROM playlists ORDER BY mode,position,id")?;
+    let mut statement = connection.prepare(
+        "SELECT id,name,mode,kind,position,group_folders FROM playlists ORDER BY mode,position,id",
+    )?;
     let rows = statement.query_map([], |row| {
         Ok((
             row.get::<_, i64>(0)?,
@@ -41,12 +42,13 @@ pub(super) fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
             row.get::<_, String>(2)?,
             row.get::<_, String>(3)?,
             row.get::<_, i64>(4)?,
+            row.get::<_, bool>(5)?,
         ))
     })?;
     let mut playlists = Vec::new();
     let mut indices = HashMap::new();
     for row in rows {
-        let (id, name, saved_mode, saved_kind, position) = row?;
+        let (id, name, saved_mode, saved_kind, position, group_folders) = row?;
         indices.insert(id, playlists.len());
         playlists.push(Playlist {
             id,
@@ -56,6 +58,7 @@ pub(super) fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
             position,
             entries: Vec::new(),
             folders: Vec::new(),
+            group_folders,
         });
     }
     // Fetch entries once for the entire library, including shared tracks.
@@ -96,7 +99,7 @@ pub(super) fn read_playlists(connection: &Connection) -> Result<Vec<Playlist>> {
 
 pub(super) fn snapshot(connection: &Connection, scope: &str) -> Result<Snapshot> {
     let mut statement = connection.prepare(
-        "SELECT p.id,p.name,p.mode,p.kind,p.position FROM playlists p WHERE (?1='desk' AND p.kind='desk') OR (?1!='desk' AND p.mode=?1 AND p.kind='normal') ORDER BY p.mode,p.position,p.id",
+        "SELECT p.id,p.name,p.mode,p.kind,p.position,p.group_folders FROM playlists p WHERE (?1='desk' AND p.kind='desk') OR (?1!='desk' AND p.mode=?1 AND p.kind='normal') ORDER BY p.mode,p.position,p.id",
     )?;
     let rows = statement.query_map([scope], |row| {
         Ok(SavedPlaylist {
@@ -107,6 +110,7 @@ pub(super) fn snapshot(connection: &Connection, scope: &str) -> Result<Snapshot>
             position: row.get(4)?,
             entries: Vec::new(),
             folders: Vec::new(),
+            group_folders: row.get(5)?,
         })
     })?;
     let mut playlists = Vec::new();
