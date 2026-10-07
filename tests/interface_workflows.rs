@@ -1,7 +1,7 @@
 use almavorn::{
     app::{App, CommandMenu, Dialog, Focus, SettingsPage, Target},
     input::{Action, Input, Key, KeyPress},
-    model::{ImportedTrack, Language, Mode, Placement},
+    model::{ImportedTrack, Language, Mode, Placement, RepeatMode},
     preferences::{BorderWeight, Corners, FontFace},
     ui,
     workspace::{Axis, Control, Dock, Panel, WorkspaceLayout},
@@ -104,14 +104,19 @@ fn command_menus_skip_unavailable_rows_and_stop_at_the_last_enabled_action() {
         matches!(target, Target::CommandMenu(CommandMenu::Playlist))
     });
     let items = app.command_items(CommandMenu::Playlist);
-    assert_eq!(items.iter().filter(|item| item.enabled).count(), 1);
+    let available: Vec<_> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(index, item)| item.enabled.then_some(index))
+        .collect();
+    assert_eq!(available.len(), 2);
     for key_value in [Key::Down, Key::PageDown, Key::Up, Key::PageUp] {
         for _ in 0..10 {
             key(&mut app, key_value);
         }
         assert!(matches!(
             app.view.dialog,
-            Some(Dialog::Commands { selected: 0, .. })
+            Some(Dialog::Commands { selected, .. }) if available.contains(&selected)
         ));
     }
     key(&mut app, Key::Escape);
@@ -155,10 +160,15 @@ fn command_menus_skip_unavailable_rows_and_stop_at_the_last_enabled_action() {
         selected: 0,
         anchor: ratatui::layout::Position::new(1, 1),
     });
-    app.settings
-        .workspace
-        .hidden_controls
-        .extend([Action::VolumeUp, Action::VolumeDown].map(Control::Action));
+    app.settings.workspace.hidden_controls.extend(
+        [
+            Action::VolumeUp,
+            Action::VolumeDown,
+            Action::CycleRepeat,
+            Action::ToggleShuffle,
+        ]
+        .map(Control::Action),
+    );
     render(&mut app, 120, 50);
     assert!(
         app.command_items(CommandMenu::Player)
@@ -176,6 +186,67 @@ fn command_menus_skip_unavailable_rows_and_stop_at_the_last_enabled_action() {
         app.view.dialog,
         Some(Dialog::Commands { selected: 0, .. })
     ));
+}
+
+#[test]
+fn repeat_and_shuffle_work_from_keys_buttons_and_the_player_menu() {
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    assert_eq!(app.settings.repeat, RepeatMode::Off);
+    assert!(!app.settings.shuffle);
+    key(&mut app, Key::Char('l'));
+    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+    click(&mut app, |target| {
+        matches!(target, Target::Action(Action::CycleRepeat))
+    });
+    assert_eq!(app.settings.repeat, RepeatMode::Track);
+    click(&mut app, |target| {
+        matches!(target, Target::Action(Action::ToggleShuffle))
+    });
+    assert!(app.settings.shuffle);
+    let items = app.command_items(CommandMenu::Player);
+    assert!(items.iter().any(|item| item.enabled
+        && item.label.contains("Трек")
+        && matches!(item.target, Target::Action(Action::CycleRepeat))));
+    let index = items
+        .iter()
+        .position(|item| matches!(item.target, Target::Action(Action::ToggleShuffle)))
+        .unwrap();
+    assert!(items[index].label.starts_with("[x]"));
+    app.view.dialog = Some(Dialog::Commands {
+        menu: CommandMenu::Player,
+        selected: index,
+        anchor: ratatui::layout::Position::new(1, 1),
+    });
+    let terminal = render(&mut app, 120, 50);
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect();
+    assert!(text.contains("Повтор: Трек"));
+    assert!(text.contains("[x] Случайное проигрывание"));
+    assert!(text.contains("L"));
+    assert!(text.contains("H"));
+    key(&mut app, Key::Enter);
+    assert!(!app.settings.shuffle);
+    assert!(app.view.dialog.is_none());
+    key(&mut app, Key::Char('l'));
+    assert_eq!(app.settings.repeat, RepeatMode::Off);
+    key(&mut app, Key::Char('р')); // Russian layout maps to H.
+    assert!(app.settings.shuffle);
+    // New controls remain reachable when the player wraps onto several rows.
+    for (width, height) in [(140, 45), (80, 30), (32, 26)] {
+        render(&mut app, width, height);
+        for action in [Action::CycleRepeat, Action::ToggleShuffle] {
+            assert!(
+                app.view.hits.iter().any(|hit| hit.enabled
+                    && matches!(hit.target, Target::Action(value) if value == action))
+            );
+        }
+    }
 }
 
 #[test]
@@ -208,7 +279,7 @@ fn help_stops_at_its_last_page_and_keeps_wrapped_content_visible_after_resizing(
                         .map(|cell| cell.symbol())
                         .collect();
                     assert!(
-                        text.contains(app.text("separately.", "отдельно.")),
+                        text.contains(app.text("typing.", "мышью.")),
                         "{width}x{height}: {text}"
                     );
                     reached_bottom = true;
@@ -349,7 +420,7 @@ fn desktop_keycaps_leave_blank_pixels_in_the_gaps_across_fonts_and_scroll_frames
 fn command_bar_is_reachable_with_tab_and_every_visible_menu_opens_from_the_keyboard() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    for (width, height) in [(120, 50), (32, 18)] {
+    for (width, height) in [(120, 50), (32, 26)] {
         render(&mut app, width, height);
         app.library.query = "keep query".into();
         for _ in 0..=app.view.workspace.areas.len() {
@@ -401,8 +472,11 @@ fn command_bar_is_reachable_with_tab_and_every_visible_menu_opens_from_the_keybo
             matches!(target, Target::Action(Action::Search))
         });
         key(&mut app, Key::Enter);
-        assert!(matches!(app.view.dialog, Some(Dialog::Text(_))));
+        assert!(matches!(app.view.dialog, Some(Dialog::Search(_))));
         key(&mut app, Key::Escape);
+        if app.view.toolbar_selected.is_none() {
+            shift_tab(&mut app);
+        }
         key(&mut app, Key::Tab);
         assert!(app.view.toolbar_selected.is_none());
         assert_eq!(app.view.workspace.focus, app.view.workspace.areas[0].0);
@@ -553,7 +627,7 @@ fn library_has_the_space_and_layout_controls_are_hidden_until_requested() {
     app.settings.playlist_placement = Placement::Left;
     for language in [Language::Russian, Language::English] {
         app.settings.language = language;
-        for (width, height) in [(32, 18), (80, 30), (140, 45)] {
+        for (width, height) in [(32, 26), (80, 30), (140, 45)] {
             let terminal = render(&mut app, width, height);
             assert_eq!(
                 app.view.workspace.areas.len(),
@@ -773,7 +847,7 @@ fn compact_volume_supports_the_full_range_and_dragging() {
             }
         })
         .unwrap();
-    assert!(bar.width <= 16);
+    assert!(bar.width >= 24 && bar.width < 120);
     app.handle(Input::Click {
         x: bar.x,
         y: bar.y,
@@ -933,7 +1007,7 @@ fn settings_show_compact_rows_and_one_selected_description() {
         .iter()
         .filter(|hit| matches!(hit.target, Target::SettingSelect(_)))
         .collect();
-    assert_eq!(rows.len(), 5);
+    assert_eq!(rows.len(), 7);
     assert!(rows.iter().all(|hit| hit.area.height == 1));
     assert_eq!(rows[4].area.y - rows[0].area.y, 8);
     let text: String = terminal

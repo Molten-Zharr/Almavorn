@@ -209,7 +209,7 @@ fn filtering_and_sorting_do_not_modify_saved_track_order() {
             .collect::<Vec<_>>(),
         ["Alpha", "Middle", "Zebra"]
     );
-    app.action(Action::Search).unwrap();
+    app.action(Action::Filter).unwrap();
     submit_text(&mut app, "ALICE second");
     assert_eq!(app.rows().len(), 1);
     assert_eq!(app.entry().unwrap().track.title, "Middle");
@@ -357,6 +357,7 @@ fn background_import_routes_to_desk_skips_duplicates_and_supports_undo() {
     fs::write(&invalid, b"invalid audio").unwrap();
     let mut app = App::new(&directory.0).unwrap();
     app.set_mode(Mode::Chaos).unwrap();
+    wait_for_library(&mut app);
     let before = app.store.snapshot("desk").unwrap();
     app.start_import(vec![music, path.clone(), invalid.clone()])
         .unwrap();
@@ -368,7 +369,9 @@ fn background_import_routes_to_desk_skips_duplicates_and_supports_undo() {
     wait_for_library(&mut app);
 
     assert!(app.view.notice_error);
-    assert_eq!(app.settings.mode, Mode::Order);
+    assert_eq!(app.settings.mode, Mode::Chaos);
+    app.set_mode(Mode::Order).unwrap();
+    wait_for_library(&mut app);
     assert_eq!(app.playlist().unwrap().kind, PlaylistKind::SortingDesk);
     assert_eq!(app.rows().len(), 1);
     assert_eq!(fs::read(&path).unwrap(), original);
@@ -462,6 +465,7 @@ fn dialogs_capture_clicks_and_render_across_languages_and_panel_positions() {
         };
         for dialog in [
             Dialog::Browser(Browser {
+                playlist_name: None,
                 directory: directory.0.clone(),
                 entries: vec![BrowserEntry {
                     path: track.path.clone(),

@@ -96,6 +96,8 @@ impl Panel {
                 Button(TogglePlay),
                 Button(Stop),
                 Button(Next),
+                Button(CycleRepeat),
+                Button(ToggleShuffle),
                 Button(VolumeDown),
                 Button(VolumeUp),
             ],

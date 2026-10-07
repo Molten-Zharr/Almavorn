@@ -242,9 +242,7 @@ impl App {
                     _ => SearchFocus::Input,
                 }
             }
-            Key::Char('l') if key.ctrl => {
-                self.target(super::Target::SearchAll(true), false)?
-            }
+            Key::Char('l') if key.ctrl => self.target(super::Target::SearchAll(true), false)?,
             Key::Char('a') if key.ctrl => {
                 search.focus = SearchFocus::Input;
                 search.selected_all = true;

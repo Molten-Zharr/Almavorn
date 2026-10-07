@@ -6,8 +6,8 @@ use super::{
 use crate::{
     app::{App, Hit, Target},
     input::Action,
-    model::duration_text,
-    preferences::PlaybackTimeline,
+    model::{RepeatMode, duration_text},
+    preferences::{FontFace, PlaybackTimeline},
     workspace::Panel,
 };
 use ratatui::{
@@ -23,6 +23,25 @@ fn controls(app: &App) -> Vec<(Action, &'static str)> {
         (Action::TogglePlay, if app.paused() { "[▶]" } else { "[‖]" }),
         (Action::Stop, "[■]"),
         (Action::Next, "›"),
+        (
+            Action::CycleRepeat,
+            match (app.settings.repeat, app.settings.appearance.font) {
+                (RepeatMode::Off, FontFace::DejaVuMono) => "[↻]",
+                (RepeatMode::Playlist, FontFace::DejaVuMono) => "[↻∞]",
+                (RepeatMode::Track, FontFace::DejaVuMono) => "[↻1]",
+                (RepeatMode::Off, _) => "[⟳]",
+                (RepeatMode::Playlist, _) => "[⟳∞]",
+                (RepeatMode::Track, _) => "[⟳1]",
+            },
+        ),
+        (
+            Action::ToggleShuffle,
+            if app.settings.appearance.font == FontFace::DejaVuMono {
+                "[⇄]"
+            } else {
+                "[↔]"
+            },
+        ),
     ]
     .into_iter()
     .filter(|(action, _)| app.control_visible(Panel::Player, *action))

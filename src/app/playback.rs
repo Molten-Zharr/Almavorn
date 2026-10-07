@@ -1,24 +1,31 @@
 use super::{
     App,
     background::{Background, background, poll},
-    bounded,
 };
 use crate::errors::AppError;
-use crate::{audio::Audio, model::Entry, preferences::PlaybackTimeline};
+use crate::{
+    audio::Audio,
+    model::{Entry, RepeatMode},
+    preferences::PlaybackTimeline,
+};
 use anyhow::{Context, Result, ensure};
 use rodio::Source;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::{path::PathBuf, time::Duration};
+use std::{collections::VecDeque, path::PathBuf, time::Duration};
+
+const SHUFFLE_HISTORY_LIMIT: usize = 256;
 
 pub(super) struct PlaybackRequest {
     queue: Arc<[Entry]>,
     playlist_id: i64,
     index: usize,
     paused: bool,
+    shuffle_history: VecDeque<usize>,
 }
+
 pub(super) struct SeekRequest {
     path: PathBuf,
     position_ms: u64,
@@ -92,10 +99,27 @@ impl App {
         self.requested_playback().is_some()
     }
     pub(super) fn can_step_playback(&self, direction: i64) -> bool {
-        let (length, index) = self
+        let (length, index, history) = self
             .requested_playback()
-            .map(|request| (request.queue.len(), request.index))
-            .unwrap_or((self.playback.queue.len(), self.playback.queue_index));
+            .map(|request| (request.queue.len(), request.index, &request.shuffle_history))
+            .unwrap_or((
+                self.playback.queue.len(),
+                self.playback.queue_index,
+                &self.playback.shuffle_history,
+            ));
+        if length == 0 || index >= length {
+            return false;
+        }
+        if self.settings.shuffle {
+            return if direction < 0 {
+                !history.is_empty()
+            } else {
+                length > 1
+            };
+        }
+        if self.settings.repeat == RepeatMode::Playlist {
+            return true;
+        }
         if direction < 0 {
             index > 0
         } else {
@@ -122,16 +146,24 @@ impl App {
         playlist_id: i64,
         index: usize,
     ) -> Result<()> {
-        ensure!(index < queue.len(), AppError::TrackSelectionRequired);
-        let title = queue[index].track.title.clone();
-        self.cancel_seek();
-        self.cancel_waveform();
-        self.playback.preparation.request(PlaybackRequest {
+        self.request_playback(PlaybackRequest {
             queue,
             playlist_id,
             index,
             paused: false,
-        });
+            shuffle_history: VecDeque::new(),
+        })
+    }
+
+    fn request_playback(&mut self, request: PlaybackRequest) -> Result<()> {
+        ensure!(
+            request.index < request.queue.len(),
+            AppError::TrackSelectionRequired
+        );
+        let title = request.queue[request.index].track.title.clone();
+        self.cancel_seek();
+        self.cancel_waveform();
+        self.playback.preparation.request(request);
         self.start_playback_job();
         self.message(format!(
             "{}: {}",
@@ -186,6 +218,7 @@ impl App {
         self.playback.playing_playlist = Some(request.playlist_id);
         self.playback.queue = request.queue;
         self.playback.queue_index = request.index;
+        self.playback.shuffle_history = request.shuffle_history;
         self.playback.current = Some(track.clone());
         self.playback.waveform = None;
         if self.settings.appearance.playback_timeline == PlaybackTimeline::Waveform {
@@ -233,6 +266,7 @@ impl App {
         self.cancel_waveform();
         self.playback.queue = Arc::from([]);
         self.playback.queue_index = 0;
+        self.clear_shuffle_history();
         self.message(
             self.text("Playback stopped", "Воспроизведение остановлено")
                 .into(),
@@ -240,28 +274,86 @@ impl App {
     }
 
     pub(super) fn next(&mut self, direction: i64, explicit: bool) -> Result<()> {
-        let Some((queue, playlist_id, index)) = self
+        let Some((queue, playlist_id, index, mut history)) = self
             .requested_playback()
-            .map(|request| (request.queue.clone(), request.playlist_id, request.index))
+            .map(|request| {
+                (
+                    request.queue.clone(),
+                    request.playlist_id,
+                    request.index,
+                    request.shuffle_history.clone(),
+                )
+            })
             .or_else(|| {
-                self.playback
-                    .playing_playlist
-                    .map(|id| (self.playback.queue.clone(), id, self.playback.queue_index))
+                self.playback.playing_playlist.map(|id| {
+                    (
+                        self.playback.queue.clone(),
+                        id,
+                        self.playback.queue_index,
+                        self.playback.shuffle_history.clone(),
+                    )
+                })
             })
         else {
             return Ok(());
         };
-        if direction > 0 && index + 1 >= queue.len() {
+        if queue.is_empty() || index >= queue.len() {
             if !explicit {
                 self.stop_playback();
             }
             return Ok(());
         }
-        if queue.is_empty() {
-            return Ok(());
+        // Repeating one track only intercepts completion, never a manual skip.
+        let next = if !explicit && direction > 0 && self.settings.repeat == RepeatMode::Track {
+            Some(index)
+        } else if self.settings.shuffle {
+            if direction < 0 {
+                history.pop_back()
+            } else if queue.len() > 1 {
+                // Sample all other positions uniformly without retries. Earlier
+                // tracks remain eligible, as only the current track is excluded.
+                let choice = fastrand::usize(..queue.len() - 1);
+                history.push_back(index);
+                if history.len() > SHUFFLE_HISTORY_LIMIT {
+                    history.pop_front();
+                }
+                Some(choice + usize::from(choice >= index))
+            } else {
+                None
+            }
+        } else {
+            history.clear();
+            if direction < 0 {
+                index.checked_sub(1).or_else(|| {
+                    (self.settings.repeat == RepeatMode::Playlist).then_some(queue.len() - 1)
+                })
+            } else if index + 1 < queue.len() {
+                Some(index + 1)
+            } else {
+                (self.settings.repeat == RepeatMode::Playlist).then_some(0)
+            }
+        };
+        if let Some(index) = next {
+            self.request_playback(PlaybackRequest {
+                queue,
+                playlist_id,
+                index,
+                paused: false,
+                shuffle_history: history,
+            })
+        } else {
+            if !explicit {
+                self.stop_playback();
+            }
+            Ok(())
         }
-        let index = bounded(index, direction, queue.len());
-        self.prepare_playback(queue, playlist_id, index)
+    }
+
+    pub(super) fn clear_shuffle_history(&mut self) {
+        self.playback.shuffle_history.clear();
+        if let Some(request) = self.playback.preparation.requested_mut() {
+            request.shuffle_history.clear();
+        }
     }
 
     pub(super) fn cancel_waveform(&mut self) {
@@ -447,5 +539,228 @@ impl App {
             }
         }
         self.start_waveform_job();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Track;
+    use std::{fs, sync::atomic::AtomicU64};
+
+    struct Directory(PathBuf);
+
+    impl Directory {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "almavorn-playback-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed),
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for Directory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn queue(app: &mut App, length: usize, index: usize) {
+        app.playback.queue = (0..length)
+            .map(|index| Entry {
+                id: index as i64 + 1,
+                position: index as i64,
+                track: Track {
+                    id: index as i64 + 1,
+                    path: app
+                        .store
+                        .path
+                        .with_file_name(format!("missing-{index}.wav")),
+                    title: format!("Track {index}"),
+                    artist: String::new(),
+                    album: String::new(),
+                    duration_ms: 1000,
+                    tags: "{}".into(),
+                },
+            })
+            .collect::<Vec<_>>()
+            .into();
+        app.playback.queue_index = index;
+        app.playback.playing_playlist = Some(42);
+        app.playback.playing_entry = app.playback.queue.get(index).map(|entry| entry.id);
+        app.playback.current = app
+            .playback
+            .queue
+            .get(index)
+            .map(|entry| entry.track.clone());
+    }
+
+    fn requested_index(app: &App) -> usize {
+        app.requested_playback()
+            .expect("Next track is being prepared")
+            .index
+    }
+
+    #[test]
+    fn normal_completion_stops_at_the_end_and_manual_steps_use_the_playing_queue() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 3, 0);
+        app.library.selected_playlist = Some(99);
+        assert!(!app.can_step_playback(-1));
+        assert!(app.can_step_playback(1));
+        app.next(1, false).unwrap();
+        assert_eq!(requested_index(&app), 1);
+        assert_eq!(app.requested_playback().unwrap().playlist_id, 42);
+        app.next(1, true).unwrap();
+        assert_eq!(requested_index(&app), 2);
+        assert!(!app.can_step_playback(1));
+        app.next(1, true).unwrap();
+        assert_eq!(requested_index(&app), 2);
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 1);
+        app.next(1, false).unwrap();
+        app.next(1, false).unwrap();
+        assert!(!app.preparing_playback());
+        assert!(app.playback.current.is_none());
+        assert!(app.playback.playing_playlist.is_none());
+        assert!(app.playback.queue.is_empty());
+    }
+
+    #[test]
+    fn track_repeat_restarts_on_completion_but_does_not_trap_manual_skips() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 3, 1);
+        app.settings.repeat = RepeatMode::Track;
+        app.next(1, false).unwrap();
+        assert_eq!(requested_index(&app), 1);
+        app.next(1, true).unwrap();
+        assert_eq!(requested_index(&app), 2);
+        app.next(1, false).unwrap();
+        assert_eq!(requested_index(&app), 2);
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 1);
+    }
+
+    #[test]
+    fn playlist_repeat_wraps_in_both_directions_including_pending_requests() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 3, 2);
+        app.settings.repeat = RepeatMode::Playlist;
+        assert!(app.can_step_playback(1));
+        app.next(1, false).unwrap();
+        assert_eq!(requested_index(&app), 0);
+        assert!(app.can_step_playback(-1));
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 2);
+        app.next(1, true).unwrap();
+        assert_eq!(requested_index(&app), 0);
+        app.settings.repeat = RepeatMode::Off;
+        assert!(!app.can_step_playback(-1));
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 0);
+    }
+
+    #[test]
+    fn shuffle_excludes_only_the_current_track_and_previous_retraces_history() {
+        fastrand::seed(7);
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 5, 4);
+        app.settings.shuffle = true;
+        assert!(app.can_step_playback(1));
+        assert!(!app.can_step_playback(-1));
+        let mut indices = vec![4];
+        for _ in 0..128 {
+            app.next(1, false).unwrap();
+            let index = requested_index(&app);
+            assert!(index < 5);
+            assert_ne!(index, *indices.last().unwrap());
+            assert_eq!(app.requested_playback().unwrap().playlist_id, 42);
+            indices.push(index);
+        }
+        assert!((0..5).all(|index| indices.contains(&index)));
+        for index in indices[..indices.len() - 1].iter().rev() {
+            assert!(app.can_step_playback(-1));
+            app.next(-1, true).unwrap();
+            assert_eq!(requested_index(&app), *index);
+        }
+        assert!(!app.can_step_playback(-1));
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 4);
+    }
+
+    #[test]
+    fn track_repeat_takes_priority_over_shuffle_and_skip_still_chooses_another_track() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 2, 1);
+        app.settings.shuffle = true;
+        app.settings.repeat = RepeatMode::Track;
+        app.next(1, false).unwrap();
+        assert_eq!(requested_index(&app), 1);
+        app.next(1, true).unwrap();
+        assert_eq!(requested_index(&app), 0);
+        app.next(1, false).unwrap();
+        assert_eq!(requested_index(&app), 0);
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 1);
+    }
+
+    #[test]
+    fn empty_and_single_track_playlists_handle_every_mode_without_invalid_requests() {
+        let directory = Directory::new();
+        for shuffle in [false, true] {
+            for repeat in [RepeatMode::Off, RepeatMode::Playlist, RepeatMode::Track] {
+                let mut app = App::new(&directory.0).unwrap();
+                app.settings.shuffle = shuffle;
+                app.settings.repeat = repeat;
+                queue(&mut app, 0, 0);
+                assert!(!app.can_step_playback(1));
+                assert!(!app.can_step_playback(-1));
+                app.next(1, false).unwrap();
+                assert!(!app.preparing_playback());
+                queue(&mut app, 1, 0);
+                app.next(1, false).unwrap();
+                if repeat == RepeatMode::Track || (!shuffle && repeat == RepeatMode::Playlist) {
+                    assert_eq!(requested_index(&app), 0);
+                } else {
+                    assert!(app.playback.current.is_none());
+                    assert!(!app.preparing_playback());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn shuffle_history_is_bounded_and_resets_on_explicit_selection_and_stop() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 2, 0);
+        app.settings.shuffle = true;
+        for _ in 0..SHUFFLE_HISTORY_LIMIT + 10 {
+            app.next(1, true).unwrap();
+        }
+        assert_eq!(
+            app.requested_playback().unwrap().shuffle_history.len(),
+            SHUFFLE_HISTORY_LIMIT
+        );
+        assert!(app.can_step_playback(-1));
+        app.prepare_playback(app.playback.queue.clone(), 99, 0)
+            .unwrap();
+        assert!(!app.can_step_playback(-1));
+        assert_eq!(app.requested_playback().unwrap().playlist_id, 99);
+        app.next(1, true).unwrap();
+        assert!(app.can_step_playback(-1));
+        app.stop_playback();
+        assert!(!app.can_step_playback(-1));
+        assert!(!app.can_step_playback(1));
+        assert!(app.playback.shuffle_history.is_empty());
     }
 }

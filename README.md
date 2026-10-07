@@ -72,6 +72,15 @@ volume sliders support dragging. Main panels use subdued border colors; border t
 Themes → Font and geometry. Color highlights selection and active headings. New configurations default
 to regular Fira Code; existing font choices remain intact.
 
+The player has repeat and shuffle buttons, also available in its context menu.
+`L` cycles repeat off → playlist → track; `H` toggles shuffle. Track repeat
+restarts a finished track; Next still skips it. Playlist repeat wraps at the
+ends of the queue. Shuffle chooses randomly from every other track in the
+playing playlist, even when a different playlist is selected; Previous returns
+through playback history. Track repeat takes priority over shuffle. Shuffle
+with a single track stops unless track repeat is enabled. Modes and shortcuts
+are saved in the active settings profile.
+
 Render the main screen, menus, and layout editor without a window:
 
 ```sh
@@ -98,9 +107,10 @@ with `F1`, the info button, or a double click on its row.
 - Use the mouse to select pages and rows, change values with buttons,
   scroll lists, and enter text through the on-screen keyboard.
   Sections, tabs, parameter rows, buttons, and breadcrumbs highlight when hovered.
-  Moving the pointer over a section, tab, or parameter makes it current without
-  changing its value. Keyboard or wheel navigation keeps control until the
-  pointer moves again, so only the current item is highlighted in each panel.
+  Moving the pointer over a section or tab makes it current. Hovering over
+  parameters only highlights them; the selected parameter stays fixed while
+  moving to the Edit or Info buttons. Click a parameter or use the keyboard
+  or wheel to change the selection.
   Left-click adjustable values to increase or advance; right-click to decrease
   or go backwards. The wheel moves one item per event in the panel under the pointer.
   Click or drag the volume scale; its percentage appears underneath.

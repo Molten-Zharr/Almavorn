@@ -291,6 +291,8 @@ fn quiet(
         Target::Action(Action::Panels) => app.view.layout_editing,
         Target::Action(Action::ToggleEdit) => app.view.editing,
         Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
+        Target::Action(Action::CycleRepeat) => app.settings.repeat != crate::model::RepeatMode::Off,
+        Target::Action(Action::ToggleShuffle) => app.settings.shuffle,
         Target::Action(Action::Filter) => app.view.filter_editing || !app.library.query.is_empty(),
         _ => false,
     };

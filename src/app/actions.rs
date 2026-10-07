@@ -245,6 +245,29 @@ impl App {
             }
             Next => self.next(1, true)?,
             Previous => self.next(-1, true)?,
+            CycleRepeat => {
+                self.settings.repeat = self.settings.repeat.next();
+                self.save_settings()?;
+                self.message(format!(
+                    "{}: {}",
+                    CycleRepeat.name(self.settings.language),
+                    self.settings.repeat.name(self.settings.language),
+                ));
+            }
+            ToggleShuffle => {
+                self.settings.shuffle = !self.settings.shuffle;
+                self.clear_shuffle_history();
+                self.save_settings()?;
+                self.message(format!(
+                    "{}: {}",
+                    ToggleShuffle.name(self.settings.language),
+                    if self.settings.shuffle {
+                        self.text("On", "Включено")
+                    } else {
+                        self.text("Off", "Выключено")
+                    },
+                ));
+            }
             VolumeUp | VolumeDown => {
                 self.adjust_volume(if action == VolumeUp { 5 } else { -5 })?;
             }
