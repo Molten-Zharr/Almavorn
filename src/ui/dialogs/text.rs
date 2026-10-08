@@ -47,17 +47,11 @@ pub(super) fn text_dialog(
             "Search · title, artist, album, path",
             "Поиск · название, исполнитель, альбом, путь",
         ),
-        TextPurpose::DeletePlaylist(_, _) => app.text(
-            "Remove playlist · confirmation",
-            "Удалить плейлист · подтверждение",
-        ),
         TextPurpose::Accent => app.text("Accent color · RRGGBB", "Цвет акцента · RRGGBB"),
         TextPurpose::Settings(edit) => edit.title(app.settings.language),
     };
     let inner = modal(frame, app, area, title.into(), 27, palette);
-    let hint = if let TextPurpose::DeletePlaylist(_, name)
-    | TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose
-    {
+    let hint = if let TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose {
         format!(
             "{}: {name}",
             app.text("Enter exact name or path", "Введите точное имя или путь")
@@ -175,9 +169,7 @@ pub(super) fn text_dialog(
         palette,
     );
     let can_submit = match &dialog.purpose {
-        TextPurpose::DeletePlaylist(_, name) | TextPurpose::RemovePlaylistFolder(_, name) => {
-            &dialog.text == name
-        }
+        TextPurpose::RemovePlaylistFolder(_, name) => &dialog.text == name,
         _ => true,
     };
     buttons(

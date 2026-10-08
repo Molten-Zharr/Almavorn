@@ -357,10 +357,11 @@ impl App {
             Delete => {
                 if self.view.focus == Focus::Playlists {
                     if let Some(playlist) = self.playlist() {
-                        self.text_dialog(
-                            TextPurpose::DeletePlaylist(playlist.id, playlist.name.clone()),
-                            String::new(),
-                        );
+                        self.view.dialog = Some(Dialog::RemovePlaylist {
+                            playlist: playlist.id,
+                            name: playlist.name.clone(),
+                            confirm: false,
+                        });
                     }
                 } else if let (Some(playlist), Some(entry)) = (self.playlist(), self.entry()) {
                     self.view.dialog = Some(Dialog::RemoveEntry {

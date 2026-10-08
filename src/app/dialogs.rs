@@ -16,7 +16,6 @@ pub enum TextPurpose {
     RemovePlaylistFolder(i64, String),
     RenameTrack(i64, i64),
     Search,
-    DeletePlaylist(i64, String),
     Accent,
     Settings(SettingsEdit),
 }
@@ -56,6 +55,11 @@ pub enum Dialog {
         playlist: i64,
         entry: i64,
         title: String,
+    },
+    RemovePlaylist {
+        playlist: i64,
+        name: String,
+        confirm: bool,
     },
     Transfer {
         ids: Vec<i64>,
@@ -103,7 +107,9 @@ impl Dialog {
             Self::Folders { .. } => Some(Action::PlaylistFolders),
             Self::ComposePlaylists { .. } => Some(Action::ComposePlaylists),
             Self::Transfer { .. } => Some(Action::Transfer),
-            Self::RemoveEntry { .. } | Self::ConfirmSettings { .. } => Some(Action::Delete),
+            Self::RemoveEntry { .. }
+            | Self::RemovePlaylist { .. }
+            | Self::ConfirmSettings { .. } => Some(Action::Delete),
             Self::Text(_) | Self::CaptureBinding { .. } | Self::Commands { .. } => None,
             Self::Search(_) => None,
         }
@@ -324,18 +330,6 @@ impl App {
                             Ok(DatabaseOutcome::Renamed)
                         })
                     }
-                    TextPurpose::DeletePlaylist(id, expected) => {
-                        if &dialog.text != expected {
-                            self.view.dialog = Some(Dialog::Text(dialog));
-                            anyhow::bail!(AppError::PlaylistConfirmationRequired);
-                        }
-                        let id = *id;
-                        self.start_database(recovery, move |store| {
-                            Ok(DatabaseOutcome::Changed(
-                                store.delete_playlist(id, &text, unlocked)?,
-                            ))
-                        })
-                    }
                     TextPurpose::Search => {
                         self.library.query = dialog.text.clone();
                         self.view.track_offset = 0;
@@ -359,6 +353,29 @@ impl App {
                 };
                 if let Err(error) = result {
                     self.view.dialog = Some(Dialog::Text(dialog));
+                    return Err(error);
+                }
+            }
+            Some(Dialog::RemovePlaylist {
+                playlist,
+                name,
+                confirm,
+            }) => {
+                if !confirm {
+                    return Ok(());
+                }
+                let recovery = Dialog::RemovePlaylist {
+                    playlist,
+                    name: name.clone(),
+                    confirm: false,
+                };
+                let unlocked = self.view.editing;
+                if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
+                    Ok(DatabaseOutcome::Changed(
+                        store.delete_playlist(playlist, &name, unlocked)?,
+                    ))
+                }) {
+                    self.view.dialog = Some(recovery);
                     return Err(error);
                 }
             }

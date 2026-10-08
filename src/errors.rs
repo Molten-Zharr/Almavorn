@@ -79,8 +79,8 @@ impl AppError {
                 "Введите точное имя плейлиста для подтверждения.",
             ),
             Self::PlaylistRemovalConfirmationRequired => language.text(
-                "Enter the exact playlist name to confirm removal",
-                "Введите точное имя плейлиста для подтверждения.",
+                "The playlist name changed. Reopen the deletion confirmation.",
+                "Название плейлиста изменилось. Откройте подтверждение удаления заново.",
             ),
             Self::InvalidTrackName => language.text(
                 "Name must contain 1–160 printable characters",

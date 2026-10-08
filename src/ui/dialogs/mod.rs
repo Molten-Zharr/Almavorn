@@ -78,6 +78,66 @@ pub(super) fn render_dialog(
         Dialog::ComposePlaylists { selected, ids } => {
             playlists::compose(frame, app, selected, ids, area, palette)
         }
+        Dialog::RemovePlaylist { name, confirm, .. } => {
+            let body = format!(
+                "{}\n\n{}",
+                name,
+                app.text(
+                    "Music files and saved tags are kept.",
+                    "Музыкальные файлы и сохраненные теги останутся."
+                )
+            );
+            let width = area.width.saturating_sub(6).clamp(1, 86);
+            let height = (Paragraph::new(body.as_str())
+                .wrap(Wrap { trim: false })
+                .line_count(width) as u16)
+                .saturating_add(5);
+            let inner = modal(
+                frame,
+                app,
+                area,
+                app.text("Delete playlist?", "Удалить плейлист?").into(),
+                height,
+                palette,
+            );
+            frame.render_widget(
+                Paragraph::new(body)
+                    .style(palette.text())
+                    .wrap(Wrap { trim: false }),
+                Rect::new(
+                    inner.x,
+                    inner.y,
+                    inner.width,
+                    inner.height.saturating_sub(2),
+                ),
+            );
+            buttons(
+                frame,
+                app,
+                Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2),
+                vec![
+                    (
+                        app.text("Yes", "Да").into(),
+                        if *confirm {
+                            Target::Submit
+                        } else {
+                            Target::DeletePlaylistAnswer(true)
+                        },
+                        !app.busy(),
+                    ),
+                    (
+                        app.text("No", "Нет").into(),
+                        if *confirm {
+                            Target::DeletePlaylistAnswer(false)
+                        } else {
+                            Target::Submit
+                        },
+                        true,
+                    ),
+                ],
+                palette,
+            );
+        }
         Dialog::RemoveEntry { title, .. } => {
             let inner = modal(
                 frame,

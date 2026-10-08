@@ -253,7 +253,12 @@ impl Store {
         })
     }
 
-    pub fn delete_playlist(&mut self, id: i64, typed_name: &str, unlocked: bool) -> Result<Change> {
+    pub fn delete_playlist(
+        &mut self,
+        id: i64,
+        expected_name: &str,
+        unlocked: bool,
+    ) -> Result<Change> {
         self.mutate(Some(id), Mode::Order, unlocked, |connection| {
             let (name, kind): (String, String) = connection.query_row(
                 "SELECT name,kind FROM playlists WHERE id=?1",
@@ -262,7 +267,7 @@ impl Store {
             )?;
             ensure!(kind == "normal", AppError::DeskRemovalForbidden);
             ensure!(
-                name == typed_name,
+                name == expected_name,
                 AppError::PlaylistRemovalConfirmationRequired
             );
             let mode: String =

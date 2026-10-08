@@ -74,6 +74,7 @@ pub enum Target {
     PlaybackVolume(Rect),
     CloseDialog,
     Submit,
+    DeletePlaylistAnswer(bool),
     Text(char),
     Backspace,
     KeyboardLanguage,

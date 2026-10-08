@@ -294,6 +294,25 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if let Some(Dialog::RemovePlaylist { confirm, .. }) = &mut self.view.dialog
+                && !key.ctrl
+                && !key.alt
+            {
+                match key.key {
+                    Key::Left | Key::Up => *confirm = true,
+                    Key::Right | Key::Down => *confirm = false,
+                    Key::Tab => *confirm = !*confirm,
+                    Key::Char('y' | 'Y' | 'д' | 'Д') => {
+                        return self.target(Target::DeletePlaylistAnswer(true), false);
+                    }
+                    Key::Char('n' | 'N' | 'н' | 'Н') => {
+                        return self.target(Target::DeletePlaylistAnswer(false), false);
+                    }
+                    Key::Enter => self.submit()?,
+                    _ => {}
+                }
+                return Ok(());
+            }
             if key.ctrl
                 && !key.alt
                 && key.key == Key::Char('g')
@@ -651,6 +670,12 @@ impl App {
                 self.close_dialog();
             }
             Target::Submit => self.submit()?,
+            Target::DeletePlaylistAnswer(answer) => {
+                if let Some(Dialog::RemovePlaylist { confirm, .. }) = &mut self.view.dialog {
+                    *confirm = answer;
+                    self.submit()?;
+                }
+            }
             Target::ComposeRow(index) => self.toggle_compose_row(index),
             Target::ComposeMove(direction) => self.move_composition_source(direction),
             Target::FolderRow(index) => {
