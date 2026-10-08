@@ -174,7 +174,18 @@ impl App {
             ),
             CommandMenu::Player => (
                 Panel::Player,
-                &[Previous, TogglePlay, Stop, Next, VolumeDown, VolumeUp],
+                &[
+                    Previous,
+                    TogglePlay,
+                    Stop,
+                    Next,
+                    CycleRepeat,
+                    ToggleShuffle,
+                    Equalizer,
+                    PlaybackTuner,
+                    VolumeDown,
+                    VolumeUp,
+                ],
             ),
         };
         let mut items = Vec::new();
@@ -209,12 +220,21 @@ impl App {
                 let checked = match action {
                     ToggleEdit => Some(self.view.editing),
                     ToggleDesk => Some(self.settings.sorting_desk),
+                    ToggleShuffle => Some(self.settings.shuffle),
                     _ => None,
                 };
-                let name = action.name(self.settings.language);
+                let name = if *action == CycleRepeat {
+                    format!(
+                        "{}: {}",
+                        action.name(self.settings.language),
+                        self.settings.repeat.name(self.settings.language),
+                    )
+                } else {
+                    action.name(self.settings.language).into()
+                };
                 items.push(CommandItem {
                     label: checked.map_or_else(
-                        || name.into(),
+                        || name.clone(),
                         |value| format!("[{}] {name}", if value { 'x' } else { ' ' }),
                     ),
                     target: Target::Action(*action),

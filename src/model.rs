@@ -49,6 +49,32 @@ impl Mode {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RepeatMode {
+    #[default]
+    Off,
+    Playlist,
+    Track,
+}
+
+impl RepeatMode {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Off => Self::Playlist,
+            Self::Playlist => Self::Track,
+            Self::Track => Self::Off,
+        }
+    }
+
+    pub fn name(self, language: Language) -> &'static str {
+        match self {
+            Self::Off => language.text("Off", "Выключен"),
+            Self::Playlist => language.text("Playlist", "Плейлист"),
+            Self::Track => language.text("Track", "Трек"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlaylistKind {
     Normal,
@@ -165,6 +191,10 @@ pub struct Settings {
     pub language: Language,
     pub mode: Mode,
     pub volume: f32,
+    pub repeat: RepeatMode,
+    pub shuffle: bool,
+    pub equalizer: crate::equalizer::EqualizerSettings,
+    pub tuner: crate::tuner::TunerSettings,
     pub sorting_desk: bool,
     pub scan_subfolders: bool,
     pub playlist_placement: Placement,
@@ -186,6 +216,10 @@ impl Default for Settings {
             language: Language::Russian,
             mode: Mode::Order,
             volume: 0.7,
+            repeat: RepeatMode::Off,
+            shuffle: false,
+            equalizer: Default::default(),
+            tuner: Default::default(),
             sorting_desk: true,
             scan_subfolders: true,
             playlist_placement: Placement::Left,

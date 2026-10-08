@@ -5,6 +5,7 @@ mod commands;
 mod context;
 mod database;
 mod dialogs;
+mod equalizer;
 mod events;
 mod history;
 mod import;
@@ -15,6 +16,7 @@ mod playlist_operations;
 mod search;
 mod settings;
 mod state;
+mod tuner;
 mod workspace;
 
 pub use browser::{Browser, BrowserEntry};
@@ -60,6 +62,8 @@ impl App {
         settings.volume = settings.volume.clamp(0.0, 1.0);
         settings.workspace.normalize();
         settings.ensure_bindings();
+        settings.equalizer.normalize();
+        settings.tuner.normalize();
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
         let view = UiState::new(settings.language);
         Ok(Self {
@@ -125,6 +129,8 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        self.cancel_audio_preparation();
+        self.cancel_seek();
         self.cancel_waveform();
         if let Some(job) = &self.library.import {
             job.cancel.store(true, Ordering::Relaxed);

@@ -129,6 +129,12 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::Submit | Target::BrowserOpen => Some("Enter".into()),
         Target::SearchPlay => Some("Enter".into()),
         Target::Setting(_) => Some("Enter".into()),
+        Target::EqualizerToggle => Some("Space".into()),
+        Target::EqualizerPresets => Some("Enter".into()),
+        Target::EqualizerPreset(index) => Some((index + 1).to_string()),
+        Target::EqualizerReset => Some("R".into()),
+        Target::TunerReverse => Some("Space".into()),
+        Target::TunerReset => Some("R".into()),
         Target::SettingHelp(_) => Some("F1".into()),
         Target::CloseDialog => Some("Esc".into()),
         Target::BrowserParent => Some("Backspace".into()),
@@ -291,6 +297,13 @@ fn quiet(
         Target::Action(Action::Panels) => app.view.layout_editing,
         Target::Action(Action::ToggleEdit) => app.view.editing,
         Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
+        Target::Action(Action::CycleRepeat) => app.settings.repeat != crate::model::RepeatMode::Off,
+        Target::Action(Action::ToggleShuffle) => app.settings.shuffle,
+        Target::Action(Action::PlaybackTuner) => app.settings.tuner != Default::default(),
+        Target::TunerReverse => app.settings.tuner.reverse,
+        Target::Action(Action::Equalizer) | Target::EqualizerToggle => {
+            app.settings.equalizer.enabled
+        }
         Target::Action(Action::Filter) => app.view.filter_editing || !app.library.query.is_empty(),
         _ => false,
     };

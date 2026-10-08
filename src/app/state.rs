@@ -106,6 +106,20 @@ pub enum Target {
     SettingHelp(usize),
     BindingModifier(usize),
     BindingKey(Key),
+    EqualizerToggle,
+    EqualizerPresets,
+    EqualizerPreset(usize),
+    EqualizerSelect(usize),
+    EqualizerGain {
+        index: usize,
+        area: Rect,
+        vertical: bool,
+    },
+    EqualizerReset,
+    TunerSelect(usize),
+    TunerSlider(usize, Rect),
+    TunerReverse,
+    TunerReset,
 }
 
 pub struct Hit {

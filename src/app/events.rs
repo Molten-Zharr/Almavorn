@@ -56,6 +56,14 @@ impl App {
                 {
                     *selected = index;
                 }
+                if let Some(Target::EqualizerPreset(index)) =
+                    self.target_at(self.view.pointer).cloned()
+                    && let Some(Dialog::Equalizer {
+                        preset_selected, ..
+                    }) = &mut self.view.dialog
+                {
+                    *preset_selected = index;
+                }
             }
             Input::Click { x, y, double } => {
                 self.view.pointer = Position::new(x, y);
@@ -98,6 +106,12 @@ impl App {
                 let delta = delta.signum();
                 if delta == 0 {
                     return Ok(());
+                }
+                if matches!(self.view.dialog, Some(Dialog::Equalizer { .. })) {
+                    return self.scroll_equalizer(Position::new(x, y), delta);
+                }
+                if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
+                    return self.scroll_tuner(Position::new(x, y), delta);
                 }
                 if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
                     let position = Position::new(x, y);
@@ -225,6 +239,16 @@ impl App {
             return self.filter_key(key);
         }
         if key.key == Key::Escape {
+            if matches!(
+                self.view.dialog,
+                Some(Dialog::Equalizer { presets: true, .. })
+            ) && self.view.workspace.gesture.is_none()
+            {
+                if let Some(Dialog::Equalizer { presets, .. }) = &mut self.view.dialog {
+                    *presets = false;
+                }
+                return Ok(());
+            }
             if self.cancel_workspace_drag() {
                 return Ok(());
             }
@@ -256,6 +280,12 @@ impl App {
         }
         if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
             return self.settings_key(key);
+        }
+        if matches!(self.view.dialog, Some(Dialog::Equalizer { .. })) {
+            return self.equalizer_key(normalized);
+        }
+        if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
+            return self.tuner_key(normalized);
         }
         if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref() {
             let index = *index;
@@ -873,6 +903,16 @@ impl App {
                     })?;
                 }
             }
+            target @ (Target::EqualizerToggle
+            | Target::EqualizerPresets
+            | Target::EqualizerPreset(_)
+            | Target::EqualizerSelect(_)
+            | Target::EqualizerGain { .. }
+            | Target::EqualizerReset) => self.equalizer_target(target)?,
+            target @ (Target::TunerSelect(_)
+            | Target::TunerSlider(_, _)
+            | Target::TunerReverse
+            | Target::TunerReset) => self.tuner_target(target)?,
         }
         Ok(())
     }

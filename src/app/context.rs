@@ -13,7 +13,7 @@ use crate::{
 };
 use ratatui::layout::{Position, Rect};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::Arc,
 };
@@ -46,11 +46,15 @@ pub struct PlaybackState {
     pub(super) pending_waveform: Option<(PathBuf, u64)>,
     pub(super) queue: Arc<[Entry]>,
     pub(super) queue_index: usize,
+    pub(super) shuffle_history: VecDeque<usize>,
     pub(super) audio: Option<Audio>,
     pub(super) preparation: LatestJob<playback::PlaybackRequest, crate::audio::PreparedAudio>,
     pub(super) seek: LatestJob<playback::SeekRequest, crate::audio::PreparedAudio>,
     pub(super) seek_preview: Option<u64>,
     pub(super) seek_paused: Option<bool>,
+    pub(super) preparation_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pub(super) seek_cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    pub(super) reverse_cache: Option<(PathBuf, Arc<crate::audio::PcmCache>)>,
 }
 
 #[derive(Default)]

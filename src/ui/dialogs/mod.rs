@@ -1,10 +1,12 @@
 mod bindings;
 mod browser;
+mod equalizer;
 mod help;
 mod panels;
 mod playlists;
 mod search;
 mod text;
+mod tuner;
 pub(crate) use text::keyboard;
 
 use self::{bindings::binding_dialog, browser::browser_dialog, text::text_dialog};
@@ -59,6 +61,22 @@ pub(super) fn render_dialog(
         return;
     }
     match dialog {
+        Dialog::PlaybackTuner { selected } => tuner::render(frame, app, selected, area, palette),
+        Dialog::Equalizer {
+            selected,
+            presets,
+            preset_selected,
+        } => {
+            equalizer::render(
+                frame,
+                app,
+                selected,
+                *presets,
+                preset_selected,
+                area,
+                palette,
+            );
+        }
         Dialog::Commands {
             menu,
             selected,
@@ -330,6 +348,9 @@ pub(super) fn render_dialog(
                 .into(),
             );
             lines.push(app.text("Hold the waveform or progress bar to choose a position silently; release to seek and keep the previous play/pause state. Esc cancels dragging. Click or drag the divided volume bar; Up/Down in the player changes volume by 1%.", "Зажмите аудиоволну или дорожку для тихого выбора позиции; отпустите для перемотки с сохранением воспроизведения или паузы. Esc отменяет перетаскивание. Полоска громкости управляется мышью; стрелки вверх/вниз в плеере меняют громкость на 1%.").into());
+            lines.push(app.text("Repeat cycles off → playlist → track. Track repeat restarts the finished track; manual Next still skips it. Shuffle chooses among all other tracks in the playing playlist, and Previous retraces playback history. Track repeat takes priority over shuffle. With shuffle and only one track, playback stops unless track repeat is enabled. These modes save in the active profile; their shortcuts are listed above.", "Повтор переключается: выключен → плейлист → трек. Повтор трека запускает завершённый трек сначала; кнопка следующего позволяет его пропустить. Случайное проигрывание выбирает из остальных треков воспроизводимого плейлиста, а Назад возвращает по истории. Повтор трека имеет приоритет. При случайном проигрывании единственного трека плеер останавливается, если не включён повтор трека. Режимы сохраняются в активном профиле; сочетания клавиш указаны выше.").into());
+            lines.push(app.text("Equalizer: the EQ button or its shortcut opens ten bands (32 Hz–16 kHz) and preamp, each from −12 to +12 dB. Drag sliders or use the wheel in 1 dB steps; Left/Right and Tab select a band, Up/Down changes its gain. Space toggles the equalizer; Enter opens presets, 1–8 applies one, R resets gains. Changes affect the current track immediately and save in the profile. Manual adjustments display Custom. Preamp adjusts all frequencies together.", "Эквалайзер: кнопка EQ или её горячая клавиша открывает десять полос (32 Гц–16 кГц) и предусиление от −12 до +12 дБ. Тяните ползунки или меняйте их колесом по 1 дБ; ←→ и Tab выбирают полосу, ↑↓ меняют усиление. Space включает эквалайзер; Enter открывает пресеты, 1–8 выбирает пресет, R сбрасывает усиление. Изменения сразу действуют на текущий трек и сохраняются в профиле. При ручной настройке показан «Пользовательский». Предусиление меняет громкость всех частот вместе.").into());
+            lines.push(app.text("Playback tuner: FX or its shortcut opens speed, tempo and pitch (50–200%, normal 100%), bass (0–100% = 0–12 dB), and reverse. Speed changes both duration and pitch; tempo preserves pitch; pitch preserves duration. Drag or use the wheel in 1% steps. Up/Down/Tab selects, Left/Right adjusts by 1%, Home restores normal, Space toggles reverse, R resets all. Reverse plays from the current position; new tracks start from the end. Pause state is retained. Reverse preparation runs in the background; subsequent seeks reuse its temporary cache. The timeline shows original track time. Settings save in the profile.", "Настройщик проигрывания: FX или горячая клавиша открывает скорость, темп и тональность (50–200%, норма 100%), бас (0–100% = 0–12 дБ) и реверс. Скорость меняет длительность и высоту звука; темп сохраняет тон; тональность сохраняет длительность. Тяните ползунки или меняйте колесом по 1%. ↑↓/Tab выбирают, ←→ меняют по 1%, Home возвращает норму, Space переключает реверс, R сбрасывает всё. Реверс идёт с текущей позиции; новые треки начинаются с конца. Пауза сохраняется. Подготовка идёт в фоне; повторная перемотка использует временный кэш. Таймер показывает исходное время трека. Настройки сохраняются в профиле.").into());
             lines.push(app.text("Settings > General > Playback timeline chooses waveform or progress bar. Only one view is shown. The choice applies immediately in GUI and TUI and is saved in the active profile. Progress bar mode skips waveform analysis.", "Настройки > Общие > Дорожка проигрывания: аудиоволна или обычная полоса. Показывается один выбранный вид. Выбор сразу применяется в GUI и TUI и сохраняется в активном профиле. При обычной полосе анализ аудиоволны не запускается.").into());
             lines.push(app.text("[▶] and [‖] mark the playing playlist and track, including pause. [■] stops playback. The selected row is highlighted separately. Playlist track counts stay visible on the right; long names end with an ellipsis.", "[▶] и [‖] обозначают воспроизводящийся плейлист и композицию, включая паузу. [■] останавливает воспроизведение. Выбранная строка выделяется отдельно. Счетчики композиций всегда справа; длинные названия сокращаются с многоточием.").into());
             lines.push(app.text("Playlist numbers show their positions. Select a regular playlist; Ctrl+Up/Down moves it by one position. At least two regular playlists are required in the current mode. In Order, enable Edit first. The sorting desk stays first and cannot be reordered. Hold LMB on a regular playlist row, drag onto another regular playlist and release to move it there. The target row is highlighted. While dragging, use the wheel to reach hidden rows. Esc cancels the drag; dropping outside the list changes nothing. Playlist order is saved; Chaos supports undo/redo. Tracks and their positions remain unchanged.", "Номера плейлистов показывают их позиции. Выберите обычный плейлист; Ctrl+вверх/вниз перемещает его на одну позицию. В текущем режиме нужны хотя бы два обычных плейлиста. В Порядке сначала включите Правку. Сортировочный стол закреплен первым и не переставляется. Зажмите ЛКМ на строке обычного плейлиста, перенесите на другой обычный плейлист и отпустите. Строка назначения подсвечивается. При переносе колесо открывает строки за пределами списка. Esc отменяет перенос; отпускание вне списка ничего не меняет. Порядок плейлистов сохраняется; в Хаосе работает отмена/повтор. Композиции и их позиции не меняются.").into());

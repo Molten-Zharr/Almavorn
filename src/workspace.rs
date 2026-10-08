@@ -96,6 +96,10 @@ impl Panel {
                 Button(TogglePlay),
                 Button(Stop),
                 Button(Next),
+                Button(CycleRepeat),
+                Button(ToggleShuffle),
+                Button(Equalizer),
+                Button(PlaybackTuner),
                 Button(VolumeDown),
                 Button(VolumeUp),
             ],
@@ -510,12 +514,27 @@ pub struct SplitArea {
 }
 
 pub enum Gesture {
-    Playlist { id: i64, target: Option<i64> },
-    Move { panel: Panel, origin: Position },
-    Resize { split: SplitArea, before: Dock },
+    Playlist {
+        id: i64,
+        target: Option<i64>,
+    },
+    Move {
+        panel: Panel,
+        origin: Position,
+    },
+    Resize {
+        split: SplitArea,
+        before: Dock,
+    },
     Seek(Rect),
     PlaybackVolume(Rect),
     Volume(usize, Rect),
+    EqualizerGain {
+        index: usize,
+        area: Rect,
+        vertical: bool,
+    },
+    TunerSlider(usize, Rect),
 }
 
 pub struct Workspace {

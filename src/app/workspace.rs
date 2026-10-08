@@ -234,6 +234,30 @@ impl App {
                 );
                 self.target(super::Target::SettingsVolume(index, area), false)?;
             }
+            Some(Gesture::EqualizerGain {
+                index,
+                area,
+                vertical,
+            }) => {
+                let (index, area, vertical) = (*index, *area, *vertical);
+                self.view.pointer = Position::new(
+                    point.x.clamp(area.x, area.right().saturating_sub(1)),
+                    point.y.clamp(area.y, area.bottom().saturating_sub(1)),
+                );
+                self.equalizer_target(super::Target::EqualizerGain {
+                    index,
+                    area,
+                    vertical,
+                })?;
+            }
+            Some(Gesture::TunerSlider(index, area)) => {
+                let (index, area) = (*index, *area);
+                self.view.pointer = Position::new(
+                    point.x.clamp(area.x, area.right().saturating_sub(1)),
+                    area.y,
+                );
+                self.tuner_target(super::Target::TunerSlider(index, area))?;
+            }
             None => {}
         }
         Ok(())

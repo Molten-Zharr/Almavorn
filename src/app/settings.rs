@@ -211,19 +211,6 @@ impl App {
                 }
                 self.view.settings.focus = SettingsFocus::Subtabs;
             }
-            Some(
-                Target::SettingSelect(index)
-                | Target::Setting(index)
-                | Target::SettingAdjust(index, _)
-                | Target::SettingsVolume(index, _),
-            ) if self
-                .view
-                .settings
-                .parameters_area
-                .contains(self.view.pointer) =>
-            {
-                self.select_setting(index);
-            }
             _ => {}
         }
     }

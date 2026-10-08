@@ -6,8 +6,8 @@ use super::{
 use crate::{
     app::{App, Hit, Target},
     input::Action,
-    model::duration_text,
-    preferences::PlaybackTimeline,
+    model::{RepeatMode, duration_text},
+    preferences::{FontFace, PlaybackTimeline},
     workspace::Panel,
 };
 use ratatui::{
@@ -23,6 +23,27 @@ fn controls(app: &App) -> Vec<(Action, &'static str)> {
         (Action::TogglePlay, if app.paused() { "[▶]" } else { "[‖]" }),
         (Action::Stop, "[■]"),
         (Action::Next, "›"),
+        (
+            Action::CycleRepeat,
+            match (app.settings.repeat, app.settings.appearance.font) {
+                (RepeatMode::Off, FontFace::DejaVuMono) => "[↻]",
+                (RepeatMode::Playlist, FontFace::DejaVuMono) => "[↻∞]",
+                (RepeatMode::Track, FontFace::DejaVuMono) => "[↻1]",
+                (RepeatMode::Off, _) => "[⟳]",
+                (RepeatMode::Playlist, _) => "[⟳∞]",
+                (RepeatMode::Track, _) => "[⟳1]",
+            },
+        ),
+        (
+            Action::ToggleShuffle,
+            if app.settings.appearance.font == FontFace::DejaVuMono {
+                "[⇄]"
+            } else {
+                "[↔]"
+            },
+        ),
+        (Action::Equalizer, "[EQ]"),
+        (Action::PlaybackTuner, "[FX]"),
     ]
     .into_iter()
     .filter(|(action, _)| app.control_visible(Panel::Player, *action))
@@ -44,18 +65,22 @@ pub(super) fn content_height(app: &App, width: u16) -> u16 {
         }
 }
 
-fn volume_width(width: u16) -> u16 {
-    (width / 3).clamp(32, 80).min(width)
+fn controls_width(app: &App) -> u16 {
+    controls(app)
+        .iter()
+        .map(|(action, label)| button_width(app, label, &Target::Action(*action)).saturating_add(1))
+        .fold(0, u16::saturating_add)
+}
+
+fn volume_width(app: &App, width: u16) -> u16 {
+    let available = width.saturating_sub(controls_width(app).saturating_add(15));
+    (width / 3).clamp(32, 80).min(available.max(32)).min(width)
 }
 
 fn stack_volume(app: &App, width: u16) -> bool {
-    let controls_width: u16 = controls(app)
-        .iter()
-        .map(|(action, label)| button_width(app, label, &Target::Action(*action)).saturating_add(1))
-        .sum();
     width < 70
-        || controls_width
-            .saturating_add(volume_width(width))
+        || controls_width(app)
+            .saturating_add(volume_width(app, width))
             .saturating_add(15)
             > width
 }
@@ -135,7 +160,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     let volume_width = if stacked {
         area.width
     } else {
-        volume_width(area.width)
+        volume_width(app, area.width)
     };
     let volume_area = Rect::new(
         row.right().saturating_sub(volume_width),

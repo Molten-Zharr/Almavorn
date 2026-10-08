@@ -1,7 +1,7 @@
 use almavorn::{
     app::{App, Dialog, SettingsFocus, SettingsPage, Target},
     input::{Action, Input, Key, KeyPress},
-    model::Language,
+    model::{Language, RepeatMode},
     preferences::{BRAND_PALETTE, BorderWeight, Corners, FontFace, NamedPalette, color_roles},
     store::Store,
     ui,
@@ -230,7 +230,7 @@ fn pages_keep_mouse_keyboard_descriptions_and_footer_available() {
                 if width >= 70 {
                     let text = screen_text(&terminal);
                     assert!(
-                        text.contains("Tab:") && text.contains("Enter:") && text.contains("Esc:"),
+                        text.contains("Tab:") && text.contains("Enter") && text.contains("Esc"),
                         "{page:?}: {text}"
                     );
                 }
@@ -673,32 +673,14 @@ fn settings_hover_wheel_and_keyboard_share_one_current_section() {
 }
 
 #[test]
-fn settings_hover_selects_rows_and_values_without_activating_them() {
+fn settings_hover_highlights_rows_without_replacing_the_selected_parameter() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::General);
+    select_row(&mut app, 3);
     rendered(&mut app, 120, 50);
-    let row = app
-        .view
-        .hits
-        .iter()
-        .find(|hit| matches!(hit.target, Target::SettingSelect(3)))
-        .unwrap()
-        .area;
     let placement = app.settings.playlist_placement;
-    app.handle(Input::Move { x: row.x, y: row.y });
-    assert_eq!(app.settings_focus(), SettingsFocus::Parameters);
-    assert!(matches!(
-        app.view.dialog,
-        Some(Dialog::Settings { selected: 3 })
-    ));
-    assert_eq!(app.settings.playlist_placement, placement);
-    key(&mut app, Key::Right);
-    assert_ne!(app.settings.playlist_placement, placement);
-    assert!(!app.hovered(row));
-    key(&mut app, Key::Left);
-    assert_eq!(app.settings.playlist_placement, placement);
-    rendered(&mut app, 120, 50);
+    let volume = app.settings.volume;
     let value = app
         .view
         .hits
@@ -706,18 +688,17 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
         .find(|hit| matches!(hit.target, Target::SettingAdjust(1, 1)))
         .unwrap()
         .area;
-    let volume = app.settings.volume;
     app.handle(Input::Move {
         x: value.x,
         y: value.y,
     });
     assert!(matches!(
         app.view.dialog,
-        Some(Dialog::Settings { selected: 1 })
+        Some(Dialog::Settings { selected: 3 })
     ));
     assert_eq!(app.settings.volume, volume);
     let before = rendered(&mut app, 120, 50);
-    let volume_row = app
+    let row = app
         .view
         .hits
         .iter()
@@ -729,9 +710,22 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
         .current_palette()
         .color("selected_file_background");
     assert_eq!(
-        before.backend().buffer()[(volume_row.x, volume_row.y)].bg,
+        before.backend().buffer()[(row.x, row.y)].bg,
         Color::Rgb(r, g, b)
     );
+    key(&mut app, Key::Right);
+    assert_ne!(app.settings.playlist_placement, placement);
+    assert_eq!(app.settings.volume, volume);
+    assert!(!app.hovered(value));
+    // Clicking a value deliberately changes the selection and its value once.
+    click(&mut app, |target| {
+        matches!(target, Target::SettingAdjust(1, 1))
+    });
+    assert!(matches!(
+        app.view.dialog,
+        Some(Dialog::Settings { selected: 1 })
+    ));
+    assert!((app.settings.volume - volume - 0.05).abs() < 0.001);
     app.handle(Input::Scroll {
         x: value.x,
         y: value.y,
@@ -745,42 +739,185 @@ fn settings_hover_selects_rows_and_values_without_activating_them() {
         let after = rendered(&mut app, 120, 50);
         let [r, g, b] = app.settings.current_palette().color("background");
         assert_eq!(
-            after.backend().buffer()[(volume_row.x, volume_row.y)].bg,
+            after.backend().buffer()[(row.x, row.y)].bg,
             Color::Rgb(r, g, b)
         );
-        assert!(!app.hovered(value));
         assert!(matches!(
             app.view.dialog,
             Some(Dialog::Settings { selected: 2 })
         ));
     }
-    app.handle(Input::Move {
-        x: value.x,
-        y: value.y,
-    });
-    key(&mut app, Key::Right);
-    assert!((app.settings.volume - (volume + 0.05)).abs() < 0.001);
-    app.open_settings_page(SettingsPage::Themes);
+}
+
+#[test]
+fn moving_across_parameters_to_the_edit_footer_keeps_its_target_and_activates_once() {
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    app.open_settings_page(SettingsPage::Typography);
+    select_row(&mut app, 1); // Exact font-size editor.
+    let original = app.settings.appearance.clone();
+    for index in [0, 2, 3] {
+        rendered(&mut app, 120, 50);
+        let row = app
+            .view
+            .hits
+            .iter()
+            .find(|hit| matches!(hit.target, Target::SettingSelect(value) if value == index))
+            .unwrap()
+            .area;
+        app.handle(Input::Move { x: row.x, y: row.y });
+        assert!(matches!(
+            app.view.dialog,
+            Some(Dialog::Settings { selected: 1 })
+        ));
+        assert_eq!(
+            serde_json::to_value(&app.settings.appearance).unwrap(),
+            serde_json::to_value(&original).unwrap()
+        );
+    }
     rendered(&mut app, 120, 50);
-    let preset = app
+    let footer = app
         .view
         .hits
         .iter()
-        .find(|hit| matches!(hit.target, Target::SettingAdjust(0, 1)))
+        .rev()
+        .find(|hit| hit.enabled && matches!(hit.target, Target::Setting(1)))
         .unwrap()
         .area;
-    let original_theme = app.settings.current_palette().id.clone();
     app.handle(Input::Move {
-        x: preset.x,
-        y: preset.y,
+        x: footer.x,
+        y: footer.y,
     });
-    assert!(matches!(
-        app.view.dialog,
-        Some(Dialog::Settings { selected: 0 })
-    ));
-    assert_eq!(app.settings.current_palette().id, original_theme);
-    key(&mut app, Key::Right);
-    assert_eq!(app.settings.current_palette().id, "classic-amber");
+    rendered(&mut app, 120, 50);
+    app.handle(Input::Click {
+        x: footer.x,
+        y: footer.y,
+        double: false,
+    });
+    app.handle(Input::Release {
+        x: footer.x,
+        y: footer.y,
+    });
+    assert!(matches!(app.view.dialog, Some(Dialog::Text(ref dialog))
+        if matches!(dialog.purpose, almavorn::app::TextPurpose::Settings(almavorn::app::SettingsEdit::FontSize))));
+    assert_eq!(
+        serde_json::to_value(&app.settings.appearance).unwrap(),
+        serde_json::to_value(&original).unwrap()
+    );
+    submit(&mut app, "21");
+    assert_eq!(app.settings.appearance.font_size, 21);
+    assert_eq!(app.settings.appearance.font, original.font);
+    assert_eq!(app.settings.appearance.borders, original.borders);
+    assert_eq!(app.settings.appearance.corners, original.corners);
+}
+
+#[test]
+fn playback_modes_save_in_the_active_profile_and_survive_restart() {
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    let defaults = app.settings.profile_preferences();
+    app.action(Action::CycleRepeat).unwrap();
+    app.action(Action::ToggleShuffle).unwrap();
+    saved(&mut app);
+    let active = app
+        .settings
+        .profiles
+        .iter()
+        .find(|profile| profile.id == app.settings.active_profile)
+        .unwrap();
+    assert_eq!(active.preferences.repeat, RepeatMode::Playlist);
+    assert!(active.preferences.shuffle);
+    let looping = app.settings.profile_preferences();
+    app.settings.apply_preferences(defaults);
+    assert_eq!(app.settings.repeat, RepeatMode::Off);
+    assert!(!app.settings.shuffle);
+    app.settings.apply_preferences(looping);
+    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+    assert!(app.settings.shuffle);
+    drop(app);
+    let app = App::new(&directory.0).unwrap();
+    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+    assert!(app.settings.shuffle);
+}
+
+#[test]
+fn old_settings_default_playback_modes_and_add_shortcuts_without_overwriting_custom_keys() {
+    let directory = Directory::new();
+    let mut store = Store::open(&directory.0).unwrap();
+    let mut settings = store.settings().unwrap();
+    settings
+        .bindings
+        .retain(|binding| !matches!(binding.action, Action::CycleRepeat | Action::ToggleShuffle));
+    for (action, key) in [(Action::Quit, 'l'), (Action::Help, 'h')] {
+        settings
+            .bindings
+            .iter_mut()
+            .find(|binding| binding.action == action)
+            .unwrap()
+            .key = KeyPress::plain(Key::Char(key));
+    }
+    settings.sync_active_profile();
+    let mut legacy = serde_json::to_value(settings).unwrap();
+    legacy.as_object_mut().unwrap().remove("repeat");
+    legacy.as_object_mut().unwrap().remove("shuffle");
+    for profile in legacy["profiles"].as_array_mut().unwrap() {
+        profile["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("repeat");
+        profile["preferences"]
+            .as_object_mut()
+            .unwrap()
+            .remove("shuffle");
+    }
+    let settings = serde_json::from_value(legacy).unwrap();
+    store.save_settings(&settings).unwrap();
+    drop(store);
+    let mut app = App::new(&directory.0).unwrap();
+    assert_eq!(app.settings.repeat, RepeatMode::Off);
+    assert!(!app.settings.shuffle);
+    assert_eq!(app.settings.profiles[0].preferences.repeat, RepeatMode::Off);
+    assert!(!app.settings.profiles[0].preferences.shuffle);
+    for (action, key) in [(Action::Quit, 'l'), (Action::Help, 'h')] {
+        assert_eq!(
+            app.settings
+                .bindings
+                .iter()
+                .find(|binding| binding.action == action)
+                .unwrap()
+                .key,
+            KeyPress::plain(Key::Char(key))
+        );
+    }
+    let repeat = app
+        .settings
+        .bindings
+        .iter()
+        .find(|binding| binding.action == Action::CycleRepeat)
+        .unwrap()
+        .key;
+    let shuffle = app
+        .settings
+        .bindings
+        .iter()
+        .find(|binding| binding.action == Action::ToggleShuffle)
+        .unwrap()
+        .key;
+    assert_ne!(repeat, shuffle);
+    for key in [repeat, shuffle] {
+        assert_eq!(
+            app.settings
+                .bindings
+                .iter()
+                .filter(|binding| binding.key == key)
+                .count(),
+            1
+        );
+    }
+    app.handle(Input::Key(repeat));
+    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+    app.handle(Input::Key(shuffle));
+    assert!(app.settings.shuffle);
 }
 
 #[test]

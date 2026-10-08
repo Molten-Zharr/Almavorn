@@ -32,6 +32,10 @@ impl App {
     }
 
     pub(super) fn save_settings(&mut self) -> Result<()> {
+        self.sync_tuner()?;
+        if let Some(audio) = &self.playback.audio {
+            audio.equalizer(&self.settings.equalizer);
+        }
         self.settings.sync_active_profile();
         self.persistence.pending = Some(self.settings.clone());
         self.persistence.failed = false;

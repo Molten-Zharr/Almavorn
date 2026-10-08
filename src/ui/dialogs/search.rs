@@ -51,22 +51,23 @@ pub(super) fn render(
     let field = Rect::new(inner.x, inner.y + 1, inner.width, 3);
     frame.render_widget(
         Paragraph::new(format!("{}│", clean(&search.query)))
-        .scroll((
-            0,
-            Line::from(search.query.as_str())
-                .width()
-                .saturating_sub(usize::from(field.width.saturating_sub(4))) as u16,
-        ))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(palette.text().fg(palette.accent)),
-        )
-        .style(palette.text().bg(if search.selected_all {
-            palette.selection
-        } else {
-            palette.background
-        })),
+            .scroll((
+                0,
+                Line::from(search.query.as_str())
+                    .width()
+                    .saturating_sub(usize::from(field.width.saturating_sub(4)))
+                    as u16,
+            ))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(palette.text().fg(palette.accent)),
+            )
+            .style(palette.text().bg(if search.selected_all {
+                palette.selection
+            } else {
+                palette.background
+            })),
         field,
     );
     app.view.hits.push(Hit {
