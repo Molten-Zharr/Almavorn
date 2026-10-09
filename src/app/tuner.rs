@@ -4,7 +4,7 @@ use crate::{
     tuner::{SLIDERS, TunerSettings},
 };
 use anyhow::Result;
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 
 impl App {
     pub(super) fn open_tuner(&mut self) {
@@ -76,6 +76,34 @@ impl App {
         Ok(())
     }
 
+    fn tuner_slider(&mut self, index: usize, area: Rect, ratio: f64) -> Result<()> {
+        self.select_tuner(index);
+        if self.view.workspace.gesture.is_none() {
+            self.view.workspace.gesture = Some(crate::workspace::Gesture::TunerSlider(index, area));
+        }
+        let minimum = TunerSettings::minimum(index);
+        let maximum = TunerSettings::maximum(index);
+        let value = f64::from(minimum) + ratio.clamp(0.0, 1.0) * f64::from(maximum - minimum);
+        self.set_tuner_value(index, value.round() as u16)
+    }
+
+    /// GUI drags keep subcell precision instead of rounding to terminal columns.
+    pub fn drag_tuner(&mut self, index: usize, area: Rect, ratio: f64, release: bool) {
+        if !matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. }))
+            || index >= SLIDERS
+            || area.width == 0
+            || !ratio.is_finite()
+        {
+            return;
+        }
+        if let Err(error) = self.tuner_slider(index, area, ratio) {
+            self.failure(error);
+        }
+        if release {
+            self.view.workspace.gesture = None;
+        }
+    }
+
     pub(super) fn tuner_target(&mut self, target: Target) -> Result<()> {
         match target {
             Target::TunerReverse => {
@@ -88,18 +116,9 @@ impl App {
             }
             Target::TunerSelect(index) => self.select_tuner(index),
             Target::TunerSlider(index, area) if index < SLIDERS && area.width > 0 => {
-                self.select_tuner(index);
-                if self.view.workspace.gesture.is_none() {
-                    self.view.workspace.gesture =
-                        Some(crate::workspace::Gesture::TunerSlider(index, area));
-                }
                 let point = self.view.pointer.x.clamp(area.x, area.right() - 1) - area.x;
-                let minimum = TunerSettings::minimum(index);
-                let maximum = TunerSettings::maximum(index);
-                let value = f32::from(minimum)
-                    + f32::from(point) * f32::from(maximum - minimum)
-                        / f32::from(area.width.saturating_sub(1).max(1));
-                self.set_tuner_value(index, value.round() as u16)?;
+                let ratio = f64::from(point) / f64::from(area.width.saturating_sub(1).max(1));
+                self.tuner_slider(index, area, ratio)?;
             }
             _ => {}
         }

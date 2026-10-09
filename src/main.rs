@@ -208,22 +208,7 @@ fn run() -> Result<()> {
                     };
                     ui.ctx().set_cursor_icon(cursor);
                 }
-                let to_cell = |point: egui::Pos2| -> Option<(u16, u16)> {
-                    if !image_rect.contains(point)
-                        || image_rect.width() <= 0.0
-                        || image_rect.height() <= 0.0
-                    {
-                        return None;
-                    }
-                    Some((
-                        ((point.x - image_rect.min.x) / image_rect.width()
-                            * dimensions.width as f32)
-                            .floor() as u16,
-                        ((point.y - image_rect.min.y) / image_rect.height()
-                            * dimensions.height as f32)
-                            .floor() as u16,
-                    ))
-                };
+                let to_cell = |point| pointer_cell(image_rect, dimensions, point);
                 let (events, pointer, down, dropped) = ctx.input(|input| {
                     (
                         input.events.clone(),
@@ -238,6 +223,16 @@ fn run() -> Result<()> {
                     )
                 });
                 for event in events {
+                    if handle_pointer_event(
+                        &mut app,
+                        image_rect,
+                        dimensions,
+                        &event,
+                        down,
+                        &mut previous_click,
+                    ) {
+                        continue;
+                    }
                     match event {
                         egui::Event::Key {
                             key,
@@ -266,60 +261,6 @@ fn run() -> Result<()> {
                         egui::Event::Text(text) | egui::Event::Paste(text) if text_active => {
                             app.handle(Input::Text(text))
                         }
-                        egui::Event::PointerButton {
-                            pos,
-                            button,
-                            pressed: true,
-                            ..
-                        } if matches!(
-                            button,
-                            egui::PointerButton::Primary | egui::PointerButton::Secondary
-                        ) =>
-                        {
-                            if let Some((x, y)) = to_cell(pos) {
-                                if button == egui::PointerButton::Secondary {
-                                    app.handle(Input::SecondaryClick { x, y });
-                                    continue;
-                                }
-                                let double =
-                                    previous_click.as_ref().is_some_and(|(point, time)| {
-                                        point.distance(pos) < 5.0
-                                            && time.elapsed() < Duration::from_millis(400)
-                                    });
-                                previous_click = Some((pos, Instant::now()));
-                                app.handle(Input::Click { x, y, double });
-                                if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos) {
-                                    app.scrub(ratio, false);
-                                }
-                            }
-                        }
-                        egui::Event::PointerMoved(pos) => {
-                            if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos)
-                                && down
-                            {
-                                app.scrub(ratio, false);
-                            } else if let Some((x, y)) = to_cell(pos)
-                                && down
-                            {
-                                app.handle(Input::Drag { x, y });
-                            }
-                        }
-                        egui::Event::PointerButton {
-                            pos,
-                            button: egui::PointerButton::Primary,
-                            pressed: false,
-                            ..
-                        } => {
-                            if let Some(ratio) = seek_ratio(&app, image_rect, dimensions, pos) {
-                                app.scrub(ratio, true);
-                                continue;
-                            }
-                            let point =
-                                pos.clamp(image_rect.min, image_rect.max - egui::vec2(0.1, 0.1));
-                            if let Some((x, y)) = to_cell(point) {
-                                app.handle(Input::Release { x, y });
-                            }
-                        }
                         egui::Event::MouseWheel { delta, .. } => {
                             if let Some((x, y)) = pointer.and_then(to_cell)
                                 && delta.y != 0.0
@@ -335,8 +276,8 @@ fn run() -> Result<()> {
                     }
                 }
                 if app.view.workspace.gesture.is_some() && !down {
-                    if let Some((x, y)) = pointer.and_then(to_cell) {
-                        app.handle(Input::Release { x, y });
+                    if let Some(point) = pointer {
+                        release_pointer(&mut app, image_rect, dimensions, point);
                     } else {
                         app.handle(Input::CancelPointer);
                     }
@@ -378,6 +319,156 @@ fn run() -> Result<()> {
         }
     })
     .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+fn pointer_cell(
+    image: egui::Rect,
+    size: ratatui::layout::Size,
+    point: egui::Pos2,
+) -> Option<(u16, u16)> {
+    if !image.contains(point) || image.width() <= 0.0 || image.height() <= 0.0 {
+        return None;
+    }
+    Some((
+        ((point.x - image.left()) / image.width() * f32::from(size.width)).floor() as u16,
+        ((point.y - image.top()) / image.height() * f32::from(size.height)).floor() as u16,
+    ))
+}
+
+fn handle_pointer_event(
+    app: &mut App,
+    image: egui::Rect,
+    size: ratatui::layout::Size,
+    event: &egui::Event,
+    down: bool,
+    previous_click: &mut Option<(egui::Pos2, Instant)>,
+) -> bool {
+    match *event {
+        egui::Event::PointerButton {
+            pos,
+            button,
+            pressed: true,
+            ..
+        } if matches!(
+            button,
+            egui::PointerButton::Primary | egui::PointerButton::Secondary
+        ) =>
+        {
+            if let Some((x, y)) = pointer_cell(image, size, pos) {
+                if button == egui::PointerButton::Secondary {
+                    app.handle(Input::SecondaryClick { x, y });
+                } else {
+                    let double = previous_click.as_ref().is_some_and(|(point, time)| {
+                        point.distance(pos) < 5.0 && time.elapsed() < Duration::from_millis(400)
+                    });
+                    *previous_click = Some((pos, Instant::now()));
+                    if !slider_pointer(app, image, size, pos, true, false) {
+                        app.handle(Input::Click { x, y, double });
+                        if let Some(ratio) = seek_ratio(app, image, size, pos) {
+                            app.scrub(ratio, false);
+                        }
+                    }
+                }
+            }
+        }
+        egui::Event::PointerMoved(pos) => {
+            if down && !slider_pointer(app, image, size, pos, false, false) {
+                if let Some(ratio) = seek_ratio(app, image, size, pos) {
+                    app.scrub(ratio, false);
+                } else if let Some((x, y)) = pointer_cell(image, size, pos) {
+                    app.handle(Input::Drag { x, y });
+                }
+            }
+        }
+        egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            ..
+        } => {
+            release_pointer(app, image, size, pos);
+        }
+        _ => return false,
+    }
+    true
+}
+
+fn release_pointer(
+    app: &mut App,
+    image: egui::Rect,
+    size: ratatui::layout::Size,
+    point: egui::Pos2,
+) {
+    if slider_pointer(app, image, size, point, false, true) {
+        return;
+    }
+    if let Some(ratio) = seek_ratio(app, image, size, point) {
+        app.scrub(ratio, true);
+        return;
+    }
+    let point = point.clamp(image.min, image.max - egui::vec2(0.1, 0.1));
+    if let Some((x, y)) = pointer_cell(image, size, point) {
+        app.handle(Input::Release { x, y });
+    }
+}
+
+fn slider_pointer(
+    app: &mut App,
+    image: egui::Rect,
+    size: ratatui::layout::Size,
+    point: egui::Pos2,
+    begin: bool,
+    release: bool,
+) -> bool {
+    use almavorn::workspace::Gesture;
+    use ratatui::layout::Position;
+
+    if size.width == 0 || size.height == 0 || image.width() <= 0.0 || image.height() <= 0.0 {
+        return false;
+    }
+    let cell_width = image.width() / f32::from(size.width);
+    let target = match app.view.workspace.gesture {
+        Some(Gesture::TunerSlider(index, area)) => Target::TunerSlider(index, area),
+        Some(Gesture::PlaybackVolume(area)) => Target::PlaybackVolume(area),
+        Some(Gesture::Volume(index, area)) => Target::SettingsVolume(index, area),
+        None if begin && image.contains(point) => {
+            let position = Position::new(
+                ((point.x - image.left()) / cell_width).floor() as u16,
+                ((point.y - image.top()) / image.height() * f32::from(size.height)).floor() as u16,
+            );
+            let Some(
+                target @ (Target::TunerSlider(_, _)
+                | Target::PlaybackVolume(_)
+                | Target::SettingsVolume(_, _)),
+            ) = app.target_at(position)
+            else {
+                return false;
+            };
+            target.clone()
+        }
+        _ => return false,
+    };
+    let area = match target {
+        Target::TunerSlider(_, area)
+        | Target::PlaybackVolume(area)
+        | Target::SettingsVolume(_, area) => area,
+        _ => return false,
+    };
+    // Retain the fractional position between the centers of the endpoint cells.
+    let left = image.left() + (f32::from(area.x) + 0.5) * cell_width;
+    let width = (f32::from(area.width.saturating_sub(1)) * cell_width).max(1.0);
+    let ratio = f64::from((point.x - left) / width);
+    if let Target::TunerSlider(index, _) = target {
+        app.drag_tuner(index, area, ratio, release);
+    } else {
+        app.drag_volume(target, ratio, release);
+    }
+    // Opening a dialog while holding the mouse may make the old slider inactive.
+    // A consumed release must still end its pointer capture.
+    if release {
+        app.view.workspace.gesture = None;
+    }
+    true
 }
 
 fn seek_ratio(
@@ -472,6 +563,299 @@ fn convert_key(key: egui::Key) -> Option<Key> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gui_volume_release_ends_capture_after_opening_settings() {
+        use almavorn::app::Dialog;
+        use ratatui::{backend::TestBackend, layout::Size};
+
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = App::new(directory.path()).unwrap();
+        let size = Size::new(120, 50);
+        let mut terminal = Terminal::new(TestBackend::new(size.width, size.height)).unwrap();
+        terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
+        let bar = app
+            .view
+            .hits
+            .iter()
+            .find_map(|hit| match hit.target {
+                Target::PlaybackVolume(area) => Some(area),
+                _ => None,
+            })
+            .unwrap();
+        let image = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1080.0, 900.0));
+        let pos = egui::pos2(
+            f32::from(bar.x + bar.width / 2) * 9.0,
+            f32::from(bar.y) * 18.0,
+        );
+        let mut previous_click = None;
+        let event = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        assert!(handle_pointer_event(
+            &mut app,
+            image,
+            size,
+            &event(true),
+            true,
+            &mut previous_click
+        ));
+        assert!(app.view.workspace.gesture.is_some());
+        app.handle(Input::Key(KeyPress::plain(Key::F(2))));
+        assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
+        assert!(handle_pointer_event(
+            &mut app,
+            image,
+            size,
+            &event(false),
+            false,
+            &mut previous_click
+        ));
+        assert!(app.view.workspace.gesture.is_none());
+    }
+
+    #[test]
+    fn gui_volume_drags_reach_every_percent_through_pointer_events() {
+        use almavorn::app::SettingsPage;
+        use ratatui::{backend::TestBackend, layout::Size};
+
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = App::new(directory.path()).unwrap();
+        app.view.graphical_keycaps = true;
+        for (columns, rows) in [(120, 50), (70, 30)] {
+            for settings in [false, true] {
+                app.view.dialog = None;
+                if settings {
+                    app.open_settings_page(SettingsPage::General);
+                }
+                let mut terminal = Terminal::new(TestBackend::new(columns, rows)).unwrap();
+                terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
+                let bar = app
+                    .view
+                    .hits
+                    .iter()
+                    .find_map(|hit| match hit.target {
+                        Target::PlaybackVolume(area) if !settings => Some(area),
+                        Target::SettingsVolume(_, area) if settings => Some(area),
+                        _ => None,
+                    })
+                    .unwrap();
+                let size = Size::new(columns, rows);
+                let image = egui::Rect::from_min_size(
+                    egui::pos2(37.25, 61.75),
+                    egui::vec2(f32::from(columns) * 9.0, f32::from(rows) * 18.0),
+                );
+                let left = image.left() + (f32::from(bar.x) + 0.5) * 9.0;
+                let span = f32::from(bar.width - 1) * 9.0;
+                let y = image.top() + (f32::from(bar.y) + 0.5) * 18.0;
+                let point = |percent: u16| egui::pos2(left + f32::from(percent) / 100.0 * span, y);
+                let button = |pos, pressed| egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                };
+                let ctx = egui::Context::default();
+                let mut previous_click = None;
+                let mut frame = |app: &mut App, events| {
+                    let _ = ctx.run_ui(
+                        egui::RawInput {
+                            screen_rect: Some(image),
+                            events,
+                            ..Default::default()
+                        },
+                        |ui| {
+                            if let Some(movement) = pointer_movement(ui.ctx(), image, columns, rows)
+                            {
+                                app.handle(movement);
+                            }
+                            let (events, down) = ui.ctx().input(|input| {
+                                (input.events.clone(), input.pointer.primary_down())
+                            });
+                            for event in events {
+                                assert!(handle_pointer_event(
+                                    app,
+                                    image,
+                                    size,
+                                    &event,
+                                    down,
+                                    &mut previous_click
+                                ));
+                            }
+                        },
+                    );
+                };
+                frame(
+                    &mut app,
+                    vec![egui::Event::PointerMoved(point(0)), button(point(0), true)],
+                );
+                assert!(app.view.workspace.gesture.is_some());
+                for percent in (0..=100).chain((0..100).rev()) {
+                    let mut position = point(percent);
+                    position.y += 40.0;
+                    frame(&mut app, vec![egui::Event::PointerMoved(position)]);
+                    assert_eq!(
+                        (app.settings.volume * 100.0).round() as u16,
+                        percent,
+                        "settings={settings}, columns={columns}"
+                    );
+                }
+                frame(&mut app, vec![button(point(51), false)]);
+                assert_eq!((app.settings.volume * 100.0).round() as u16, 51);
+                assert!(app.view.workspace.gesture.is_none());
+                assert!(!app.view.notice_error, "{}", app.view.notice);
+                // The frame fallback must not turn a precise value into a cell value.
+                frame(&mut app, vec![button(point(50), true)]);
+                release_pointer(&mut app, image, size, point(51));
+                assert_eq!((app.settings.volume * 100.0).round() as u16, 51);
+                assert!(app.view.workspace.gesture.is_none());
+                frame(&mut app, vec![button(point(51), false)]);
+            }
+        }
+        drop(app);
+        let app = App::new(directory.path()).unwrap();
+        assert_eq!((app.settings.volume * 100.0).round() as u16, 51);
+    }
+
+    #[test]
+    fn gui_tuner_drag_reaches_every_percent_and_preserves_precision_on_release() {
+        use almavorn::{app::Dialog, input::Action, tuner::TunerSettings};
+        use ratatui::{backend::TestBackend, layout::Size};
+
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = App::new(directory.path()).unwrap();
+        app.view.graphical_keycaps = true;
+        for (columns, rows, cell_width) in [(120, 50, 9.0), (70, 30, 12.5), (32, 26, 6.0)] {
+            let size = Size::new(columns, rows);
+            let image = egui::Rect::from_min_size(
+                egui::pos2(37.25, 61.75),
+                egui::vec2(f32::from(columns) * cell_width, f32::from(rows) * 18.0),
+            );
+            app.action(Action::PlaybackTuner).unwrap();
+            for index in 0..4 {
+                let mut terminal = Terminal::new(TestBackend::new(columns, rows)).unwrap();
+                terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
+                let bar = app
+                    .view
+                    .hits
+                    .iter()
+                    .find_map(|hit| match hit.target {
+                        Target::TunerSlider(value, area) if value == index => Some(area),
+                        _ => None,
+                    })
+                    .unwrap();
+                let minimum = TunerSettings::minimum(index);
+                let maximum = TunerSettings::maximum(index);
+                let left = image.left() + (f32::from(bar.x) + 0.5) * cell_width;
+                let span = f32::from(bar.width - 1) * cell_width;
+                let y = image.top() + (f32::from(bar.y) + 0.5) * 18.0;
+                let point = |value| {
+                    egui::pos2(
+                        left + f32::from(value - minimum) / f32::from(maximum - minimum) * span,
+                        y,
+                    )
+                };
+                assert!(!slider_pointer(
+                    &mut app,
+                    image,
+                    size,
+                    point(minimum),
+                    false,
+                    false
+                ));
+                assert!(slider_pointer(
+                    &mut app,
+                    image,
+                    size,
+                    point(minimum),
+                    true,
+                    false
+                ));
+                for value in (minimum..=maximum).chain((minimum..maximum).rev()) {
+                    // Most adjacent values share a cell; keep their fractional positions.
+                    let mut position = point(value);
+                    position.y += 40.0;
+                    assert!(slider_pointer(
+                        &mut app, image, size, position, false, false
+                    ));
+                    assert_eq!(
+                        app.settings.tuner.value(index),
+                        Some(value),
+                        "{columns} cols"
+                    );
+                }
+                for (x, expected) in [
+                    (image.left() - 100.0, minimum),
+                    (image.right() + 100.0, maximum),
+                ] {
+                    assert!(slider_pointer(
+                        &mut app,
+                        image,
+                        size,
+                        egui::pos2(x, y),
+                        false,
+                        false
+                    ));
+                    assert_eq!(app.settings.tuner.value(index), Some(expected));
+                }
+                let value = if index == 3 { 50 } else { 100 };
+                assert!(slider_pointer(
+                    &mut app,
+                    image,
+                    size,
+                    point(value),
+                    false,
+                    true
+                ));
+                assert_eq!(app.settings.tuner.value(index), Some(value));
+                assert!(app.view.workspace.gesture.is_none());
+                assert!(!app.view.notice_error, "{}", app.view.notice);
+                if index == 3 {
+                    assert!(slider_pointer(
+                        &mut app,
+                        image,
+                        size,
+                        point(value),
+                        true,
+                        false,
+                    ));
+                    app.handle(Input::Key(KeyPress::plain(Key::Escape)));
+                    assert!(app.view.workspace.gesture.is_none());
+                    assert!(!slider_pointer(
+                        &mut app,
+                        image,
+                        size,
+                        point(value + 1),
+                        false,
+                        false,
+                    ));
+                    assert_eq!(app.settings.tuner.value(index), Some(value));
+                }
+                app.handle(Input::Key(KeyPress::plain(Key::Tab)));
+            }
+            app.handle(Input::Key(KeyPress::plain(Key::Escape)));
+            assert!(app.view.dialog.is_none());
+            assert!(!slider_pointer(
+                &mut app,
+                image,
+                size,
+                image.center(),
+                false,
+                false
+            ));
+        }
+        assert!(!matches!(
+            app.view.dialog,
+            Some(Dialog::PlaybackTuner { .. })
+        ));
+        let expected = app.settings.tuner.clone();
+        drop(app);
+        let app = App::new(directory.path()).unwrap();
+        assert_eq!(app.settings.tuner, expected);
+    }
 
     #[test]
     fn gui_repaints_keys_and_wheel_do_not_reemit_stationary_pointer_movement() {

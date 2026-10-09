@@ -46,6 +46,44 @@ impl App {
         }
     }
 
+    /// Apply GUI volume drags without reducing the pointer to a terminal cell.
+    pub fn drag_volume(&mut self, target: Target, ratio: f64, release: bool) {
+        use crate::workspace::{Gesture, Panel};
+        if !ratio.is_finite() {
+            return;
+        }
+        let gesture = match target {
+            Target::PlaybackVolume(area) if area.width > 0 && self.view.dialog.is_none() => {
+                if self.view.workspace.gesture.is_none() {
+                    self.view.toolbar_selected = None;
+                    self.view.filter_editing = false;
+                    self.view.filter_keyboard = false;
+                    self.focus_panel(Panel::Player);
+                }
+                Gesture::PlaybackVolume(area)
+            }
+            Target::SettingsVolume(index, area)
+                if area.width > 0 && matches!(self.view.dialog, Some(Dialog::Settings { .. })) =>
+            {
+                self.select_setting(index);
+                Gesture::Volume(index, area)
+            }
+            _ => return,
+        };
+        if self.view.workspace.gesture.is_none() {
+            self.view.workspace.gesture = Some(gesture);
+        }
+        let percent = (ratio.clamp(0.0, 1.0) * 100.0).round() as i16;
+        if let Err(error) =
+            self.adjust_volume(percent - (self.settings.volume * 100.0).round() as i16)
+        {
+            self.failure(error);
+        }
+        if release {
+            self.view.workspace.gesture = None;
+        }
+    }
+
     fn handle_inner(&mut self, input: Input) -> Result<()> {
         match input {
             Input::Move { x, y } => {
