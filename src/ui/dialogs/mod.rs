@@ -12,7 +12,7 @@ pub(crate) use text::keyboard;
 use self::{bindings::binding_dialog, browser::browser_dialog, text::text_dialog};
 use super::{
     theme::Palette,
-    widgets::{button, buttons, dialog_footer, modal, visible_offset},
+    widgets::{button, buttons, clean, dialog_footer, modal, visible_offset},
 };
 use crate::{
     app::{App, Dialog, Hit, Target},
@@ -391,10 +391,13 @@ pub(super) fn render_dialog(
             if let Ok(tags) =
                 serde_json::from_str::<std::collections::BTreeMap<String, Vec<String>>>(&track.tags)
             {
-                lines.extend(
-                    tags.into_iter()
-                        .map(|(key, values)| format!("{key}: {}", values.join("; "))),
-                );
+                lines.extend(tags.into_iter().map(|(key, values)| {
+                    let values: Vec<_> = values
+                        .iter()
+                        .map(|value| metadata_tag_value(app, value))
+                        .collect();
+                    format!("{}: {}", metadata_tag_name(app, &key), values.join("; "))
+                }));
             }
             help::scroll_text(
                 frame,
@@ -415,4 +418,114 @@ pub(super) fn render_dialog(
             binding_dialog(frame, app, *index, area, palette);
         }
     }
+}
+
+fn metadata_tag_name(app: &App, key: &str) -> String {
+    let field = key.split_once('.').map_or(key, |(_, field)| field);
+    let (en, ru) = match field {
+        "TrackTitle" => ("Title", "Название"),
+        "TrackSubtitle" => ("Subtitle", "Подзаголовок"),
+        "TrackArtist" => ("Artist", "Исполнитель"),
+        "TrackArtists" => ("Artists", "Исполнители"),
+        "AlbumTitle" => ("Album", "Альбом"),
+        "AlbumArtist" => ("Album artist", "Исполнитель альбома"),
+        "AlbumArtists" => ("Album artists", "Исполнители альбома"),
+        "Composer" => ("Composer", "Композитор"),
+        "Lyricist" => ("Lyricist", "Автор текста"),
+        "Conductor" => ("Conductor", "Дирижер"),
+        "Performer" => ("Performer", "Участник исполнения"),
+        "Producer" => ("Producer", "Продюсер"),
+        "Publisher" => ("Publisher", "Издатель"),
+        "Label" => ("Label", "Лейбл"),
+        "Genre" => ("Genre", "Жанр"),
+        "TrackNumber" => ("Track number", "Номер композиции"),
+        "TrackTotal" => ("Total tracks", "Всего композиций"),
+        "DiscNumber" => ("Disc number", "Номер диска"),
+        "DiscTotal" => ("Total discs", "Всего дисков"),
+        "Year" => ("Year", "Год"),
+        "RecordingDate" => ("Recording date", "Дата записи"),
+        "ReleaseDate" => ("Release date", "Дата выпуска"),
+        "OriginalReleaseDate" => ("Original release date", "Дата первого выпуска"),
+        "EncoderSoftware" => ("Encoding software", "Программа кодирования"),
+        "EncoderSettings" => ("Encoding settings", "Настройки кодирования"),
+        "EncodedBy" => ("Encoded by", "Кодирование"),
+        "Comment" => ("Comment", "Комментарий"),
+        "Description" => ("Description", "Описание"),
+        "Lyrics" => ("Lyrics", "Текст песни"),
+        "Language" => ("Language", "Язык"),
+        "CopyrightMessage" => ("Copyright", "Авторские права"),
+        "MetadataNote" => ("Metadata note", "Примечание к тегам"),
+        _ => {
+            let mut name = String::new();
+            let mut previous_lowercase = false;
+            for c in field.chars() {
+                if c.is_uppercase() && previous_lowercase {
+                    name.push(' ');
+                }
+                name.push(c);
+                previous_lowercase = c.is_lowercase();
+            }
+            return clean(&name);
+        }
+    };
+    app.text(en, ru).into()
+}
+
+fn metadata_tag_value(app: &App, value: &str) -> String {
+    if let Some(quoted) = value
+        .strip_prefix("Text(")
+        .or_else(|| value.strip_prefix("Locator("))
+        .and_then(|value| value.strip_suffix(')'))
+    {
+        return clean(&decode_tag_text(quoted).unwrap_or_else(|| quoted.to_owned()));
+    }
+    if let Some(bytes) = value
+        .strip_prefix("Binary(")
+        .and_then(|value| value.strip_suffix(')'))
+        .and_then(|value| serde_json::from_str::<Vec<u8>>(value).ok())
+    {
+        return format!(
+            "{}: {} {}",
+            app.text("Binary data", "Двоичные данные"),
+            bytes.len(),
+            app.text("bytes", "байт")
+        );
+    }
+    clean(value)
+}
+
+// Imported values use Rust's Debug string escapes, including \u{...} and \0.
+fn decode_tag_text(quoted: &str) -> Option<String> {
+    let mut chars = quoted.strip_prefix('"')?.strip_suffix('"')?.chars();
+    let mut text = String::new();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            text.push(c);
+            continue;
+        }
+        text.push(match chars.next()? {
+            '"' => '"',
+            '\\' => '\\',
+            'n' => '\n',
+            'r' => '\r',
+            't' => '\t',
+            '0' => '\0',
+            'u' => {
+                if chars.next()? != '{' {
+                    return None;
+                }
+                let mut hex = String::new();
+                loop {
+                    match chars.next()? {
+                        '}' => break,
+                        c if c.is_ascii_hexdigit() && hex.len() < 6 => hex.push(c),
+                        _ => return None,
+                    }
+                }
+                char::from_u32(u32::from_str_radix(&hex, 16).ok()?)?
+            }
+            _ => return None,
+        });
+    }
+    Some(text)
 }
