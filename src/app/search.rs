@@ -333,7 +333,8 @@ impl App {
                 self.view.filter_keyboard = false;
                 self.refresh()?;
             }
-            Key::Enter | Key::Tab => {
+            Key::Enter if self.entry().is_some() => self.play_selected()?,
+            Key::Tab => {
                 self.view.filter_editing = false;
                 self.view.filter_keyboard = false;
             }
