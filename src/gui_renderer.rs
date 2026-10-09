@@ -5,7 +5,7 @@ use almavorn::{
 use eframe::egui;
 use egui_ratatui::RataguiBackend;
 use ratatui::{buffer::Buffer, layout::Rect};
-use soft_ratatui::{EmbeddedTTF, RgbPixmap, SoftBackend};
+use soft_ratatui::{RasterBackend, RgbPixmap, SoftBackend};
 use std::sync::Arc;
 
 type WaveformKey = (usize, usize, egui::Rect, egui::Color32, egui::Color32);
@@ -171,10 +171,10 @@ impl ImageCache {
         self.buffer = None;
     }
 
-    pub fn update(
+    pub fn update<R: RasterBackend>(
         &mut self,
         ctx: &egui::Context,
-        backend: &mut RataguiBackend<EmbeddedTTF>,
+        backend: &mut RataguiBackend<R>,
     ) -> egui::Vec2 {
         let soft = &backend.soft_backend;
         let size = [soft.get_pixmap_width(), soft.get_pixmap_height()];
@@ -267,7 +267,7 @@ fn include_cell(damage: &mut Option<Rect>, x: u16, y: u16, area: Rect) {
     }
 }
 
-pub fn resize(backend: &mut SoftBackend<EmbeddedTTF>, columns: u16, rows: u16) {
+pub fn resize<R: RasterBackend>(backend: &mut SoftBackend<R>, columns: u16, rows: u16) {
     backend.buffer.resize(Rect::new(0, 0, columns, rows));
     backend.rgb_pixmap = RgbPixmap::new(
         backend.char_width * usize::from(columns),
@@ -441,5 +441,132 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
             egui::FontId::monospace((f32::from(app.settings.appearance.font_size) * 0.75).max(8.0)),
             egui::Color32::from_rgb(r, g, b),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use almavorn::{
+        app::SettingsPage,
+        input::{Action, Input, Key, KeyPress},
+        ui,
+    };
+    use ratatui::Terminal;
+
+    #[test]
+    fn mouse_highlights_and_dialog_changes_leave_no_pixels_in_cached_frames() {
+        for (columns, rows) in [(120, 50), (70, 30)] {
+            let directory = tempfile::tempdir().unwrap();
+            let mut app = App::new(directory.path()).unwrap();
+            app.view.graphical_keycaps = true;
+            let mut terminal = Terminal::new(RataguiBackend::new(
+                "selection-regression",
+                crate::gui_fonts::backend(
+                    app.settings.appearance.font,
+                    app.settings.appearance.font_size,
+                    columns,
+                    rows,
+                ),
+            ))
+            .unwrap();
+            let ctx = egui::Context::default();
+            let mut cache = ImageCache::default();
+            let mut uploaded = egui::ColorImage::default();
+            let mut frame = |app: &mut App| {
+                terminal.draw(|frame| ui::render(app, frame)).unwrap();
+                let backend = terminal.backend_mut();
+                cache.update(&ctx, backend);
+                let texture = backend.text_handle.as_ref().unwrap().id();
+                for (id, delta) in ctx.tex_manager().write().take_delta().set {
+                    if id != texture {
+                        continue;
+                    }
+                    let egui::ImageData::Color(image) = delta.image;
+                    if let Some([x, y]) = delta.pos {
+                        for row in 0..image.height() {
+                            let start = (y + row) * uploaded.width() + x;
+                            uploaded.pixels[start..start + image.width()].copy_from_slice(
+                                &image.pixels[row * image.width()..(row + 1) * image.width()],
+                            );
+                        }
+                    } else {
+                        uploaded = (*image).clone();
+                    }
+                }
+                let mut fresh = crate::gui_fonts::backend(
+                    app.settings.appearance.font,
+                    app.settings.appearance.font_size,
+                    columns,
+                    rows,
+                );
+                fresh.buffer = backend.soft_backend.buffer.clone();
+                fresh.redraw();
+                let expected = egui::ColorImage::from_rgb(
+                    [fresh.get_pixmap_width(), fresh.get_pixmap_height()],
+                    fresh.get_pixmap_data(),
+                );
+                let mismatch = uploaded
+                    .pixels
+                    .iter()
+                    .zip(&expected.pixels)
+                    .position(|(actual, expected)| actual != expected);
+                assert_eq!(uploaded.size, expected.size);
+                assert!(
+                    mismatch.is_none(),
+                    "{columns} columns, dialog={}: stale pixel {mismatch:?}",
+                    app.view.dialog.is_some()
+                );
+            };
+            frame(&mut app);
+            for action in [
+                Action::PlaybackTuner,
+                Action::Equalizer,
+                Action::Settings,
+                Action::Search,
+                Action::Help,
+            ] {
+                app.action(action).unwrap();
+                frame(&mut app);
+                let areas: Vec<_> = app
+                    .view
+                    .hits
+                    .iter()
+                    .filter(|hit| hit.enabled)
+                    .map(|hit| hit.area)
+                    .collect();
+                for area in areas {
+                    app.handle(Input::Move {
+                        x: area.x,
+                        y: area.y,
+                    });
+                    frame(&mut app);
+                    if let Some(target @ Target::TunerSlider(_, _)) =
+                        app.target_at((area.x, area.y).into()).cloned()
+                    {
+                        let Target::TunerSlider(index, bar) = target else {
+                            unreachable!()
+                        };
+                        app.drag_tuner(index, bar, 0.47, false);
+                        frame(&mut app);
+                        app.drag_tuner(index, bar, 0.63, true);
+                        frame(&mut app);
+                    }
+                    app.handle(Input::Move {
+                        x: u16::MAX,
+                        y: u16::MAX,
+                    });
+                    frame(&mut app);
+                }
+                app.handle(Input::Key(KeyPress::plain(Key::Escape)));
+                frame(&mut app);
+            }
+            for page in SettingsPage::ALL {
+                app.open_settings_page(page);
+                frame(&mut app);
+            }
+            app.handle(Input::Key(KeyPress::plain(Key::Escape)));
+            frame(&mut app);
+        }
     }
 }

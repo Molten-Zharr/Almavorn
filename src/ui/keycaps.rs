@@ -70,8 +70,7 @@ pub(super) fn render(
             break;
         }
         if app.view.graphical_keycaps {
-            // The GUI paints its own key faces. Keep the backing raster blank:
-            // font backgrounds can extend beyond a cell during incremental redraws.
+            // The GUI paints its own key faces, so keep the backing raster blank.
             frame.render_widget(Block::default().style(palette.text()), rect);
         } else {
             frame.render_widget(

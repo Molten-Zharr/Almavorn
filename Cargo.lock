@@ -68,6 +68,7 @@ dependencies = [
  "ratatui",
  "rodio",
  "rusqlite",
+ "rustc-hash 2.1.3",
  "serde",
  "serde_json",
  "soft_ratatui",
