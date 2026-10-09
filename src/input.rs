@@ -172,7 +172,55 @@ pub enum Action {
     Panels,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ShortcutGroup {
+    Player,
+    MainWindow,
+    Playlist,
+}
+
+impl ShortcutGroup {
+    pub const ALL: [Self; 3] = [Self::Player, Self::MainWindow, Self::Playlist];
+
+    pub fn name(self, language: Language) -> &'static str {
+        match self {
+            Self::Player => language.text("Player shortcuts", "Клавиши проигрывателя"),
+            Self::MainWindow => language.text("Main window shortcuts", "Клавиши основного окна"),
+            Self::Playlist => language.text("Playlist shortcuts", "Клавиши плейлиста"),
+        }
+    }
+}
+
 impl Action {
+    pub fn shortcut_group(self) -> ShortcutGroup {
+        match self {
+            Self::TogglePlay
+            | Self::Stop
+            | Self::Next
+            | Self::Previous
+            | Self::CycleRepeat
+            | Self::ToggleShuffle
+            | Self::Equalizer
+            | Self::PlaybackTuner
+            | Self::VolumeUp
+            | Self::VolumeDown
+            | Self::SeekForward
+            | Self::SeekBackward => ShortcutGroup::Player,
+            Self::Quit
+            | Self::Help
+            | Self::Settings
+            | Self::SwitchMode
+            | Self::ToggleDesk
+            | Self::Search
+            | Self::Undo
+            | Self::Redo
+            | Self::PlaylistPanel
+            | Self::PlayerPanel
+            | Self::Panels => ShortcutGroup::MainWindow,
+            _ => ShortcutGroup::Playlist,
+        }
+    }
+
     pub fn description(self, language: Language) -> &'static str {
         match self {
             Self::Quit => language.text("Close the application and finish saving settings.", "Закрыть приложение и завершить сохранение настроек."),

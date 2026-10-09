@@ -146,7 +146,9 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     let rows = app.settings_rows();
     app.view.settings.selected = app.view.settings.selected.min(rows.len().saturating_sub(1));
     let stacked = content.width < 40;
-    let step = 2;
+    let grouped = app.view.settings.page == SettingsPage::Shortcuts;
+    let step = if grouped && !stacked { 1 } else { 2 };
+    let row_height = if stacked { 2 } else { 1 };
     let capacity = if stacked {
         content.height / step
     } else {
@@ -169,23 +171,64 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         } else {
             content.width / 2
         });
-    app.view.settings.offset = visible_offset(
-        app.view.settings.offset,
-        app.view.settings.selected,
-        capacity,
-        rows.len(),
-    );
-    for (index, item) in rows
-        .iter()
-        .enumerate()
-        .skip(app.view.settings.offset)
-        .take(capacity)
-    {
-        let y = content.y + (index - app.view.settings.offset) as u16 * step;
-        if y >= content.bottom() {
+    if grouped {
+        let selected = app.view.settings.selected;
+        let mut offset = app.view.settings.offset.min(selected);
+        while offset < selected {
+            let mut previous_group = None;
+            let height = rows[offset..=selected]
+                .iter()
+                .map(|row| {
+                    let divider = u16::from(
+                        row.shortcut_group.is_some() && row.shortcut_group != previous_group,
+                    ) * 2;
+                    previous_group = row.shortcut_group;
+                    usize::from(step + divider)
+                })
+                .sum::<usize>()
+                - usize::from(step - row_height);
+            if height <= usize::from(content.height) {
+                break;
+            }
+            offset += 1;
+        }
+        app.view.settings.offset = offset;
+    } else {
+        app.view.settings.offset = visible_offset(
+            app.view.settings.offset,
+            app.view.settings.selected,
+            capacity,
+            rows.len(),
+        );
+    }
+    let mut y = content.y;
+    let mut previous_group = None;
+    for (index, item) in rows.iter().enumerate().skip(app.view.settings.offset) {
+        if let Some(group) = item.shortcut_group
+            && item.shortcut_group != previous_group
+        {
+            // Dividers are decoration; setting indices and navigation skip them.
+            if y + 2 + row_height > content.bottom() {
+                break;
+            }
+            let title = format!("─ {} ", group.name(app.settings.language));
+            let remaining = usize::from(content.width).saturating_sub(Span::raw(&title).width());
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(title, palette.text().fg(palette.sidebar_title)),
+                    Span::styled("─".repeat(remaining), palette.text().fg(palette.separator)),
+                ]))
+                .wrap(Wrap { trim: true }),
+                Rect::new(content.x, y, content.width, 2),
+            );
+            y += 2;
+        }
+        previous_group = item.shortcut_group;
+        if y + row_height > content.bottom() {
             break;
         }
-        let row = Rect::new(content.x, y, content.width, if stacked { 2 } else { 1 });
+        let row = Rect::new(content.x, y, content.width, row_height);
+        y += step;
         let selected = app.view.settings.selected == index
             && app.view.settings.focus == SettingsFocus::Parameters;
         let style = if selected || (item.enabled && app.hovered(row)) {
@@ -216,7 +259,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         );
         let value = Rect::new(
             content.right() - value_width,
-            y + u16::from(stacked),
+            row.y + u16::from(stacked),
             value_width,
             1,
         );
@@ -264,7 +307,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         if let Some([r, g, b]) = item.color {
             frame.render_widget(
                 Paragraph::new("■").style(style.fg(Color::Rgb(r, g, b))),
-                Rect::new(row.x + label_width, y, 1, 1),
+                Rect::new(row.x + label_width, row.y, 1, 1),
             );
         }
     }

@@ -1,6 +1,6 @@
 use almavorn::{
     app::{App, Dialog, SettingsFocus, SettingsPage, Target},
-    input::{Action, Input, Key, KeyPress},
+    input::{Action, Input, Key, KeyPress, ShortcutGroup},
     model::{Language, RepeatMode},
     preferences::{BRAND_PALETTE, BorderWeight, Corners, FontFace, NamedPalette, color_roles},
     store::Store,
@@ -114,6 +114,14 @@ fn click_row(app: &mut App, row: usize) {
         app,
         |target| matches!(target,Target::Setting(index) if *index == row),
     );
+}
+fn shortcut_row(app: &App, action: Action) -> usize {
+    let mut bindings: Vec<_> = app.settings.bindings.iter().collect();
+    bindings.sort_by_key(|binding| binding.action.shortcut_group());
+    1 + bindings
+        .iter()
+        .position(|binding| binding.action == action)
+        .unwrap()
 }
 fn rendered(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
@@ -1083,7 +1091,8 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
         .position(|b| b.action == Action::Settings)
         .unwrap();
     app.open_settings_page(SettingsPage::Shortcuts);
-    click_row(&mut app, index + 1);
+    let row = shortcut_row(&app, Action::Settings);
+    click_row(&mut app, row);
     let original = app.settings.bindings[index].key;
     click(&mut app, |target| {
         matches!(target, Target::BindingKey(Key::F(1)))
@@ -1127,6 +1136,104 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
     drop(app);
     let app = App::new(&directory.0).unwrap();
     assert_eq!(app.settings.bindings[index].key.label(), "Ctrl+Alt+J");
+}
+
+#[test]
+fn shortcut_dividers_skip_navigation_and_keep_original_binding_indices() {
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    app.settings.bindings.reverse();
+    let original = serde_json::to_value(&app.settings.bindings).unwrap();
+    let indices: Vec<_> = ShortcutGroup::ALL
+        .into_iter()
+        .flat_map(|group| {
+            app.settings
+                .bindings
+                .iter()
+                .enumerate()
+                .filter(move |(_, binding)| binding.action.shortcut_group() == group)
+                .map(|(index, _)| index)
+        })
+        .collect();
+
+    for language in [Language::Russian, Language::English] {
+        app.settings.language = language;
+        app.open_settings_page(SettingsPage::Shortcuts);
+        let terminal = rendered(&mut app, 140, 50);
+        let text = screen_text(&terminal);
+        for group in ShortcutGroup::ALL {
+            assert!(text.contains(group.name(language)));
+        }
+    }
+
+    for (width, height) in [(120, 50), (70, 30), (32, 18)] {
+        app.open_settings_page(SettingsPage::Shortcuts);
+        key(&mut app, Key::Right);
+        for (position, &index) in indices.iter().enumerate() {
+            key(&mut app, Key::Down);
+            let row = position + 1;
+            assert!(
+                matches!(app.view.dialog, Some(Dialog::Settings { selected }) if selected == row)
+            );
+            rendered(&mut app, width, height);
+            let area = app
+                .view
+                .hits
+                .iter()
+                .find(|hit| matches!(hit.target, Target::Setting(selected) if selected == row))
+                .expect("selected binding stays visible while scrolling")
+                .area;
+            assert!(area.right() <= width && area.bottom() <= height);
+            app.handle(Input::Click {
+                x: area.x,
+                y: area.y,
+                double: false,
+            });
+            assert!(
+                matches!(app.view.dialog, Some(Dialog::CaptureBinding { index: selected }) if selected == index)
+            );
+            key(&mut app, Key::Escape);
+        }
+        key(&mut app, Key::Home);
+        key(&mut app, Key::Down);
+        rendered(&mut app, width, height);
+        let row = app
+            .view
+            .hits
+            .iter()
+            .find(|hit| matches!(hit.target, Target::SettingSelect(1)))
+            .unwrap()
+            .area;
+        let divider = (row.x, row.y - 2);
+        assert!(
+            !app.view
+                .hits
+                .iter()
+                .any(|hit| hit.area.contains(divider.into()))
+        );
+        app.handle(Input::Click {
+            x: divider.0,
+            y: divider.1,
+            double: false,
+        });
+        assert!(matches!(
+            app.view.dialog,
+            Some(Dialog::Settings { selected: 1 })
+        ));
+        app.handle(Input::Scroll {
+            x: divider.0,
+            y: divider.1,
+            delta: 1,
+        });
+        assert!(matches!(
+            app.view.dialog,
+            Some(Dialog::Settings { selected: 2 })
+        ));
+    }
+    assert_eq!(
+        serde_json::to_value(&app.settings.bindings).unwrap(),
+        original
+    );
 }
 
 #[test]

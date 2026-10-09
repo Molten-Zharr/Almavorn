@@ -1,5 +1,6 @@
 use super::{App, SettingsPage};
 use crate::{
+    input::ShortcutGroup,
     model::Mode,
     preferences::{BorderWeight, color_hex, color_role_name, color_roles},
 };
@@ -46,6 +47,7 @@ pub(crate) struct SettingRow {
     pub adjustable: bool,
     pub enabled: bool,
     pub color: Option<[u8; 3]>,
+    pub shortcut_group: Option<ShortcutGroup>,
 }
 impl App {
     pub(crate) fn settings_rows(&self) -> Vec<SettingRow> {
@@ -54,14 +56,23 @@ impl App {
                     value: String,
                     description: &str,
                     control: SettingControl,
-                    adjustable: bool| SettingRow {
-            label: label.into(),
-            value,
-            description: description.into(),
-            control,
-            adjustable,
-            enabled: true,
-            color: None,
+                    adjustable: bool| {
+            let shortcut_group = match &control {
+                SettingControl::Binding(index) => {
+                    Some(self.settings.bindings[*index].action.shortcut_group())
+                }
+                _ => None,
+            };
+            SettingRow {
+                label: label.into(),
+                value,
+                description: description.into(),
+                control,
+                adjustable,
+                enabled: true,
+                color: None,
+                shortcut_group,
+            }
         };
         let action = lang.text("Open", "Открыть").to_owned();
         let run = lang.text("Apply", "Применить").to_owned();
@@ -136,7 +147,9 @@ impl App {
             }
             SettingsPage::Shortcuts => {
                 let mut rows = vec![make(lang.text("Reset shortcuts", "Сбросить горячие клавиши"), run, lang.text("Restore standard shortcuts in this profile. Settings navigation remains available.", "Восстановить стандартные сочетания в этом профиле. Навигация настроек остаётся доступной."), SettingControl::ResetBindings, false)];
-                rows.extend(self.settings.bindings.iter().enumerate().map(|(index, binding)| make(binding.action.name(lang), binding.key.label(), binding.action.description(lang), SettingControl::Binding(index), false)));
+                let mut bindings: Vec<_> = self.settings.bindings.iter().enumerate().collect();
+                bindings.sort_by_key(|(_, binding)| binding.action.shortcut_group());
+                rows.extend(bindings.into_iter().map(|(index, binding)| make(binding.action.name(lang), binding.key.label(), binding.action.description(lang), SettingControl::Binding(index), false)));
                 rows
             }
         }
