@@ -199,7 +199,8 @@ impl App {
             }
             Some(Dialog::Browser(browser)) => {
                 browser.selected =
-                    bounded(browser.selected, direction as i64, browser.entries.len())
+                    bounded(browser.selected, direction as i64, browser.entries.len());
+                browser.selection_explicit = !browser.entries.is_empty();
             }
             Some(Dialog::CaptureBinding { .. }) => {
                 self.view.settings.binding_offset = bounded(

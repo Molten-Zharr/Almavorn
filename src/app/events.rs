@@ -810,6 +810,7 @@ impl App {
             Target::BrowserRow(index) => {
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
                     browser.selected = index;
+                    browser.selection_explicit = browser.entries.get(index).is_some();
                     if let Some(entry) = browser.entries.get(index)
                         && !entry.directory
                         && !browser.marked.insert(entry.path.clone())

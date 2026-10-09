@@ -2,12 +2,17 @@ use super::{App, Dialog, TextDialog, TextPurpose, background::background};
 use crate::errors::AppError;
 use crate::media;
 use anyhow::{Context, Result, ensure};
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+};
 
 pub(super) struct BrowserRequest {
     directory: PathBuf,
     folder: bool,
     initial: bool,
+    focus: Option<PathBuf>,
+    offset: usize,
 }
 
 #[derive(Clone)]
@@ -21,9 +26,11 @@ pub struct Browser {
     pub entries: Vec<BrowserEntry>,
     pub selected: usize,
     pub offset: usize,
+    pub selection_explicit: bool,
     pub marked: HashSet<PathBuf>,
     pub folder: bool,
     pub playlist_name: Option<TextDialog>,
+    offsets: HashMap<PathBuf, usize>,
 }
 
 impl Browser {
@@ -33,9 +40,11 @@ impl Browser {
             entries: Vec::new(),
             selected: 0,
             offset: 0,
+            selection_explicit: false,
             marked: HashSet::new(),
             folder,
             playlist_name: None,
+            offsets: HashMap::new(),
         }
     }
     pub(super) fn open(directory: PathBuf, folder: bool) -> Result<Self> {
@@ -65,7 +74,19 @@ impl Browser {
         });
         self.selected = 0;
         self.offset = 0;
+        self.selection_explicit = false;
         Ok(())
+    }
+
+    pub fn chosen_folder(&self) -> &Path {
+        if self.selection_explicit
+            && let Some(entry) = self.entries.get(self.selected)
+            && entry.directory
+        {
+            &entry.path
+        } else {
+            &self.directory
+        }
     }
 }
 
@@ -101,20 +122,39 @@ impl App {
             directory.clone(),
             folder,
         )));
-        self.queue_browser(directory, folder, true);
+        self.queue_browser(directory, folder, true, None);
     }
-    fn queue_browser(&mut self, directory: PathBuf, folder: bool, initial: bool) {
+    fn queue_browser(
+        &mut self,
+        directory: PathBuf,
+        folder: bool,
+        initial: bool,
+        focus: Option<PathBuf>,
+    ) {
+        let ready = self.browser_state.ready;
         self.browser_state.ready = false;
+        let mut offset = 0;
         if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            if ready {
+                browser
+                    .offsets
+                    .insert(browser.directory.clone(), browser.offset);
+            }
+            if focus.is_some() {
+                offset = browser.offsets.get(&directory).copied().unwrap_or(0);
+            }
             browser.directory = directory.clone();
             browser.entries.clear();
             browser.selected = 0;
             browser.offset = 0;
+            browser.selection_explicit = false;
         }
         self.browser_state.job.request(BrowserRequest {
             directory,
             folder,
             initial,
+            focus,
+            offset,
         });
         self.start_browser_job();
         self.message(self.text("Reading folder...", "Чтение папки...").into());
@@ -126,15 +166,27 @@ impl App {
                 directory,
                 folder,
                 initial,
+                focus,
+                offset,
             } = request;
             let (directory, folder, initial) = (directory.clone(), *folder, *initial);
+            let (focus, offset) = (focus.clone(), *offset);
             background(runtime, move || {
                 let directory = if initial && !directory.is_dir() {
                     dirs::home_dir().unwrap_or(directory)
                 } else {
                     directory
                 };
-                Browser::open(directory, folder)
+                let mut browser = Browser::open(directory, folder)?;
+                if let Some(focus) = focus
+                    && let Some(index) =
+                        browser.entries.iter().position(|entry| entry.path == focus)
+                {
+                    browser.selected = index;
+                    browser.offset = offset;
+                    browser.selection_explicit = true;
+                }
+                Ok(browser)
             })
         });
     }
@@ -159,6 +211,9 @@ impl App {
             let loaded = completed.result?;
             browser.directory = loaded.directory;
             browser.entries = loaded.entries;
+            browser.selected = loaded.selected;
+            browser.offset = loaded.offset;
+            browser.selection_explicit = loaded.selection_explicit;
             self.browser_state.ready = true;
             self.message(self.text("Folder loaded", "Папка прочитана").into());
         }
@@ -168,7 +223,12 @@ impl App {
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(parent) = browser.directory.parent()
         {
-            self.queue_browser(parent.to_owned(), browser.folder, false);
+            self.queue_browser(
+                parent.to_owned(),
+                browser.folder,
+                false,
+                Some(browser.directory.clone()),
+            );
         }
     }
     pub(super) fn browser_open(&mut self) -> Result<()> {
@@ -187,7 +247,7 @@ impl App {
             None
         };
         if let Some((directory, folder)) = directory {
-            self.queue_browser(directory, folder, false);
+            self.queue_browser(directory, folder, false, None);
         }
         Ok(())
     }
@@ -198,7 +258,7 @@ impl App {
             && let Some(dialog) = &browser.playlist_name
         {
             let name = browser
-                .directory
+                .chosen_folder()
                 .file_name()
                 .and_then(|name| name.to_str())
                 .context(self.text("Choose a folder with a name", "Выберите папку с названием"))?;
@@ -225,7 +285,7 @@ impl App {
                 }
             );
             dialog.purpose = TextPurpose::CreateFromFolder {
-                folder: browser.directory.clone(),
+                folder: browser.chosen_folder().to_owned(),
                 group_subfolders,
             };
             dialog.selected_all = true;
@@ -235,7 +295,7 @@ impl App {
         }
         let paths = if let Some(Dialog::Browser(browser)) = &self.view.dialog {
             if browser.folder {
-                vec![browser.directory.clone()]
+                vec![browser.chosen_folder().to_owned()]
             } else if !browser.marked.is_empty() {
                 let mut paths: Vec<_> = browser.marked.iter().cloned().collect();
                 paths.sort();

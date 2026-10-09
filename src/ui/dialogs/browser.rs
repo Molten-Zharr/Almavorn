@@ -156,7 +156,11 @@ pub(super) fn browser_dialog(
         });
     }
     let add = if browser.playlist_name.is_some() {
-        app.text("Use folder", "Выбрать папку").into()
+        if browser.selection_explicit {
+            app.text("Selected folder", "Выбранную папку").into()
+        } else {
+            app.text("Current folder", "Текущую папку").into()
+        }
     } else if browser.folder {
         app.text("Add folder", "Добавить папку").into()
     } else {

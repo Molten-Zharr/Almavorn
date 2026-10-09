@@ -104,8 +104,8 @@ pub(super) fn help_dialog(
             false,
             false,
             Key::Char('f'),
-            "In Create playlist, choose a music folder. Ctrl+Enter accepts the folder. Subfolders are skipped unless Subfolders as groups is on.",
-            "При создании плейлиста выбрать папку с музыкой. Ctrl+Enter — выбрать папку. Подпапки пропускаются, если не включены группы.",
+            "In Create playlist, choose a music folder. Ctrl+Enter accepts the selected folder, or the open folder if no row was chosen. Subfolders are skipped unless Subfolders as groups is on.",
+            "При создании плейлиста выбрать папку с музыкой. Ctrl+Enter — выделенную папку; без выбора строки — открытую. Подпапки пропускаются, если не включены группы.",
         ),
         (
             true,
