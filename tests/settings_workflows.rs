@@ -1430,6 +1430,189 @@ fn palette_import_failure_and_export_collision_keep_existing_data() {
 }
 
 #[test]
+fn palette_picker_synchronizes_controls_and_only_saves_on_apply() {
+    fn color(app: &App) -> &almavorn::color_picker::ColorPicker {
+        let Some(Dialog::Text(dialog)) = &app.view.dialog else {
+            panic!("Expected color editor");
+        };
+        dialog.color_picker.as_ref().unwrap()
+    }
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    app.open_settings_page(SettingsPage::Palettes);
+    let palettes = app.settings.palettes.clone();
+    rendered(&mut app, 120, 50);
+    let swatch = app
+        .view
+        .hits
+        .iter()
+        .find(|hit| matches!(hit.target, Target::Setting(3)) && hit.area.width == 1)
+        .unwrap()
+        .area;
+    app.handle(Input::Click {
+        x: swatch.x,
+        y: swatch.y,
+        double: false,
+    });
+    app.handle(Input::Release {
+        x: swatch.x,
+        y: swatch.y,
+    });
+    assert_eq!(color(&app).original, [0, 0, 0]);
+    ctrl(&mut app, 'a');
+    app.handle(Input::Text("#102030".into()));
+    assert_eq!(color(&app).hsv.rgb(), [16, 32, 48]);
+    assert_eq!(color(&app).channel(3), 16.0);
+    assert_eq!(color(&app).channel(4), 32.0);
+    assert_eq!(color(&app).channel(5), 48.0);
+
+    rendered(&mut app, 120, 50);
+    let wheel = app
+        .view
+        .hits
+        .iter()
+        .find_map(|hit| match hit.target {
+            Target::ColorWheel(area) => Some(area),
+            _ => None,
+        })
+        .unwrap();
+    let brightness = color(&app).hsv.value;
+    app.handle(Input::Click {
+        x: wheel.right() - 1,
+        y: wheel.y + wheel.height / 2,
+        double: false,
+    });
+    assert!(app.view.workspace.gesture.is_some());
+    assert_eq!(color(&app).hsv.value, brightness);
+    assert!(color(&app).hsv.saturation > 0.99);
+    app.handle(Input::Release {
+        x: u16::MAX,
+        y: u16::MAX,
+    });
+    assert!(app.view.workspace.gesture.is_none());
+    assert_eq!(app.settings.palettes, palettes);
+    click(&mut app, |target| matches!(target, Target::ColorReset));
+    assert_eq!(color(&app).hsv.rgb(), [0, 0, 0]);
+
+    click(&mut app, |target| matches!(target, Target::ColorSelect(3)));
+    key(&mut app, Key::Home);
+    key(&mut app, Key::Right);
+    assert_eq!(color(&app).channel(3), 1.0);
+    app.handle(Input::Key(KeyPress {
+        key: Key::Right,
+        shift: true,
+        ctrl: false,
+        alt: false,
+    }));
+    assert_eq!(color(&app).channel(3), 11.0);
+    key(&mut app, Key::End);
+    assert_eq!(color(&app).channel(3), 255.0);
+    let label = app
+        .view
+        .hits
+        .iter()
+        .find(|hit| matches!(hit.target, Target::ColorSelect(3)))
+        .unwrap()
+        .area;
+    app.handle(Input::Scroll {
+        x: label.x,
+        y: label.y,
+        delta: 1,
+    });
+    assert_eq!(color(&app).channel(3), 254.0);
+    assert_eq!(app.settings.palettes, palettes);
+    click(&mut app, |target| matches!(target, Target::CloseDialog));
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
+    assert_eq!(app.settings.palettes, palettes);
+
+    click_row(&mut app, 3);
+    ctrl(&mut app, 'a');
+    app.handle(Input::Text("#102030".into()));
+    ctrl(&mut app, 'a');
+    app.handle(Input::Text("invalid".into()));
+    assert_eq!(color(&app).hsv.rgb(), [16, 32, 48]);
+    rendered(&mut app, 120, 50);
+    assert!(
+        app.view
+            .hits
+            .iter()
+            .any(|hit| { matches!(hit.target, Target::Submit) && !hit.enabled })
+    );
+    key(&mut app, Key::Enter);
+    assert!(app.view.notice_error);
+    assert_eq!(color(&app).hsv.rgb(), [16, 32, 48]);
+    assert_eq!(app.settings.palettes, palettes);
+    ctrl(&mut app, 'a');
+    app.handle(Input::Text("#123456".into()));
+    click(&mut app, |target| matches!(target, Target::Submit));
+    assert!(!app.view.notice_error, "{}", app.view.notice);
+    assert_eq!(app.settings.palettes[0].color("background"), [18, 52, 86]);
+    let mut expected = palettes;
+    expected[0].colors.insert("background".into(), [18, 52, 86]);
+    assert_eq!(app.settings.palettes, expected);
+    saved(&mut app);
+    drop(app);
+    let app = App::new(&directory.0).unwrap();
+    assert_eq!(app.settings.palettes, expected);
+}
+
+#[test]
+fn palette_picker_keeps_controls_and_exit_accessible_at_small_sizes() {
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    app.settings.language = Language::Russian;
+    app.open_settings_page(SettingsPage::Palettes);
+    click_row(&mut app, 3);
+    for graphical in [false, true] {
+        app.view.graphical_keycaps = graphical;
+        for (width, height) in [(120, 50), (70, 30), (47, 26), (44, 22), (32, 18), (20, 8)] {
+            for _ in 0..7 {
+                let terminal = rendered(&mut app, width, height);
+                let bounds = terminal.backend().buffer().area;
+                for hit in &app.view.hits {
+                    assert_eq!(hit.area.intersection(bounds), hit.area, "{width}×{height}");
+                }
+                assert!(
+                    app.view
+                        .hits
+                        .iter()
+                        .any(|hit| { hit.enabled && matches!(hit.target, Target::CloseDialog) })
+                );
+                if height >= 22 {
+                    assert_eq!(
+                        app.view
+                            .hits
+                            .iter()
+                            .filter(|hit| matches!(hit.target, Target::ColorSlider(_, _)))
+                            .count(),
+                        6
+                    );
+                }
+                if width >= 24 && height >= 18 {
+                    assert!(
+                        app.view
+                            .hits
+                            .iter()
+                            .any(|hit| { hit.enabled && matches!(hit.target, Target::ColorHex) })
+                    );
+                    let Some(Dialog::Text(dialog)) = &app.view.dialog else {
+                        panic!("Expected color editor");
+                    };
+                    if let Some(selected) = dialog.color_picker.as_ref().unwrap().selected {
+                        assert!(app.view.hits.iter().any(|hit| {
+                            matches!(hit.target, Target::ColorSlider(index, _) if index == selected)
+                        }));
+                    }
+                }
+                key(&mut app, Key::Tab);
+            }
+        }
+    }
+    key(&mut app, Key::Escape);
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
+}
+
+#[test]
 fn theme_presets_store_font_geometry_and_palette_with_full_crud() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();

@@ -1,5 +1,6 @@
 mod bindings;
 mod browser;
+mod color_picker;
 mod equalizer;
 mod help;
 mod panels;

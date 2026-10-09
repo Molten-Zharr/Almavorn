@@ -27,6 +27,18 @@ pub struct TextDialog {
     pub keyboard: Language,
     pub upper: bool,
     pub selected_all: bool,
+    pub color_picker: Option<crate::color_picker::ColorPicker>,
+}
+
+impl TextDialog {
+    pub(super) fn sync_color_text(&mut self) {
+        if let Some(color) = &mut self.color_picker {
+            color.selected = None;
+            if let Ok(rgb) = crate::preferences::parse_color(&self.text) {
+                color.set_rgb(rgb);
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -143,12 +155,23 @@ impl Dialog {
 impl App {
     pub(super) fn text_dialog(&mut self, purpose: TextPurpose, text: String) {
         let selected_all = !text.is_empty();
+        let color_picker = if matches!(
+            purpose,
+            TextPurpose::Settings(SettingsEdit::PaletteColor { .. })
+        ) {
+            crate::preferences::parse_color(&text)
+                .ok()
+                .map(crate::color_picker::ColorPicker::new)
+        } else {
+            None
+        };
         self.view.dialog = Some(Dialog::Text(TextDialog {
             purpose,
             text,
             keyboard: self.settings.language,
             upper: false,
             selected_all,
+            color_picker,
         }));
     }
 

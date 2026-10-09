@@ -120,6 +120,11 @@ pub enum Target {
     TunerSlider(usize, Rect),
     TunerReverse,
     TunerReset,
+    ColorWheel(Rect),
+    ColorSlider(usize, Rect),
+    ColorSelect(usize),
+    ColorHex,
+    ColorReset,
 }
 
 pub struct Hit {

@@ -182,7 +182,12 @@ no borders, single, double, or thick borders. Rounded corners apply to single
 borders. Font and size changes take effect immediately in GUITUI; the terminal
 controls them in TUI. Bundled font licenses are in `assets/fonts/`.
 
-Copy, rename, edit each HEX color, and delete palettes. Import accepts Almavorn
+Copy, rename, edit colors, and delete palettes. Click a color sample or HEX value
+to open the color wheel with hue, saturation, brightness, and RGB sliders.
+HEX input stays synchronized. The original sample resets the draft; Apply saves
+the color, and Cancel discards it. Use Tab to choose a control, arrows for a
+single step, and Shift+arrows for ten steps. Scrolling over a slider adjusts it.
+Import accepts Almavorn
 JSON (`almavorn.palette`, version 1) and Molten-Zharr palette JSON (version 2),
 adding an independent copy. Export writes a new file at the entered path and
 preserves existing files. Removing a palette redirects its references to a

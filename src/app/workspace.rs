@@ -258,6 +258,16 @@ impl App {
                 );
                 self.tuner_target(super::Target::TunerSlider(index, area))?;
             }
+            Some(Gesture::ColorWheel(area)) => {
+                let area = *area;
+                self.view.pointer = point;
+                self.color_target(super::Target::ColorWheel(area));
+            }
+            Some(Gesture::ColorSlider(index, area)) => {
+                let (index, area) = (*index, *area);
+                self.view.pointer = point;
+                self.color_target(super::Target::ColorSlider(index, area));
+            }
             None => {}
         }
         Ok(())

@@ -156,6 +156,9 @@ impl App {
                 if delta == 0 {
                     return Ok(());
                 }
+                if self.color_picker_scroll(Position::new(x, y), delta) {
+                    return Ok(());
+                }
                 if matches!(self.view.dialog, Some(Dialog::Equalizer { .. })) {
                     return self.scroll_equalizer(Position::new(x, y), delta);
                 }
@@ -225,6 +228,7 @@ impl App {
                     dialog
                         .text
                         .extend(text.chars().filter(|c| !c.is_control()).take(remaining));
+                    dialog.sync_color_text();
                 }
             }
             Input::SecondaryClick { x, y } => {
@@ -373,6 +377,9 @@ impl App {
             return Ok(());
         }
         if self.view.dialog.is_some() {
+            if self.color_picker_key(key) {
+                return Ok(());
+            }
             if let Some(Dialog::RemovePlaylist { confirm, .. }) = &mut self.view.dialog
                 && !key.ctrl
                 && !key.alt
@@ -526,6 +533,7 @@ impl App {
                         } else {
                             dialog.text.pop();
                         }
+                        dialog.sync_color_text();
                     }
                 }
                 Key::Up => self.scroll_dialog(-1),
@@ -797,6 +805,7 @@ impl App {
                     if dialog.text.chars().count() < 512 {
                         dialog.text.push(c);
                     }
+                    dialog.sync_color_text();
                 }
             }
             Target::Backspace => {
@@ -815,6 +824,7 @@ impl App {
                     } else {
                         dialog.text.pop();
                     }
+                    dialog.sync_color_text();
                 }
             }
             Target::KeyboardLanguage => {
@@ -963,6 +973,11 @@ impl App {
             | Target::TunerSlider(_, _)
             | Target::TunerReverse
             | Target::TunerReset) => self.tuner_target(target)?,
+            target @ (Target::ColorWheel(_)
+            | Target::ColorSlider(_, _)
+            | Target::ColorSelect(_)
+            | Target::ColorHex
+            | Target::ColorReset) => self.color_target(target),
         }
         Ok(())
     }

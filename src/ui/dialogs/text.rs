@@ -19,6 +19,10 @@ pub(super) fn text_dialog(
     area: Rect,
     palette: Palette,
 ) {
+    if dialog.color_picker.is_some() {
+        super::color_picker::render(frame, app, dialog, area, palette);
+        return;
+    }
     let title = match &dialog.purpose {
         TextPurpose::Create | TextPurpose::CreateFromFolder { .. } => {
             app.text("Create playlist", "Создать плейлист")

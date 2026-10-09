@@ -8,6 +8,7 @@ use eframe::egui::{self, emath::GuiRounding};
 use egui_ratatui::RataguiBackend;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
+mod gui_color_picker;
 mod gui_fonts;
 mod gui_renderer;
 use std::time::{Duration, Instant};
@@ -43,6 +44,7 @@ fn run() -> Result<()> {
     let mut previous_click: Option<(egui::Pos2, Instant)> = None;
     let mut image_cache = gui_renderer::ImageCache::default();
     let mut playback_painter = gui_renderer::PlaybackPainter::default();
+    let mut color_painter = gui_color_picker::ColorPickerPainter::default();
     eframe::run_ui_native("Almavorn · GUITUI", options, move |root, _| {
         let ctx = root.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(16));
@@ -153,8 +155,14 @@ fn run() -> Result<()> {
                         Some(
                             Target::PlaybackVolume(_)
                             | Target::Seek(_)
-                            | Target::SettingsVolume(_, _),
+                            | Target::SettingsVolume(_, _)
+                            | Target::ColorSlider(_, _),
                         ) => egui::CursorIcon::ResizeHorizontal,
+                        Some(Target::ColorWheel(_)) => egui::CursorIcon::Crosshair,
+                        Some(Target::ColorHex) => egui::CursorIcon::Text,
+                        Some(Target::ColorSelect(_) | Target::ColorReset) => {
+                            egui::CursorIcon::PointingHand
+                        }
                         Some(Target::EqualizerGain { vertical: true, .. }) => {
                             egui::CursorIcon::ResizeVertical
                         }
@@ -312,6 +320,7 @@ fn run() -> Result<()> {
                     ui.painter()
                         .image(texture_id, popup, uv, egui::Color32::WHITE);
                 }
+                color_painter.paint(ui, image_rect, &app, dimensions);
                 gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
             });
         if app.view.quit {
@@ -362,7 +371,9 @@ fn handle_pointer_event(
                         point.distance(pos) < 5.0 && time.elapsed() < Duration::from_millis(400)
                     });
                     *previous_click = Some((pos, Instant::now()));
-                    if !slider_pointer(app, image, size, pos, true, false) {
+                    if !picker_pointer(app, image, size, pos, true, false)
+                        && !slider_pointer(app, image, size, pos, true, false)
+                    {
                         app.handle(Input::Click { x, y, double });
                         if let Some(ratio) = seek_ratio(app, image, size, pos) {
                             app.scrub(ratio, false);
@@ -372,7 +383,10 @@ fn handle_pointer_event(
             }
         }
         egui::Event::PointerMoved(pos) => {
-            if down && !slider_pointer(app, image, size, pos, false, false) {
+            if down
+                && !picker_pointer(app, image, size, pos, false, false)
+                && !slider_pointer(app, image, size, pos, false, false)
+            {
                 if let Some(ratio) = seek_ratio(app, image, size, pos) {
                     app.scrub(ratio, false);
                 } else if let Some((x, y)) = pointer_cell(image, size, pos) {
@@ -399,7 +413,9 @@ fn release_pointer(
     size: ratatui::layout::Size,
     point: egui::Pos2,
 ) {
-    if slider_pointer(app, image, size, point, false, true) {
+    if picker_pointer(app, image, size, point, false, true)
+        || slider_pointer(app, image, size, point, false, true)
+    {
         return;
     }
     if let Some(ratio) = seek_ratio(app, image, size, point) {
@@ -410,6 +426,57 @@ fn release_pointer(
     if let Some((x, y)) = pointer_cell(image, size, point) {
         app.handle(Input::Release { x, y });
     }
+}
+
+fn picker_pointer(
+    app: &mut App,
+    image: egui::Rect,
+    size: ratatui::layout::Size,
+    point: egui::Pos2,
+    begin: bool,
+    release: bool,
+) -> bool {
+    use almavorn::workspace::Gesture;
+    if size.width == 0 || size.height == 0 || image.width() <= 0.0 || image.height() <= 0.0 {
+        return false;
+    }
+    let target = match app.view.workspace.gesture {
+        Some(Gesture::ColorWheel(area)) => Target::ColorWheel(area),
+        Some(Gesture::ColorSlider(index, area)) => Target::ColorSlider(index, area),
+        None if begin => {
+            let Some((x, y)) = pointer_cell(image, size, point) else {
+                return false;
+            };
+            let Some(target @ (Target::ColorWheel(_) | Target::ColorSlider(_, _))) =
+                app.target_at((x, y).into())
+            else {
+                return false;
+            };
+            target.clone()
+        }
+        _ => return false,
+    };
+    match target {
+        Target::ColorWheel(area) => {
+            let (center, radius) = gui_color_picker::wheel_geometry(image, size, area);
+            let position = (point - center) / radius;
+            if begin && position.length() > 1.05 {
+                return true;
+            }
+            app.drag_color_wheel(area, f64::from(position.x), f64::from(position.y), release);
+        }
+        Target::ColorSlider(index, area) => {
+            let cell = image.width() / f32::from(size.width);
+            let left = image.left() + (f32::from(area.x) + 0.5) * cell;
+            let span = (f32::from(area.width.saturating_sub(1)) * cell).max(1.0);
+            app.drag_color_slider(index, area, f64::from((point.x - left) / span), release);
+        }
+        _ => return false,
+    }
+    if release {
+        app.view.workspace.gesture = None;
+    }
+    true
 }
 
 fn slider_pointer(
@@ -563,6 +630,164 @@ fn convert_key(key: egui::Key) -> Option<Key> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gui_color_picker_drag_reaches_each_channel_value_and_releases_capture() {
+        use almavorn::{
+            app::{Dialog, SettingsFocus, SettingsPage},
+            color_picker::ColorPicker,
+        };
+        use ratatui::{backend::TestBackend, layout::Size};
+
+        fn color(app: &App) -> &ColorPicker {
+            let Some(Dialog::Text(dialog)) = &app.view.dialog else {
+                panic!("Expected color picker");
+            };
+            dialog.color_picker.as_ref().unwrap()
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = App::new(directory.path()).unwrap();
+        app.view.graphical_keycaps = true;
+        app.open_settings_page(SettingsPage::Palettes);
+        while app.settings_focus() != SettingsFocus::Parameters {
+            app.handle(Input::Key(KeyPress::plain(Key::Tab)));
+        }
+        for _ in 0..3 {
+            app.handle(Input::Key(KeyPress::plain(Key::Down)));
+        }
+        app.handle(Input::Key(KeyPress::plain(Key::Enter)));
+        assert_eq!(color(&app).original, [0, 0, 0]);
+        let original = app.settings.palettes.clone();
+        for (columns, rows, cell_width) in [(120, 50, 9.0), (70, 30, 12.5), (32, 22, 6.0)] {
+            let size = Size::new(columns, rows);
+            let image = egui::Rect::from_min_size(
+                egui::pos2(37.25, 61.75),
+                egui::vec2(
+                    f32::from(columns) * cell_width,
+                    f32::from(rows) * cell_width * 2.0,
+                ),
+            );
+            let mut terminal = Terminal::new(TestBackend::new(columns, rows)).unwrap();
+            let ctx = egui::Context::default();
+            let mut previous_click = None;
+            let button = |pos, pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            };
+            let mut frame = |app: &mut App, events| {
+                let _ = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(image),
+                        events,
+                        ..Default::default()
+                    },
+                    |ui| {
+                        if let Some(movement) = pointer_movement(ui.ctx(), image, columns, rows) {
+                            app.handle(movement);
+                        }
+                        let (events, down) = ui
+                            .ctx()
+                            .input(|input| (input.events.clone(), input.pointer.primary_down()));
+                        for event in events {
+                            assert!(handle_pointer_event(
+                                app,
+                                image,
+                                size,
+                                &event,
+                                down,
+                                &mut previous_click
+                            ));
+                        }
+                    },
+                );
+            };
+            for index in 0..ColorPicker::CHANNELS {
+                while color(&app).selected != Some(index) {
+                    app.handle(Input::Key(KeyPress::plain(Key::Tab)));
+                }
+                terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
+                let bar = app
+                    .view
+                    .hits
+                    .iter()
+                    .find_map(|hit| match hit.target {
+                        Target::ColorSlider(channel, area) if channel == index => Some(area),
+                        _ => None,
+                    })
+                    .unwrap();
+                let maximum = ColorPicker::maximum(index) as u16;
+                let left = image.left() + (f32::from(bar.x) + 0.5) * cell_width;
+                let span = f32::from(bar.width - 1) * cell_width;
+                let y = image.top() + (f32::from(bar.y) + 0.5) * cell_width * 2.0;
+                let point =
+                    |value| egui::pos2(left + f32::from(value) / f32::from(maximum) * span, y);
+                frame(
+                    &mut app,
+                    vec![egui::Event::PointerMoved(point(0)), button(point(0), true)],
+                );
+                assert!(app.view.workspace.gesture.is_some());
+                for value in (0..=maximum).chain((0..maximum).rev()) {
+                    let mut pos = point(value);
+                    pos.y += 40.0;
+                    frame(&mut app, vec![egui::Event::PointerMoved(pos)]);
+                    assert_eq!(
+                        color(&app).channel(index).round() as u16,
+                        value,
+                        "channel={index}, width={columns}"
+                    );
+                }
+                frame(&mut app, vec![button(point(101.min(maximum)), false)]);
+                assert_eq!(color(&app).channel(index).round() as u16, 101.min(maximum));
+                assert!(app.view.workspace.gesture.is_none());
+                frame(&mut app, vec![button(point(50), true)]);
+                release_pointer(&mut app, image, size, point(51));
+                assert_eq!(color(&app).channel(index).round() as u16, 51);
+                assert!(app.view.workspace.gesture.is_none());
+                frame(&mut app, vec![button(point(51), false)]);
+            }
+            terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
+            let wheel = app
+                .view
+                .hits
+                .iter()
+                .find_map(|hit| match hit.target {
+                    Target::ColorWheel(area) => Some(area),
+                    _ => None,
+                })
+                .unwrap();
+            let (center, radius) = gui_color_picker::wheel_geometry(image, size, wheel);
+            let brightness = color(&app).hsv.value;
+            // The unpainted corner does not start a wheel drag.
+            let corner = gui_color_picker::map_rect(image, size, wheel).min + egui::vec2(0.5, 0.5);
+            frame(&mut app, vec![button(corner, true)]);
+            assert!(app.view.workspace.gesture.is_none());
+            frame(&mut app, vec![button(corner, false)]);
+            frame(&mut app, vec![button(center, true)]);
+            assert_eq!(color(&app).hsv.saturation, 0.0);
+            for angle in [0.0_f32, 60.0, 120.0, 180.0, 240.0, 300.0] {
+                let pos = center
+                    + egui::vec2(angle.to_radians().cos(), angle.to_radians().sin())
+                        * radius
+                        * 0.75;
+                frame(&mut app, vec![egui::Event::PointerMoved(pos)]);
+                assert!((color(&app).hsv.hue - f64::from(angle)).abs() < 0.001);
+                assert!((color(&app).hsv.saturation - 0.75).abs() < 0.001);
+                assert_eq!(color(&app).hsv.value, brightness);
+            }
+            frame(
+                &mut app,
+                vec![button(center + egui::vec2(radius * 2.0, 0.0), false)],
+            );
+            assert_eq!(color(&app).hsv.saturation, 1.0);
+            assert!(app.view.workspace.gesture.is_none());
+            assert_eq!(app.settings.palettes, original);
+        }
+        app.handle(Input::Key(KeyPress::plain(Key::Escape)));
+        assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
+        assert_eq!(app.settings.palettes, original);
+    }
 
     #[test]
     fn gui_volume_release_ends_capture_after_opening_settings() {

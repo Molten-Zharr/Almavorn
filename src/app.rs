@@ -1,6 +1,7 @@
 mod actions;
 mod background;
 mod browser;
+mod color_picker;
 mod commands;
 mod context;
 mod database;

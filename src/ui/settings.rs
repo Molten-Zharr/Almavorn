@@ -305,10 +305,16 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             palette,
         );
         if let Some([r, g, b]) = item.color {
+            let swatch = Rect::new(row.x + label_width, row.y, 1, 1);
             frame.render_widget(
                 Paragraph::new("■").style(style.fg(Color::Rgb(r, g, b))),
-                Rect::new(row.x + label_width, row.y, 1, 1),
+                swatch,
             );
+            app.view.hits.push(Hit {
+                area: swatch,
+                target: Target::Setting(index),
+                enabled: item.enabled,
+            });
         }
     }
     let footer = Rect::new(

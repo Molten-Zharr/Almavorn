@@ -633,7 +633,10 @@ fn settings_values_share_a_right_column_and_narrow_windows_keep_font_values_read
             .hits
             .iter()
             .filter_map(|hit| {
-                if matches!(hit.target, Target::Setting(_)) && hit.area.y < 40 {
+                if matches!(hit.target, Target::Setting(_))
+                    && hit.area.width > 1 // Color swatches are separate clickable samples.
+                    && hit.area.y < 40
+                {
                     Some(hit.area)
                 } else {
                     None

@@ -535,6 +535,8 @@ pub enum Gesture {
         vertical: bool,
     },
     TunerSlider(usize, Rect),
+    ColorWheel(Rect),
+    ColorSlider(usize, Rect),
 }
 
 pub struct Workspace {

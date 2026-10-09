@@ -294,6 +294,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
             continue;
         }
         if hit.area.height != 1
+            || matches!(hit.target, Target::Setting(_)) && hit.area.width == 1
             || !matches!(
                 hit.target,
                 Target::Action(_)
@@ -564,6 +565,45 @@ mod tests {
             for page in SettingsPage::ALL {
                 app.open_settings_page(page);
                 frame(&mut app);
+            }
+            app.open_settings_page(SettingsPage::Palettes);
+            frame(&mut app);
+            let sample = app
+                .view
+                .hits
+                .iter()
+                .find(|hit| matches!(hit.target, Target::Setting(4)))
+                .unwrap()
+                .area;
+            app.handle(Input::Click {
+                x: sample.x,
+                y: sample.y,
+                double: false,
+            });
+            app.handle(Input::Release {
+                x: sample.x,
+                y: sample.y,
+            });
+            frame(&mut app);
+            for index in 0..6 {
+                while !matches!(&app.view.dialog, Some(almavorn::app::Dialog::Text(dialog)) if dialog.color_picker.as_ref().unwrap().selected == Some(index))
+                {
+                    app.handle(Input::Key(KeyPress::plain(Key::Tab)));
+                }
+                frame(&mut app);
+                let bar = app
+                    .view
+                    .hits
+                    .iter()
+                    .find_map(|hit| match hit.target {
+                        Target::ColorSlider(channel, area) if channel == index => Some(area),
+                        _ => None,
+                    })
+                    .unwrap();
+                for ratio in [0.0, 0.39, 0.4, 0.41, 1.0] {
+                    app.drag_color_slider(index, bar, ratio, true);
+                    frame(&mut app);
+                }
             }
             app.handle(Input::Key(KeyPress::plain(Key::Escape)));
             frame(&mut app);
