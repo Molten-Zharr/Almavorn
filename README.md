@@ -80,6 +80,8 @@ Themes → Font and geometry. Color highlights selection and active headings. Ne
 to regular Fira Code; existing font choices remain intact.
 
 The player has repeat and shuffle buttons, also available in its context menu.
+Single-click the repeat button to enable track repeat; single-click again to
+turn it off. Double-click enables playlist repeat.
 `L` cycles repeat off → playlist → track; `H` toggles shuffle. Track repeat
 restarts a finished track; Next still skips it. Playlist repeat wraps at the
 ends of the queue. Shuffle chooses randomly from every other track in the

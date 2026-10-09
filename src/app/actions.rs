@@ -2,11 +2,22 @@ use super::{App, Dialog, Focus, TextPurpose, database::DatabaseOutcome};
 use crate::errors::AppError;
 use crate::{
     input::Action,
-    model::{Mode, PlaylistKind},
+    model::{Mode, PlaylistKind, RepeatMode},
 };
 use anyhow::{Context, Result};
 
 impl App {
+    pub(super) fn set_repeat(&mut self, repeat: RepeatMode) -> Result<()> {
+        self.settings.repeat = repeat;
+        self.save_settings()?;
+        self.message(format!(
+            "{}: {}",
+            Action::CycleRepeat.name(self.settings.language),
+            repeat.name(self.settings.language),
+        ));
+        Ok(())
+    }
+
     pub fn allowed(&self, action: Action) -> bool {
         use Action::*;
         if self.database_busy()
@@ -247,15 +258,7 @@ impl App {
             }
             Next => self.next(1, true)?,
             Previous => self.next(-1, true)?,
-            CycleRepeat => {
-                self.settings.repeat = self.settings.repeat.next();
-                self.save_settings()?;
-                self.message(format!(
-                    "{}: {}",
-                    CycleRepeat.name(self.settings.language),
-                    self.settings.repeat.name(self.settings.language),
-                ));
-            }
+            CycleRepeat => self.set_repeat(self.settings.repeat.next())?,
             ToggleShuffle => {
                 self.settings.shuffle = !self.settings.shuffle;
                 self.clear_shuffle_history();

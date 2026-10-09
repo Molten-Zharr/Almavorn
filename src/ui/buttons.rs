@@ -161,8 +161,14 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
 
 pub(super) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
     let label = button_caption(label, target);
+    // Keep room for the repeat mode marker between the two clicks.
+    let label_width = if matches!(target, Target::Action(Action::CycleRepeat)) {
+        Span::raw(label).width().max(4)
+    } else {
+        Span::raw(label).width()
+    };
     let shortcut = displayed_shortcut(app, target);
-    (Span::raw(label).width()
+    (label_width
         + shortcut.as_ref().map_or(0, |key| {
             Span::raw(key).width() + if label.is_empty() { 0 } else { 3 }
         })

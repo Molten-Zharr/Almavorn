@@ -191,6 +191,67 @@ fn command_menus_skip_unavailable_rows_and_stop_at_the_last_enabled_action() {
 }
 
 #[test]
+fn repeat_button_selects_track_on_single_click_and_playlist_on_double_click() {
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    for (before, after) in [
+        (RepeatMode::Off, RepeatMode::Track),
+        (RepeatMode::Track, RepeatMode::Off),
+        (RepeatMode::Playlist, RepeatMode::Track),
+    ] {
+        app.settings.repeat = before;
+        click(&mut app, |target| {
+            matches!(target, Target::Action(Action::CycleRepeat))
+        });
+        assert_eq!(app.settings.repeat, after);
+        assert!(!app.view.notice_error, "{}", app.view.notice);
+    }
+    for (width, height) in [(140, 45), (80, 30), (32, 26)] {
+        for before in [RepeatMode::Off, RepeatMode::Track, RepeatMode::Playlist] {
+            app.settings.repeat = before;
+            render(&mut app, width, height);
+            let repeat_area = |app: &App| {
+                app.view
+                    .hits
+                    .iter()
+                    .find(|hit| {
+                        hit.enabled && matches!(hit.target, Target::Action(Action::CycleRepeat))
+                    })
+                    .unwrap()
+                    .area
+            };
+            let area = repeat_area(&app);
+            // Both frontends emit a single click first, then a double click.
+            // Reuse the right edge to catch layout shifts after the first click.
+            for double in [false, true] {
+                app.handle(Input::Click {
+                    x: area.right() - 1,
+                    y: area.y,
+                    double,
+                });
+                render(&mut app, width, height);
+                assert_eq!(repeat_area(&app), area);
+            }
+            assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+            assert!(!app.view.notice_error, "{}", app.view.notice);
+            assert_eq!(
+                app.settings
+                    .profiles
+                    .iter()
+                    .find(|profile| profile.id == app.settings.active_profile)
+                    .unwrap()
+                    .preferences
+                    .repeat,
+                RepeatMode::Playlist,
+            );
+        }
+    }
+    drop(app);
+    let app = App::new(&directory.0).unwrap();
+    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+}
+
+#[test]
 fn repeat_and_shuffle_work_from_keys_buttons_and_the_player_menu() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();

@@ -1,8 +1,8 @@
 use super::{App, Dialog, Focus, Target};
 use crate::errors::AppError;
 use crate::{
-    input::{Input, Key, KeyPress},
-    model::Language,
+    input::{Action, Input, Key, KeyPress},
+    model::{Language, RepeatMode},
 };
 use anyhow::{Result, ensure};
 use ratatui::layout::{Position, Rect};
@@ -91,7 +91,18 @@ impl App {
                     self.view.filter_keyboard = false;
                 }
                 if let Some(target) = hit {
-                    self.target(target, double)?;
+                    if matches!(target, Target::Action(Action::CycleRepeat)) {
+                        let repeat = if double {
+                            RepeatMode::Playlist
+                        } else if self.settings.repeat == RepeatMode::Track {
+                            RepeatMode::Off
+                        } else {
+                            RepeatMode::Track
+                        };
+                        self.set_repeat(repeat)?;
+                    } else {
+                        self.target(target, double)?;
+                    }
                 }
             }
             Input::Drag { x, y } => {

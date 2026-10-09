@@ -1,12 +1,11 @@
 use almavorn::{
-    app::{App, Browser, BrowserEntry, CommandMenu, Dialog, Focus, Sort, Target},
+    app::{App, BrowserEntry, CommandMenu, Dialog, Focus, Sort, Target},
     input::{Action, Input, Key, KeyPress},
     model::{ImportedTrack, Language, Mode, Placement, PlaylistKind, Track},
     ui,
 };
 use ratatui::{Terminal, backend::TestBackend};
 use std::{
-    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
@@ -463,19 +462,17 @@ fn dialogs_capture_clicks_and_render_across_languages_and_panel_positions() {
             duration_ms: 1_000,
             tags: "{}".into(),
         };
+        app.action(Action::AddFiles).unwrap();
+        let Some(Dialog::Browser(mut browser)) = app.view.dialog.take() else {
+            panic!("AddFiles opens the file picker");
+        };
+        browser.directory = directory.0.clone();
+        browser.entries = vec![BrowserEntry {
+            path: track.path.clone(),
+            directory: false,
+        }];
         for dialog in [
-            Dialog::Browser(Browser {
-                playlist_name: None,
-                directory: directory.0.clone(),
-                entries: vec![BrowserEntry {
-                    path: track.path.clone(),
-                    directory: false,
-                }],
-                selected: 0,
-                offset: 0,
-                marked: HashSet::new(),
-                folder: false,
-            }),
+            Dialog::Browser(browser),
             Dialog::RemoveEntry {
                 playlist,
                 entry: 1,
