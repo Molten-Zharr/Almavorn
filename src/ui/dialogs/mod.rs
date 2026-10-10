@@ -375,9 +375,21 @@ pub(super) fn render_dialog(
                 palette,
             );
             let mut lines = vec![
-                format!("{}: {}", app.text("Title", "Название"), track.title),
-                format!("{}: {}", app.text("Artist", "Исполнитель"), track.artist),
-                format!("{}: {}", app.text("Album", "Альбом"), track.album),
+                format!(
+                    "{}: {}",
+                    app.text("Title", "Название"),
+                    metadata_text(app, &track.title)
+                ),
+                format!(
+                    "{}: {}",
+                    app.text("Artist", "Исполнитель"),
+                    metadata_text(app, &track.artist)
+                ),
+                format!(
+                    "{}: {}",
+                    app.text("Album", "Альбом"),
+                    metadata_text(app, &track.album)
+                ),
                 format!(
                     "{}: {}",
                     app.text("Duration", "Длительность"),
@@ -394,13 +406,28 @@ pub(super) fn render_dialog(
             if let Ok(tags) =
                 serde_json::from_str::<std::collections::BTreeMap<String, Vec<String>>>(&track.tags)
             {
+                if tags.is_empty() {
+                    lines.push(app.text("Empty", "Пусто").into());
+                }
                 lines.extend(tags.into_iter().map(|(key, values)| {
                     let values: Vec<_> = values
                         .iter()
                         .map(|value| metadata_tag_value(app, value))
                         .collect();
-                    format!("{}: {}", metadata_tag_name(app, &key), values.join("; "))
+                    format!(
+                        "{}: {}",
+                        metadata_tag_name(app, &key),
+                        metadata_text(app, &values.join("; "))
+                    )
                 }));
+            } else {
+                lines.push(
+                    app.text(
+                        "Saved tags could not be read",
+                        "Не удалось прочитать сохраненные теги",
+                    )
+                    .into(),
+                );
             }
             help::scroll_text(
                 frame,
@@ -474,19 +501,34 @@ fn metadata_tag_name(app: &App, key: &str) -> String {
     app.text(en, ru).into()
 }
 
+fn metadata_text(app: &App, value: &str) -> String {
+    let text = clean(value);
+    if text.trim().is_empty() {
+        app.text("Empty", "Пусто").into()
+    } else {
+        text
+    }
+}
+
 fn metadata_tag_value(app: &App, value: &str) -> String {
     if let Some(quoted) = value
         .strip_prefix("Text(")
         .or_else(|| value.strip_prefix("Locator("))
         .and_then(|value| value.strip_suffix(')'))
     {
-        return clean(&decode_tag_text(quoted).unwrap_or_else(|| quoted.to_owned()));
+        return metadata_text(
+            app,
+            &decode_tag_text(quoted).unwrap_or_else(|| quoted.to_owned()),
+        );
     }
     if let Some(bytes) = value
         .strip_prefix("Binary(")
         .and_then(|value| value.strip_suffix(')'))
         .and_then(|value| serde_json::from_str::<Vec<u8>>(value).ok())
     {
+        if bytes.is_empty() {
+            return app.text("Empty", "Пусто").into();
+        }
         return format!(
             "{}: {} {}",
             app.text("Binary data", "Двоичные данные"),
@@ -494,7 +536,7 @@ fn metadata_tag_value(app: &App, value: &str) -> String {
             app.text("bytes", "байт")
         );
     }
-    clean(value)
+    metadata_text(app, value)
 }
 
 // Imported values use Rust's Debug string escapes, including \u{...} and \0.
