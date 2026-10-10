@@ -142,13 +142,8 @@ impl App {
                 );
                 self.settings.appearance.font_size = size;
             }
-            SettingsEdit::ImportPalette => {
-                self.start_palette_import(text)?;
-                self.show_settings();
-                return Ok(());
-            }
-            SettingsEdit::ExportPalette(id) => {
-                self.start_palette_export(&id, text)?;
+            SettingsEdit::ExportPalette { id, directory } => {
+                self.start_palette_export(&id, &directory, text)?;
                 self.show_settings();
                 return Ok(());
             }

@@ -92,6 +92,30 @@ pub(super) fn modal(
     inner
 }
 
+pub(super) fn file_modal(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    title: String,
+    height: u16,
+    palette: Palette,
+) -> Rect {
+    let width = area.width.saturating_sub(4).min(88);
+    let height = height.min(area.height);
+    let rect = Rect::new(
+        area.x + (area.width - width) / 2,
+        area.y + (area.height - height) / 2,
+        width,
+        height,
+    );
+    app.view.overlay_area = rect;
+    frame.render_widget(Clear, rect);
+    let outer = block(title, palette, true);
+    let inner = outer.inner(rect);
+    frame.render_widget(outer, rect);
+    inner
+}
+
 pub(super) fn dialog_footer(frame: &mut Frame, app: &mut App, inner: Rect, palette: Palette) {
     buttons(
         frame,

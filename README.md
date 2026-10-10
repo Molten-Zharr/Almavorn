@@ -189,8 +189,15 @@ the color, and Cancel discards it. Use Tab to choose a control, arrows for a
 single step, and Shift+arrows for ten steps. Scrolling over a slider adjusts it.
 Import accepts Almavorn
 JSON (`almavorn.palette`, version 1) and Molten-Zharr palette JSON (version 2),
-adding an independent copy. Export writes a new file at the entered path and
-preserves existing files. Removing a palette redirects its references to a
+adding an independent copy. Import, export, and deletion appear under the
+Danger zone divider. In both GUI and TUI, import opens a built-in JSON file
+picker; export lets you choose a folder and enter just a file name (`.json`
+is added automatically). Click to select, Enter or double-click to open a folder
+or import a file, Backspace to go up, and Ctrl+Enter to confirm the selection.
+Home and Documents buttons provide quick navigation. The last chosen folder is
+remembered for the session; Ctrl+F in the export name dialog selects another
+folder. Export creates a new file and preserves existing files.
+Removing a palette redirects its references to a
 remaining palette. Each catalog retains at least one entry.
 
 Render every settings page without a window or audio device:

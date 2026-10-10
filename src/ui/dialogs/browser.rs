@@ -1,8 +1,8 @@
 use super::super::{
     theme::Palette,
-    widgets::{buttons, clean, modal, visible_offset},
+    widgets::{buttons, clean, file_modal, modal, visible_offset},
 };
-use crate::app::{App, Browser, Hit, Target};
+use crate::app::{App, Browser, Hit, PaletteFilePicker, Target};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -16,35 +16,35 @@ pub(super) fn browser_dialog(
     area: Rect,
     palette: Palette,
 ) {
-    let inner = modal(
-        frame,
-        app,
-        area,
-        app.text(
-            if browser.playlist_name.is_some() {
-                "Playlist from folder"
-            } else if browser.folder {
-                "Add folder"
-            } else {
-                "Add files"
-            },
-            if browser.playlist_name.is_some() {
-                "Плейлист из папки"
-            } else if browser.folder {
-                "Добавить папку"
-            } else {
-                "Добавить файлы"
-            },
-        )
-        .into(),
-        42,
-        palette,
-    );
+    let title = match &browser.palette_file {
+        Some(PaletteFilePicker::Import) => {
+            app.text("Import palette · JSON", "Импорт палитры · JSON")
+        }
+        Some(PaletteFilePicker::Export { .. }) => app.text(
+            "Export palette · choose folder",
+            "Экспорт палитры · выбрать папку",
+        ),
+        None if browser.playlist_name.is_some() => {
+            app.text("Playlist from folder", "Плейлист из папки")
+        }
+        None if browser.folder => app.text("Add folder", "Добавить папку"),
+        None => app.text("Add files", "Добавить файлы"),
+    };
+    let inner = if browser.palette_file.is_some() {
+        file_modal(frame, app, area, title.into(), 42, palette)
+    } else {
+        modal(frame, app, area, title.into(), 42, palette)
+    };
+    let path_height = if browser.palette_file.is_some() && inner.height < 12 {
+        1
+    } else {
+        2
+    };
     frame.render_widget(
         Paragraph::new(browser.directory.display().to_string())
             .style(palette.text().fg(palette.folder_path))
             .wrap(Wrap { trim: false }),
-        Rect::new(inner.x, inner.y, inner.width, 2),
+        Rect::new(inner.x, inner.y, inner.width, path_height),
     );
     let mut controls = vec![
         (
@@ -53,12 +53,31 @@ pub(super) fn browser_dialog(
             browser.directory.parent().is_some(),
         ),
         (
-            app.text("Select / open", "Выбрать / открыть").into(),
+            if browser.palette_file.is_some() {
+                app.text("Open", "Открыть")
+            } else {
+                app.text("Select / open", "Выбрать / открыть")
+            }
+            .into(),
             Target::BrowserOpen,
             !browser.entries.is_empty(),
         ),
     ];
-    if browser.playlist_name.is_none() {
+    if browser.palette_file.is_some() {
+        controls.extend([
+            (
+                app.text("Home", "Домой").into(),
+                Target::BrowserHome,
+                dirs::home_dir().is_some(),
+            ),
+            (
+                app.text("Documents", "Документы").into(),
+                Target::BrowserDocuments,
+                dirs::document_dir().is_some(),
+            ),
+        ]);
+    }
+    if browser.playlist_name.is_none() && browser.palette_file.is_none() {
         controls.push((
             if browser.folder {
                 format!(
@@ -88,19 +107,38 @@ pub(super) fn browser_dialog(
     let used = buttons(
         frame,
         app,
-        Rect::new(inner.x, inner.y + 2, inner.width, 3),
+        Rect::new(inner.x, inner.y + path_height, inner.width, 3),
         controls,
         palette,
     );
+    let list_top = inner.y + path_height + used;
     let list = Rect::new(
         inner.x,
-        inner.y + 2 + used,
+        list_top,
         inner.width,
-        inner.height.saturating_sub(4 + used),
+        inner.bottom().saturating_sub(2).saturating_sub(list_top),
     );
     if app.browser_loading() {
         frame.render_widget(
             Paragraph::new(app.text("Reading folder...", "Чтение папки...")).style(palette.text()),
+            list,
+        );
+    }
+    if app.browser_ready() && browser.entries.is_empty() && browser.palette_file.is_some() {
+        frame.render_widget(
+            Paragraph::new(if browser.folder {
+                app.text(
+                    "No subfolders. You can choose the current folder.",
+                    "Нет подпапок. Можно выбрать текущую папку.",
+                )
+            } else {
+                app.text(
+                    "No JSON files in this folder.",
+                    "В этой папке нет JSON-файлов.",
+                )
+            })
+            .style(palette.text().fg(palette.muted))
+            .wrap(Wrap { trim: false }),
             list,
         );
     }
@@ -120,6 +158,8 @@ pub(super) fn browser_dialog(
         let name = entry.path.file_name().unwrap_or_default().to_string_lossy();
         let marker = if entry.directory {
             "DIR"
+        } else if browser.palette_file.is_some() {
+            "JSON"
         } else if browser.marked.contains(&entry.path) {
             "[x]"
         } else {
@@ -155,7 +195,27 @@ pub(super) fn browser_dialog(
             enabled: true,
         });
     }
-    let add = if browser.playlist_name.is_some() {
+    let add = if let Some(purpose) = &browser.palette_file {
+        match purpose {
+            PaletteFilePicker::Import => app
+                .text(
+                    "Import",
+                    if inner.width < 40 {
+                        "Импорт"
+                    } else {
+                        "Импортировать"
+                    },
+                )
+                .into(),
+            PaletteFilePicker::Export { .. } if inner.width < 40 => {
+                app.text("Choose", "Выбрать").into()
+            }
+            PaletteFilePicker::Export { .. } if browser.selection_explicit => {
+                app.text("Selected folder", "Выбранную папку").into()
+            }
+            PaletteFilePicker::Export { .. } => app.text("Current folder", "Текущую папку").into(),
+        }
+    } else if browser.playlist_name.is_some() {
         if browser.selection_explicit {
             app.text("Selected folder", "Выбранную папку").into()
         } else {

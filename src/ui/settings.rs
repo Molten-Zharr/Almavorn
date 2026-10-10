@@ -3,7 +3,7 @@ use super::{
     theme::Palette,
     widgets::{block, visible_offset},
 };
-use crate::app::{App, Hit, SettingControl, SettingsFocus, SettingsPage, Target};
+use crate::app::{App, Hit, SettingControl, SettingGroup, SettingsFocus, SettingsPage, Target};
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
@@ -146,8 +146,12 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     let rows = app.settings_rows();
     app.view.settings.selected = app.view.settings.selected.min(rows.len().saturating_sub(1));
     let stacked = content.width < 40;
-    let grouped = app.view.settings.page == SettingsPage::Shortcuts;
-    let step = if grouped && !stacked { 1 } else { 2 };
+    let grouped = rows.iter().any(|row| row.group.is_some());
+    let step = if app.view.settings.page == SettingsPage::Shortcuts && !stacked {
+        1
+    } else {
+        2
+    };
     let row_height = if stacked { 2 } else { 1 };
     let capacity = if stacked {
         content.height / step
@@ -179,10 +183,8 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             let height = rows[offset..=selected]
                 .iter()
                 .map(|row| {
-                    let divider = u16::from(
-                        row.shortcut_group.is_some() && row.shortcut_group != previous_group,
-                    ) * 2;
-                    previous_group = row.shortcut_group;
+                    let divider = u16::from(row.group.is_some() && row.group != previous_group) * 2;
+                    previous_group = row.group;
                     usize::from(step + divider)
                 })
                 .sum::<usize>()
@@ -204,8 +206,8 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     let mut y = content.y;
     let mut previous_group = None;
     for (index, item) in rows.iter().enumerate().skip(app.view.settings.offset) {
-        if let Some(group) = item.shortcut_group
-            && item.shortcut_group != previous_group
+        if let Some(group) = item.group
+            && item.group != previous_group
         {
             // Dividers are decoration; setting indices and navigation skip them.
             if y + 2 + row_height > content.bottom() {
@@ -215,7 +217,14 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             let remaining = usize::from(content.width).saturating_sub(Span::raw(&title).width());
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
-                    Span::styled(title, palette.text().fg(palette.sidebar_title)),
+                    Span::styled(
+                        title,
+                        palette.text().fg(if group == SettingGroup::DangerZone {
+                            palette.error
+                        } else {
+                            palette.sidebar_title
+                        }),
+                    ),
                     Span::styled("─".repeat(remaining), palette.text().fg(palette.separator)),
                 ]))
                 .wrap(Wrap { trim: true }),
@@ -223,7 +232,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             );
             y += 2;
         }
-        previous_group = item.shortcut_group;
+        previous_group = item.group;
         if y + row_height > content.bottom() {
             break;
         }

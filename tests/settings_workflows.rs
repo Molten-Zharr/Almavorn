@@ -9,7 +9,7 @@ use almavorn::{
 use ratatui::{Terminal, backend::TestBackend, style::Color};
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
@@ -61,6 +61,73 @@ fn submit(app: &mut App, text: &str) {
     assert!(app.accepts_text());
     ctrl(app, 'a');
     app.handle(Input::Text(text.into()));
+    key(app, Key::Enter);
+    assert!(!app.view.notice_error, "{}", app.view.notice);
+}
+fn ctrl_enter(app: &mut App) {
+    app.handle(Input::Key(KeyPress {
+        key: Key::Enter,
+        ctrl: true,
+        alt: false,
+        shift: false,
+    }));
+}
+fn select_browser_path(app: &mut App, path: &Path) -> usize {
+    let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+        panic!("Expected file picker");
+    };
+    let index = browser
+        .entries
+        .iter()
+        .position(|entry| entry.path == path)
+        .expect("path must be listed");
+    key(app, Key::Home);
+    for _ in 0..index {
+        key(app, Key::Down);
+    }
+    index
+}
+fn browse_to(app: &mut App, directory: &Path) {
+    until(app, App::browser_ready);
+    loop {
+        let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+            panic!("Expected file picker");
+        };
+        if directory.starts_with(&browser.directory) {
+            break;
+        }
+        key(app, Key::Backspace);
+        until(app, App::browser_ready);
+    }
+    let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+        unreachable!();
+    };
+    let remaining: Vec<_> = directory
+        .strip_prefix(&browser.directory)
+        .unwrap()
+        .components()
+        .map(|part| part.as_os_str().to_owned())
+        .collect();
+    for part in remaining {
+        let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+            unreachable!();
+        };
+        let path = browser.directory.join(part);
+        select_browser_path(app, &path);
+        key(app, Key::Enter);
+        until(app, App::browser_ready);
+    }
+}
+fn export_to(app: &mut App, path: &Path) {
+    ctrl(app, 'e');
+    browse_to(app, path.parent().unwrap());
+    ctrl_enter(app);
+    submit(app, path.file_name().unwrap().to_str().unwrap());
+}
+fn import_from(app: &mut App, path: &Path) {
+    ctrl(app, 'i');
+    browse_to(app, path.parent().unwrap());
+    select_browser_path(app, path);
     key(app, Key::Enter);
     assert!(!app.view.notice_error, "{}", app.view.notice);
 }
@@ -1371,8 +1438,7 @@ fn palettes_crud_validate_colors_roundtrip_and_preserve_references() {
     assert_eq!(app.settings.current_palette().id, id);
     let colors = app.settings.current_palette().colors.clone();
     let path = directory.0.join("palette.json");
-    ctrl(&mut app, 'e');
-    submit(&mut app, path.to_str().unwrap());
+    export_to(&mut app, &path);
     until(&mut app, |_| {
         fs::read(&path)
             .ok()
@@ -1382,8 +1448,7 @@ fn palettes_crud_validate_colors_roundtrip_and_preserve_references() {
     until(&mut app, |app| !app.settings_file_busy());
     assert_eq!(NamedPalette::import_json(&bytes).unwrap().colors, colors);
     let before = app.settings.palettes.len();
-    ctrl(&mut app, 'i');
-    submit(&mut app, path.to_str().unwrap());
+    import_from(&mut app, &path);
     until(&mut app, |app| app.settings.palettes.len() == before + 1);
     assert_ne!(app.settings.palettes.last().unwrap().id, id);
     assert_eq!(app.settings.palettes.last().unwrap().name, "Personal (2)");
@@ -1416,16 +1481,259 @@ fn palette_import_failure_and_export_collision_keep_existing_data() {
     fs::write(&path, b"keep this file").unwrap();
     app.open_settings_page(SettingsPage::Palettes);
     let palettes = app.settings.palettes.clone();
+    import_from(&mut app, &path);
+    until(&mut app, |app| app.view.notice_error);
+    assert_eq!(app.settings.palettes, palettes);
+    assert_eq!(fs::read(&path).unwrap(), b"keep this file");
+    export_to(&mut app, &path);
+    until(&mut app, |app| app.view.notice_error);
+    assert_eq!(fs::read(&path).unwrap(), b"keep this file");
+    assert_eq!(app.settings.palettes, palettes);
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
+}
+
+#[test]
+fn danger_zone_dividers_group_catalog_actions_and_skip_navigation() {
+    let directory = Directory::new();
+    let mut app = App::new(&directory.0).unwrap();
+    let import = 4 + color_roles().len();
+    for language in [Language::Russian, Language::English] {
+        app.settings.language = language;
+        for (width, height) in [(120, 50), (70, 30), (32, 18)] {
+            for (page, index) in [
+                (SettingsPage::Profiles, 4),
+                (SettingsPage::Themes, 6),
+                (SettingsPage::Palettes, import),
+            ] {
+                app.open_settings_page(page);
+                select_row(&mut app, index);
+                let terminal = rendered(&mut app, width, height);
+                assert!(
+                    screen_text(&terminal).contains(language.text("Danger zone", "Опасная зона"))
+                );
+                let row = app.view.hits.iter().find(|hit| matches!(hit.target, Target::SettingSelect(selected) if selected == index)).unwrap().area;
+                let divider = ratatui::layout::Position::new(row.x, row.y - 2);
+                assert!(!app.view.hits.iter().any(|hit| hit.area.contains(divider)));
+                app.handle(Input::Click {
+                    x: divider.x,
+                    y: divider.y,
+                    double: false,
+                });
+                assert!(
+                    matches!(app.view.dialog, Some(Dialog::Settings { selected }) if selected == index)
+                );
+                if page == SettingsPage::Palettes {
+                    key(&mut app, Key::Down);
+                    assert!(
+                        matches!(app.view.dialog, Some(Dialog::Settings { selected }) if selected == import + 1)
+                    );
+                    key(&mut app, Key::Down);
+                    assert!(
+                        matches!(app.view.dialog, Some(Dialog::Settings { selected }) if selected == import + 2)
+                    );
+                    rendered(&mut app, width, height);
+                    assert!(app.view.hits.iter().any(|hit| matches!(hit.target, Target::SettingSelect(selected) if selected == import + 2)));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn palette_file_picker_filters_json_imports_one_file_and_returns_to_settings() {
+    let directory = Directory::new();
+    let folder = directory.0.join("Палитры с пробелами");
+    fs::create_dir(&folder).unwrap();
+    fs::create_dir(folder.join("nested")).unwrap();
+    let mut app = App::new(&directory.0).unwrap();
+    let palette = app.settings.palettes[0].clone();
+    let input = folder.join("brand.JSON");
+    fs::write(&input, palette.export_json().unwrap()).unwrap();
+    fs::write(folder.join("other.json"), palette.export_json().unwrap()).unwrap();
+    fs::write(folder.join("music.mp3"), b"music").unwrap();
+    fs::write(folder.join("notes.txt"), b"notes").unwrap();
+    let before = app.settings.palettes.len();
+    app.open_settings_page(SettingsPage::Palettes);
     ctrl(&mut app, 'i');
-    submit(&mut app, path.to_str().unwrap());
-    until(&mut app, |app| app.view.notice_error);
-    assert_eq!(app.settings.palettes, palettes);
-    assert_eq!(fs::read(&path).unwrap(), b"keep this file");
+    assert!(!app.accepts_text());
+    browse_to(&mut app, &folder);
+    let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+        unreachable!();
+    };
+    assert!(browser.entries[0].directory);
+    assert_eq!(browser.entries.len(), 3);
+    let index = select_browser_path(&mut app, &input);
+    ctrl(&mut app, 'a');
+    key(&mut app, Key::Char(' '));
+    let scan = app.settings.scan_subfolders;
+    let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+        unreachable!();
+    };
+    assert!(browser.marked.is_empty());
+    let terminal = rendered(&mut app, 120, 50);
+    assert!(screen_text(&terminal).contains("JSON brand.JSON"));
+    assert!(
+        !app.view
+            .hits
+            .iter()
+            .any(|hit| matches!(hit.target, Target::BrowserMarkAll | Target::ScanSubfolders))
+    );
+    click(
+        &mut app,
+        |target| matches!(target, Target::BrowserRow(selected) if *selected == index),
+    );
+    assert!(matches!(app.view.dialog, Some(Dialog::Browser(_))));
+    click(&mut app, |target| matches!(target, Target::BrowserAdd));
+    until(&mut app, |app| app.settings.palettes.len() == before + 1);
+    assert_eq!(app.settings.palettes.last().unwrap().colors, palette.colors);
+    assert_eq!(app.settings.scan_subfolders, scan);
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     ctrl(&mut app, 'e');
-    submit(&mut app, path.to_str().unwrap());
-    until(&mut app, |app| app.view.notice_error);
-    assert_eq!(fs::read(&path).unwrap(), b"keep this file");
-    assert_eq!(app.settings.palettes, palettes);
+    until(&mut app, App::browser_ready);
+    let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+        unreachable!();
+    };
+    assert_eq!(browser.directory, folder);
+    assert!(browser.entries.iter().all(|entry| entry.directory));
+    let original = app.settings.palettes.clone();
+    for graphical in [false, true] {
+        app.view.graphical_keycaps = graphical;
+        for (width, height) in [(120, 50), (70, 30), (44, 22), (32, 18), (20, 8)] {
+            rendered(&mut app, width, height);
+            assert!(
+                app.view
+                    .hits
+                    .iter()
+                    .all(|hit| hit.area.right() <= width && hit.area.bottom() <= height)
+            );
+            assert!(
+                app.view
+                    .hits
+                    .iter()
+                    .any(|hit| hit.enabled && matches!(hit.target, Target::CloseDialog))
+            );
+            assert!(
+                !app.view
+                    .hits
+                    .iter()
+                    .any(|hit| matches!(hit.target, Target::SettingsPage(_)))
+            );
+        }
+    }
+    key(&mut app, Key::Char(' '));
+    assert_eq!(app.settings.scan_subfolders, scan);
+    key(&mut app, Key::Escape);
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
+    // A cancelled directory load cannot reopen a picker or change settings.
+    ctrl(&mut app, 'i');
+    key(&mut app, Key::Escape);
+    for _ in 0..10 {
+        app.tick();
+    }
+    assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
+    assert_eq!(app.settings.palettes, original);
+}
+
+#[test]
+fn palette_export_chooses_folder_preserves_draft_and_validates_file_names() {
+    let directory = Directory::new();
+    let first = directory.0.join("first");
+    let second = directory.0.join("Вторая папка");
+    fs::create_dir(&first).unwrap();
+    fs::create_dir(&second).unwrap();
+    let mut app = App::new(&directory.0).unwrap();
+    app.open_settings_page(SettingsPage::Palettes);
+    ctrl(&mut app, 'e');
+    browse_to(&mut app, &first);
+    // Returning from a child keeps its focus, but exports to the current parent.
+    key(&mut app, Key::Backspace);
+    until(&mut app, App::browser_ready);
+    let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+        unreachable!();
+    };
+    assert_eq!(browser.chosen_folder(), directory.0);
+    browse_to(&mut app, &first);
+    click(&mut app, |target| matches!(target, Target::BrowserAdd));
+    assert!(app.accepts_text());
+    let Some(Dialog::Text(dialog)) = &app.view.dialog else {
+        unreachable!();
+    };
+    assert_eq!(dialog.text, "molten-zharr.json");
+    ctrl(&mut app, 'a');
+    app.handle(Input::Text("Моя палитра".into()));
+    ctrl(&mut app, 'f');
+    browse_to(&mut app, &second);
+    ctrl_enter(&mut app);
+    let Some(Dialog::Text(dialog)) = &app.view.dialog else {
+        unreachable!();
+    };
+    assert_eq!(dialog.text, "Моя палитра");
+    assert!(
+        matches!(&dialog.purpose, almavorn::app::TextPurpose::Settings(almavorn::app::SettingsEdit::ExportPalette { directory, .. }) if directory == &second)
+    );
+    for graphical in [false, true] {
+        app.view.graphical_keycaps = graphical;
+        for (width, height) in [(120, 50), (70, 30), (44, 22), (32, 18), (20, 8)] {
+            rendered(&mut app, width, height);
+            assert!(
+                app.view
+                    .hits
+                    .iter()
+                    .all(|hit| hit.area.right() <= width && hit.area.bottom() <= height)
+            );
+            assert!(
+                app.view
+                    .hits
+                    .iter()
+                    .any(|hit| hit.enabled && matches!(hit.target, Target::CloseDialog))
+            );
+            if height >= 18 {
+                for (index, hit) in app.view.hits.iter().enumerate() {
+                    assert!(
+                        app.view.hits[index + 1..]
+                            .iter()
+                            .all(|other| !hit.area.intersects(other.area)),
+                        "export controls must not overlap at {width}×{height}"
+                    );
+                }
+                assert!(app.view.hits.iter().any(|hit| hit.enabled && matches!(hit.target, Target::PaletteExportFolder)));
+                assert!(
+                    app.view
+                        .hits
+                        .iter()
+                        .any(|hit| hit.enabled && matches!(hit.target, Target::Submit))
+                );
+            }
+        }
+    }
+    for invalid in [
+        "",
+        "..",
+        "../outside.json",
+        "nested/file.json",
+        "C:\\palette.json",
+    ] {
+        ctrl(&mut app, 'a');
+        app.handle(Input::Text(invalid.into()));
+        key(&mut app, Key::Enter);
+        assert!(app.view.notice_error);
+        assert!(app.accepts_text());
+        assert!(!app.settings_file_busy());
+    }
+    submit(&mut app, "Моя палитра");
+    until(&mut app, |app| !app.settings_file_busy());
+    let output = second.join("Моя палитра.json");
+    let exported = NamedPalette::import_json(&fs::read(&output).unwrap()).unwrap();
+    assert_eq!(exported.colors, app.settings.palettes[0].colors);
+    assert!(!first.join("Моя палитра.json").exists());
+    ctrl(&mut app, 'e');
+    until(&mut app, App::browser_ready);
+    let Some(Dialog::Browser(browser)) = &app.view.dialog else {
+        unreachable!();
+    };
+    assert_eq!(browser.directory, second);
+    assert!(browser.entries.is_empty());
+    key(&mut app, Key::Escape);
     assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
 }
 

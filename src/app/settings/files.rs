@@ -18,23 +18,34 @@ enum FileOutcome {
 pub(crate) struct SettingsFileJob {
     receiver: Background<FileOutcome>,
 }
-fn file_path(text: &str) -> Result<PathBuf> {
-    ensure!(!text.trim().is_empty(), AppError::FilePathRequired);
-    if let Some(rest) = text.trim().strip_prefix("~/") {
-        Ok(dirs::home_dir()
-            .context("Home directory is unavailable")?
-            .join(rest))
+fn export_filename(text: &str) -> Result<String> {
+    let name = text.trim();
+    ensure!(
+        !name.is_empty()
+            && !matches!(name, "." | "..")
+            && !name
+                .chars()
+                .any(|c| c.is_control() || "/\\:*?\"<>|".contains(c)),
+        AppError::InvalidFileName
+    );
+    let name = if Path::new(name)
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+    {
+        name.to_owned()
     } else {
-        Ok(PathBuf::from(text.trim()))
-    }
+        format!("{name}.json")
+    };
+    ensure!(name.len() <= 255, AppError::InvalidFileName);
+    Ok(name)
 }
 impl App {
     pub fn settings_file_busy(&self) -> bool {
         self.persistence.file.is_some()
     }
-    pub(super) fn start_palette_import(&mut self, text: &str) -> Result<()> {
+    pub(crate) fn start_palette_import(&mut self, path: &Path) -> Result<()> {
         ensure!(!self.settings_file_busy(), AppError::PaletteFileBusy);
-        let path = file_path(text)?;
+        let path = path.to_owned();
         self.persistence.file = Some(SettingsFileJob {
             receiver: background(self.runtime(), move || {
                 let file =
@@ -50,9 +61,14 @@ impl App {
         );
         Ok(())
     }
-    pub(super) fn start_palette_export(&mut self, id: &str, text: &str) -> Result<()> {
+    pub(super) fn start_palette_export(
+        &mut self,
+        id: &str,
+        directory: &Path,
+        text: &str,
+    ) -> Result<()> {
         ensure!(!self.settings_file_busy(), AppError::PaletteFileBusy);
-        let path = file_path(text)?;
+        let path = directory.join(export_filename(text)?);
         let bytes = self
             .settings
             .palettes

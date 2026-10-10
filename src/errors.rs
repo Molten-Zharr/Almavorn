@@ -29,6 +29,8 @@ pub enum AppError {
     DatabaseWriterFailed,
     PaletteFileBusy,
     FilePathRequired,
+    InvalidFileName,
+    PaletteSelectionRequired,
     InvalidPaletteJson,
     UnsupportedPaletteVersion,
     UnsupportedPaletteFormat,
@@ -159,6 +161,13 @@ impl AppError {
                 "Дождитесь завершения импорта или экспорта палитры.",
             ),
             Self::FilePathRequired => language.text("Enter a file path", "Введите путь к файлу."),
+            Self::InvalidFileName => language.text(
+                "Enter a file name without folders, for example palette.json",
+                "Введите имя файла без папок, например palette.json.",
+            ),
+            Self::PaletteSelectionRequired => {
+                language.text("Select a palette JSON file", "Выберите JSON-файл палитры.")
+            }
             Self::InvalidPaletteJson => language.text(
                 "Cannot read palette JSON",
                 "Не удалось прочитать JSON палитры. Проверьте файл.",

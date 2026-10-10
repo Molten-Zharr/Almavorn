@@ -1,4 +1,4 @@
-use super::{App, Dialog, TextDialog, TextPurpose, background::background};
+use super::{App, Dialog, SettingsEdit, TextDialog, TextPurpose, background::background};
 use crate::errors::AppError;
 use crate::media;
 use anyhow::{Context, Result, ensure};
@@ -10,9 +10,16 @@ use std::{
 pub(super) struct BrowserRequest {
     directory: PathBuf,
     folder: bool,
+    palette: bool,
     initial: bool,
     focus: Option<PathBuf>,
     offset: usize,
+}
+
+#[derive(Clone)]
+pub enum PaletteFilePicker {
+    Import,
+    Export { id: String, filename: String },
 }
 
 #[derive(Clone)]
@@ -30,6 +37,7 @@ pub struct Browser {
     pub marked: HashSet<PathBuf>,
     pub folder: bool,
     pub playlist_name: Option<TextDialog>,
+    pub palette_file: Option<PaletteFilePicker>,
     offsets: HashMap<PathBuf, usize>,
 }
 
@@ -44,22 +52,31 @@ impl Browser {
             marked: HashSet::new(),
             folder,
             playlist_name: None,
+            palette_file: None,
             offsets: HashMap::new(),
         }
     }
-    pub(super) fn open(directory: PathBuf, folder: bool) -> Result<Self> {
+    fn open(directory: PathBuf, folder: bool, palette: bool) -> Result<Self> {
         let mut browser = Self::unloaded(directory, folder);
-        browser.refresh()?;
+        browser.refresh(palette)?;
         Ok(browser)
     }
-    pub(super) fn refresh(&mut self) -> Result<()> {
+    fn refresh(&mut self, palette: bool) -> Result<()> {
         self.entries.clear();
         for entry in std::fs::read_dir(&self.directory)
             .with_context(|| format!("Cannot read folder {}", self.directory.display()))?
             .collect::<std::io::Result<Vec<_>>>()?
         {
             let directory = entry.path().is_dir();
-            if directory || (!self.folder && media::is_audio(&entry.path())) {
+            let selectable = if palette {
+                entry
+                    .path()
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+            } else {
+                media::is_audio(&entry.path())
+            };
+            if directory || (!self.folder && selectable) {
                 self.entries.push(BrowserEntry {
                     path: entry.path(),
                     directory,
@@ -91,6 +108,51 @@ impl Browser {
 }
 
 impl App {
+    pub(super) fn choose_palette_import(&mut self) {
+        self.show_palette_browser(PaletteFilePicker::Import, None);
+    }
+
+    pub(super) fn choose_palette_export_folder(&mut self) {
+        let Some(Dialog::Text(dialog)) = &self.view.dialog else {
+            return;
+        };
+        let TextPurpose::Settings(SettingsEdit::ExportPalette { id, directory }) = &dialog.purpose
+        else {
+            return;
+        };
+        self.show_palette_browser(
+            PaletteFilePicker::Export {
+                id: id.clone(),
+                filename: dialog.text.clone(),
+            },
+            Some(directory.clone()),
+        );
+    }
+
+    pub(super) fn show_palette_browser(
+        &mut self,
+        purpose: PaletteFilePicker,
+        directory: Option<PathBuf>,
+    ) {
+        let directory = directory
+            .or_else(|| self.view.settings.file_directory.clone())
+            .or_else(dirs::document_dir)
+            .or_else(dirs::home_dir)
+            .unwrap_or_else(|| {
+                self.store
+                    .path
+                    .parent()
+                    .unwrap_or(Path::new("."))
+                    .to_owned()
+            });
+        let folder = matches!(purpose, PaletteFilePicker::Export { .. });
+        self.view.dialog = Some(Dialog::Browser(Browser {
+            palette_file: Some(purpose),
+            ..Browser::unloaded(directory.clone(), folder)
+        }));
+        self.queue_browser(directory, folder, true, None);
+    }
+
     pub(super) fn choose_playlist_name_folder(&mut self) -> Result<()> {
         ensure!(!self.busy(), AppError::LibraryBusy);
         let Some(Dialog::Text(dialog)) = &self.view.dialog else {
@@ -152,6 +214,7 @@ impl App {
         self.browser_state.job.request(BrowserRequest {
             directory,
             folder,
+            palette: matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.palette_file.is_some()),
             initial,
             focus,
             offset,
@@ -165,11 +228,13 @@ impl App {
             let BrowserRequest {
                 directory,
                 folder,
+                palette,
                 initial,
                 focus,
                 offset,
             } = request;
-            let (directory, folder, initial) = (directory.clone(), *folder, *initial);
+            let (directory, folder, palette, initial) =
+                (directory.clone(), *folder, *palette, *initial);
             let (focus, offset) = (focus.clone(), *offset);
             background(runtime, move || {
                 let directory = if initial && !directory.is_dir() {
@@ -177,7 +242,7 @@ impl App {
                 } else {
                     directory
                 };
-                let mut browser = Browser::open(directory, folder)?;
+                let mut browser = Browser::open(directory, folder, palette)?;
                 if let Some(focus) = focus
                     && let Some(index) =
                         browser.entries.iter().position(|entry| entry.path == focus)
@@ -213,7 +278,9 @@ impl App {
             browser.entries = loaded.entries;
             browser.selected = loaded.selected;
             browser.offset = loaded.offset;
-            browser.selection_explicit = loaded.selection_explicit;
+            // Restored focus after going up does not choose that child folder for export.
+            browser.selection_explicit =
+                loaded.selection_explicit && browser.palette_file.is_none();
             self.browser_state.ready = true;
             self.message(self.text("Folder loaded", "Папка прочитана").into());
         }
@@ -231,7 +298,24 @@ impl App {
             );
         }
     }
+    pub(super) fn browser_location(&mut self, documents: bool) {
+        let directory = if documents {
+            dirs::document_dir()
+        } else {
+            dirs::home_dir()
+        };
+        if let Some(directory) = directory
+            && let Some(Dialog::Browser(browser)) = &self.view.dialog
+        {
+            self.queue_browser(directory, browser.folder, true, None);
+        }
+    }
     pub(super) fn browser_open(&mut self) -> Result<()> {
+        if matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.palette_file.is_some()
+            && browser.entries.get(browser.selected).is_some_and(|entry| !entry.directory))
+        {
+            return self.browser_add();
+        }
         let directory = if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
             && let Some(entry) = browser.entries.get(browser.selected)
         {
@@ -254,6 +338,35 @@ impl App {
 
     pub(super) fn browser_add(&mut self) -> Result<()> {
         ensure!(self.browser_state.ready, AppError::FolderNotReady);
+        if let Some(Dialog::Browser(browser)) = &self.view.dialog
+            && let Some(purpose) = browser.palette_file.clone()
+        {
+            match purpose {
+                PaletteFilePicker::Import => {
+                    let path = browser
+                        .entries
+                        .get(browser.selected)
+                        .filter(|entry| !entry.directory)
+                        .context(AppError::PaletteSelectionRequired)?
+                        .path
+                        .clone();
+                    self.start_palette_import(&path)?;
+                    self.view.settings.file_directory = path.parent().map(Path::to_owned);
+                    self.cancel_browser();
+                    self.show_settings();
+                }
+                PaletteFilePicker::Export { id, filename } => {
+                    let directory = browser.chosen_folder().to_owned();
+                    self.view.settings.file_directory = Some(directory.clone());
+                    self.cancel_browser();
+                    self.text_dialog(
+                        TextPurpose::Settings(SettingsEdit::ExportPalette { id, directory }),
+                        filename,
+                    );
+                }
+            }
+            return Ok(());
+        }
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(dialog) = &browser.playlist_name
         {

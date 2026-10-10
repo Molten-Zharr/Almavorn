@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::Result;
 pub(crate) use files::SettingsFileJob;
-pub(crate) use items::SettingControl;
+pub(crate) use items::{SettingControl, SettingGroup};
 use ratatui::layout::Rect;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -83,6 +83,7 @@ pub(crate) struct SettingsView {
     pub parameters_area: Rect,
     pub binding_modifiers: [bool; 3],
     pub binding_offset: usize,
+    pub file_directory: Option<std::path::PathBuf>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsCatalog {
@@ -96,9 +97,14 @@ pub enum SettingsEdit {
     RenameProfile(String),
     CreatePalette,
     RenamePalette(String),
-    PaletteColor { id: String, token: String },
-    ImportPalette,
-    ExportPalette(String),
+    PaletteColor {
+        id: String,
+        token: String,
+    },
+    ExportPalette {
+        id: String,
+        directory: std::path::PathBuf,
+    },
     CreatePreset,
     RenamePreset(String),
     FontSize,
@@ -117,14 +123,9 @@ impl SettingsEdit {
             ),
             Self::RenamePalette(_) => language.text("Rename palette", "Переименовать палитру"),
             Self::PaletteColor { .. } => language.text("Color - #RRGGBB", "Цвет - #RRGGBB"),
-            Self::ImportPalette => language.text(
-                "Import palette - JSON file path",
-                "Импорт палитры - путь к JSON",
-            ),
-            Self::ExportPalette(_) => language.text(
-                "Export palette - new JSON file path",
-                "Экспорт палитры - путь к новому JSON",
-            ),
+            Self::ExportPalette { .. } => {
+                language.text("Export palette - file name", "Экспорт палитры - имя файла")
+            }
             Self::CreatePreset => language.text(
                 "New preset from current appearance",
                 "Новый пресет из текущего оформления",
@@ -230,7 +231,11 @@ impl App {
             }
             Some(Dialog::Browser(browser)) => {
                 self.cancel_browser();
-                self.view.dialog = browser.playlist_name.map(Dialog::Text);
+                if browser.palette_file.is_some() {
+                    self.show_settings();
+                } else {
+                    self.view.dialog = browser.playlist_name.map(Dialog::Text);
+                }
                 true
             }
             Some(_) => true,
@@ -328,7 +333,7 @@ impl App {
                     && self.view.settings.page == SettingsPage::Palettes
                     && !self.settings_file_busy() =>
             {
-                self.settings_text(SettingsEdit::ImportPalette, String::new());
+                self.choose_palette_import();
             }
             Key::Char('e')
                 if key.ctrl
@@ -400,9 +405,7 @@ impl App {
                     self.selected_settings_palette().id.clone();
                 self.save_settings()?;
             }
-            SettingControl::PaletteImport => {
-                self.settings_text(SettingsEdit::ImportPalette, String::new())
-            }
+            SettingControl::PaletteImport => self.choose_palette_import(),
             SettingControl::PaletteExport => self.export_selected_palette(),
             SettingControl::PresetCreate => self.settings_text(
                 SettingsEdit::CreatePreset,
@@ -572,15 +575,12 @@ impl App {
     }
     fn export_selected_palette(&mut self) {
         let p = self.selected_settings_palette();
-        let path = self
-            .store
-            .path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .join(format!("{}.json", p.id));
-        self.settings_text(
-            SettingsEdit::ExportPalette(p.id.clone()),
-            path.to_string_lossy().into(),
+        self.show_palette_browser(
+            super::browser::PaletteFilePicker::Export {
+                id: p.id.clone(),
+                filename: format!("{}.json", p.id),
+            },
+            None,
         );
     }
     pub(crate) fn selected_settings_palette(&self) -> &crate::preferences::NamedPalette {

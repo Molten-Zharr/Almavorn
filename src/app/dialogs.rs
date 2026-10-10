@@ -119,6 +119,7 @@ impl Dialog {
             Self::Panels { .. } => Some(Action::Panels),
             Self::Help { .. } | Self::SettingsHelp { .. } => Some(Action::Help),
             Self::Settings { .. } => Some(Action::Settings),
+            Self::Browser(browser) if browser.palette_file.is_some() => None,
             Self::Browser(browser) if browser.playlist_name.is_some() => None,
             Self::Browser(browser) => Some(if browser.folder {
                 Action::AddFolder
@@ -138,17 +139,18 @@ impl Dialog {
     }
 
     pub(crate) fn is_settings(&self) -> bool {
-        matches!(
-            self,
-            Self::Settings { .. }
-                | Self::Text(TextDialog {
-                    purpose: TextPurpose::Settings(_),
-                    ..
-                })
-                | Self::ConfirmSettings { .. }
-                | Self::SettingsHelp { .. }
-                | Self::CaptureBinding { .. }
-        )
+        matches!(self, Self::Browser(browser) if browser.palette_file.is_some())
+            || matches!(
+                self,
+                Self::Settings { .. }
+                    | Self::Text(TextDialog {
+                        purpose: TextPurpose::Settings(_),
+                        ..
+                    })
+                    | Self::ConfirmSettings { .. }
+                    | Self::SettingsHelp { .. }
+                    | Self::CaptureBinding { .. }
+            )
     }
 }
 

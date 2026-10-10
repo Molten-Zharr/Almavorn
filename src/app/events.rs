@@ -413,6 +413,14 @@ impl App {
             {
                 return self.choose_playlist_name_folder();
             }
+            if key.ctrl
+                && !key.alt
+                && key.key == Key::Char('f')
+                && matches!(&self.view.dialog, Some(Dialog::Text(dialog)) if matches!(dialog.purpose, super::TextPurpose::Settings(super::SettingsEdit::ExportPalette { .. })))
+            {
+                self.choose_palette_export_folder();
+                return Ok(());
+            }
             if let Some(Dialog::ComposePlaylists { selected, .. }) = &self.view.dialog {
                 let selected = *selected;
                 if key.ctrl && !key.alt && matches!(key.key, Key::Up | Key::Down) {
@@ -502,7 +510,7 @@ impl App {
             }
             if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
                 if key.key == Key::Char(' ')
-                    && matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none())
+                    && matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none())
                 {
                     return self.target(Target::ScanSubfolders, false);
                 }
@@ -514,6 +522,14 @@ impl App {
                 }
                 if key.key == Key::Backspace {
                     return self.target(Target::BrowserParent, false);
+                }
+                if key.key == Key::Home || key.key == Key::End {
+                    self.scroll_dialog(if key.key == Key::Home {
+                        i16::MIN
+                    } else {
+                        i16::MAX
+                    });
+                    return Ok(());
                 }
             }
             if key.ctrl
@@ -542,6 +558,7 @@ impl App {
                 Key::PageDown => self.scroll_dialog(8),
                 Key::Char(' ') => {
                     if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+                        && browser.palette_file.is_none()
                         && let Some(entry) = browser.entries.get(browser.selected)
                         && !entry.directory
                         && !browser.marked.insert(entry.path.clone())
@@ -784,7 +801,7 @@ impl App {
                 ensure!(!self.busy(), AppError::LibraryBusy);
                 ensure!(
                     matches!(self.view.dialog, Some(Dialog::Folders { .. }))
-                        || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none()),
+                        || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none()),
                     AppError::FolderNotReady
                 );
                 self.settings.scan_subfolders = !self.settings.scan_subfolders;
@@ -870,7 +887,8 @@ impl App {
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
                     browser.selected = index;
                     browser.selection_explicit = browser.entries.get(index).is_some();
-                    if let Some(entry) = browser.entries.get(index)
+                    if browser.palette_file.is_none()
+                        && let Some(entry) = browser.entries.get(index)
                         && !entry.directory
                         && !browser.marked.insert(entry.path.clone())
                     {
@@ -884,8 +902,12 @@ impl App {
             Target::BrowserParent => {
                 self.browser_parent();
             }
+            Target::BrowserHome => self.browser_location(false),
+            Target::BrowserDocuments => self.browser_location(true),
             Target::BrowserMarkAll => {
-                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+                    && browser.palette_file.is_none()
+                {
                     for entry in &browser.entries {
                         if !entry.directory {
                             browser.marked.insert(entry.path.clone());
@@ -895,6 +917,7 @@ impl App {
             }
             Target::BrowserOpen => self.browser_open()?,
             Target::BrowserAdd => self.browser_add()?,
+            Target::PaletteExportFolder => self.choose_palette_export_folder(),
             Target::PlaylistAutoName => self.choose_playlist_name_folder()?,
             Target::CreateFolderGroups => {
                 ensure!(!self.busy(), AppError::LibraryBusy);

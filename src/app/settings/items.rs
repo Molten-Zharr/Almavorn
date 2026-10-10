@@ -1,7 +1,7 @@
 use super::{App, SettingsPage};
 use crate::{
     input::ShortcutGroup,
-    model::Mode,
+    model::{Language, Mode},
     preferences::{BorderWeight, color_hex, color_role_name, color_roles},
 };
 
@@ -38,6 +38,19 @@ pub(crate) enum SettingControl {
     ResetBindings,
     DeleteCatalog,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SettingGroup {
+    Shortcuts(ShortcutGroup),
+    DangerZone,
+}
+impl SettingGroup {
+    pub(crate) fn name(self, language: Language) -> &'static str {
+        match self {
+            Self::Shortcuts(group) => group.name(language),
+            Self::DangerZone => language.text("Danger zone", "Опасная зона"),
+        }
+    }
+}
 #[derive(Clone, Debug)]
 pub(crate) struct SettingRow {
     pub label: String,
@@ -47,7 +60,7 @@ pub(crate) struct SettingRow {
     pub adjustable: bool,
     pub enabled: bool,
     pub color: Option<[u8; 3]>,
-    pub shortcut_group: Option<ShortcutGroup>,
+    pub group: Option<SettingGroup>,
 }
 impl App {
     pub(crate) fn settings_rows(&self) -> Vec<SettingRow> {
@@ -57,10 +70,13 @@ impl App {
                     description: &str,
                     control: SettingControl,
                     adjustable: bool| {
-            let shortcut_group = match &control {
-                SettingControl::Binding(index) => {
-                    Some(self.settings.bindings[*index].action.shortcut_group())
-                }
+            let group = match &control {
+                SettingControl::Binding(index) => Some(SettingGroup::Shortcuts(
+                    self.settings.bindings[*index].action.shortcut_group(),
+                )),
+                SettingControl::PaletteImport
+                | SettingControl::PaletteExport
+                | SettingControl::DeleteCatalog => Some(SettingGroup::DangerZone),
                 _ => None,
             };
             SettingRow {
@@ -71,7 +87,7 @@ impl App {
                 adjustable,
                 enabled: true,
                 color: None,
-                shortcut_group,
+                group,
             }
         };
         let action = lang.text("Open", "Открыть").to_owned();

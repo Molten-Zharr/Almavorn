@@ -1,9 +1,9 @@
 use super::super::{
     theme::Palette,
-    widgets::{button, buttons, modal},
+    widgets::{button, buttons, file_modal, modal},
 };
 use crate::{
-    app::{App, Target, TextDialog, TextPurpose},
+    app::{App, SettingsEdit, Target, TextDialog, TextPurpose},
     model::Language,
 };
 use ratatui::{
@@ -54,45 +54,70 @@ pub(super) fn text_dialog(
         TextPurpose::Accent => app.text("Accent color · RRGGBB", "Цвет акцента · RRGGBB"),
         TextPurpose::Settings(edit) => edit.title(app.settings.language),
     };
-    let inner = modal(frame, app, area, title.into(), 27, palette);
-    let hint = if let TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose {
-        format!(
-            "{}: {name}",
-            app.text("Enter exact name or path", "Введите точное имя или путь")
-        )
-    } else if let TextPurpose::CreateFromFolder {
-        folder,
-        group_subfolders,
-    } = &dialog.purpose
-    {
-        format!(
-            "{}: {}\n{}",
-            app.text("Folder", "Папка"),
-            folder.display(),
-            if *group_subfolders {
-                app.text(
-                    "Include subfolders as groups. Enter: create · Esc: cancel",
-                    "Подпапки станут группами. Enter: создать · Esc: отмена",
-                )
-            } else {
-                app.text(
-                    "Only files in this folder. Enter: create · Esc: cancel",
-                    "Только файлы этой папки. Enter: создать · Esc: отмена",
-                )
-            }
-        )
+    let exporting = matches!(
+        dialog.purpose,
+        TextPurpose::Settings(SettingsEdit::ExportPalette { .. })
+    );
+    let title = if exporting && area.width < 50 {
+        app.text("Export · file name", "Экспорт · имя файла")
     } else {
-        app.text(
-            "Enter: save · Esc: cancel",
-            "Enter: сохранить · Esc: отмена",
-        )
-        .into()
+        title
     };
+    let inner = if exporting {
+        file_modal(frame, app, area, title.into(), 27, palette)
+    } else {
+        modal(frame, app, area, title.into(), 27, palette)
+    };
+    let hint =
+        if let TextPurpose::Settings(SettingsEdit::ExportPalette { directory, .. }) =
+            &dialog.purpose
+        {
+            format!("{}: {}\n{}", app.text("Folder", "Папка"), directory.display(), app.text(
+            "Enter a file name; .json is added automatically. Existing files are kept.",
+            "Введите имя файла; .json добавится автоматически. Существующие файлы сохраняются.",
+        ))
+        } else if let TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose {
+            format!(
+                "{}: {name}",
+                app.text("Enter exact name or path", "Введите точное имя или путь")
+            )
+        } else if let TextPurpose::CreateFromFolder {
+            folder,
+            group_subfolders,
+        } = &dialog.purpose
+        {
+            format!(
+                "{}: {}\n{}",
+                app.text("Folder", "Папка"),
+                folder.display(),
+                if *group_subfolders {
+                    app.text(
+                        "Include subfolders as groups. Enter: create · Esc: cancel",
+                        "Подпапки станут группами. Enter: создать · Esc: отмена",
+                    )
+                } else {
+                    app.text(
+                        "Only files in this folder. Enter: create · Esc: cancel",
+                        "Только файлы этой папки. Enter: создать · Esc: отмена",
+                    )
+                }
+            )
+        } else {
+            app.text(
+                "Enter: save · Esc: cancel",
+                "Enter: сохранить · Esc: отмена",
+            )
+            .into()
+        };
     let hint_height = (Paragraph::new(hint.clone())
         .wrap(Wrap { trim: false })
         .line_count(inner.width.max(1)) as u16
         + 1)
-    .min(10);
+    .min(if exporting {
+        inner.height.saturating_sub(8)
+    } else {
+        10
+    });
     frame.render_widget(
         Paragraph::new(hint)
             .style(palette.text().fg(palette.muted))
@@ -124,6 +149,35 @@ pub(super) fn text_dialog(
         field,
     );
     let mut keyboard_top = field.bottom() + 1;
+    if matches!(
+        dialog.purpose,
+        TextPurpose::Settings(SettingsEdit::ExportPalette { .. })
+    ) {
+        let used = buttons(
+            frame,
+            app,
+            Rect::new(inner.x, keyboard_top, inner.width, 2),
+            vec![(
+                app.text(
+                    if inner.width < 40 {
+                        "Folder (Ctrl+F)"
+                    } else {
+                        "Choose folder (Ctrl+F)"
+                    },
+                    if inner.width < 40 {
+                        "Папка (Ctrl+F)"
+                    } else {
+                        "Выбрать папку (Ctrl+F)"
+                    },
+                )
+                .into(),
+                Target::PaletteExportFolder,
+                true,
+            )],
+            palette,
+        );
+        keyboard_top += used + 1;
+    }
     if matches!(
         dialog.purpose,
         TextPurpose::Create | TextPurpose::CreateFromFolder { .. }
@@ -204,6 +258,9 @@ pub(crate) fn keyboard(
     upper: bool,
     palette: Palette,
 ) {
+    if area.height < 2 || area.width == 0 {
+        return;
+    }
     let keyboard = if language == Language::Russian {
         vec![
             "йцукенгшщзхъ",

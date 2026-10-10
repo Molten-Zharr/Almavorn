@@ -20,14 +20,14 @@ mod state;
 mod tuner;
 mod workspace;
 
-pub use browser::{Browser, BrowserEntry};
+pub use browser::{Browser, BrowserEntry, PaletteFilePicker};
 pub use commands::{CommandItem, CommandMenu};
 use context::{BrowserState, SettingsPersistence};
 pub use context::{LibraryState, PlaybackState, UiState};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
 pub use options::Options;
 pub use search::{SearchDialog, SearchFocus};
-pub(crate) use settings::SettingControl;
+pub(crate) use settings::{SettingControl, SettingGroup};
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
 
