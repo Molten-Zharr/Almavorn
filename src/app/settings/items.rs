@@ -14,6 +14,8 @@ pub(crate) enum SettingControl {
     PlayerPlacement,
     PlaybackTimeline,
     ButtonShortcuts,
+    Visualizer,
+    AnimationBrightness,
     ProfilePick,
     ProfileCreate,
     ProfileApply,
@@ -94,6 +96,7 @@ impl App {
         let run = lang.text("Apply", "Применить").to_owned();
         match self.view.settings.page {
             SettingsPage::General => vec![
+                // Existing controls retain their keyboard order; animation controls follow them.
                 make(lang.text("Language", "Язык"), if lang == crate::model::Language::English { "English" } else { "Русский" }.into(), lang.text("Language of menus, descriptions, notices and keyboard hints.", "Язык меню, описаний, уведомлений и подсказок клавиш."), SettingControl::Language, true),
                 make(lang.text("Volume", "Громкость"), format!("{}%", (self.settings.volume*100.0).round() as u32), lang.text("Playback volume. Changes immediately; step: 5%.", "Громкость воспроизведения. Меняется сразу; шаг: 5%."), SettingControl::Volume, true),
                 make(lang.text("Sorting desk", "Сортировочный стол"), lang.text(if self.settings.sorting_desk { "On" } else { "Off" }, if self.settings.sorting_desk { "Включён" } else { "Выключен" }).into(), lang.text("Route added files to the editable desk instead of the selected playlist.", "Направлять добавляемые файлы на доступный для правки стол вместо выбранного плейлиста."), SettingControl::Desk, true),
@@ -101,6 +104,8 @@ impl App {
                 make(lang.text("Player panel", "Панель проигрывателя"), self.settings.player_placement.name(lang).into(), lang.text("Position of playback controls relative to the library.", "Расположение управления воспроизведением относительно библиотеки."), SettingControl::PlayerPlacement, true),
                 make(lang.text("Playback timeline", "Дорожка проигрывания"), self.settings.appearance.playback_timeline.name(lang).into(), lang.text("Choose waveform or progress bar. Only the selected view is shown, in both GUI and TUI. Saves into the active profile.", "Выберите аудиоволну или обычную полосу. Показывается только выбранный вид, в GUI и TUI. Выбор сохраняется в активный профиль."), SettingControl::PlaybackTimeline, true),
                 make(lang.text("Shortcuts on buttons", "Клавиши на кнопках"), lang.text(if self.settings.appearance.show_button_shortcuts { "Shown" } else { "Hidden" }, if self.settings.appearance.show_button_shortcuts { "Показаны" } else { "Скрыты" }).into(), lang.text("Show assigned shortcuts on buttons. Help always shows F1. Other shortcuts work when hidden, and remain listed in Help and menus. Saved in the active profile.", "Показывать назначенные сочетания на кнопках. На справке всегда остается F1. Остальные клавиши работают при скрытии; их список остается в справке и меню. Выбор сохраняется в активном профиле."), SettingControl::ButtonShortcuts, true),
+                make(lang.text("Background animation", "Анимация фона"), self.settings.appearance.visualizer.name(lang).into(), lang.text("Music-driven background of the main window. VIS opens the scene menu; F6 cycles scenes. No animation is the last option. Pausing freezes the scene. Saved in the active profile.", "Музыкальный фон главного окна. VIS открывает список сцен, F6 переключает их по кругу. «Без анимации» — последний пункт. Пауза останавливает движение. Выбор сохраняется в активном профиле."), SettingControl::Visualizer, true),
+                make(lang.text("Animation brightness", "Яркость анимации"), format!("{}%", self.settings.appearance.animation_brightness.clamp(10, 70)), lang.text("Brightness of the background drawing, 10–70%; step: 5%. Text and controls stay above the animation.", "Яркость фонового рисунка: 10–70%; шаг: 5%. Текст и кнопки остаются поверх анимации."), SettingControl::AnimationBrightness, true),
             ],
             SettingsPage::Profiles => {
                 let profile = &self.settings.profiles[self.view.settings.profile.min(self.settings.profiles.len()-1)];

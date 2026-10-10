@@ -168,6 +168,7 @@ fn command_menus_skip_unavailable_rows_and_stop_at_the_last_enabled_action() {
             Action::ToggleShuffle,
             Action::Equalizer,
             Action::PlaybackTuner,
+            Action::CycleVisualizer,
         ]
         .map(Control::Action),
     );
@@ -1073,7 +1074,7 @@ fn settings_show_compact_rows_and_one_selected_description() {
         .iter()
         .filter(|hit| matches!(hit.target, Target::SettingSelect(_)))
         .collect();
-    assert_eq!(rows.len(), 7);
+    assert_eq!(rows.len(), 9);
     assert!(rows.iter().all(|hit| hit.area.height == 1));
     assert_eq!(rows[4].area.y - rows[0].area.y, 8);
     let text: String = terminal

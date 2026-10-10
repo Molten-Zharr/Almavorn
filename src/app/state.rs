@@ -46,6 +46,7 @@ impl Sort {
 #[derive(Clone)]
 pub enum Target {
     CommandMenu(super::CommandMenu),
+    Visualizer(crate::visualizer::VisualizerKind),
     CommandRow(usize),
     ManagePanels,
     PanelFocus(crate::workspace::Panel),

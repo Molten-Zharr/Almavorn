@@ -4,7 +4,7 @@ use super::{
     widgets::clean,
 };
 use crate::{
-    app::{App, Hit, Target},
+    app::{App, CommandMenu, Hit, Target},
     input::Action,
     model::{RepeatMode, duration_text},
     preferences::{FontFace, PlaybackTimeline},
@@ -44,6 +44,7 @@ fn controls(app: &App) -> Vec<(Action, &'static str)> {
         ),
         (Action::Equalizer, "[EQ]"),
         (Action::PlaybackTuner, "[FX]"),
+        (Action::CycleVisualizer, "[VIS↓]"),
     ]
     .into_iter()
     .filter(|(action, _)| app.control_visible(Panel::Player, *action))
@@ -68,13 +69,21 @@ pub(super) fn content_height(app: &App, width: u16) -> u16 {
 fn controls_width(app: &App) -> u16 {
     controls(app)
         .iter()
-        .map(|(action, label)| button_width(app, label, &Target::Action(*action)).saturating_add(1))
+        .map(|(action, label)| button_width(app, label, &control_target(*action)).saturating_add(1))
         .fold(0, u16::saturating_add)
+}
+
+fn control_target(action: Action) -> Target {
+    if action == Action::CycleVisualizer {
+        Target::CommandMenu(CommandMenu::Visualizer)
+    } else {
+        Target::Action(action)
+    }
 }
 
 fn volume_width(app: &App, width: u16) -> u16 {
     let available = width.saturating_sub(controls_width(app).saturating_add(15));
-    (width / 3).clamp(32, 80).min(available.max(32)).min(width)
+    (width / 3).clamp(24, 80).min(available.max(24)).min(width)
 }
 
 fn stack_volume(app: &App, width: u16) -> bool {
@@ -91,7 +100,7 @@ fn control_cells(app: &App, width: u16) -> Vec<(Rect, Action, &'static str)> {
     controls(app)
         .into_iter()
         .map(|(action, label)| {
-            let size = button_width(app, label, &Target::Action(action)).min(width);
+            let size = button_width(app, label, &control_target(action)).min(width);
             if x > 0 && x.saturating_add(size) > width {
                 x = 0;
                 y += 1;
@@ -176,7 +185,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             app,
             rect,
             label,
-            Target::Action(action),
+            control_target(action),
             app.allowed(action),
             palette,
         );

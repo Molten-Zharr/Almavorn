@@ -18,6 +18,7 @@ mod search;
 mod settings;
 mod state;
 mod tuner;
+mod visualizer;
 mod workspace;
 
 pub use browser::{Browser, BrowserEntry, PaletteFilePicker};
@@ -116,6 +117,7 @@ impl App {
         self.poll_import()?;
         self.tick_library()?;
         self.tick_search()?;
+        self.tick_visualizer();
         if !self.preparing_playback()
             && self.playback.seek_preview.is_none()
             && self.playback.audio.as_mut().is_some_and(Audio::finished)

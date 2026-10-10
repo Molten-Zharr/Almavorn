@@ -114,6 +114,12 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
                 .find(|binding| binding.action == action)
                 .map(|binding| binding.key.label())
         }
+        Target::CommandMenu(crate::app::CommandMenu::Visualizer) => app
+            .settings
+            .bindings
+            .iter()
+            .find(|binding| binding.action == Action::CycleVisualizer)
+            .map(|binding| binding.key.label()),
         Target::Action(action) => app
             .settings
             .bindings
@@ -306,6 +312,10 @@ fn quiet(
         Target::Action(Action::CycleRepeat) => app.settings.repeat != crate::model::RepeatMode::Off,
         Target::Action(Action::ToggleShuffle) => app.settings.shuffle,
         Target::Action(Action::PlaybackTuner) => app.settings.tuner != Default::default(),
+        Target::Action(Action::CycleVisualizer)
+        | Target::CommandMenu(crate::app::CommandMenu::Visualizer) => {
+            app.settings.appearance.visualizer != crate::visualizer::VisualizerKind::Off
+        }
         Target::TunerReverse => app.settings.tuner.reverse,
         Target::Action(Action::Equalizer) | Target::EqualizerToggle => {
             app.settings.equalizer.enabled

@@ -253,6 +253,7 @@ impl App {
             TogglePlay => self.toggle_playback()?,
             Equalizer => self.open_equalizer(),
             PlaybackTuner => self.open_tuner(),
+            CycleVisualizer => self.cycle_visualizer(1)?,
             Stop => {
                 self.stop_playback();
             }

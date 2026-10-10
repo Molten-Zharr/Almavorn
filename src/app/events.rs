@@ -633,6 +633,7 @@ impl App {
     pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
         match target {
             Target::CommandMenu(menu) => self.open_commands(menu),
+            Target::Visualizer(kind) => self.set_visualizer(kind)?,
             Target::CommandRow(index) => self.activate_command(index)?,
             Target::ManagePanels => {
                 self.view.dialog = Some(Dialog::Panels {

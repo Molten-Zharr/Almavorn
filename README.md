@@ -120,6 +120,27 @@ private PCM file with bounded memory; subsequent seeks reuse that cache.
 Tuner settings save in the active profile. Narrow windows scroll the sliders
 when navigating with the keyboard.
 
+The main window background responds to the playing audio's level, frequency
+bands and attacks after EQ/FX processing. Choose spectrum, waveform, pulse
+rings, particles or Carpet bombing, inspired by the Red Alert 3 menu: a red
+city skyline, bomber formations, falling bomb trains, successive blasts and
+smoke. Carpet bombing is enabled by default. VIS opens a dropdown with the
+current scene marked: spectrum, waveform, rings, particles, bombing, then
+No animation as the last option. `F6` cycles through them.
+Settings → General selects the scene and brightness (10–70%);
+both save in the active profile. Pausing freezes the scene; stopping clears
+it. Text, selection and controls remain above the background; settings and
+dialogs retain their own backing.
+
+Render animation previews and a bombing frame sequence without a window or
+audio device:
+
+```sh
+cargo run --release --example visualizer_preview
+```
+
+PPM images are written to `target/visualizer-preview/`.
+
 Render the main screen, menus, and layout editor without a window:
 
 ```sh

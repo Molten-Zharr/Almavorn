@@ -1,7 +1,10 @@
+mod analysis;
 mod reverse;
 use crate::equalizer::{EqualizerControl, EqualizerSettings, EqualizerSource};
 use crate::errors::AppError;
 use crate::tuner::{TunerControl, TunerSettings, TunerSource};
+pub use analysis::{AnalysisFrame, SPECTRUM_BANDS, WAVE_SAMPLES};
+use analysis::{AnalysisSource, AudioAnalysis};
 use anyhow::{Context, Result};
 pub(crate) use reverse::PcmCache;
 use rodio::{
@@ -66,6 +69,9 @@ pub struct Audio {
     reverse: bool,
     equalizer: Arc<EqualizerControl>,
     tuner: Arc<TunerControl>,
+    analysis: Arc<AudioAnalysis>,
+    analysis_enabled: bool,
+    analysis_generation: u64,
 }
 
 impl Audio {
@@ -83,6 +89,9 @@ impl Audio {
             reverse: false,
             equalizer: EqualizerControl::new(EqualizerSettings::default()),
             tuner: TunerControl::new(TunerSettings::default()),
+            analysis: AudioAnalysis::new(false),
+            analysis_enabled: false,
+            analysis_generation: 0,
         })
     }
 
@@ -206,8 +215,12 @@ impl Audio {
             start,
             self.reverse,
         );
-        self.player
-            .append(EqualizerSource::new(source, self.equalizer.clone()));
+        self.analysis = AudioAnalysis::new(self.analysis_enabled);
+        self.analysis_generation = self.analysis_generation.wrapping_add(1);
+        self.player.append(AnalysisSource::new(
+            EqualizerSource::new(source, self.equalizer.clone()),
+            self.analysis.clone(),
+        ));
         self.started = true;
     }
 
@@ -217,6 +230,16 @@ impl Audio {
         } else {
             self.player.play();
         }
+    }
+    pub fn enable_analysis(&mut self, enabled: bool) {
+        self.analysis_enabled = enabled;
+        self.analysis.enable(enabled);
+    }
+    pub fn analysis(&self) -> Option<AnalysisFrame> {
+        self.analysis.snapshot()
+    }
+    pub fn analysis_generation(&self) -> u64 {
+        self.analysis_generation
     }
 
     pub fn equalizer(&self, settings: &EqualizerSettings) {
@@ -242,6 +265,7 @@ impl Audio {
         self.player.stop();
         self.started = false;
         self.position = Arc::new(AtomicU64::new(0));
+        self.analysis = AudioAnalysis::new(self.analysis_enabled);
     }
     pub fn paused(&self) -> bool {
         self.player.is_paused()
@@ -264,6 +288,7 @@ impl Audio {
         self.player
             .try_seek(position)
             .context(AppError::SeekingUnavailable)?;
+        self.analysis_generation = self.analysis_generation.wrapping_add(1);
         Ok(())
     }
     pub fn volume(&self, volume: f32) {

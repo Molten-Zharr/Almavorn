@@ -461,6 +461,13 @@ impl App {
                 return self.set_settings_volume(self.settings.volume + direction as f32 * 0.05);
             }
             SettingControl::Desk => self.settings.sorting_desk = !self.settings.sorting_desk,
+            SettingControl::Visualizer => return self.cycle_visualizer(direction),
+            SettingControl::AnimationBrightness => {
+                self.settings.appearance.animation_brightness =
+                    (i128::from(self.settings.appearance.animation_brightness)
+                        + i128::from(direction) * 5)
+                        .clamp(10, 70) as u8;
+            }
             SettingControl::ButtonShortcuts => {
                 self.settings.appearance.show_button_shortcuts =
                     !self.settings.appearance.show_button_shortcuts;

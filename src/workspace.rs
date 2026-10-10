@@ -100,6 +100,7 @@ impl Panel {
                 Button(ToggleShuffle),
                 Button(Equalizer),
                 Button(PlaybackTuner),
+                Button(CycleVisualizer),
                 Button(VolumeDown),
                 Button(VolumeUp),
             ],

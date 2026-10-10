@@ -10,4 +10,5 @@ pub mod preferences;
 pub mod store;
 pub mod tuner;
 pub mod ui;
+pub mod visualizer;
 pub mod workspace;

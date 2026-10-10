@@ -1,5 +1,9 @@
 use almavorn::preferences::FontFace;
-use ratatui::{buffer::Cell, text::Span};
+use ratatui::{
+    buffer::Cell,
+    style::{Color, Modifier},
+    text::Span,
+};
 use rustc_hash::FxHashSet;
 use soft_ratatui::{EmbeddedTTF, RasterBackend, RgbPixmap, SoftBackend, rusttype::Font};
 
@@ -8,6 +12,47 @@ pub struct CellFont {
     inner: EmbeddedTTF,
     cell: RgbPixmap,
     blink_cells: FxHashSet<(u16, u16)>,
+}
+
+// Animation dots use a consistent 2 × 4 grid even in fonts without Braille glyphs.
+fn draw_braille(cell: &Cell, width: usize, height: usize, pixmap: &mut RgbPixmap) -> bool {
+    let mut chars = cell.symbol().chars();
+    let Some(symbol) = chars
+        .next()
+        .filter(|c| ('\u{2800}'..='\u{28ff}').contains(c))
+    else {
+        return false;
+    };
+    if chars.next().is_some() {
+        return false;
+    }
+    let (Color::Rgb(fr, fg, fb), Color::Rgb(br, bg, bb)) = (cell.fg, cell.bg) else {
+        return false;
+    };
+    let (mut foreground, mut background) = ([fr, fg, fb], [br, bg, bb]);
+    if cell.modifier.contains(Modifier::REVERSED) {
+        std::mem::swap(&mut foreground, &mut background);
+    }
+    let bits = symbol as u32 - 0x2800;
+    let radius = (width as f32 / 7.0).min(height as f32 / 14.0).max(0.65);
+    for y in 0..height {
+        for x in 0..width {
+            let col = (x * 2 / width).min(1);
+            let row = (y * 4 / height).min(3);
+            let cx = (col as f32 + 0.5) * width as f32 / 2.0;
+            let cy = (row as f32 + 0.5) * height as f32 / 4.0;
+            let inside =
+                (x as f32 + 0.5 - cx).powi(2) + (y as f32 + 0.5 - cy).powi(2) <= radius * radius;
+            let color = if inside && bits & (1 << [[0, 1, 2, 6], [3, 4, 5, 7]][col][row]) != 0 {
+                foreground
+            } else {
+                background
+            };
+            let offset = (y * pixmap.width + x) * 3;
+            pixmap.data[offset..offset + 3].copy_from_slice(&color);
+        }
+    }
+    true
 }
 
 impl RasterBackend for CellFont {
@@ -30,17 +75,19 @@ impl RasterBackend for CellFont {
         self.blink_cells.clear();
         // EmbeddedTTF's background can exceed a cell by a few pixels. Render
         // locally and copy only the occupied cells, including wide characters.
-        self.inner.draw_cell(
-            0,
-            0,
-            cell,
-            &mut self.blink_cells,
-            blinking_fast,
-            blinking_slow,
-            width,
-            char_height,
-            &mut self.cell,
-        );
+        if !draw_braille(cell, width, char_height, &mut self.cell) {
+            self.inner.draw_cell(
+                0,
+                0,
+                cell,
+                &mut self.blink_cells,
+                blinking_fast,
+                blinking_slow,
+                width,
+                char_height,
+                &mut self.cell,
+            );
+        }
         if self.blink_cells.is_empty() {
             always_redraw_list.remove(&(x, y));
         } else {
@@ -108,6 +155,51 @@ mod tests {
         style::{Color, Modifier, Style},
         widgets::{Block, Paragraph},
     };
+
+    #[test]
+    fn braille_dots_render_in_the_correct_grid_for_every_font() {
+        for face in FontFace::ALL {
+            for size in [12, 16, 24] {
+                let mut terminal = Terminal::new(backend(face, size, 8, 1)).unwrap();
+                terminal
+                    .draw(|frame| {
+                        for bit in 0..8 {
+                            let symbol = char::from_u32(0x2800 + (1 << bit)).unwrap().to_string();
+                            frame.render_widget(
+                                Paragraph::new(symbol).style(
+                                    Style::default()
+                                        .fg(Color::Rgb(255, 255, 255))
+                                        .bg(Color::Rgb(0, 0, 0)),
+                                ),
+                                Rect::new(bit, 0, 1, 1),
+                            );
+                        }
+                    })
+                    .unwrap();
+                let raster = terminal.backend();
+                for bit in 0..8 {
+                    let mut dots = [false; 8];
+                    for y in 0..raster.char_height {
+                        for x in 0..raster.char_width {
+                            let offset =
+                                (y * raster.get_pixmap_width() + bit * raster.char_width + x) * 3;
+                            if raster.get_pixmap_data()[offset] != 0 {
+                                let col = (x * 2 / raster.char_width).min(1);
+                                let row = (y * 4 / raster.char_height).min(3);
+                                dots[[[0, 1, 2, 6], [3, 4, 5, 7]][col][row]] = true;
+                            }
+                        }
+                    }
+                    assert_eq!(
+                        dots,
+                        std::array::from_fn(|i| i == bit),
+                        "{} {size}px bit {bit}",
+                        face.name()
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn clearing_a_selected_cell_removes_its_entire_background() {

@@ -7,6 +7,7 @@ mod player;
 mod settings;
 mod theme;
 mod toolbar;
+mod visualizer;
 mod widgets;
 mod workspace;
 
@@ -172,6 +173,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         true,
         palette,
     );
+    visualizer::render(frame, app, palette);
     if app.view.dialog.is_none() && app.view.filter_keyboard {
         library::filter_keyboard(frame, app, palette);
     }

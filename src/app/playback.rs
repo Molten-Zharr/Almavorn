@@ -298,6 +298,7 @@ impl App {
         Ok(())
     }
     pub(super) fn stop_playback(&mut self) {
+        self.playback.visualizer.reset();
         self.cancel_seek();
         self.cancel_audio_preparation();
         self.playback.preparation.cancel();

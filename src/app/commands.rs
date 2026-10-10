@@ -13,6 +13,7 @@ pub enum CommandMenu {
     Tracks,
     Player,
     Application,
+    Visualizer,
 }
 
 impl CommandMenu {
@@ -23,6 +24,7 @@ impl CommandMenu {
             Self::Tracks => language.text("Tracks", "Композиции"),
             Self::Player => language.text("Player", "Проигрыватель"),
             Self::Application => language.text("Application", "Приложение"),
+            Self::Visualizer => language.text("Background animation", "Анимация фона"),
         }
     }
 }
@@ -146,7 +148,26 @@ impl App {
 
     pub fn command_items(&self, menu: CommandMenu) -> Vec<CommandItem> {
         use Action::*;
+        if menu == CommandMenu::Visualizer {
+            return crate::visualizer::VisualizerKind::ALL
+                .into_iter()
+                .map(|kind| CommandItem {
+                    label: format!(
+                        "{} {}",
+                        if self.settings.appearance.visualizer == kind {
+                            "●"
+                        } else {
+                            " "
+                        },
+                        kind.name(self.settings.language)
+                    ),
+                    target: Target::Visualizer(kind),
+                    enabled: true,
+                })
+                .collect();
+        }
         let (panel, actions): (Panel, &[Action]) = match menu {
+            CommandMenu::Visualizer => unreachable!("Animation choices are built above"),
             CommandMenu::Add => (Panel::Add, &[AddFiles, AddFolder, AddNew]),
             CommandMenu::Playlist => (
                 Panel::PlaylistActions,
@@ -183,6 +204,7 @@ impl App {
                     ToggleShuffle,
                     Equalizer,
                     PlaybackTuner,
+                    CycleVisualizer,
                     VolumeDown,
                     VolumeUp,
                 ],
@@ -237,7 +259,11 @@ impl App {
                         || name.clone(),
                         |value| format!("[{}] {name}", if value { 'x' } else { ' ' }),
                     ),
-                    target: Target::Action(*action),
+                    target: if *action == CycleVisualizer {
+                        Target::CommandMenu(CommandMenu::Visualizer)
+                    } else {
+                        Target::Action(*action)
+                    },
                     enabled: self.allowed(*action),
                 });
             }
@@ -260,7 +286,7 @@ impl App {
         match menu {
             CommandMenu::Playlist => self.focus_panel(Panel::Playlists),
             CommandMenu::Tracks => self.focus_panel(Panel::Tracks),
-            CommandMenu::Player => self.focus_panel(Panel::Player),
+            CommandMenu::Player | CommandMenu::Visualizer => self.focus_panel(Panel::Player),
             _ => {}
         }
         self.view.toolbar_selected = toolbar_selected;
@@ -278,9 +304,17 @@ impl App {
         } else {
             self.view.pointer
         };
+        let selected = if menu == CommandMenu::Visualizer {
+            crate::visualizer::VisualizerKind::ALL
+                .iter()
+                .position(|kind| *kind == self.settings.appearance.visualizer)
+                .unwrap_or_default()
+        } else {
+            Self::command_selection(&self.command_items(menu), 0, 0)
+        };
         self.view.dialog = Some(Dialog::Commands {
             menu,
-            selected: Self::command_selection(&self.command_items(menu), 0, 0),
+            selected,
             anchor,
         });
     }

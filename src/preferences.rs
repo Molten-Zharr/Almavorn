@@ -78,6 +78,8 @@ pub struct Appearance {
     pub corners: Corners,
     pub playback_timeline: PlaybackTimeline,
     pub show_button_shortcuts: bool,
+    pub visualizer: crate::visualizer::VisualizerKind,
+    pub animation_brightness: u8,
 }
 impl Default for Appearance {
     fn default() -> Self {
@@ -90,6 +92,8 @@ impl Default for Appearance {
             corners: Corners::Square,
             playback_timeline: PlaybackTimeline::default(),
             show_button_shortcuts: true,
+            visualizer: crate::visualizer::VisualizerKind::default(),
+            animation_brightness: 35,
         }
     }
 }

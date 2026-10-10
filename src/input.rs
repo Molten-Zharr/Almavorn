@@ -139,6 +139,7 @@ pub enum Action {
     ToggleShuffle,
     Equalizer,
     PlaybackTuner,
+    CycleVisualizer,
     VolumeUp,
     VolumeDown,
     SeekForward,
@@ -202,6 +203,7 @@ impl Action {
             | Self::ToggleShuffle
             | Self::Equalizer
             | Self::PlaybackTuner
+            | Self::CycleVisualizer
             | Self::VolumeUp
             | Self::VolumeDown
             | Self::SeekForward
@@ -235,6 +237,7 @@ impl Action {
             Self::Equalizer => language.text("Open the ten-band equalizer, preamp and presets. Changes apply during playback and save in the active profile.", "Открыть десятиполосный эквалайзер, предусиление и пресеты. Изменения применяются во время проигрывания и сохраняются в активный профиль."),
             Self::PlaybackTuner => language.text("Adjust speed, tempo, pitch, reverse playback and bass. The wheel changes sliders by 1%. Changes save in the active profile.", "Настроить скорость, темп, тональность, обратное проигрывание и бас. Колесо меняет ползунки по 1%. Настройки сохраняются в активном профиле."),
             Self::VolumeUp => language.text("Increase playback volume by 5%.", "Увеличить громкость на 5%."),
+            Self::CycleVisualizer => language.text("Cycle music-driven background animations, including off. Style and brightness are saved in the active profile.", "Переключать музыкальные анимации фона, включая отключение. Вид и яркость сохраняются в активном профиле."),
             Self::VolumeDown => language.text("Decrease playback volume by 5%.", "Уменьшить громкость на 5%."),
             Self::SeekForward => language.text("Seek forward by five seconds if the file supports it.", "Перемотать вперёд на пять секунд, если файл поддерживает перемотку."),
             Self::SeekBackward => language.text("Seek backward by five seconds if the file supports it.", "Перемотать назад на пять секунд, если файл поддерживает перемотку."),
@@ -281,6 +284,7 @@ impl Action {
             Self::Equalizer => language.text("Equalizer", "Эквалайзер"),
             Self::PlaybackTuner => language.text("Playback tuner", "Настройщик проигрывания"),
             Self::VolumeUp => language.text("Volume up", "Громкость выше"),
+            Self::CycleVisualizer => language.text("Background animation", "Анимация фона"),
             Self::VolumeDown => language.text("Volume down", "Громкость ниже"),
             Self::SeekForward => language.text("Seek +5 seconds", "Вперед на 5 секунд"),
             Self::SeekBackward => language.text("Seek -5 seconds", "Назад на 5 секунд"),
@@ -339,6 +343,7 @@ pub fn default_bindings() -> Vec<Binding> {
         (ToggleShuffle, Key::Char('h')),
         (Equalizer, Key::F(4)),
         (PlaybackTuner, Key::F(5)),
+        (CycleVisualizer, Key::F(6)),
         (VolumeUp, Key::Char('+')),
         (VolumeDown, Key::Char('-')),
         (SeekForward, Key::Right),

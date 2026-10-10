@@ -38,6 +38,9 @@ pub struct LibraryState {
 
 #[derive(Default)]
 pub struct PlaybackState {
+    pub visualizer: crate::visualizer::VisualizerState,
+    pub(super) visualizer_tick: Option<std::time::Instant>,
+    pub(super) visualizer_generation: u64,
     pub current: Option<Track>,
     pub playing_playlist: Option<i64>,
     pub playing_entry: Option<i64>,
