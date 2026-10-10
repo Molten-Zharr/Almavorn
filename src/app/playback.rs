@@ -245,6 +245,7 @@ impl App {
         if self.playback.audio.is_none() {
             self.playback.audio = Some(Audio::open(self.settings.volume)?);
         }
+        self.finish_listening();
         let audio = self
             .playback
             .audio
@@ -258,6 +259,7 @@ impl App {
         if let Some(duration) = duration {
             track.duration_ms = duration.as_millis().min(u128::from(u64::MAX)) as u64;
         }
+        self.begin_listening(track.id, track.duration_ms);
         self.playback.playing_entry = Some(entry.id);
         self.playback.playing_playlist = Some(request.playlist_id);
         self.playback.queue = request.queue;
@@ -298,6 +300,7 @@ impl App {
         Ok(())
     }
     pub(super) fn stop_playback(&mut self) {
+        self.finish_listening();
         self.playback.visualizer.reset();
         self.cancel_seek();
         self.cancel_audio_preparation();

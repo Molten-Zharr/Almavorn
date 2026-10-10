@@ -1,4 +1,5 @@
 mod analysis;
+mod listening;
 mod reverse;
 use crate::equalizer::{EqualizerControl, EqualizerSettings, EqualizerSource};
 use crate::errors::AppError;
@@ -6,6 +7,7 @@ use crate::tuner::{TunerControl, TunerSettings, TunerSource};
 pub use analysis::{AnalysisFrame, SPECTRUM_BANDS, WAVE_SAMPLES};
 use analysis::{AnalysisSource, AudioAnalysis};
 use anyhow::{Context, Result};
+use listening::ListeningSource;
 pub(crate) use reverse::PcmCache;
 use rodio::{
     ChannelCount, Decoder, DeviceSinkBuilder, MixerDeviceSink, Player, SampleRate, Source,
@@ -72,6 +74,7 @@ pub struct Audio {
     analysis: Arc<AudioAnalysis>,
     analysis_enabled: bool,
     analysis_generation: u64,
+    listening_clock: Arc<AtomicU64>,
 }
 
 impl Audio {
@@ -92,6 +95,7 @@ impl Audio {
             analysis: AudioAnalysis::new(false),
             analysis_enabled: false,
             analysis_generation: 0,
+            listening_clock: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -179,6 +183,7 @@ impl Audio {
     }
 
     pub fn play_prepared(&mut self, source: PreparedAudio, paused: bool) {
+        self.listening_clock = Arc::new(AtomicU64::new(0));
         self.play_prepared_at(source, paused, Duration::ZERO);
     }
 
@@ -217,9 +222,12 @@ impl Audio {
         );
         self.analysis = AudioAnalysis::new(self.analysis_enabled);
         self.analysis_generation = self.analysis_generation.wrapping_add(1);
-        self.player.append(AnalysisSource::new(
-            EqualizerSource::new(source, self.equalizer.clone()),
-            self.analysis.clone(),
+        self.player.append(ListeningSource::new(
+            AnalysisSource::new(
+                EqualizerSource::new(source, self.equalizer.clone()),
+                self.analysis.clone(),
+            ),
+            self.listening_clock.clone(),
         ));
         self.started = true;
     }
@@ -240,6 +248,9 @@ impl Audio {
     }
     pub fn analysis_generation(&self) -> u64 {
         self.analysis_generation
+    }
+    pub fn listened_time(&self) -> Duration {
+        Duration::from_nanos(self.listening_clock.load(Ordering::Relaxed))
     }
 
     pub fn equalizer(&self, settings: &EqualizerSettings) {

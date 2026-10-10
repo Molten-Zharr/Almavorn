@@ -131,6 +131,7 @@ pub enum Action {
     Quit,
     Help,
     Settings,
+    Statistics,
     TogglePlay,
     Stop,
     Next,
@@ -211,6 +212,7 @@ impl Action {
             Self::Quit
             | Self::Help
             | Self::Settings
+            | Self::Statistics
             | Self::SwitchMode
             | Self::ToggleDesk
             | Self::Search
@@ -228,6 +230,7 @@ impl Action {
             Self::Quit => language.text("Close the application and finish saving settings.", "Закрыть приложение и завершить сохранение настроек."),
             Self::Help => language.text("Open the guide and shortcut list.", "Открыть руководство и список сочетаний."),
             Self::Settings => language.text("Open the settings pages.", "Открыть страницы настроек."),
+            Self::Statistics => language.text("View listening time, track plays, artists, albums and recent listening history.", "Открыть время прослушивания, счётчики треков, исполнителей, альбомов и недавнюю историю."),
             Self::TogglePlay => language.text("Play the selected track or pause/resume playback.", "Играть выбранную композицию либо поставить воспроизведение на паузу или продолжить."),
             Self::Stop => language.text("Stop playback and clear the current track.", "Остановить воспроизведение и убрать текущую композицию."),
             Self::Next => language.text("Play the next track in the queue.", "Играть следующую композицию в очереди."),
@@ -275,6 +278,7 @@ impl Action {
             Self::Quit => language.text("Quit", "Выход"),
             Self::Help => language.text("Help", "Помощь"),
             Self::Settings => language.text("Settings", "Настройки"),
+            Self::Statistics => language.text("Listening statistics", "Статистика прослушивания"),
             Self::TogglePlay => language.text("Play / pause", "Играть / пауза"),
             Self::Stop => language.text("Stop", "Стоп"),
             Self::Next => language.text("Next track", "Следующая композиция"),
@@ -344,6 +348,7 @@ pub fn default_bindings() -> Vec<Binding> {
         (Equalizer, Key::F(4)),
         (PlaybackTuner, Key::F(5)),
         (CycleVisualizer, Key::F(6)),
+        (Statistics, Key::F(7)),
         (VolumeUp, Key::Char('+')),
         (VolumeDown, Key::Char('-')),
         (SeekForward, Key::Right),

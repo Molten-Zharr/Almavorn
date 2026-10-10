@@ -47,6 +47,10 @@ impl Sort {
 pub enum Target {
     CommandMenu(super::CommandMenu),
     Visualizer(crate::visualizer::VisualizerKind),
+    StatisticsPage(super::StatisticsPage),
+    StatisticsSort,
+    StatisticsRow(usize),
+    StatisticsRefresh,
     CommandRow(usize),
     ManagePanels,
     PanelFocus(crate::workspace::Panel),

@@ -6,6 +6,7 @@ mod help;
 mod panels;
 mod playlists;
 mod search;
+mod statistics;
 mod text;
 mod tuner;
 pub(crate) use text::keyboard;
@@ -62,6 +63,7 @@ pub(super) fn render_dialog(
         return;
     }
     match dialog {
+        Dialog::Statistics => statistics::render(frame, app, area, palette),
         Dialog::PlaybackTuner { selected } => tuner::render(frame, app, selected, area, palette),
         Dialog::Equalizer {
             selected,

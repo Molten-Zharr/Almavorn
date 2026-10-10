@@ -17,6 +17,7 @@ mod playlist_operations;
 mod search;
 mod settings;
 mod state;
+mod statistics;
 mod tuner;
 mod visualizer;
 mod workspace;
@@ -31,6 +32,7 @@ pub use search::{SearchDialog, SearchFocus};
 pub(crate) use settings::{SettingControl, SettingGroup};
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
+pub use statistics::{StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
 
 use self::background::{Background, background};
 use crate::{audio::Audio, model::Settings, store::Store};
@@ -44,6 +46,7 @@ pub struct App {
     pub settings: Settings,
     pub library: LibraryState,
     pub playback: PlaybackState,
+    pub statistics: StatisticsState,
     pub view: UiState,
     browser_state: BrowserState,
     persistence: SettingsPersistence,
@@ -75,6 +78,7 @@ impl App {
             library,
             view,
             playback: Default::default(),
+            statistics: Default::default(),
             browser_state: Default::default(),
             persistence: Default::default(),
             search_job: Default::default(),
@@ -107,6 +111,7 @@ impl App {
     }
 
     fn tick_inner(&mut self) -> Result<()> {
+        self.tick_statistics()?;
         self.tick_database()?;
         self.tick_settings()?;
         self.tick_settings_files()?;
@@ -121,10 +126,12 @@ impl App {
         if !self.preparing_playback()
             && self.playback.seek_preview.is_none()
             && self.playback.audio.as_mut().is_some_and(Audio::finished)
-            && let Err(error) = self.next(1, false)
         {
-            self.playback.current = None;
-            return Err(error);
+            self.finish_listening();
+            if let Err(error) = self.next(1, false) {
+                self.playback.current = None;
+                return Err(error);
+            }
         }
         Ok(())
     }
@@ -132,6 +139,10 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        if let Some(audio) = &self.playback.audio {
+            audio.set_paused(true);
+        }
+        self.finish_listening();
         self.cancel_audio_preparation();
         self.cancel_seek();
         self.cancel_waveform();
@@ -141,9 +152,14 @@ impl Drop for App {
         let Some(runtime) = self.runtime.take() else {
             return;
         };
-        // Only shutdown waits for settings. Share a deadline with the worker shutdown
-        // because started blocking calls cannot be aborted, including settings writes.
+        // Only shutdown waits for persistence. Share a deadline with the worker
+        // shutdown because started blocking calls cannot be aborted.
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        if let Err(error) = self.shutdown_statistics(&runtime, deadline) {
+            eprintln!(
+                "Almavorn: listening history was not saved / статистика не сохранена: {error:#}"
+            );
+        }
         let wait = |job: Background<()>| {
             runtime
                 .block_on(async {

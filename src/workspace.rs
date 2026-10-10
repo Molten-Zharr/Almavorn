@@ -64,6 +64,7 @@ impl Panel {
                 Page(Mode::Chaos),
                 Button(ToggleEdit),
                 Button(ToggleDesk),
+                Button(Statistics),
                 Button(Settings),
                 Button(Help),
                 Button(Quit),

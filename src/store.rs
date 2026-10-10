@@ -18,6 +18,7 @@ use std::{
 mod migration;
 mod playlists;
 mod queries;
+mod statistics;
 use queries::{playlist_access, read_playlists, snapshot};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -36,6 +36,10 @@ required-features = ["guitui"]
 name = "visualizer_preview"
 required-features = ["guitui"]
 
+[[example]]
+name = "statistics_preview"
+required-features = ["guitui"]
+
 [dependencies]
 ratatui = { version = "0.30.2", default-features = false, features = ["std", "unstable-rendered-line-info"] }
 crossterm = { version = "0.29", optional = true }

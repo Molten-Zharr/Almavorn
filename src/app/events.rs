@@ -165,6 +165,10 @@ impl App {
                 if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
                     return self.scroll_tuner(Position::new(x, y), delta);
                 }
+                if matches!(self.view.dialog, Some(Dialog::Statistics)) {
+                    self.move_statistics(i64::from(-delta) * 3);
+                    return Ok(());
+                }
                 if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
                     let position = Position::new(x, y);
                     self.view.settings.focus = if self.view.settings.menu_area.contains(position) {
@@ -339,6 +343,9 @@ impl App {
         }
         if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
             return self.tuner_key(normalized);
+        }
+        if matches!(self.view.dialog, Some(Dialog::Statistics)) {
+            return self.statistics_key(normalized);
         }
         if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref() {
             let index = *index;
@@ -634,6 +641,10 @@ impl App {
         match target {
             Target::CommandMenu(menu) => self.open_commands(menu),
             Target::Visualizer(kind) => self.set_visualizer(kind)?,
+            target @ (Target::StatisticsPage(_)
+            | Target::StatisticsSort
+            | Target::StatisticsRow(_)
+            | Target::StatisticsRefresh) => self.statistics_target(target),
             Target::CommandRow(index) => self.activate_command(index)?,
             Target::ManagePanels => {
                 self.view.dialog = Some(Dialog::Panels {

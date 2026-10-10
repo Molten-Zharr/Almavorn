@@ -43,6 +43,7 @@ impl TextDialog {
 
 #[derive(Clone)]
 pub enum Dialog {
+    Statistics,
     PlaybackTuner {
         selected: usize,
     },
@@ -114,6 +115,7 @@ impl Dialog {
     pub(super) fn opening_action(&self) -> Option<crate::input::Action> {
         use crate::input::Action;
         match self {
+            Self::Statistics => Some(Action::Statistics),
             Self::PlaybackTuner { .. } => Some(Action::PlaybackTuner),
             Self::Equalizer { .. } => Some(Action::Equalizer),
             Self::Panels { .. } => Some(Action::Panels),

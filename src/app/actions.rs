@@ -250,6 +250,7 @@ impl App {
             Quit => self.view.quit = true,
             Help => self.view.dialog = Some(Dialog::Help { offset: 0 }),
             Settings => self.open_settings_page(super::SettingsPage::General),
+            Statistics => self.open_statistics(),
             TogglePlay => self.toggle_playback()?,
             Equalizer => self.open_equalizer(),
             PlaybackTuner => self.open_tuner(),

@@ -54,7 +54,7 @@ playlist, query, or sort options change. The command bar wraps to fit narrow win
 
 ## Main screen
 
-The command bar provides Add, Playlist, undo/redo, search, Settings, and the
+The command bar provides Add, Playlist, undo/redo, search, Statistics, Settings, and the
 current mode's menu. `Tab` and `Shift+Tab` cycle through the panels and command
 bar. On the bar, arrows select an enabled button and `Enter` opens it; `Esc`
 returns to the library. The focused button is highlighted, and keyboard menus
@@ -148,6 +148,30 @@ cargo run --release --example interface_preview
 ```
 
 PPM images are written to `target/interface-preview/`.
+
+## Listening statistics
+
+Click **Statistics** beside Settings on the command bar, open **Listening
+statistics** from the current mode's application menu, or press `F7`.
+The summary shows total listening time, qualified plays, starts, and unique
+tracks, artists and albums. Four tabs list tracks, artists, albums and the last
+100 listening sessions; totals include the entire history. Artist and album
+counts aggregate track plays. Sort by listening time, play count or name.
+Use `←`/`→` or Tab to change tabs, arrows or the wheel to select rows,
+`S` to change sorting, `R` to refresh, and Esc or F7 to close.
+
+A track counts as played after **50% of its duration or four minutes of actual
+playback**, whichever comes first. Shorter listens still add time. Pauses and
+seeking do not add time; EQ/FX playback time is measured from rendered audio.
+Each repeat starts a new session, and rewinding cannot count a session twice.
+History begins with this version, is shared between modes and profiles, and
+persists in SQLite independently of playlist undo. Checkpoints save in the
+background every five seconds (every second with the dialog open), on track
+changes and when closing the application.
+
+Render the dialog without a window or audio device with
+`cargo run --release --example statistics_preview`.
+PPM images are written to `target/statistics-preview/`.
 
 ## Settings
 

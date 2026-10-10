@@ -98,6 +98,13 @@ impl App {
                 self.allowed(Action::Filter),
             ));
         }
+        if self.control_visible(Panel::Application, Action::Statistics) {
+            entries.push((
+                self.text("Statistics", "Статистика").into(),
+                Target::Action(Action::Statistics),
+                true,
+            ));
+        }
         if self.control_visible(Panel::Application, Action::Settings) {
             entries.push((
                 self.text("Settings", "Настройки").into(),
@@ -191,7 +198,7 @@ impl App {
             ),
             CommandMenu::Application => (
                 Panel::Application,
-                &[ToggleEdit, ToggleDesk, Settings, Help, Quit],
+                &[ToggleEdit, ToggleDesk, Statistics, Settings, Help, Quit],
             ),
             CommandMenu::Player => (
                 Panel::Player,
