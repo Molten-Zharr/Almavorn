@@ -58,6 +58,10 @@ pub(super) fn text_dialog(
         dialog.purpose,
         TextPurpose::Settings(SettingsEdit::ExportPalette { .. })
     );
+    let creating = matches!(
+        dialog.purpose,
+        TextPurpose::Create | TextPurpose::CreateFromFolder { .. }
+    );
     let title = if exporting && area.width < 50 {
         app.text("Export · file name", "Экспорт · имя файла")
     } else {
@@ -66,7 +70,12 @@ pub(super) fn text_dialog(
     let inner = if exporting {
         file_modal(frame, app, area, title.into(), 27, palette)
     } else {
-        modal(frame, app, area, title.into(), 27, palette)
+        let height = if creating && area.width.saturating_sub(6) < 60 {
+            29
+        } else {
+            27
+        };
+        modal(frame, app, area, title.into(), height, palette)
     };
     let hint =
         if let TextPurpose::Settings(SettingsEdit::ExportPalette { directory, .. }) =
@@ -124,7 +133,29 @@ pub(super) fn text_dialog(
             .wrap(Wrap { trim: false }),
         Rect::new(inner.x, inner.y, inner.width, hint_height),
     );
-    let field = Rect::new(inner.x, inner.y + hint_height, inner.width, 3);
+    let mut field = Rect::new(inner.x, inner.y + hint_height, inner.width, 3);
+    let folder_choice = if creating {
+        if inner.width >= 60 {
+            field.width = inner.width.saturating_sub(2) / 2;
+            Some(Rect::new(
+                field.right() + 2,
+                field.y,
+                inner.right().saturating_sub(field.right() + 2),
+                3,
+            ))
+        } else {
+            Some(Rect::new(inner.x, field.bottom() + 1, inner.width, 3))
+        }
+    } else {
+        None
+    };
+    let field_border = if creating {
+        Block::default()
+            .borders(Borders::ALL)
+            .title(app.text("Playlist name", "Название плейлиста"))
+    } else {
+        Block::default().borders(Borders::ALL)
+    };
     frame.render_widget(
         Paragraph::new(format!("{}|", dialog.text))
             .scroll((
@@ -133,9 +164,9 @@ pub(super) fn text_dialog(
                     .text
                     .chars()
                     .count()
-                    .saturating_sub(inner.width.saturating_sub(4) as usize) as u16,
+                    .saturating_sub(field.width.saturating_sub(4) as usize) as u16,
             ))
-            .block(Block::default().borders(Borders::ALL))
+            .block(field_border)
             .style(
                 palette
                     .text()
@@ -149,6 +180,18 @@ pub(super) fn text_dialog(
         field,
     );
     let mut keyboard_top = field.bottom() + 1;
+    if let Some(folder_choice) = folder_choice {
+        button(
+            frame,
+            app,
+            folder_choice,
+            app.text("From music folder", "Из папки с музыкой"),
+            Target::PlaylistAutoName,
+            !app.busy(),
+            palette,
+        );
+        keyboard_top = folder_choice.bottom() + 1;
+    }
     if matches!(
         dialog.purpose,
         TextPurpose::Settings(SettingsEdit::ExportPalette { .. })
@@ -178,20 +221,15 @@ pub(super) fn text_dialog(
         );
         keyboard_top += used + 1;
     }
-    if matches!(
-        dialog.purpose,
-        TextPurpose::Create | TextPurpose::CreateFromFolder { .. }
-    ) {
-        let mut controls = vec![(
-            app.text("From music folder", "Из папки с музыкой").into(),
-            Target::PlaylistAutoName,
-            !app.busy(),
-        )];
-        if let TextPurpose::CreateFromFolder {
-            group_subfolders, ..
-        } = &dialog.purpose
-        {
-            controls.push((
+    if let TextPurpose::CreateFromFolder {
+        group_subfolders, ..
+    } = &dialog.purpose
+    {
+        let used = buttons(
+            frame,
+            app,
+            Rect::new(inner.x, keyboard_top, inner.width, 2),
+            vec![(
                 format!(
                     "[{}] {}",
                     if *group_subfolders { 'x' } else { ' ' },
@@ -199,13 +237,7 @@ pub(super) fn text_dialog(
                 ),
                 Target::CreateFolderGroups,
                 !app.busy(),
-            ));
-        }
-        let used = buttons(
-            frame,
-            app,
-            Rect::new(inner.x, keyboard_top, inner.width, 2),
-            controls,
+            )],
             palette,
         );
         keyboard_top += used + 1;
