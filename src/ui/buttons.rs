@@ -141,6 +141,7 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::EqualizerReset => Some("R".into()),
         Target::TunerReverse => Some("Space".into()),
         Target::TunerReset => Some("R".into()),
+        Target::TunerPin => Some("P".into()),
         Target::SettingHelp(_) => Some("F1".into()),
         Target::CloseDialog => Some("Esc".into()),
         Target::BrowserParent => Some("Backspace".into()),
@@ -311,12 +312,13 @@ fn quiet(
         Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
         Target::Action(Action::CycleRepeat) => app.settings.repeat != crate::model::RepeatMode::Off,
         Target::Action(Action::ToggleShuffle) => app.settings.shuffle,
-        Target::Action(Action::PlaybackTuner) => app.settings.tuner != Default::default(),
+        Target::Action(Action::PlaybackTuner) => app.tuner_settings() != &Default::default(),
         Target::Action(Action::CycleVisualizer)
         | Target::CommandMenu(crate::app::CommandMenu::Visualizer) => {
             app.settings.appearance.visualizer != crate::visualizer::VisualizerKind::Off
         }
-        Target::TunerReverse => app.settings.tuner.reverse,
+        Target::TunerReverse => app.tuner_settings().reverse,
+        Target::TunerPin => app.tuner_pinned(),
         Target::Action(Action::Equalizer) | Target::EqualizerToggle => {
             app.settings.equalizer.enabled
         }

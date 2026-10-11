@@ -155,7 +155,7 @@ impl App {
             index,
             paused: false,
             shuffle_history: VecDeque::new(),
-            reverse: self.settings.tuner.reverse,
+            reverse: false,
         })
     }
 
@@ -165,7 +165,9 @@ impl App {
             AppError::TrackSelectionRequired
         );
         let title = request.queue[request.index].track.title.clone();
-        request.reverse = self.settings.tuner.reverse;
+        request.reverse = self
+            .tuner_for_path(&request.queue[request.index].track.path)
+            .reverse;
         self.cancel_seek();
         self.cancel_audio_preparation();
         self.cancel_waveform();
@@ -201,7 +203,10 @@ impl App {
     }
     pub(super) fn sync_playback_direction(&mut self) -> Result<()> {
         if let Some(request) = self.requested_playback()
-            && request.reverse != self.settings.tuner.reverse
+            && request.reverse
+                != self
+                    .tuner_for_path(&request.queue[request.index].track.path)
+                    .reverse
         {
             self.request_playback(request.clone())?;
         }
@@ -236,7 +241,8 @@ impl App {
         {
             self.playback.reverse_cache = None;
         }
-        if source.reversed() != self.settings.tuner.reverse {
+        let tuner = self.tuner_for_path(&path).clone();
+        if source.reversed() != tuner.reverse {
             return self.request_playback(request);
         }
         let duration = source.total_duration();
@@ -252,7 +258,7 @@ impl App {
             .as_mut()
             .context(AppError::AudioUnavailable)?;
         audio.equalizer(&self.settings.equalizer);
-        audio.tuner(&self.settings.tuner);
+        audio.tuner(&tuner);
         audio.play_prepared(source, request.paused);
         let entry = &request.queue[request.index];
         let mut track = entry.track.clone();
@@ -390,7 +396,7 @@ impl App {
                 index,
                 paused: false,
                 shuffle_history: history,
-                reverse: self.settings.tuner.reverse,
+                reverse: false,
             })
         } else {
             if !explicit {
@@ -438,7 +444,7 @@ impl App {
             self.playback.seek.request(SeekRequest {
                 path: track.path.clone(),
                 position_ms,
-                reverse: self.settings.tuner.reverse,
+                reverse: self.tuner_for_path(&track.path).reverse,
             });
             self.start_seek_job();
         }
@@ -494,7 +500,7 @@ impl App {
         if !completed.current {
             return Ok(());
         }
-        if completed.request.reverse != self.settings.tuner.reverse {
+        if completed.request.reverse != self.tuner_for_path(&completed.request.path).reverse {
             self.seek_to(completed.request.position_ms);
             return Ok(());
         }
@@ -848,6 +854,87 @@ mod tests {
         assert!(!app.can_step_playback(-1));
         assert!(!app.can_step_playback(1));
         assert!(app.playback.shuffle_history.is_empty());
+    }
+
+    #[test]
+    fn pinned_reverse_uses_the_destination_file_for_skips_repeat_and_pending_changes() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 3, 0);
+        app.settings.tuner.reverse = true;
+        let pinned_path = app.playback.queue[1].track.path.clone();
+        app.settings
+            .track_tuners
+            .insert(pinned_path, Default::default());
+        assert!(app.tuner_settings().reverse);
+
+        app.next(1, true).unwrap();
+        assert_eq!(requested_index(&app), 1);
+        assert!(!app.requested_playback().unwrap().reverse);
+        let generation = app.playback.preparation.generation();
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
+        // Changes to global FX cannot replace a pinned destination's decode.
+        app.settings.tuner.reverse = false;
+        app.sync_tuner().unwrap();
+        app.settings.tuner.reverse = true;
+        app.sync_tuner().unwrap();
+        assert_eq!(app.playback.preparation.generation(), generation);
+        assert!(!cancel.load(Ordering::Relaxed));
+
+        app.settings.repeat = RepeatMode::Track;
+        app.next(1, false).unwrap();
+        assert_eq!(requested_index(&app), 1);
+        assert!(!app.requested_playback().unwrap().reverse);
+        app.next(1, true).unwrap();
+        assert_eq!(requested_index(&app), 2);
+        assert!(app.requested_playback().unwrap().reverse);
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 1);
+        assert!(!app.requested_playback().unwrap().reverse);
+    }
+
+    #[test]
+    fn editing_current_pinned_reverse_leaves_another_pending_track_alone_and_seeks_use_its_fx() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 2, 0);
+        app.settings.tuner.reverse = true;
+        let path = app.playback.current.as_ref().unwrap().path.clone();
+        app.settings
+            .track_tuners
+            .insert(path.clone(), Default::default());
+        app.prepare_playback(app.playback.queue.clone(), 42, 1)
+            .unwrap();
+        app.playback.preparation.requested_mut().unwrap().paused = true;
+        let generation = app.playback.preparation.generation();
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
+        app.tuner_target(super::super::Target::TunerReverse)
+            .unwrap();
+        assert!(app.tuner_settings().reverse);
+        assert_eq!(app.playback.preparation.generation(), generation);
+        assert!(!cancel.load(Ordering::Relaxed));
+        assert!(app.requested_playback().unwrap().paused);
+
+        app.settings.tuner.reverse = false;
+        app.sync_tuner().unwrap();
+        assert!(cancel.load(Ordering::Relaxed));
+        let request = app.requested_playback().unwrap();
+        assert!(!request.reverse);
+        assert!(request.paused);
+        assert_eq!(request.index, 1);
+        assert_eq!(request.playlist_id, 42);
+        app.cancel_audio_preparation();
+        app.playback.preparation.cancel();
+        app.seek_to(500);
+        assert!(app.playback.seek.requested().unwrap().reverse);
+        app.cancel_seek();
+        app.settings.track_tuners.get_mut(&path).unwrap().reverse = false;
+        app.settings.tuner.reverse = true;
+        app.seek_to(300);
+        let seek = app.playback.seek.requested().unwrap();
+        assert!(!seek.reverse);
+        assert_eq!(seek.path, path);
+        assert_eq!(seek.position_ms, 300);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use super::super::{
     theme::Palette,
-    widgets::{buttons, modal, visible_offset},
+    widgets::{buttons, clean, modal, visible_offset},
 };
 use crate::{
     app::{App, Hit, Target},
@@ -20,35 +20,85 @@ pub(super) fn render(
         app,
         area,
         app.text("Playback tuner", "Настройщик проигрывания").into(),
-        27,
+        29,
         palette,
     );
     if inner.height < 6 || inner.width < 8 {
         return;
     }
     *selected = (*selected).min(SLIDERS - 1);
-    let header_height = buttons(
+    let pinned = app.tuner_pinned();
+    let scope_height = u16::from(inner.height >= 12);
+    let scope = if let Some(track) = &app.playback.current {
+        format!(
+            "{}: {}",
+            if pinned {
+                app.text("Track FX", "FX композиции")
+            } else {
+                app.text("Global FX", "Общие FX")
+            },
+            clean(&track.title)
+        )
+    } else {
+        app.text(
+            "Global FX · play a track to pin",
+            "Общие FX · включите трек для закрепления",
+        )
+        .into()
+    };
+    buttons(
         frame,
         app,
-        Rect::new(inner.x, inner.y, inner.width, 3),
-        vec![
-            (
-                format!(
-                    "[{}] {}",
-                    if app.settings.tuner.reverse { 'x' } else { ' ' },
-                    if inner.width < 48 {
-                        app.text("Reverse", "Реверс")
-                    } else {
-                        app.text("Reverse", "Обратное проигрывание")
-                    }
-                ),
-                Target::TunerReverse,
-                true,
+        Rect::new(inner.x, inner.y, inner.width, 1),
+        vec![(
+            format!(
+                "[{}] {}",
+                if pinned { 'x' } else { ' ' },
+                if inner.width < 48 {
+                    app.text("Pin FX", "Закрепить FX")
+                } else {
+                    app.text("Pin FX to this track", "Закрепить FX за композицией")
+                }
             ),
-            (app.text("Reset", "Сброс").into(), Target::TunerReset, true),
-        ],
+            Target::TunerPin,
+            app.playback.current.is_some(),
+        )],
         palette,
     );
+    if scope_height > 0 {
+        frame.render_widget(
+            Paragraph::new(scope).style(palette.text().fg(palette.muted)),
+            Rect::new(inner.x, inner.y + 1, inner.width, 1),
+        );
+    }
+    let header_height = 1
+        + scope_height
+        + buttons(
+            frame,
+            app,
+            Rect::new(inner.x, inner.y + 1 + scope_height, inner.width, 3),
+            vec![
+                (
+                    format!(
+                        "[{}] {}",
+                        if app.tuner_settings().reverse {
+                            'x'
+                        } else {
+                            ' '
+                        },
+                        if inner.width < 48 {
+                            app.text("Reverse", "Реверс")
+                        } else {
+                            app.text("Reverse", "Обратное проигрывание")
+                        }
+                    ),
+                    Target::TunerReverse,
+                    true,
+                ),
+                (app.text("Reset", "Сброс").into(), Target::TunerReset, true),
+            ],
+            palette,
+        );
     let body = Rect::new(
         inner.x,
         inner.y + header_height + 1,
@@ -64,7 +114,7 @@ pub(super) fn render(
         if y + row_height > body.bottom() {
             break;
         }
-        let value = app.settings.tuner.value(index).unwrap_or(100);
+        let value = app.tuner_settings().value(index).unwrap_or(100);
         let detail = if index == 2 && !compact {
             format!(
                 " ({:+.1} {})",

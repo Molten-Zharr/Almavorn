@@ -1007,7 +1007,8 @@ impl App {
             target @ (Target::TunerSelect(_)
             | Target::TunerSlider(_, _)
             | Target::TunerReverse
-            | Target::TunerReset) => self.tuner_target(target)?,
+            | Target::TunerReset
+            | Target::TunerPin) => self.tuner_target(target)?,
             target @ (Target::ColorWheel(_)
             | Target::ColorSlider(_, _)
             | Target::ColorSelect(_)

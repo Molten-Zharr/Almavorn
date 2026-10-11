@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Language {
@@ -195,6 +198,8 @@ pub struct Settings {
     pub shuffle: bool,
     pub equalizer: crate::equalizer::EqualizerSettings,
     pub tuner: crate::tuner::TunerSettings,
+    /// File-specific FX belong to the library and are shared by all profiles.
+    pub track_tuners: BTreeMap<PathBuf, crate::tuner::TunerSettings>,
     pub sorting_desk: bool,
     pub scan_subfolders: bool,
     pub playlist_placement: Placement,
@@ -220,6 +225,7 @@ impl Default for Settings {
             shuffle: false,
             equalizer: Default::default(),
             tuner: Default::default(),
+            track_tuners: Default::default(),
             sorting_desk: true,
             scan_subfolders: true,
             playlist_placement: Placement::Left,

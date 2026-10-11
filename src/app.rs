@@ -69,6 +69,9 @@ impl App {
         settings.ensure_bindings();
         settings.equalizer.normalize();
         settings.tuner.normalize();
+        for tuner in settings.track_tuners.values_mut() {
+            tuner.normalize();
+        }
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
         let view = UiState::new(settings.language);
         Ok(Self {

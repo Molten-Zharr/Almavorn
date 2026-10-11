@@ -117,8 +117,13 @@ original track time. Reverse starts new tracks from the end, or reverses the
 current track from its current position, retaining pause state. Preparing
 reverse audio runs in the background and uses an automatically removed
 private PCM file with bounded memory; subsequent seeks reuse that cache.
-Tuner settings save in the active profile. Narrow windows scroll the sliders
-when navigating with the keyboard.
+Global tuner settings save in the active profile. Enable **Pin FX to this track**
+(P) while a track is playing to save its speed, tempo, pitch, bass and reverse
+separately. Further edits and Reset affect only that track. Its FX load whenever
+the same file plays, in any playlist or profile, and persist after restarting.
+Other tracks use their own pinned FX or the active profile's global settings.
+Disable the pin to remove the track's FX and immediately return to global settings.
+Narrow windows scroll the sliders when navigating with the keyboard.
 
 The main window background responds to the playing audio's level, frequency
 bands and attacks after EQ/FX processing. Choose spectrum, waveform, pulse

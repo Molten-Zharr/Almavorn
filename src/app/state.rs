@@ -128,6 +128,7 @@ pub enum Target {
     TunerSlider(usize, Rect),
     TunerReverse,
     TunerReset,
+    TunerPin,
     ColorWheel(Rect),
     ColorSlider(usize, Rect),
     ColorSelect(usize),

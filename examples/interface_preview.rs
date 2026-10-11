@@ -139,6 +139,18 @@ fn main() -> Result<()> {
     app.handle(Input::Key(KeyPress::plain(Key::PageDown)));
     render(&mut app, &output, "playback-tuner", 140, 45)?;
     render(&mut app, &output, "playback-tuner-compact", 32, 26)?;
+    app.playback.current = app
+        .store
+        .playlists()?
+        .into_iter()
+        .find(|p| p.id == playlist)
+        .and_then(|p| p.entries.into_iter().next())
+        .map(|entry| entry.track);
+    app.handle(Input::Key(KeyPress::plain(Key::Char('p'))));
+    app.handle(Input::Key(KeyPress::plain(Key::PageUp)));
+    render(&mut app, &output, "playback-tuner-pinned", 140, 45)?;
+    render(&mut app, &output, "playback-tuner-pinned-compact", 32, 26)?;
+    render(&mut app, &output, "playback-tuner-pinned-small", 32, 18)?;
     drop(app);
     fs::remove_dir_all(data)?;
     println!("Interface previews: {}", output.display());
