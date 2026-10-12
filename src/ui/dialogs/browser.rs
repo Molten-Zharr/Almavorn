@@ -111,12 +111,18 @@ pub(super) fn browser_dialog(
         controls,
         palette,
     );
+    let music_folder = browser.folder && browser.palette_file.is_none();
+    let current_choice = music_folder && browser.selection_explicit;
+    let footer_height = if music_folder { 3 } else { 2 };
     let list_top = inner.y + path_height + used;
     let list = Rect::new(
         inner.x,
         list_top,
         inner.width,
-        inner.bottom().saturating_sub(2).saturating_sub(list_top),
+        inner
+            .bottom()
+            .saturating_sub(footer_height)
+            .saturating_sub(list_top),
     );
     if app.browser_loading() {
         frame.render_widget(
@@ -230,28 +236,39 @@ pub(super) fn browser_dialog(
             browser.marked.len()
         )
     };
+    let mut footer = vec![(
+        add,
+        Target::BrowserAdd,
+        app.browser_ready()
+            && (browser.folder
+                || !browser.marked.is_empty()
+                || browser
+                    .entries
+                    .get(browser.selected)
+                    .is_some_and(|entry| !entry.directory)),
+    )];
+    if current_choice {
+        footer.push((
+            app.text("Current folder", "Текущую папку").into(),
+            Target::BrowserCurrentFolder,
+            app.browser_ready(),
+        ));
+    }
+    footer.push((
+        app.text("Cancel", "Отмена").into(),
+        Target::CloseDialog,
+        true,
+    ));
     buttons(
         frame,
         app,
-        Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2),
-        vec![
-            (
-                add,
-                Target::BrowserAdd,
-                app.browser_ready()
-                    && (browser.folder
-                        || !browser.marked.is_empty()
-                        || browser
-                            .entries
-                            .get(browser.selected)
-                            .is_some_and(|entry| !entry.directory)),
-            ),
-            (
-                app.text("Cancel", "Отмена").into(),
-                Target::CloseDialog,
-                true,
-            ),
-        ],
+        Rect::new(
+            inner.x,
+            inner.bottom().saturating_sub(footer_height),
+            inner.width,
+            footer_height,
+        ),
+        footer,
         palette,
     );
 }

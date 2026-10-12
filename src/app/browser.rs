@@ -249,7 +249,6 @@ impl App {
                 {
                     browser.selected = index;
                     browser.offset = offset;
-                    browser.selection_explicit = true;
                 }
                 Ok(browser)
             })
@@ -278,9 +277,8 @@ impl App {
             browser.entries = loaded.entries;
             browser.selected = loaded.selected;
             browser.offset = loaded.offset;
-            // Restored focus after going up does not choose that child folder for export.
-            browser.selection_explicit =
-                loaded.selection_explicit && browser.palette_file.is_none();
+            // Restoring navigation focus does not confirm a choice of that child folder.
+            browser.selection_explicit = false;
             self.browser_state.ready = true;
             self.message(self.text("Folder loaded", "Папка прочитана").into());
         }
@@ -337,7 +335,24 @@ impl App {
     }
 
     pub(super) fn browser_add(&mut self) -> Result<()> {
+        self.confirm_browser(false)
+    }
+
+    pub(super) fn browser_add_current_folder(&mut self) -> Result<()> {
+        self.confirm_browser(true)
+    }
+
+    fn confirm_browser(&mut self, current_folder: bool) -> Result<()> {
         ensure!(self.browser_state.ready, AppError::FolderNotReady);
+        let folder = if let Some(Dialog::Browser(browser)) = &self.view.dialog {
+            if current_folder {
+                browser.directory.clone()
+            } else {
+                browser.chosen_folder().to_owned()
+            }
+        } else {
+            return Ok(());
+        };
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(purpose) = browser.palette_file.clone()
         {
@@ -356,7 +371,7 @@ impl App {
                     self.show_settings();
                 }
                 PaletteFilePicker::Export { id, filename } => {
-                    let directory = browser.chosen_folder().to_owned();
+                    let directory = folder;
                     self.view.settings.file_directory = Some(directory.clone());
                     self.cancel_browser();
                     self.text_dialog(
@@ -370,8 +385,7 @@ impl App {
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(dialog) = &browser.playlist_name
         {
-            let name = browser
-                .chosen_folder()
+            let name = folder
                 .file_name()
                 .and_then(|name| name.to_str())
                 .context(self.text("Choose a folder with a name", "Выберите папку с названием"))?;
@@ -398,7 +412,7 @@ impl App {
                 }
             );
             dialog.purpose = TextPurpose::CreateFromFolder {
-                folder: browser.chosen_folder().to_owned(),
+                folder,
                 group_subfolders,
             };
             dialog.selected_all = true;
@@ -408,7 +422,7 @@ impl App {
         }
         let paths = if let Some(Dialog::Browser(browser)) = &self.view.dialog {
             if browser.folder {
-                vec![browser.chosen_folder().to_owned()]
+                vec![folder]
             } else if !browser.marked.is_empty() {
                 let mut paths: Vec<_> = browser.marked.iter().cloned().collect();
                 paths.sort();

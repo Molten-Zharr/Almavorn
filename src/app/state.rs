@@ -91,6 +91,7 @@ pub enum Target {
     BrowserMarkAll,
     BrowserOpen,
     BrowserAdd,
+    BrowserCurrentFolder,
     PaletteExportFolder,
     PlaylistAutoName,
     CreateFolderGroups,

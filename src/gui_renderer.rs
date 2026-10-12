@@ -310,6 +310,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
                     | Target::BrowserMarkAll
                     | Target::BrowserOpen
                     | Target::BrowserAdd
+                    | Target::BrowserCurrentFolder
                     | Target::DialogScroll(_)
                     | Target::Setting(_)
                     | Target::SettingAdjust(_, _)

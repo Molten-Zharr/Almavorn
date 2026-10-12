@@ -104,8 +104,8 @@ pub(super) fn help_dialog(
             false,
             false,
             Key::Char('f'),
-            "In Create playlist, choose a music folder. Ctrl+Enter accepts the selected folder, or the open folder if no row was chosen. Subfolders are skipped unless Subfolders as groups is on.",
-            "При создании плейлиста выбрать папку с музыкой. Ctrl+Enter — выделенную папку; без выбора строки — открытую. Подпапки пропускаются, если не включены группы.",
+            "In Create playlist, choose a music folder. Ctrl+Enter accepts an explicitly selected folder; after going up it accepts the open folder. Ctrl+Shift+Enter always chooses the open music folder. Subfolders are skipped unless Subfolders as groups is on.",
+            "При создании плейлиста выбрать папку с музыкой. Ctrl+Enter — явно выбранную папку; после возврата наверх — открытую. Ctrl+Shift+Enter всегда выбирает открытую папку с музыкой. Подпапки пропускаются, если не включены группы.",
         ),
         (
             true,
@@ -122,6 +122,14 @@ pub(super) fn help_dialog(
             Key::Enter,
             "Add selected files in the file picker.",
             "Добавить выбранные файлы в файловом окне.",
+        ),
+        (
+            true,
+            false,
+            true,
+            Key::Enter,
+            "In a music folder picker, choose the open folder even if a child folder is selected.",
+            "В выборе папки с музыкой выбрать открытую папку, даже если выделена подпапка.",
         ),
         (
             false,

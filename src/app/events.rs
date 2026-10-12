@@ -525,6 +525,12 @@ impl App {
                     return self.target(Target::BrowserMarkAll, false);
                 }
                 if (key.key == Key::Enter && key.ctrl) || key.key == Key::Char('a') {
+                    if key.key == Key::Enter
+                        && key.shift
+                        && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.palette_file.is_none())
+                    {
+                        return self.browser_add_current_folder();
+                    }
                     return self.browser_add();
                 }
                 if key.key == Key::Backspace {
@@ -929,6 +935,7 @@ impl App {
             }
             Target::BrowserOpen => self.browser_open()?,
             Target::BrowserAdd => self.browser_add()?,
+            Target::BrowserCurrentFolder => self.browser_add_current_folder()?,
             Target::PaletteExportFolder => self.choose_palette_export_folder(),
             Target::PlaylistAutoName => self.choose_playlist_name_folder()?,
             Target::CreateFolderGroups => {
