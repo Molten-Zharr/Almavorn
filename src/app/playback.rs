@@ -14,7 +14,11 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::{collections::VecDeque, path::PathBuf, time::Duration};
+use std::{
+    collections::{HashSet, VecDeque},
+    path::PathBuf,
+    time::Duration,
+};
 
 const SHUFFLE_HISTORY_LIMIT: usize = 256;
 
@@ -26,6 +30,7 @@ pub(super) struct PlaybackRequest {
     paused: bool,
     shuffle_history: VecDeque<usize>,
     reverse: bool,
+    marked_only: bool,
 }
 
 pub(super) struct SeekRequest {
@@ -101,6 +106,185 @@ impl App {
     pub fn preparing_playback(&self) -> bool {
         self.requested_playback().is_some()
     }
+    fn marked_queue(&self) -> Option<(i64, &[Entry])> {
+        if let Some(request) = self.requested_playback() {
+            return request
+                .marked_only
+                .then_some((request.playlist_id, &request.queue));
+        }
+        self.playback.marked_only.then_some(())?;
+        Some((self.playback.playing_playlist?, &self.playback.queue))
+    }
+    pub fn marked_playback_count(&self) -> Option<usize> {
+        self.marked_queue().map(|(_, queue)| queue.len())
+    }
+    pub(super) fn marked_playback_playlist(&self) -> Option<i64> {
+        self.marked_queue().map(|(id, _)| id)
+    }
+    pub(super) fn restore_playback_marks(&mut self) {
+        if let Some((id, queue)) = self.marked_queue()
+            && self.library.selected_playlist == Some(id)
+        {
+            self.library.marked = queue.iter().map(|entry| entry.id).collect();
+        }
+    }
+    fn playback_request(&self) -> Option<PlaybackRequest> {
+        self.requested_playback().cloned().or_else(|| {
+            Some(PlaybackRequest {
+                queue: self.playback.queue.clone(),
+                playlist_id: self.playback.playing_playlist?,
+                index: self.playback.queue_index,
+                paused: self.paused(),
+                shuffle_history: self.playback.shuffle_history.clone(),
+                reverse: false,
+                marked_only: self.playback.marked_only,
+            })
+        })
+    }
+    pub(super) fn play_marked(&mut self) -> Result<()> {
+        let playlist = self
+            .playlist()
+            .context(AppError::PlaylistSelectionRequired)?;
+        let playlist_id = playlist.id;
+        let queue: Arc<[Entry]> = playlist
+            .entries
+            .iter()
+            .filter(|entry| self.library.marked.contains(&entry.id))
+            .cloned()
+            .collect();
+        ensure!(!queue.is_empty(), AppError::TrackSelectionRequired);
+        let index = queue
+            .iter()
+            .position(|entry| Some(entry.id) == self.library.selected_entry)
+            .unwrap_or(0);
+        self.request_playback(PlaybackRequest {
+            queue,
+            playlist_id,
+            index,
+            paused: false,
+            shuffle_history: VecDeque::new(),
+            reverse: false,
+            marked_only: true,
+        })
+    }
+    pub(super) fn toggle_mark(&mut self, id: i64) -> Result<()> {
+        if !self.library.marked.insert(id) {
+            self.library.marked.remove(&id);
+        }
+        self.sync_marked_playback()
+    }
+    pub(super) fn play_whole_playlist(&mut self) -> Result<()> {
+        let Some(mut request) = self
+            .playback_request()
+            .filter(|request| request.marked_only)
+        else {
+            return Ok(());
+        };
+        let Some(playlist) = self
+            .library
+            .playlists
+            .iter()
+            .find(|playlist| playlist.id == request.playlist_id)
+        else {
+            self.stop_playback();
+            return Ok(());
+        };
+        let queue = playlist.entries.clone().into();
+        request.marked_only = false;
+        self.update_playback_queue(request, queue)?;
+        self.message(
+            self.text(
+                "Playing the whole playlist",
+                "Воспроизведение всего плейлиста",
+            )
+            .into(),
+        );
+        Ok(())
+    }
+    pub(super) fn sync_marked_playback(&mut self) -> Result<()> {
+        let Some(request) = self
+            .playback_request()
+            .filter(|request| request.marked_only)
+        else {
+            return Ok(());
+        };
+        let Some(playlist) = self
+            .library
+            .playlists
+            .iter()
+            .find(|playlist| playlist.id == request.playlist_id)
+        else {
+            self.stop_playback();
+            return Ok(());
+        };
+        // Marks in another playlist belong to that view, not to the playing set.
+        let active: HashSet<_> = request.queue.iter().map(|entry| entry.id).collect();
+        let queue = playlist
+            .entries
+            .iter()
+            .filter(|entry| {
+                if self.library.selected_playlist == Some(playlist.id) {
+                    self.library.marked.contains(&entry.id)
+                } else {
+                    active.contains(&entry.id)
+                }
+            })
+            .cloned()
+            .collect();
+        self.update_playback_queue(request, queue)
+    }
+    fn update_playback_queue(
+        &mut self,
+        mut request: PlaybackRequest,
+        queue: Arc<[Entry]>,
+    ) -> Result<()> {
+        if queue.is_empty() {
+            self.stop_playback();
+            return Ok(());
+        }
+        let target = &request.queue[request.index];
+        let kept = queue
+            .iter()
+            .position(|entry| entry.id == target.id && entry.track.path == target.track.path);
+        let index = kept.unwrap_or_else(|| {
+            queue
+                .iter()
+                .position(|entry| entry.position > target.position)
+                .unwrap_or(0)
+        });
+        request.shuffle_history = remap_history(&request.queue, &queue, &request.shuffle_history);
+        request.queue = queue.clone();
+        request.index = index;
+        let current_kept = self.playback.playing_playlist == Some(request.playlist_id)
+            && self
+                .playback
+                .playing_entry
+                .is_some_and(|id| queue.iter().any(|entry| entry.id == id));
+        if current_kept {
+            self.playback.shuffle_history =
+                remap_history(&self.playback.queue, &queue, &self.playback.shuffle_history);
+            self.playback.queue_index = queue
+                .iter()
+                .position(|entry| Some(entry.id) == self.playback.playing_entry)
+                .expect("current entry is in the queue");
+            self.playback.queue = queue;
+            self.playback.marked_only = request.marked_only;
+        }
+        if kept.is_some() {
+            if let Some(pending) = self.playback.preparation.requested_mut() {
+                // The prepared source is still for the same entry and path.
+                request.reverse = pending.reverse;
+                *pending = request;
+            }
+        } else {
+            self.request_playback(request)?;
+        }
+        if !current_kept && let Some(audio) = &self.playback.audio {
+            // Never continue playing a track removed from the active set.
+            audio.set_paused(true);
+        }
+        Ok(())
+    }
     pub(super) fn can_step_playback(&self, direction: i64) -> bool {
         let (length, index, history) = self
             .requested_playback()
@@ -113,14 +297,15 @@ impl App {
         if length == 0 || index >= length {
             return false;
         }
+        let marked_only = self.marked_playback_count().is_some();
         if self.settings.shuffle {
             return if direction < 0 {
                 !history.is_empty()
             } else {
-                length > 1
+                length > 1 || marked_only
             };
         }
-        if self.settings.repeat == RepeatMode::Playlist {
+        if marked_only || self.settings.repeat == RepeatMode::Playlist {
             return true;
         }
         if direction < 0 {
@@ -156,6 +341,7 @@ impl App {
             paused: false,
             shuffle_history: VecDeque::new(),
             reverse: false,
+            marked_only: false,
         })
     }
 
@@ -224,7 +410,13 @@ impl App {
         let source = match completed.result {
             Ok(source) => source,
             Err(error) => {
-                if !self.playback.audio.as_ref().is_some_and(Audio::has_track) {
+                if !self.playback.audio.as_ref().is_some_and(Audio::has_track)
+                    || (request.marked_only
+                        && !request
+                            .queue
+                            .iter()
+                            .any(|entry| Some(entry.id) == self.playback.playing_entry))
+                {
                     self.stop_playback();
                 }
                 return Err(error);
@@ -271,6 +463,7 @@ impl App {
         self.playback.queue = request.queue;
         self.playback.queue_index = request.index;
         self.playback.shuffle_history = request.shuffle_history;
+        self.playback.marked_only = request.marked_only;
         self.playback.current = Some(track.clone());
         self.playback.waveform = None;
         if self.settings.appearance.playback_timeline == PlaybackTimeline::Waveform {
@@ -322,6 +515,7 @@ impl App {
         self.cancel_waveform();
         self.playback.queue = Arc::from([]);
         self.playback.queue_index = 0;
+        self.playback.marked_only = false;
         self.clear_shuffle_history();
         self.message(
             self.text("Playback stopped", "Воспроизведение остановлено")
@@ -330,7 +524,7 @@ impl App {
     }
 
     pub(super) fn next(&mut self, direction: i64, explicit: bool) -> Result<()> {
-        let Some((queue, playlist_id, index, mut history)) = self
+        let Some((queue, playlist_id, index, mut history, marked_only)) = self
             .requested_playback()
             .map(|request| {
                 (
@@ -338,6 +532,7 @@ impl App {
                     request.playlist_id,
                     request.index,
                     request.shuffle_history.clone(),
+                    request.marked_only,
                 )
             })
             .or_else(|| {
@@ -347,6 +542,7 @@ impl App {
                         id,
                         self.playback.queue_index,
                         self.playback.shuffle_history.clone(),
+                        self.playback.marked_only,
                     )
                 })
             })
@@ -360,8 +556,14 @@ impl App {
             return Ok(());
         }
         // Repeating one track only intercepts completion, never a manual skip.
-        let next = if !explicit && direction > 0 && self.settings.repeat == RepeatMode::Track {
+        let next = if !marked_only
+            && !explicit
+            && direction > 0
+            && self.settings.repeat == RepeatMode::Track
+        {
             Some(index)
+        } else if marked_only && queue.len() == 1 {
+            Some(0)
         } else if self.settings.shuffle {
             if direction < 0 {
                 history.pop_back()
@@ -381,12 +583,13 @@ impl App {
             history.clear();
             if direction < 0 {
                 index.checked_sub(1).or_else(|| {
-                    (self.settings.repeat == RepeatMode::Playlist).then_some(queue.len() - 1)
+                    (marked_only || self.settings.repeat == RepeatMode::Playlist)
+                        .then_some(queue.len() - 1)
                 })
             } else if index + 1 < queue.len() {
                 Some(index + 1)
             } else {
-                (self.settings.repeat == RepeatMode::Playlist).then_some(0)
+                (marked_only || self.settings.repeat == RepeatMode::Playlist).then_some(0)
             }
         };
         if let Some(index) = next {
@@ -397,6 +600,7 @@ impl App {
                 paused: false,
                 shuffle_history: history,
                 reverse: false,
+                marked_only,
             })
         } else {
             if !explicit {
@@ -632,6 +836,16 @@ impl App {
         }
         self.start_waveform_job();
     }
+}
+
+fn remap_history(old: &[Entry], new: &[Entry], history: &VecDeque<usize>) -> VecDeque<usize> {
+    history
+        .iter()
+        .filter_map(|index| {
+            let id = old.get(*index)?.id;
+            new.iter().position(|entry| entry.id == id)
+        })
+        .collect()
 }
 
 #[cfg(test)]

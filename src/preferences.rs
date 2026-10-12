@@ -388,6 +388,8 @@ impl Settings {
                     | crate::input::Action::ToggleShuffle
                     | crate::input::Action::Equalizer
                     | crate::input::Action::PlaybackTuner
+                    | crate::input::Action::PlayMarked
+                    | crate::input::Action::PlayWholePlaylist
             ) && self.bindings.iter().any(|value| value.key == binding.key)
                 && let Some(key) =
                     std::iter::once(crate::input::KeyPress::plain(crate::input::Key::F(4)))

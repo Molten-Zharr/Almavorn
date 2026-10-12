@@ -702,9 +702,7 @@ impl App {
             Target::Mark(id) => {
                 self.library.selected_entry = Some(id);
                 self.view.focus = Focus::Tracks;
-                if !self.library.marked.insert(id) {
-                    self.library.marked.remove(&id);
-                }
+                self.toggle_mark(id)?;
             }
             Target::SortColumn(sort) => {
                 self.library.sort_descending =

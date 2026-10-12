@@ -8,6 +8,9 @@ use anyhow::{Context, Result};
 
 impl App {
     pub(super) fn set_repeat(&mut self, repeat: RepeatMode) -> Result<()> {
+        if self.marked_playback_count().is_some() {
+            return Ok(());
+        }
         self.settings.repeat = repeat;
         self.save_settings()?;
         self.message(format!(
@@ -137,6 +140,14 @@ impl App {
             Next => self.can_step_playback(1),
             Previous => self.can_step_playback(-1),
             Stop => self.playback.current.is_some() || self.preparing_playback(),
+            PlayMarked => self.playlist().is_some_and(|playlist| {
+                playlist
+                    .entries
+                    .iter()
+                    .any(|entry| self.library.marked.contains(&entry.id))
+            }),
+            PlayWholePlaylist => self.marked_playback_count().is_some(),
+            CycleRepeat => self.marked_playback_count().is_none(),
             SeekForward | SeekBackward => self.playback.current.is_some(),
             Filter => self.playlist().is_some(),
             VolumeUp => self.settings.volume < 1.0,
@@ -252,6 +263,8 @@ impl App {
             Settings => self.open_settings_page(super::SettingsPage::General),
             Statistics => self.open_statistics(),
             TogglePlay => self.toggle_playback()?,
+            PlayMarked => self.play_marked()?,
+            PlayWholePlaylist => self.play_whole_playlist()?,
             Equalizer => self.open_equalizer(),
             PlaybackTuner => self.open_tuner(),
             CycleVisualizer => self.cycle_visualizer(1)?,
@@ -507,10 +520,8 @@ impl App {
                 }
             }
             Mark => {
-                if let Some(id) = self.library.selected_entry
-                    && !self.library.marked.insert(id)
-                {
-                    self.library.marked.remove(&id);
+                if let Some(id) = self.library.selected_entry {
+                    self.toggle_mark(id)?;
                 }
             }
             PlaylistPanel => {

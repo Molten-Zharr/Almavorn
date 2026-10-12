@@ -49,6 +49,7 @@ pub struct PlaybackState {
     pub(super) pending_waveform: Option<(PathBuf, u64)>,
     pub(super) queue: Arc<[Entry]>,
     pub(super) queue_index: usize,
+    pub(super) marked_only: bool,
     pub(super) shuffle_history: VecDeque<usize>,
     pub(super) audio: Option<Audio>,
     pub(super) preparation: LatestJob<playback::PlaybackRequest, crate::audio::PreparedAudio>,

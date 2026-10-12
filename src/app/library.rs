@@ -153,6 +153,7 @@ impl App {
     }
 
     pub(super) fn refresh(&mut self) -> Result<()> {
+        let selected_playlist = self.library.selected_playlist;
         if !self
             .visible_playlists()
             .iter()
@@ -160,6 +161,9 @@ impl App {
         {
             self.library.selected_playlist =
                 self.visible_playlists().first().map(|playlist| playlist.id);
+        }
+        if selected_playlist != self.library.selected_playlist {
+            self.restore_playback_marks();
         }
         if !self
             .rows()
@@ -205,13 +209,14 @@ impl App {
             self.library.query.clear();
             self.view.filter_editing = false;
             self.view.filter_keyboard = false;
+            self.library.marked.clear();
         }
         self.library.selected_playlist = Some(id);
         self.library.selected_entry = self
             .playlist()
             .and_then(|playlist| playlist.entries.first())
             .map(|entry| entry.id);
-        self.library.marked.clear();
+        self.restore_playback_marks();
         self.view.track_offset = 0;
     }
 
@@ -227,6 +232,7 @@ impl App {
         self.library.marked.clear();
         self.library.selected_playlist =
             self.visible_playlists().first().map(|playlist| playlist.id);
+        self.restore_playback_marks();
         self.view.track_offset = 0;
         self.view.playlist_offset = 0;
         self.refresh()?;

@@ -3,7 +3,10 @@ use super::{
     theme::Palette,
     widgets::{block, visible_offset},
 };
-use crate::app::{App, CommandMenu, Hit, Target};
+use crate::{
+    app::{App, CommandMenu, Hit, Target},
+    input::Action,
+};
 use ratatui::{
     Frame,
     layout::{Position, Rect},
@@ -67,12 +70,35 @@ pub(super) fn render(
         } else {
             palette.text()
         };
+        frame.render_widget(Paragraph::new("").style(style), rect);
+        let shortcut = button_shortcut(app, &item.target);
+        let key_width = shortcut
+            .as_ref()
+            .map_or(0, |key| Span::raw(key).width() as u16)
+            .min(rect.width.saturating_sub(1));
+        let label_width =
+            rect.width
+                .saturating_sub(if shortcut.is_some() { key_width + 2 } else { 0 });
+        let label = if matches!(&item.target, Target::Action(Action::PlayMarked))
+            && Span::raw(&item.label).width() + 1 > usize::from(label_width)
+        {
+            format!(
+                "[{}] {}",
+                if item.label.starts_with("[x]") {
+                    'x'
+                } else {
+                    ' '
+                },
+                app.text("Checked tracks only", "Только отмеченные")
+            )
+        } else {
+            item.label.clone()
+        };
         frame.render_widget(
-            Paragraph::new(format!(" {}", item.label)).style(style),
-            rect,
+            Paragraph::new(format!(" {label}")).style(style),
+            Rect::new(rect.x, rect.y, label_width, 1),
         );
-        if let Some(key) = button_shortcut(app, &item.target) {
-            let key_width = Span::raw(&key).width() as u16;
+        if let Some(key) = shortcut {
             frame.render_widget(
                 Paragraph::new(key).style(style.fg(palette.muted)),
                 Rect::new(

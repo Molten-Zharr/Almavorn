@@ -192,8 +192,19 @@ impl App {
             CommandMenu::Tracks => (
                 Panel::PlaylistActions,
                 &[
-                    TogglePlay, Mark, Rename, Transfer, Delete, MoveUp, MoveDown, Metadata, Sort,
-                    Search, Filter,
+                    TogglePlay,
+                    Mark,
+                    PlayMarked,
+                    PlayWholePlaylist,
+                    Rename,
+                    Transfer,
+                    Delete,
+                    MoveUp,
+                    MoveDown,
+                    Metadata,
+                    Sort,
+                    Search,
+                    Filter,
                 ],
             ),
             CommandMenu::Application => (
@@ -208,6 +219,7 @@ impl App {
                     Stop,
                     Next,
                     CycleRepeat,
+                    PlayWholePlaylist,
                     ToggleShuffle,
                     Equalizer,
                     PlaybackTuner,
@@ -250,13 +262,21 @@ impl App {
                     ToggleEdit => Some(self.view.editing),
                     ToggleDesk => Some(self.settings.sorting_desk),
                     ToggleShuffle => Some(self.settings.shuffle),
+                    PlayMarked => Some(
+                        self.marked_playback_playlist().is_some()
+                            && self.library.selected_playlist == self.marked_playback_playlist(),
+                    ),
                     _ => None,
                 };
                 let name = if *action == CycleRepeat {
                     format!(
                         "{}: {}",
                         action.name(self.settings.language),
-                        self.settings.repeat.name(self.settings.language),
+                        if self.marked_playback_count().is_some() {
+                            self.text("Checked tracks", "Отмеченные")
+                        } else {
+                            self.settings.repeat.name(self.settings.language)
+                        },
                     )
                 } else {
                     action.name(self.settings.language).into()

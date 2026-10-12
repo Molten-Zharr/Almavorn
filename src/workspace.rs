@@ -91,6 +91,7 @@ impl Panel {
                 Button(Sort),
                 Button(Metadata),
                 Button(Mark),
+                Button(PlayMarked),
             ],
             Self::Player => &[
                 Button(Previous),
@@ -98,6 +99,7 @@ impl Panel {
                 Button(Stop),
                 Button(Next),
                 Button(CycleRepeat),
+                Button(PlayWholePlaylist),
                 Button(ToggleShuffle),
                 Button(Equalizer),
                 Button(PlaybackTuner),

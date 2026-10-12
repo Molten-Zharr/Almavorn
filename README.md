@@ -90,6 +90,18 @@ through playback history. Track repeat takes priority over shuffle. Shuffle
 with a single track stops unless track repeat is enabled. Modes and shortcuts
 are saved in the active settings profile.
 
+Track checkboxes can also define a temporary repeating set inside a playlist.
+Choose **Play checked tracks only** from the tracks context menu, or press
+`Ctrl+Enter`. Checkboxes change the active set immediately. Removing the playing
+track advances to the next checked track; clearing all stops playback. The set
+keeps playing when browsing other playlists, and its checkboxes return when
+selecting its playlist again. It repeats even a single track, independently of
+the saved repeat setting; shuffle stays within the checked set. **All tracks**
+in the player, **Play the whole playlist** in either context menu, or `Ctrl+U`
+returns to the full playing playlist without restarting the current track.
+Stop, Enter on a track, or double-click also exits this mode. This selection
+exists only for the current playback session; it creates no separate playlist.
+
 `F4` or the player's EQ button opens the equalizer; the player menu lists
 Equalizer with its assigned shortcut. Ten bands cover 32 Hz to 16 kHz, plus a
 preamp for overall gain, all adjustable from −12 to +12 dB. Drag the sliders

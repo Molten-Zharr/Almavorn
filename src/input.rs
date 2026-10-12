@@ -169,6 +169,8 @@ pub enum Action {
     Redo,
     Metadata,
     Mark,
+    PlayMarked,
+    PlayWholePlaylist,
     PlaylistPanel,
     PlayerPanel,
     Panels,
@@ -267,7 +269,9 @@ impl Action {
             Self::Undo => language.text("Undo a library change in Chaos or the sorting desk.", "Отменить правку библиотеки в Хаосе либо на сортировочном столе."),
             Self::Redo => language.text("Repeat a library change that was undone.", "Повторить отменённую правку библиотеки."),
             Self::Metadata => language.text("Show saved metadata and original imported tags.", "Показать сохранённые сведения и исходные импортированные теги."),
-            Self::Mark => language.text("Toggle the selected track's copy checkbox.", "Изменить отметку выбранной композиции для копирования."),
+            Self::Mark => language.text("Toggle the selected track's checkbox for copying or looping checked tracks.", "Изменить отметку выбранной композиции для копирования или повтора отмеченных."),
+            Self::PlayMarked => language.text("Loop checked tracks in this playlist. Checkboxes update the set immediately; clearing all stops playback. No playlist is created.", "Проигрывать отмеченные композиции этого плейлиста по кругу. Галочки сразу меняют набор; снятие всех отметок останавливает воспроизведение. Новый плейлист не создается."),
+            Self::PlayWholePlaylist => language.text("Leave the checked-track loop and continue the whole playing playlist without restarting the current track.", "Выйти из повтора отмеченных и продолжить весь воспроизводимый плейлист без перезапуска текущей композиции."),
             Self::PlaylistPanel => language.text("Move the playlist panel around the library.", "Изменить расположение панели плейлистов."),
             Self::PlayerPanel => language.text("Move playback controls around the library.", "Изменить расположение панели проигрывателя."),
             Self::Panels => language.text("Toggle layout editing: drag titles and borders. Visibility and button choices are available in the layout toolbar.", "Включить компоновку: тянуть заголовки и границы. Видимость блоков и кнопок настраивается в верхней строке."),
@@ -318,6 +322,12 @@ impl Action {
             Self::Redo => language.text("Redo", "Повторить"),
             Self::Metadata => language.text("Track information", "Сведения о композиции"),
             Self::Mark => language.text("Mark track", "Отметить композицию"),
+            Self::PlayMarked => {
+                language.text("Play checked tracks only", "Прослушивать только отмеченные")
+            }
+            Self::PlayWholePlaylist => {
+                language.text("Play the whole playlist", "Воспроизводить весь плейлист")
+            }
             Self::PlaylistPanel => {
                 language.text("Move playlists panel", "Переместить панель плейлистов")
             }
@@ -389,6 +399,8 @@ pub fn default_bindings() -> Vec<Binding> {
         (PlaylistFolders, Key::Char('r'), true, false),
         (CopyPlaylist, Key::Char('d'), true, false),
         (ComposePlaylists, Key::Char('g'), true, false),
+        (PlayMarked, Key::Enter, true, false),
+        (PlayWholePlaylist, Key::Char('u'), true, false),
     ] {
         bindings.push(Binding {
             action,

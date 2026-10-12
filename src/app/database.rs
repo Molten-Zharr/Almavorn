@@ -160,7 +160,7 @@ impl App {
             && let Some((id, mode)) = self.library.pending_selection.take()
             && self.settings.mode == mode
         {
-            self.library.selected_playlist = Some(id);
+            self.select_playlist(id);
             self.view.focus = Focus::Tracks;
             self.refresh()?;
         }
@@ -178,10 +178,11 @@ impl App {
                 if let Some((id, mode)) = self.library.pending_selection.take()
                     && self.settings.mode == mode
                 {
-                    self.library.selected_playlist = Some(id);
+                    self.select_playlist(id);
                     self.view.focus = Focus::Tracks;
                 }
                 self.refresh()?;
+                self.sync_marked_playback()?;
                 if self.library.database.is_none() && self.library.import.is_none() {
                     self.validate_history();
                 }

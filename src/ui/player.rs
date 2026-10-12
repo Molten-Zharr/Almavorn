@@ -119,18 +119,23 @@ fn control_rows(app: &App, width: u16) -> u16 {
 }
 
 fn base_height(app: &App, width: u16) -> u16 {
-    if stack_volume(app, width) {
+    let height = if stack_volume(app, width) {
         control_rows(app, width).saturating_add(3)
     } else {
         2
-    }
+    };
+    height + loop_rows(app, width)
+}
+
+fn loop_rows(app: &App, width: u16) -> u16 {
+    u16::from(width < 70 && app.marked_playback_count().is_some())
 }
 
 pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     if area.height < 2 || area.width < 8 {
         return;
     }
-    let title = if app.preparing_playback() && !app.playback_active() {
+    let mut title = if app.preparing_playback() && !app.playback_active() {
         app.text("Preparing audio…", "Подготовка аудио…").to_owned()
     } else if let Some(track) = app
         .playback
@@ -155,15 +160,45 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         )
         .to_owned()
     };
+    let mut title_width = area.width;
+    let loop_rows = loop_rows(app, area.width);
+    if let Some(count) = app.marked_playback_count() {
+        let caption = format!("{}: {count}", app.text("Checked loop", "Повтор отметок"));
+        let mut caption_width = area.width;
+        if app.control_visible(Panel::Player, Action::PlayWholePlaylist) {
+            let label = app.text("All tracks", "Все треки");
+            let target = Target::Action(Action::PlayWholePlaylist);
+            let width = button_width(app, label, &target).min(area.width.saturating_sub(8));
+            caption_width = area.width.saturating_sub(width + 1);
+            quiet_button(
+                frame,
+                app,
+                Rect::new(area.right() - width, area.y + loop_rows, width, 1),
+                label,
+                target,
+                true,
+                palette,
+            );
+        }
+        if loop_rows > 0 {
+            frame.render_widget(
+                Paragraph::new(caption).style(palette.text().fg(palette.accent)),
+                Rect::new(area.x, area.y + loop_rows, caption_width, 1),
+            );
+        } else {
+            title = format!("{caption} · {title}");
+            title_width = caption_width;
+        }
+    }
     frame.render_widget(
         Paragraph::new(clean(&title)).style(palette.text().fg(if app.playback_active() {
             palette.accent
         } else {
             palette.muted
         })),
-        Rect::new(area.x, area.y, area.width, 1),
+        Rect::new(area.x, area.y, title_width, 1),
     );
-    let row = Rect::new(area.x, area.y + 1, area.width, 1);
+    let row = Rect::new(area.x, area.y + 1 + loop_rows, area.width, 1);
     let stacked = stack_volume(app, area.width);
     let control_rows = control_rows(app, area.width);
     let volume_width = if stacked {
