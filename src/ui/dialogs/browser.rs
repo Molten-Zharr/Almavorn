@@ -27,6 +27,9 @@ pub(super) fn browser_dialog(
         None if browser.playlist_name.is_some() => {
             app.text("Playlist from folder", "Плейлист из папки")
         }
+        None if browser.folder_playlists.is_some() => {
+            app.text("Folders to playlists", "Папки в плейлисты")
+        }
         None if browser.folder => app.text("Add folder", "Добавить папку"),
         None => app.text("Add files", "Добавить файлы"),
     };
@@ -53,7 +56,7 @@ pub(super) fn browser_dialog(
             browser.directory.parent().is_some(),
         ),
         (
-            if browser.palette_file.is_some() {
+            if browser.palette_file.is_some() || browser.folder_playlists.is_some() {
                 app.text("Open", "Открыть")
             } else {
                 app.text("Select / open", "Выбрать / открыть")
@@ -77,7 +80,29 @@ pub(super) fn browser_dialog(
             ),
         ]);
     }
-    if browser.playlist_name.is_none() && browser.palette_file.is_none() {
+    if let Some(group_subfolders) = browser.folder_playlists {
+        controls.extend([
+            (
+                app.text("Mark all", "Отметить все").into(),
+                Target::BrowserMarkAll,
+                app.browser_ready() && !browser.entries.is_empty(),
+            ),
+            (
+                app.text("Clear marks", "Снять отметки").into(),
+                Target::BrowserClearMarks,
+                !browser.marked.is_empty(),
+            ),
+            (
+                format!(
+                    "[{}] {}",
+                    if group_subfolders { 'x' } else { ' ' },
+                    app.text("Subfolders as groups", "Подпапки в группы")
+                ),
+                Target::CreateFolderGroups,
+                !app.busy(),
+            ),
+        ]);
+    } else if browser.playlist_name.is_none() && browser.palette_file.is_none() {
         controls.push((
             if browser.folder {
                 format!(
@@ -107,13 +132,27 @@ pub(super) fn browser_dialog(
     let used = buttons(
         frame,
         app,
-        Rect::new(inner.x, inner.y + path_height, inner.width, 3),
+        Rect::new(
+            inner.x,
+            inner.y + path_height,
+            inner.width,
+            if browser.folder_playlists.is_some() {
+                4
+            } else {
+                3
+            },
+        ),
         controls,
         palette,
     );
-    let music_folder = browser.folder && browser.palette_file.is_none();
+    let music_folder =
+        browser.folder && browser.folder_playlists.is_none() && browser.palette_file.is_none();
     let current_choice = music_folder && browser.selection_explicit;
-    let footer_height = if music_folder { 3 } else { 2 };
+    let footer_height = if music_folder || browser.folder_playlists.is_some() {
+        3
+    } else {
+        2
+    };
     let list_top = inner.y + path_height + used;
     let list = Rect::new(
         inner.x,
@@ -130,9 +169,17 @@ pub(super) fn browser_dialog(
             list,
         );
     }
-    if app.browser_ready() && browser.entries.is_empty() && browser.palette_file.is_some() {
+    if app.browser_ready()
+        && browser.entries.is_empty()
+        && (browser.palette_file.is_some() || browser.folder_playlists.is_some())
+    {
         frame.render_widget(
-            Paragraph::new(if browser.folder {
+            Paragraph::new(if browser.folder_playlists.is_some() {
+                app.text(
+                    "No folders here. Go to the parent folder.",
+                    "Здесь нет папок. Перейдите выше.",
+                )
+            } else if browser.folder {
                 app.text(
                     "No subfolders. You can choose the current folder.",
                     "Нет подпапок. Можно выбрать текущую папку.",
@@ -162,7 +209,13 @@ pub(super) fn browser_dialog(
         .take(list.height as usize)
     {
         let name = entry.path.file_name().unwrap_or_default().to_string_lossy();
-        let marker = if entry.directory {
+        let marker = if browser.folder_playlists.is_some() {
+            if browser.marked.contains(&entry.path) {
+                "[x]"
+            } else {
+                "[ ]"
+            }
+        } else if entry.directory {
             "DIR"
         } else if browser.palette_file.is_some() {
             "JSON"
@@ -200,6 +253,13 @@ pub(super) fn browser_dialog(
             target: Target::BrowserRow(index),
             enabled: true,
         });
+        if browser.folder_playlists.is_some() {
+            app.view.hits.push(Hit {
+                area: Rect::new(rect.x, rect.y, rect.width.min(3), 1),
+                target: Target::BrowserMark(index),
+                enabled: app.browser_ready(),
+            });
+        }
     }
     let add = if let Some(purpose) = &browser.palette_file {
         match purpose {
@@ -221,6 +281,12 @@ pub(super) fn browser_dialog(
             }
             PaletteFilePicker::Export { .. } => app.text("Current folder", "Текущую папку").into(),
         }
+    } else if browser.folder_playlists.is_some() {
+        format!(
+            "{} ({})",
+            app.text("Create", "Создать"),
+            browser.marked.len()
+        )
     } else if browser.playlist_name.is_some() {
         if browser.selection_explicit {
             app.text("Selected folder", "Выбранную папку").into()
@@ -240,12 +306,16 @@ pub(super) fn browser_dialog(
         add,
         Target::BrowserAdd,
         app.browser_ready()
-            && (browser.folder
-                || !browser.marked.is_empty()
-                || browser
-                    .entries
-                    .get(browser.selected)
-                    .is_some_and(|entry| !entry.directory)),
+            && if browser.folder_playlists.is_some() {
+                !browser.marked.is_empty()
+            } else {
+                browser.folder
+                    || !browser.marked.is_empty()
+                    || browser
+                        .entries
+                        .get(browser.selected)
+                        .is_some_and(|entry| !entry.directory)
+            },
     )];
     if current_choice {
         footer.push((

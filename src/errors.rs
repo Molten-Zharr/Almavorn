@@ -13,6 +13,7 @@ pub enum AppError {
     PlaylistMissing,
     EntryMissing,
     MusicSelectionRequired,
+    FolderSelectionRequired,
     FolderNotReady,
     FolderMissing,
     FolderAlreadyRegistered,
@@ -99,6 +100,10 @@ impl AppError {
             Self::MusicSelectionRequired => language.text(
                 "Select music files first",
                 "Сначала выберите музыкальные файлы.",
+            ),
+            Self::FolderSelectionRequired => language.text(
+                "Check the folders to create playlists.",
+                "Отметьте папки, из которых нужно создать плейлисты.",
             ),
             Self::FolderNotReady => language.text(
                 "Choose an available folder before adding music",

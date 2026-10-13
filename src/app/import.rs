@@ -5,8 +5,8 @@ use super::{
 use crate::errors::AppError;
 use crate::{
     media,
-    model::{Mode, PlaylistKind},
-    store::Change,
+    model::{ImportedTrack, Mode, PlaylistKind},
+    store::{Change, FolderPlaylistImport},
 };
 use anyhow::{Context, Result, ensure};
 use std::{
@@ -30,6 +30,17 @@ enum ImportDestination {
         mode: Mode,
         group_folders: bool,
     },
+    CreateFolders {
+        mode: Mode,
+        group_folders: bool,
+    },
+}
+
+struct ImportedMusic {
+    tracks: Vec<ImportedTrack>,
+    folders: Vec<PathBuf>,
+    errors: Vec<String>,
+    skipped: usize,
 }
 pub(super) struct ImportJob {
     receiver: Background<ImportOutcome>,
@@ -85,6 +96,25 @@ impl App {
             HashSet::new(),
             ImportDestination::Create {
                 name,
+                mode: self.settings.mode,
+                group_folders: group_subfolders,
+            },
+            group_subfolders,
+            recovery,
+        )
+    }
+
+    pub(super) fn start_folder_playlists(
+        &mut self,
+        folders: Vec<PathBuf>,
+        group_subfolders: bool,
+        recovery: Option<Dialog>,
+    ) -> Result<()> {
+        ensure!(!folders.is_empty(), AppError::FolderSelectionRequired);
+        self.start_import_into(
+            folders,
+            HashSet::new(),
+            ImportDestination::CreateFolders {
                 mode: self.settings.mode,
                 group_folders: group_subfolders,
             },
@@ -151,7 +181,7 @@ impl App {
         ensure!(!self.busy(), AppError::LibraryBusy);
         let target = match &destination {
             ImportDestination::Existing(id) => Some(*id),
-            ImportDestination::Create { .. } => None,
+            ImportDestination::Create { .. } | ImportDestination::CreateFolders { .. } => None,
         };
         let creating = target.is_none();
         let grouping = matches!(
@@ -159,98 +189,88 @@ impl App {
             ImportDestination::Create {
                 group_folders: true,
                 ..
+            } | ImportDestination::CreateFolders {
+                group_folders: true,
+                ..
             }
         );
         let mut worker_store = self.store.try_clone()?;
         let unlocked = self.view.editing;
+        let language = self.settings.language;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let progress = Arc::new(AtomicUsize::new(0));
         let worker_progress = progress.clone();
         let receiver = background(self.runtime(), move || {
-            let mut tracks = Vec::new();
-            let mut errors = Vec::new();
-            let mut skipped = 0;
-            let mut candidates = Vec::new();
-            let mut folders = Vec::new();
-            for path in paths {
-                if worker_cancel.load(Ordering::Relaxed) {
-                    anyhow::bail!(AppError::ImportInterrupted);
+            if let ImportDestination::CreateFolders {
+                mode,
+                group_folders,
+            } = &destination
+            {
+                let mut playlists = Vec::new();
+                let mut errors = Vec::new();
+                let mut skipped = 0;
+                for folder in paths {
+                    let name = folder
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .context(AppError::InvalidPathEncoding)?
+                        .chars()
+                        .map(|c| if c.is_control() { ' ' } else { c })
+                        .take(145)
+                        .collect::<String>();
+                    let music = read_music(
+                        vec![folder.clone()],
+                        HashSet::new(),
+                        true,
+                        *group_folders,
+                        recursive,
+                        &worker_cancel,
+                        &worker_progress,
+                    )
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "{} {}: {}",
+                            language.text("Cannot import folder", "Не удалось добавить папку"),
+                            folder.display(),
+                            crate::errors::message(&error, language)
+                        )
+                    })?;
+                    skipped += music.skipped;
+                    let available = 5usize.saturating_sub(errors.len());
+                    errors.extend(music.errors.into_iter().take(available));
+                    playlists.push(FolderPlaylistImport {
+                        name,
+                        tracks: music.tracks,
+                        folders: music.folders,
+                    });
                 }
-                if creating {
-                    ensure!(path.is_dir(), AppError::FolderNotReady);
-                    std::fs::read_dir(&path).context(AppError::FolderNotReady)?;
-                }
-                if path.is_dir() {
-                    match media::scan_audio_files(&path, &worker_cancel, recursive) {
-                        Ok(scan) => {
-                            folders.push(path.canonicalize()?);
-                            candidates.extend(scan.files);
-                            skipped += scan.skipped;
-                            let available = 5usize.saturating_sub(errors.len());
-                            errors.extend(scan.errors.into_iter().take(available));
-                        }
-                        Err(error) => {
-                            if creating {
-                                return Err(error);
-                            }
-                            skipped += 1;
-                            if errors.len() < 5 {
-                                errors.push(format!("{}: {error}", path.display()));
-                            }
-                        }
-                    }
-                } else {
-                    candidates.push(path);
-                }
-            }
-            if grouping {
-                candidates.sort_by(|left, right| {
-                    left.parent()
-                        .cmp(&right.parent())
-                        .then_with(|| left.cmp(right))
+                let change = worker_store.create_folder_playlists(
+                    &playlists,
+                    *mode,
+                    *group_folders,
+                    &worker_cancel,
+                )?;
+                return Ok(ImportOutcome {
+                    change,
+                    errors,
+                    skipped,
                 });
             }
-            let mut seen = known;
-            for path in candidates {
-                if worker_cancel.load(Ordering::Relaxed) {
-                    anyhow::bail!(AppError::ImportInterrupted);
-                }
-                worker_progress.fetch_add(1, Ordering::Relaxed);
-                if path
-                    .canonicalize()
-                    .ok()
-                    .is_some_and(|path| seen.contains(&path))
-                {
-                    skipped += 1;
-                    continue;
-                }
-                match media::read_track(&path) {
-                    Ok(track) => {
-                        if seen.insert(track.path.clone()) {
-                            if let Some(parent) = track.path.parent()
-                                && !folders.iter().any(|folder| parent.starts_with(folder))
-                            {
-                                folders.push(parent.to_owned());
-                            }
-                            tracks.push(track);
-                        } else {
-                            skipped += 1;
-                        }
-                    }
-                    Err(error) => {
-                        skipped += 1;
-                        if errors.len() < 5 {
-                            errors.push(error.to_string());
-                        }
-                    }
-                }
-            }
-            if worker_cancel.load(Ordering::Relaxed) {
-                anyhow::bail!(AppError::ImportInterrupted);
-            }
-            folders.sort();
-            folders.dedup();
+            let ImportedMusic {
+                tracks,
+                folders,
+                errors,
+                skipped,
+            } = read_music(
+                paths,
+                known,
+                creating,
+                grouping,
+                recursive,
+                &worker_cancel,
+                &worker_progress,
+            )?;
             let change = match destination {
                 ImportDestination::Existing(id) => {
                     worker_store.add_tracks_from_folders(id, &tracks, &folders, unlocked)?
@@ -266,6 +286,9 @@ impl App {
                     &folders,
                     group_folders,
                 )?,
+                ImportDestination::CreateFolders { .. } => {
+                    unreachable!("folder playlists are imported above")
+                }
             };
             Ok(ImportOutcome {
                 change,
@@ -288,6 +311,106 @@ impl App {
     }
 }
 
+fn read_music(
+    paths: Vec<PathBuf>,
+    known: HashSet<PathBuf>,
+    creating: bool,
+    grouping: bool,
+    recursive: bool,
+    cancel: &AtomicBool,
+    progress: &AtomicUsize,
+) -> Result<ImportedMusic> {
+    let mut tracks = Vec::new();
+    let mut errors = Vec::new();
+    let mut skipped = 0;
+    let mut candidates = Vec::new();
+    let mut folders = Vec::new();
+    for path in paths {
+        if cancel.load(Ordering::Relaxed) {
+            anyhow::bail!(AppError::ImportInterrupted);
+        }
+        if creating {
+            ensure!(path.is_dir(), AppError::FolderNotReady);
+            std::fs::read_dir(&path).context(AppError::FolderNotReady)?;
+        }
+        if path.is_dir() {
+            match media::scan_audio_files(&path, cancel, recursive) {
+                Ok(scan) => {
+                    folders.push(path.canonicalize()?);
+                    candidates.extend(scan.files);
+                    skipped += scan.skipped;
+                    let available = 5usize.saturating_sub(errors.len());
+                    errors.extend(scan.errors.into_iter().take(available));
+                }
+                Err(error) => {
+                    if creating {
+                        return Err(error);
+                    }
+                    skipped += 1;
+                    if errors.len() < 5 {
+                        errors.push(format!("{}: {error}", path.display()));
+                    }
+                }
+            }
+        } else {
+            candidates.push(path);
+        }
+    }
+    if grouping {
+        candidates.sort_by(|left, right| {
+            left.parent()
+                .cmp(&right.parent())
+                .then_with(|| left.cmp(right))
+        });
+    }
+    let mut seen = known;
+    for path in candidates {
+        if cancel.load(Ordering::Relaxed) {
+            anyhow::bail!(AppError::ImportInterrupted);
+        }
+        progress.fetch_add(1, Ordering::Relaxed);
+        if path
+            .canonicalize()
+            .ok()
+            .is_some_and(|path| seen.contains(&path))
+        {
+            skipped += 1;
+            continue;
+        }
+        match media::read_track(&path) {
+            Ok(track) => {
+                if seen.insert(track.path.clone()) {
+                    if let Some(parent) = track.path.parent()
+                        && !folders.iter().any(|folder| parent.starts_with(folder))
+                    {
+                        folders.push(parent.to_owned());
+                    }
+                    tracks.push(track);
+                } else {
+                    skipped += 1;
+                }
+            }
+            Err(error) => {
+                skipped += 1;
+                if errors.len() < 5 {
+                    errors.push(error.to_string());
+                }
+            }
+        }
+    }
+    if cancel.load(Ordering::Relaxed) {
+        anyhow::bail!(AppError::ImportInterrupted);
+    }
+    folders.sort();
+    folders.dedup();
+    Ok(ImportedMusic {
+        tracks,
+        folders,
+        errors,
+        skipped,
+    })
+}
+
 impl App {
     pub(super) fn poll_import(&mut self) -> Result<()> {
         let outcome = self
@@ -301,7 +424,7 @@ impl App {
                 Ok(outcome) => outcome,
                 Err(error) => {
                     if let Some(dialog) = job.recovery {
-                        self.view.dialog = Some(dialog);
+                        self.restore_import_dialog(dialog);
                     }
                     return Err(error);
                 }
@@ -352,6 +475,11 @@ impl App {
                         .map(|playlist| playlist.entries.len())
                         .sum(),
                 );
+            let created = change
+                .after
+                .playlists
+                .len()
+                .saturating_sub(change.before.playlists.len());
             self.remember(change)?;
             if self.library.pending_selection.is_none()
                 && let Some(mode) = mode
@@ -366,6 +494,12 @@ impl App {
                 self.text("Skipped", "Пропущено"),
                 outcome.skipped
             );
+            if created > 0 {
+                message = format!(
+                    "{}: {created}. {message}",
+                    self.text("Playlists created", "Создано плейлистов")
+                );
+            }
             if let Some(error) = outcome.errors.first() {
                 message.push_str(&format!(
                     ". {}: {error}",

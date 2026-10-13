@@ -72,6 +72,7 @@ impl Panel {
             Self::Add => &[
                 Button(AddFiles),
                 Button(AddFolder),
+                Button(AddFolderPlaylists),
                 Button(AddNew),
                 Button(Undo),
                 Button(Redo),

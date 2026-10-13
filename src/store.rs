@@ -17,6 +17,7 @@ use std::{
 
 mod migration;
 mod playlists;
+pub(crate) use playlists::FolderPlaylistImport;
 mod queries;
 mod statistics;
 use queries::{playlist_access, read_playlists, snapshot};

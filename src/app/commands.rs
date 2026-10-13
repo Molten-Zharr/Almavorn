@@ -175,7 +175,10 @@ impl App {
         }
         let (panel, actions): (Panel, &[Action]) = match menu {
             CommandMenu::Visualizer => unreachable!("Animation choices are built above"),
-            CommandMenu::Add => (Panel::Add, &[AddFiles, AddFolder, AddNew]),
+            CommandMenu::Add => (
+                Panel::Add,
+                &[AddFiles, AddFolder, AddFolderPlaylists, AddNew],
+            ),
             CommandMenu::Playlist => (
                 Panel::PlaylistActions,
                 &[

@@ -379,6 +379,7 @@ impl Settings {
             if matches!(
                 binding.action,
                 crate::input::Action::Filter
+                    | crate::input::Action::AddFolderPlaylists
                     | crate::input::Action::PlaylistFolders
                     | crate::input::Action::CopyPlaylist
                     | crate::input::Action::ComposePlaylists

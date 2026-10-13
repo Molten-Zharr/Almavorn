@@ -150,6 +150,7 @@ pub enum Action {
     ToggleDesk,
     AddFiles,
     AddFolder,
+    AddFolderPlaylists,
     AddNew,
     PlaylistFolders,
     NewPlaylist,
@@ -251,6 +252,7 @@ impl Action {
             Self::ToggleDesk => language.text("Route imported files to the desk or selected playlist.", "Направлять добавляемые файлы на стол либо в выбранный плейлист."),
             Self::AddFiles => language.text("Select music files to import.", "Выбрать музыкальные файлы для добавления."),
             Self::AddFolder => language.text("Select a folder and import its music.", "Выбрать папку и добавить её музыку."),
+            Self::AddFolderPlaylists => language.text("Check folders and create one playlist per folder, named after it. Subfolders are skipped unless groups are enabled.", "Отметить папки и создать из каждой плейлист с ее названием. Подпапки пропускаются, если не включены группы."),
             Self::AddNew => language.text("Scan saved playlist folders, including subfolders, for new tracks. Existing tracks and positions stay unchanged.", "Проверить сохраненные папки плейлиста и вложенные папки на новые композиции. Существующие композиции и позиции сохраняются."),
             Self::PlaylistFolders => language.text("View and manage folders used to find new tracks for this playlist.", "Просмотреть и настроить папки для поиска новых композиций этого плейлиста."),
             Self::NewPlaylist => language.text("Create an empty playlist in the current mode.", "Создать пустой плейлист в текущем режиме."),
@@ -303,6 +305,7 @@ impl Action {
             }
             Self::AddFiles => language.text("Add files", "Добавить файлы"),
             Self::AddFolder => language.text("Add folder", "Добавить папку"),
+            Self::AddFolderPlaylists => language.text("Folders to playlists", "Папки в плейлисты"),
             Self::AddNew => language.text("Add new files", "Добавить новые"),
             Self::PlaylistFolders => language.text("Playlist folders", "Папки плейлиста"),
             Self::NewPlaylist => language.text("New playlist", "Создать плейлист"),
@@ -412,6 +415,15 @@ pub fn default_bindings() -> Vec<Binding> {
             },
         });
     }
+    bindings.push(Binding {
+        action: AddFolderPlaylists,
+        key: KeyPress {
+            key: Key::Char('f'),
+            ctrl: true,
+            alt: false,
+            shift: true,
+        },
+    });
     bindings
 }
 

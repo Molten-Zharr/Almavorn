@@ -1,11 +1,60 @@
 use super::queries::playlist_access;
-use super::{Change, Store, append_track, lock_ordering, playlist_name, unique_playlist_name};
-use crate::{errors::AppError, model::Mode};
+use super::{
+    Change, Store, append_track, insert_playlist_tracks, lock_ordering, playlist_name,
+    unique_playlist_name,
+};
+use crate::{
+    errors::AppError,
+    model::{ImportedTrack, Mode},
+};
 use anyhow::{Context, Result, ensure};
 use rusqlite::params;
-use std::path::Path;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
+};
+
+pub(crate) struct FolderPlaylistImport {
+    pub name: String,
+    pub tracks: Vec<ImportedTrack>,
+    pub folders: Vec<PathBuf>,
+}
 
 impl Store {
+    pub(crate) fn create_folder_playlists(
+        &mut self,
+        playlists: &[FolderPlaylistImport],
+        mode: Mode,
+        group_folders: bool,
+        cancel: &AtomicBool,
+    ) -> Result<Change> {
+        ensure!(!playlists.is_empty(), AppError::FolderSelectionRequired);
+        self.mutate(None, mode, true, |connection| {
+            lock_ordering(connection, mode.key())?;
+            let mut names: HashSet<String> = connection.prepare("SELECT name_fold FROM playlists WHERE mode=?1")?
+                .query_map([mode.key()], |row| row.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
+            names.extend(["sorting desk".into(), "сортировочный стол".into()]);
+            for playlist in playlists {
+                ensure!(!cancel.load(Ordering::Relaxed), AppError::ImportInterrupted);
+                let base = playlist.name.trim();
+                let mut name = base.to_owned();
+                let mut number = 0;
+                while names.contains(&name.to_lowercase()) {
+                    number += 1;
+                    name = format!("{base} ({number})");
+                }
+                let name = playlist_name(&name)?;
+                names.insert(name.to_lowercase());
+                connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position,group_folders) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3),?4)", params![name, name.to_lowercase(), mode.key(), group_folders])?;
+                insert_playlist_tracks(connection, connection.last_insert_rowid(), &playlist.tracks, &playlist.folders)?;
+            }
+            ensure!(!cancel.load(Ordering::Relaxed), AppError::ImportInterrupted);
+            Ok(())
+        })
+    }
+
     pub fn compose_playlists(
         &mut self,
         sources: &[i64],

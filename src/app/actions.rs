@@ -28,6 +28,7 @@ impl App {
                 action,
                 AddFiles
                     | AddFolder
+                    | AddFolderPlaylists
                     | AddNew
                     | NewPlaylist
                     | Rename
@@ -49,7 +50,13 @@ impl App {
         if self.importing()
             && matches!(
                 action,
-                AddFiles | AddFolder | AddNew | ToggleEdit | ToggleDesk | SwitchMode
+                AddFiles
+                    | AddFolder
+                    | AddFolderPlaylists
+                    | AddNew
+                    | ToggleEdit
+                    | ToggleDesk
+                    | SwitchMode
             )
         {
             return false;
@@ -315,11 +322,15 @@ impl App {
                 self.settings.sorting_desk = !self.settings.sorting_desk;
                 self.save_settings()?;
             }
-            AddFiles | AddFolder => {
+            AddFiles | AddFolder | AddFolderPlaylists => {
                 let directory = dirs::audio_dir()
                     .or_else(dirs::home_dir)
                     .unwrap_or(std::env::current_dir()?);
-                self.show_browser(directory, action == AddFolder);
+                if action == AddFolderPlaylists {
+                    self.show_folder_playlists(directory);
+                } else {
+                    self.show_browser(directory, action == AddFolder);
+                }
             }
             AddNew => {
                 let id = self

@@ -74,6 +74,16 @@ and individual command choices. `Ctrl+B`, Esc, or Done finishes arranging.
 Older layouts migrate to three content panels; command blocks become menus
 while hidden command preferences are preserved.
 
+**Add → Folders to playlists** (`Ctrl+Shift+F`) opens a folder picker with
+checkboxes. Check folders with the mouse, Space or Insert; Enter or double-click
+opens a folder. Marks remain when navigating. `Ctrl+A` checks folders in the
+current view, and `Ctrl+D` clears all marks. **Create** makes a separate playlist
+for each checked folder, using its name; occupied names receive a numeric suffix.
+Only files directly in each folder are included by default. **Subfolders as
+groups** (`Ctrl+G`) includes their music as groups inside each new playlist.
+Creation runs in the background and commits all new playlists together;
+Chaos supports undo and redo of the whole addition.
+
 The idle player is compact; playback reveals the waveform. Position and
 volume sliders support dragging. Main panels use subdued border colors; border type and corners follow
 Themes → Font and geometry. Color highlights selection and active headings. New configurations default

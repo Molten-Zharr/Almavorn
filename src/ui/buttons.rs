@@ -146,6 +146,7 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::CloseDialog => Some("Esc".into()),
         Target::BrowserParent => Some("Backspace".into()),
         Target::BrowserMarkAll => Some("Ctrl+A".into()),
+        Target::BrowserClearMarks => Some("Ctrl+D".into()),
         Target::BrowserAdd => Some("Ctrl+Enter".into()),
         Target::BrowserCurrentFolder => Some("Ctrl+Shift+Enter".into()),
         Target::PlaylistAutoName => Some("Ctrl+F".into()),

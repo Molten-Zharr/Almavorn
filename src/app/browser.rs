@@ -36,6 +36,8 @@ pub struct Browser {
     pub selection_explicit: bool,
     pub marked: HashSet<PathBuf>,
     pub folder: bool,
+    /// Some(group_subfolders) selects one playlist per checked directory.
+    pub folder_playlists: Option<bool>,
     pub playlist_name: Option<TextDialog>,
     pub palette_file: Option<PaletteFilePicker>,
     offsets: HashMap<PathBuf, usize>,
@@ -51,6 +53,7 @@ impl Browser {
             selection_explicit: false,
             marked: HashSet::new(),
             folder,
+            folder_playlists: None,
             playlist_name: None,
             palette_file: None,
             offsets: HashMap::new(),
@@ -105,9 +108,47 @@ impl Browser {
             &self.directory
         }
     }
+
+    pub fn can_mark(&self, entry: &BrowserEntry) -> bool {
+        self.palette_file.is_none()
+            && if self.folder_playlists.is_some() {
+                entry.directory
+            } else {
+                !entry.directory
+            }
+    }
+
+    pub(super) fn toggle_mark(&mut self, index: usize) {
+        if let Some(entry) = self.entries.get(index)
+            && self.can_mark(entry)
+            && !self.marked.insert(entry.path.clone())
+        {
+            self.marked.remove(&entry.path);
+        }
+    }
 }
 
 impl App {
+    pub(super) fn show_folder_playlists(&mut self, directory: PathBuf) {
+        self.show_browser(directory, true);
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            browser.folder_playlists = Some(false);
+        }
+    }
+
+    pub(super) fn restore_import_dialog(&mut self, dialog: Dialog) {
+        self.view.dialog = Some(dialog);
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            let directory = browser.directory.clone();
+            let folder = browser.folder;
+            let focus = browser
+                .entries
+                .get(browser.selected)
+                .map(|entry| entry.path.clone());
+            browser.offsets.insert(directory.clone(), browser.offset);
+            self.queue_browser(directory, folder, false, focus);
+        }
+    }
     pub(super) fn choose_palette_import(&mut self) {
         self.show_palette_browser(PaletteFilePicker::Import, None);
     }
@@ -280,7 +321,9 @@ impl App {
             // Restoring navigation focus does not confirm a choice of that child folder.
             browser.selection_explicit = false;
             self.browser_state.ready = true;
-            self.message(self.text("Folder loaded", "Папка прочитана").into());
+            if !self.view.notice_error {
+                self.message(self.text("Folder loaded", "Папка прочитана").into());
+            }
         }
         Ok(())
     }
@@ -344,6 +387,18 @@ impl App {
 
     fn confirm_browser(&mut self, current_folder: bool) -> Result<()> {
         ensure!(self.browser_state.ready, AppError::FolderNotReady);
+        if let Some(Dialog::Browser(browser)) = &self.view.dialog
+            && let Some(group_subfolders) = browser.folder_playlists
+        {
+            let mut folders: Vec<_> = browser.marked.iter().cloned().collect();
+            folders.sort();
+            ensure!(!folders.is_empty(), AppError::FolderSelectionRequired);
+            let recovery = self.view.dialog.clone();
+            self.start_folder_playlists(folders, group_subfolders, recovery)?;
+            self.cancel_browser();
+            self.view.dialog = None;
+            return Ok(());
+        }
         let folder = if let Some(Dialog::Browser(browser)) = &self.view.dialog {
             if current_folder {
                 browser.directory.clone()
