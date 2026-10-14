@@ -320,6 +320,15 @@ fn help_stops_at_its_last_page_and_keeps_wrapped_content_visible_after_resizing(
     for language in [Language::Russian, Language::English] {
         app.settings.language = language;
         for (width, height) in [(140, 45), (70, 30), (32, 18)] {
+            // Request the final page directly, independently of keyboard scrolling.
+            // Its content can grow without changing the navigation expectation.
+            app.view.dialog = Some(Dialog::Help { offset: usize::MAX });
+            let expected = render(&mut app, width, height).backend().buffer().clone();
+            let expected_offset = match app.view.dialog {
+                Some(Dialog::Help { offset }) => offset,
+                _ => unreachable!(),
+            };
+            assert!(expected_offset > 0);
             app.action(Action::Help).unwrap();
             render(&mut app, width, height);
             let mut reached_bottom = false;
@@ -335,16 +344,11 @@ fn help_stops_at_its_last_page_and_keeps_wrapped_content_visible_after_resizing(
                     _ => unreachable!(),
                 };
                 if before == after {
-                    let text: String = terminal
-                        .backend()
-                        .buffer()
-                        .content
-                        .iter()
-                        .map(|cell| cell.symbol())
-                        .collect();
-                    assert!(
-                        text.contains(app.text("typing.", "мышью.")),
-                        "{width}x{height}: {text}"
+                    assert_eq!(after, expected_offset, "{width}x{height}");
+                    assert_eq!(
+                        terminal.backend().buffer(),
+                        &expected,
+                        "{width}x{height}: scrolling must reach the final help page"
                     );
                     reached_bottom = true;
                     break;

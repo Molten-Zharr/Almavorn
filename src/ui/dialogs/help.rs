@@ -327,3 +327,57 @@ pub(super) fn help_dialog(
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Language;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[test]
+    fn wrapped_guide_tail_is_visible_on_the_last_body_row_and_cannot_scroll_past_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = App::new(directory.path()).unwrap();
+        for language in [Language::Russian, Language::English] {
+            app.settings.language = language;
+            let marker = app.text("LAST LINE", "ПОСЛЕДНЯЯ");
+            for (width, height) in [(86, 36), (64, 21), (26, 9)] {
+                let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+                let inner = Rect::new(0, 0, width, height);
+                let palette = Palette::new(&app);
+                // The final paragraph itself exceeds the viewport and must be
+                // partially rendered, including its last line after wrapping.
+                let guide = vec![
+                    "Earlier guide section".repeat(4),
+                    format!("{}\n{marker}", "wrapped words ".repeat(200)),
+                ];
+                let mut offset = usize::MAX;
+                terminal
+                    .draw(|frame| {
+                        help_dialog(frame, &mut app, &mut offset, inner, guide.clone(), palette);
+                    })
+                    .unwrap();
+                assert!(offset > 0);
+                let maximum = offset;
+                // The last three rows are reserved for the dialog footer.
+                let body_last_y = inner.bottom() - 4;
+                let last_line: String = (inner.x..inner.right())
+                    .map(|x| terminal.backend().buffer()[(x, body_last_y)].symbol())
+                    .collect();
+                assert_eq!(last_line.trim(), marker, "{width}x{height}, {language:?}");
+
+                offset += 1;
+                terminal
+                    .draw(|frame| {
+                        help_dialog(frame, &mut app, &mut offset, inner, guide.clone(), palette);
+                    })
+                    .unwrap();
+                assert_eq!(offset, maximum);
+                let last_line: String = (inner.x..inner.right())
+                    .map(|x| terminal.backend().buffer()[(x, body_last_y)].symbol())
+                    .collect();
+                assert_eq!(last_line.trim(), marker, "{width}x{height}, {language:?}");
+            }
+        }
+    }
+}
