@@ -5,15 +5,16 @@ use super::{
     database::{DatabaseJob, LibraryJob},
     import::ImportJob,
     playback,
+    playback_queue::PlaybackQueue,
 };
 use crate::{
     audio::Audio,
-    model::{Entry, Language, Mode, Playlist, Settings, Track},
+    model::{Language, Mode, Playlist, Settings, Track},
     store::Change,
 };
 use ratatui::layout::{Position, Rect};
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::Arc,
 };
@@ -47,10 +48,7 @@ pub struct PlaybackState {
     pub waveform: Option<Vec<f32>>,
     pub(super) waveform_job: Option<playback::WaveformJob>,
     pub(super) pending_waveform: Option<(PathBuf, u64)>,
-    pub(super) queue: Arc<[Entry]>,
-    pub(super) queue_index: usize,
-    pub(super) marked_only: bool,
-    pub(super) shuffle_history: VecDeque<usize>,
+    pub(super) queue: PlaybackQueue,
     pub(super) audio: Option<Audio>,
     pub(super) preparation: LatestJob<playback::PlaybackRequest, crate::audio::PreparedAudio>,
     pub(super) seek: LatestJob<playback::SeekRequest, crate::audio::PreparedAudio>,
