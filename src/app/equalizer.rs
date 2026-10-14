@@ -6,6 +6,19 @@ use crate::{
 use anyhow::Result;
 
 impl App {
+    pub(super) fn close_equalizer_presets(&mut self) -> bool {
+        if self.view.workspace.gesture.is_some() {
+            return false;
+        }
+        if let Some(Dialog::Equalizer { presets, .. }) = &mut self.view.dialog
+            && *presets
+        {
+            *presets = false;
+            return true;
+        }
+        false
+    }
+
     pub(super) fn open_equalizer(&mut self) {
         self.cancel_workspace_drag();
         self.view.dialog = Some(Dialog::Equalizer {

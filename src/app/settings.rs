@@ -4,13 +4,14 @@ mod items;
 
 use super::{App, Dialog, Target, TextPurpose, bounded};
 use crate::{
+    errors::AppError,
     input::{Key, KeyPress},
     model::{Language, Placement},
     preferences::{
         BorderWeight, Corners, FontFace, MAX_FONT_SIZE, MIN_FONT_SIZE, PlaybackTimeline, color_hex,
     },
 };
-use anyhow::Result;
+use anyhow::{Result, ensure};
 pub(crate) use files::SettingsFileJob;
 pub(crate) use items::{SettingControl, SettingGroup};
 use ratatui::layout::Rect;
@@ -149,6 +150,42 @@ fn cycle_index(current: usize, length: usize, direction: i64) -> usize {
 }
 
 impl App {
+    pub(super) fn capture_binding_key(&mut self, index: usize, key: KeyPress) -> Result<()> {
+        let key = key.normalized();
+        ensure!(
+            !matches!(
+                key.key,
+                Key::Tab
+                    | Key::Up
+                    | Key::Down
+                    | Key::Left
+                    | Key::Right
+                    | Key::Home
+                    | Key::End
+                    | Key::PageUp
+                    | Key::PageDown
+            ) || key.ctrl
+                || key.alt,
+            AppError::ReservedShortcut
+        );
+        ensure!(
+            !self
+                .settings
+                .bindings
+                .iter()
+                .enumerate()
+                .any(|(other, binding)| other != index && binding.key == key),
+            AppError::ShortcutConflict
+        );
+        self.settings.bindings[index].key = key;
+        self.save_settings()?;
+        self.view.settings.page = SettingsPage::Shortcuts;
+        self.view.settings.selected = 1 + index;
+        self.view.settings.focus = SettingsFocus::Parameters;
+        self.show_settings();
+        Ok(())
+    }
+
     pub fn settings_page(&self) -> SettingsPage {
         self.view.settings.page
     }

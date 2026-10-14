@@ -1,3 +1,6 @@
+mod keyboard;
+mod text;
+
 use super::{App, Browser, SettingsCatalog, SettingsEdit, bounded, database::DatabaseOutcome};
 use crate::errors::AppError;
 use crate::model::{Language, Playlist, Track};

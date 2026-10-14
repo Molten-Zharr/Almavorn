@@ -7,6 +7,27 @@ use anyhow::Result;
 use ratatui::layout::Position;
 
 impl App {
+    pub(super) fn panels_key(&mut self, key: KeyPress) -> Result<()> {
+        if !key.ctrl
+            && !key.alt
+            && let Some(Dialog::Panels { selected, .. }) = &self.view.dialog
+        {
+            let selected = *selected;
+            match key.key {
+                Key::Left | Key::Right => {
+                    self.expand_panel_category(key.key == Key::Right);
+                    return Ok(());
+                }
+                Key::Char(' ') => {
+                    self.activate_panel_row(selected, true)?;
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
+        self.dialog_navigation_key(key)
+    }
+
     pub(crate) fn activate_panel_row(&mut self, index: usize, visibility: bool) -> Result<()> {
         let Some(Dialog::Panels { selected, expanded }) = &mut self.view.dialog else {
             return Ok(());

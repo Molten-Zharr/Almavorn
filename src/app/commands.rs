@@ -36,6 +36,41 @@ pub struct CommandItem {
 }
 
 impl App {
+    pub(super) fn commands_key(&mut self, key: KeyPress) -> Result<()> {
+        if self.view.toolbar_selected.is_some() && !key.ctrl && !key.alt {
+            if key.key == Key::Tab {
+                self.close_dialog();
+                self.workspace_key(key)?;
+                return Ok(());
+            }
+            if matches!(key.key, Key::Left | Key::Right) {
+                self.close_dialog();
+                self.toolbar_key(key)?;
+                if let Some(Target::CommandMenu(menu)) = self
+                    .view
+                    .toolbar_selected
+                    .and_then(|index| self.toolbar_items().into_iter().nth(index))
+                    .map(|item| item.target)
+                {
+                    self.open_commands(menu);
+                }
+                return Ok(());
+            }
+        }
+        let normalized = key.normalized();
+        if let Some(action) = self
+            .settings
+            .bindings
+            .iter()
+            .find(|binding| binding.key == normalized)
+            .map(|binding| binding.action)
+        {
+            self.view.dialog = None;
+            return self.action(action);
+        }
+        self.dialog_navigation_key(key)
+    }
+
     pub(crate) fn command_selection(
         items: &[CommandItem],
         selected: usize,
