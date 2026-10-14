@@ -7,6 +7,10 @@ use anyhow::Result;
 use ratatui::layout::Position;
 
 impl App {
+    fn workspace_fits(&self, root: &Dock) -> bool {
+        crate::layout::workspace_metrics(self).fits(root, self.view.workspace.bounds)
+    }
+
     pub(super) fn panels_key(&mut self, key: KeyPress) -> Result<()> {
         if !key.ctrl
             && !key.alt
@@ -244,7 +248,7 @@ impl App {
                 {
                     *ratio =
                         ((u32::from(cut) * 1000 / u32::from(length.max(1))) as u16).clamp(1, 999);
-                    if crate::ui::workspace_fits(self, &root) {
+                    if self.workspace_fits(&root) {
                         self.settings.preferences.workspace.root = Some(root.clone());
                         self.view.workspace.root = Some(root);
                     }
@@ -339,7 +343,7 @@ impl App {
                         remaining.insert(panel, target, edge);
                         root = remaining;
                     }
-                    if crate::ui::workspace_fits(self, &root) {
+                    if self.workspace_fits(&root) {
                         self.settings.preferences.workspace.root = Some(root.clone());
                         self.view.workspace.root = Some(root);
                         self.save_settings()?;
@@ -469,7 +473,7 @@ impl App {
                 && let Some(mut root) = self.view.workspace.root.clone()
             {
                 root.swap(panel, neighbor);
-                if crate::ui::workspace_fits(self, &root) {
+                if self.workspace_fits(&root) {
                     self.settings.preferences.workspace.root = Some(root.clone());
                     self.view.workspace.root = Some(root);
                     self.save_settings()?;
@@ -493,7 +497,7 @@ impl App {
                 } else {
                     ratio.saturating_add(30).min(999)
                 };
-                if crate::ui::workspace_fits(self, &root) {
+                if self.workspace_fits(&root) {
                     self.settings.preferences.workspace.root = Some(root.clone());
                     self.view.workspace.root = Some(root);
                     self.save_settings()?;

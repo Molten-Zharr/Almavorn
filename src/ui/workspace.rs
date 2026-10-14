@@ -4,11 +4,15 @@ use super::{
     theme::Palette,
     widgets::block,
 };
+use crate::layout::{
+    title_reserved,
+    workspace::{drop_preview, resize_handle},
+    workspace_metrics,
+};
 use crate::{
     app::{App, CommandMenu, Hit, Target},
     input::Action,
-    model::Placement,
-    workspace::{Axis, Dock, Edge, Panel, SplitArea},
+    workspace::{Axis, Panel},
 };
 use ratatui::{
     Frame,
@@ -17,303 +21,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-
-fn automatic(app: &App, area: Rect) -> Dock {
-    let list_horizontal = area.width >= 55
-        && matches!(
-            app.settings.preferences.playlist_placement,
-            Placement::Left | Placement::Right
-        );
-    let list_first = matches!(
-        app.settings.preferences.playlist_placement,
-        Placement::Left | Placement::Top
-    );
-    let list_ratio = if list_horizontal { 220 } else { 200 };
-    let (first, second) = if list_first {
-        (Panel::Playlists, Panel::Tracks)
-    } else {
-        (Panel::Tracks, Panel::Playlists)
-    };
-    let library = Dock::split(
-        if list_horizontal {
-            Axis::Horizontal
-        } else {
-            Axis::Vertical
-        },
-        if list_first {
-            list_ratio
-        } else {
-            1000 - list_ratio
-        },
-        Dock::Panel(first),
-        Dock::Panel(second),
-    );
-    let side_player = area.width >= 80
-        && matches!(
-            app.settings.preferences.player_placement,
-            Placement::Left | Placement::Right
-        );
-    let player_first = matches!(
-        app.settings.preferences.player_placement,
-        Placement::Left | Placement::Top
-    );
-    let player_ratio = if side_player {
-        250
-    } else {
-        (u32::from(player::preferred_height(app, area.width)) * 1000
-            / u32::from(area.height.max(1))) as u16
-    };
-    let player = Dock::Panel(Panel::Player);
-    if player_first {
-        Dock::split(
-            if side_player {
-                Axis::Horizontal
-            } else {
-                Axis::Vertical
-            },
-            player_ratio,
-            player,
-            library,
-        )
-    } else {
-        Dock::split(
-            if side_player {
-                Axis::Horizontal
-            } else {
-                Axis::Vertical
-            },
-            1000u16.saturating_sub(player_ratio),
-            library,
-            player,
-        )
-    }
-}
-
-fn min_width(app: &App, node: &Dock) -> u16 {
-    match node {
-        Dock::Panel(panel) => {
-            if app.settings.preferences.workspace.hidden.contains(panel) {
-                0
-            } else {
-                match panel {
-                    Panel::Playlists => (title_reserved(app, *panel)
-                        + Span::raw(panel.name(app.settings.preferences.language)).width() as u16)
-                        .max(18),
-                    Panel::Tracks => 30,
-                    _ => 20,
-                }
-            }
-        }
-        Dock::Split {
-            axis,
-            first,
-            second,
-            ..
-        } => {
-            let (left, right) = (min_width(app, first), min_width(app, second));
-            if *axis == Axis::Horizontal {
-                left.saturating_add(right)
-            } else {
-                left.max(right)
-            }
-        }
-    }
-}
-
-fn title_reserved(app: &App, panel: Panel) -> u16 {
-    if app.view.layout_editing {
-        13
-    } else if panel == Panel::Playlists
-        && app.control_visible(Panel::PlaylistActions, Action::NewPlaylist)
-    {
-        button_width(app, "+", &Target::Action(Action::NewPlaylist)).saturating_add(6)
-    } else {
-        9
-    }
-}
-
-fn axis(app: &App, desired: Axis, first: &Dock, second: &Dock, width: u16) -> Axis {
-    if desired == Axis::Horizontal
-        && min_width(app, first).saturating_add(min_width(app, second)) > width
-    {
-        Axis::Vertical
-    } else {
-        desired
-    }
-}
-
-fn minimum(app: &App, node: &Dock, width: u16, compact: bool) -> u16 {
-    match node {
-        Dock::Panel(panel) => {
-            if app.settings.preferences.workspace.hidden.contains(panel) {
-                return 0;
-            }
-            if app.settings.preferences.workspace.collapsed.contains(panel) {
-                return if compact { 1 } else { 2 };
-            }
-            if *panel == Panel::Player {
-                return player::content_height(app, width.saturating_sub(2))
-                    + if compact { 1 } else { 2 };
-            }
-            match panel {
-                Panel::Playlists => {
-                    if compact {
-                        3
-                    } else {
-                        4
-                    }
-                }
-                Panel::Tracks => {
-                    if compact {
-                        4
-                    } else {
-                        5
-                    }
-                }
-                Panel::Player => {
-                    if compact {
-                        5
-                    } else {
-                        6
-                    }
-                }
-                _ => 3,
-            }
-        }
-        Dock::Split {
-            axis: desired,
-            ratio,
-            first,
-            second,
-        } => {
-            if min_width(app, first) == 0 {
-                return minimum(app, second, width, compact);
-            }
-            if min_width(app, second) == 0 {
-                return minimum(app, first, width, compact);
-            }
-            if axis(app, *desired, first, second, width) == Axis::Vertical {
-                minimum(app, first, width, compact)
-                    .saturating_add(minimum(app, second, width, compact))
-            } else {
-                let cut = width_cut(app, width, *ratio, first, second);
-                minimum(app, first, cut, compact).max(minimum(
-                    app,
-                    second,
-                    width.saturating_sub(cut),
-                    compact,
-                ))
-            }
-        }
-    }
-}
-
-fn width_cut(app: &App, width: u16, ratio: u16, first: &Dock, second: &Dock) -> u16 {
-    let left = min_width(app, first);
-    let right = min_width(app, second);
-    ((u32::from(width) * u32::from(ratio) / 1000) as u16).clamp(
-        left.min(width),
-        width.saturating_sub(right).max(left.min(width)),
-    )
-}
-
-fn arrange(app: &mut App, node: &Dock, area: Rect, compact: bool, path: &mut Vec<bool>) {
-    match node {
-        Dock::Panel(panel) => {
-            if !app.settings.preferences.workspace.hidden.contains(panel) {
-                app.view.workspace.areas.push((*panel, area));
-            }
-        }
-        Dock::Split {
-            axis: desired,
-            ratio,
-            first,
-            second,
-        } => {
-            if min_width(app, first) == 0 {
-                path.push(true);
-                arrange(app, second, area, compact, path);
-                path.pop();
-                return;
-            }
-            if min_width(app, second) == 0 {
-                path.push(false);
-                arrange(app, first, area, compact, path);
-                path.pop();
-                return;
-            }
-            let axis = axis(app, *desired, first, second, area.width);
-            let (length, left, right) = if axis == Axis::Horizontal {
-                (area.width, min_width(app, first), min_width(app, second))
-            } else {
-                (
-                    area.height,
-                    minimum(app, first, area.width, compact),
-                    minimum(app, second, area.width, compact),
-                )
-            };
-            let first_collapsed = all_collapsed(app, first);
-            let second_collapsed = all_collapsed(app, second);
-            let wanted = if first_collapsed {
-                left
-            } else if second_collapsed {
-                length.saturating_sub(right)
-            } else {
-                (u32::from(length) * u32::from(*ratio) / 1000) as u16
-            };
-            let cut = wanted.clamp(
-                left.min(length),
-                length.saturating_sub(right).max(left.min(length)),
-            );
-            app.view.workspace.splits.push(SplitArea {
-                path: path.clone(),
-                area,
-                axis,
-                cut,
-                minimum: (left, right),
-            });
-            let (a, b) = if axis == Axis::Horizontal {
-                (
-                    Rect::new(area.x, area.y, cut, area.height),
-                    Rect::new(
-                        area.x + cut,
-                        area.y,
-                        area.width.saturating_sub(cut),
-                        area.height,
-                    ),
-                )
-            } else {
-                (
-                    Rect::new(area.x, area.y, area.width, cut),
-                    Rect::new(
-                        area.x,
-                        area.y + cut,
-                        area.width,
-                        area.height.saturating_sub(cut),
-                    ),
-                )
-            };
-            path.push(false);
-            arrange(app, first, a, compact, path);
-            path.pop();
-            path.push(true);
-            arrange(app, second, b, compact, path);
-            path.pop();
-        }
-    }
-}
-
-fn all_collapsed(app: &App, node: &Dock) -> bool {
-    match node {
-        Dock::Panel(panel) => {
-            app.settings.preferences.workspace.hidden.contains(panel)
-                || app.settings.preferences.workspace.collapsed.contains(panel)
-        }
-        Dock::Split { first, second, .. } => {
-            all_collapsed(app, first) && all_collapsed(app, second)
-        }
-    }
-}
 
 fn chrome(
     frame: &mut Frame,
@@ -471,16 +178,13 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     app.view.workspace.splits.clear();
     app.view.playlist_area = Rect::default();
     app.view.tracks_area = Rect::default();
-    let root = app
-        .settings
-        .preferences
-        .workspace
-        .root
-        .clone()
-        .and_then(Dock::content_only)
-        .unwrap_or_else(|| automatic(app, area));
-    let compact = minimum(app, &root, area.width, false) > area.height;
-    if minimum(app, &root, area.width, compact) > area.height {
+    let geometry =
+        workspace_metrics(app).arrange(app.settings.preferences.workspace.root.as_ref(), area);
+    let compact = geometry.compact;
+    app.view.workspace.areas = geometry.areas;
+    app.view.workspace.splits = geometry.splits;
+    app.view.workspace.root = Some(geometry.root);
+    if !geometry.fits {
         frame.render_widget(
             Paragraph::new(app.text(
                 "Enlarge the window, reduce zoom, or hide blocks via Ctrl+B.",
@@ -489,11 +193,8 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             .style(palette.text()),
             area,
         );
-        app.view.workspace.root = Some(root);
         return;
     }
-    arrange(app, &root, area, compact, &mut Vec::new());
-    app.view.workspace.root = Some(root);
     for (panel, rect) in app.view.workspace.areas.clone() {
         let inner = chrome(frame, app, panel, rect, compact, palette);
         if app
@@ -521,25 +222,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         .enumerate()
         .filter(|_| app.view.layout_editing)
     {
-        let rect = match split.axis {
-            Axis::Horizontal => Rect::new(
-                split.area.x + split.cut.saturating_sub(1),
-                split.area.y + 1,
-                2,
-                split.area.height.saturating_sub(1),
-            ),
-            Axis::Vertical => Rect::new(
-                split.area.x,
-                split.area.y
-                    + if compact {
-                        split.cut
-                    } else {
-                        split.cut.saturating_sub(1)
-                    },
-                split.area.width,
-                if compact { 1 } else { 2 },
-            ),
-        };
+        let rect = resize_handle(split, compact);
         app.view.hits.push(Hit {
             area: rect.intersection(area),
             target: Target::PanelResize(index),
@@ -559,20 +242,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             .iter()
             .find(|(value, _)| *value == panel)
     {
-        let mut preview = *rect;
-        match edge {
-            Edge::Left => preview.width /= 2,
-            Edge::Right => {
-                preview.x += preview.width / 2;
-                preview.width -= preview.width / 2;
-            }
-            Edge::Top => preview.height /= 2,
-            Edge::Bottom => {
-                preview.y += preview.height / 2;
-                preview.height -= preview.height / 2;
-            }
-            Edge::Center => {}
-        }
+        let preview = drop_preview(*rect, edge);
         frame.render_widget(
             Block::default()
                 .borders(Borders::ALL)
@@ -580,8 +250,4 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             preview,
         );
     }
-}
-
-pub(super) fn fits(app: &App, root: &Dock) -> bool {
-    minimum(app, root, app.view.workspace.bounds.width, true) <= app.view.workspace.bounds.height
 }

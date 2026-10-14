@@ -3,11 +3,12 @@ use super::{
     theme::Palette,
     widgets::clean,
 };
+use crate::layout::{player_metrics, player_target};
 use crate::{
-    app::{App, CommandMenu, Hit, Target},
+    app::{App, Hit, Target},
     input::Action,
-    model::{RepeatMode, duration_text},
-    preferences::{FontFace, PlaybackTimeline},
+    model::duration_text,
+    preferences::PlaybackTimeline,
     workspace::Panel,
 };
 use ratatui::{
@@ -17,127 +18,11 @@ use ratatui::{
     widgets::{Paragraph, Sparkline},
 };
 
-fn controls(app: &App) -> Vec<(Action, &'static str)> {
-    [
-        (Action::Previous, "‹"),
-        (Action::TogglePlay, if app.paused() { "[▶]" } else { "[‖]" }),
-        (Action::Stop, "[■]"),
-        (Action::Next, "›"),
-        (
-            Action::CycleRepeat,
-            match (
-                app.settings.preferences.repeat,
-                app.settings.preferences.appearance.font,
-            ) {
-                (RepeatMode::Off, FontFace::DejaVuMono) => "[↻]",
-                (RepeatMode::Playlist, FontFace::DejaVuMono) => "[↻∞]",
-                (RepeatMode::Track, FontFace::DejaVuMono) => "[↻1]",
-                (RepeatMode::Off, _) => "[⟳]",
-                (RepeatMode::Playlist, _) => "[⟳∞]",
-                (RepeatMode::Track, _) => "[⟳1]",
-            },
-        ),
-        (
-            Action::ToggleShuffle,
-            if app.settings.preferences.appearance.font == FontFace::DejaVuMono {
-                "[⇄]"
-            } else {
-                "[↔]"
-            },
-        ),
-        (Action::Equalizer, "[EQ]"),
-        (Action::PlaybackTuner, "[FX]"),
-        (Action::CycleVisualizer, "[VIS↓]"),
-    ]
-    .into_iter()
-    .filter(|(action, _)| app.control_visible(Panel::Player, *action))
-    .collect()
-}
-
-pub(super) fn preferred_height(app: &App, width: u16) -> u16 {
-    content_height(app, width.saturating_sub(2)) + 2
-}
-
-pub(super) fn content_height(app: &App, width: u16) -> u16 {
-    base_height(app, width)
-        + if app.playback_active()
-            && app.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Waveform
-        {
-            4
-        } else {
-            0
-        }
-}
-
-fn controls_width(app: &App) -> u16 {
-    controls(app)
-        .iter()
-        .map(|(action, label)| button_width(app, label, &control_target(*action)).saturating_add(1))
-        .fold(0, u16::saturating_add)
-}
-
-fn control_target(action: Action) -> Target {
-    if action == Action::CycleVisualizer {
-        Target::CommandMenu(CommandMenu::Visualizer)
-    } else {
-        Target::Action(action)
-    }
-}
-
-fn volume_width(app: &App, width: u16) -> u16 {
-    let available = width.saturating_sub(controls_width(app).saturating_add(15));
-    (width / 3).clamp(24, 80).min(available.max(24)).min(width)
-}
-
-fn stack_volume(app: &App, width: u16) -> bool {
-    width < 70
-        || controls_width(app)
-            .saturating_add(volume_width(app, width))
-            .saturating_add(15)
-            > width
-}
-
-fn control_cells(app: &App, width: u16) -> Vec<(Rect, Action, &'static str)> {
-    let mut x: u16 = 0;
-    let mut y = 0;
-    controls(app)
-        .into_iter()
-        .map(|(action, label)| {
-            let size = button_width(app, label, &control_target(action)).min(width);
-            if x > 0 && x.saturating_add(size) > width {
-                x = 0;
-                y += 1;
-            }
-            let rect = Rect::new(x, y, size, 1);
-            x = x.saturating_add(size + 1);
-            (rect, action, label)
-        })
-        .collect()
-}
-
-fn control_rows(app: &App, width: u16) -> u16 {
-    control_cells(app, width)
-        .last()
-        .map_or(1, |(area, ..)| area.bottom())
-}
-
-fn base_height(app: &App, width: u16) -> u16 {
-    let height = if stack_volume(app, width) {
-        control_rows(app, width).saturating_add(3)
-    } else {
-        2
-    };
-    height + loop_rows(app, width)
-}
-
-fn loop_rows(app: &App, width: u16) -> u16 {
-    u16::from(width < 70 && app.marked_playback_count().is_some())
-}
-
 pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     if area.height < 2 || area.width < 8 {
         return;
     }
+    let geometry = player_metrics(app).arrange(area);
     let mut title = if app.preparing_playback() && !app.playback_active() {
         app.text("Preparing audio…", "Подготовка аудио…").to_owned()
     } else if let Some(track) = app
@@ -164,7 +49,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         .to_owned()
     };
     let mut title_width = area.width;
-    let loop_rows = loop_rows(app, area.width);
+    let loop_rows = geometry.loop_rows;
     if let Some(count) = app.marked_playback_count() {
         let caption = format!("{}: {count}", app.text("Checked loop", "Повтор отметок"));
         let mut caption_width = area.width;
@@ -201,42 +86,19 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         })),
         Rect::new(area.x, area.y, title_width, 1),
     );
-    let row = Rect::new(area.x, area.y + 1 + loop_rows, area.width, 1);
-    let stacked = stack_volume(app, area.width);
-    let control_rows = control_rows(app, area.width);
-    let volume_width = if stacked {
-        area.width
-    } else {
-        volume_width(app, area.width)
-    };
-    let volume_area = Rect::new(
-        row.right().saturating_sub(volume_width),
-        row.y + if stacked { control_rows } else { 0 },
-        volume_width,
-        1,
-    );
-    let mut x = row.x;
-    for (cell, action, label) in control_cells(app, area.width) {
-        let rect = Rect::new(row.x + cell.x, row.y + cell.y, cell.width, cell.height);
+    for (rect, action, label) in geometry.controls {
         quiet_button(
             frame,
             app,
             rect,
             label,
-            control_target(action),
+            player_target(action),
             app.allowed(action),
             palette,
         );
-        x = rect.right() + 1;
     }
-    volume(frame, app, volume_area, palette);
-    let progress = if !stacked {
-        Rect::new(x + 1, row.y, volume_area.x.saturating_sub(x + 2), 1)
-    } else if area.height >= base_height(app, area.width) {
-        Rect::new(area.x, volume_area.bottom(), area.width, 1)
-    } else {
-        Rect::default()
-    };
+    volume(frame, app, geometry.volume, palette);
+    let progress = geometry.progress;
     let duration = app
         .playback
         .current
@@ -274,12 +136,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             1,
         ),
     );
-    let wave_y = area.y + base_height(app, area.width);
-    if app.playback_active()
-        && app.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Waveform
-        && wave_y + 4 <= area.bottom()
-    {
-        let wave = Rect::new(area.x, wave_y, area.width, 4);
+    if let Some(wave) = geometry.waveform {
         app.view.waveform_area = wave;
         waveform(frame, app, wave, ratio, palette);
         app.view.hits.push(Hit {

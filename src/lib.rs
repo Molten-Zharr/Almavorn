@@ -4,6 +4,7 @@ pub mod color_picker;
 pub mod equalizer;
 pub mod errors;
 pub mod input;
+mod layout;
 pub mod media;
 pub mod model;
 pub mod preferences;

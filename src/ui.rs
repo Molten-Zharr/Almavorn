@@ -11,10 +11,6 @@ mod visualizer;
 mod widgets;
 mod workspace;
 
-pub(crate) fn workspace_fits(app: &App, root: &crate::workspace::Dock) -> bool {
-    workspace::fits(app, root)
-}
-
 use self::{dialogs::render_dialog, theme::Palette};
 use crate::{
     app::{App, Target},
