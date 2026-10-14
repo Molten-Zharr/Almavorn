@@ -107,7 +107,7 @@ pub(super) fn browser_dialog(
             if browser.folder {
                 format!(
                     "[{}] {}",
-                    if app.settings.scan_subfolders {
+                    if app.settings.preferences.scan_subfolders {
                         'x'
                     } else {
                         ' '

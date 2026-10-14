@@ -16,8 +16,8 @@ mod gui_fonts;
 
 fn render(app: &mut App, output: &Path, name: &str, columns: u16, rows: u16) -> Result<()> {
     let backend = gui_fonts::backend(
-        app.settings.appearance.font,
-        app.settings.appearance.font_size,
+        app.settings.preferences.appearance.font,
+        app.settings.preferences.appearance.font_size,
         columns,
         rows,
     );
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             app.settings.palettes.iter().any(|item| item.id == palette),
             "Unknown preview palette: {palette}"
         );
-        app.settings.appearance.palette_ids = [palette.clone(), palette];
+        app.settings.preferences.appearance.palette_ids = [palette.clone(), palette];
     }
     for (index, page) in SettingsPage::ALL.into_iter().enumerate() {
         app.open_settings_page(page);

@@ -110,9 +110,9 @@ fn pinned_fx_edits_follow_the_playing_file_and_survive_profiles_playlists_and_re
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     let tracks = library_tracks(&mut app, &directory);
-    app.settings.tuner.speed = 120;
-    let global = app.settings.tuner.clone();
-    let equalizer = app.settings.equalizer.clone();
+    app.settings.preferences.tuner.speed = 120;
+    let global = app.settings.preferences.tuner.clone();
+    let equalizer = app.settings.preferences.equalizer.clone();
     app.playback.current = Some(tracks[0].clone());
     // Library selection is independent from the track whose FX are being edited.
     app.library.selected_entry = Some(999);
@@ -164,8 +164,8 @@ fn pinned_fx_edits_follow_the_playing_file_and_survive_profiles_playlists_and_re
         reverse: true,
     };
     assert_eq!(app.tuner_settings(), &pinned);
-    assert_eq!(app.settings.tuner, global);
-    assert_eq!(app.settings.equalizer, equalizer);
+    assert_eq!(app.settings.preferences.tuner, global);
+    assert_eq!(app.settings.preferences.equalizer, equalizer);
     saved(&mut app);
     assert_eq!(app.settings.profiles[0].preferences.tuner, global);
 
@@ -184,7 +184,7 @@ fn pinned_fx_edits_follow_the_playing_file_and_survive_profiles_playlists_and_re
     drop(app);
 
     let mut app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.tuner, global);
+    assert_eq!(app.settings.preferences.tuner, global);
     let change = app.store.create_playlist("Same file", Mode::Chaos).unwrap();
     let playlist = change
         .after
@@ -227,12 +227,12 @@ fn reset_preserves_the_pin_and_unpin_restores_global_fx_without_changing_other_t
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     let tracks = library_tracks(&mut app, &directory);
-    app.settings.tuner = TunerSettings {
+    app.settings.preferences.tuner = TunerSettings {
         speed: 130,
         bass: 25,
         ..Default::default()
     };
-    let global = app.settings.tuner.clone();
+    let global = app.settings.preferences.tuner.clone();
     app.settings.track_tuners.insert(
         tracks[1].path.clone(),
         TunerSettings {
@@ -247,7 +247,7 @@ fn reset_preserves_the_pin_and_unpin_restores_global_fx_without_changing_other_t
     key(&mut app, Key::Char('r'));
     assert!(app.tuner_pinned());
     assert_eq!(app.tuner_settings(), &TunerSettings::default());
-    assert_eq!(app.settings.tuner, global);
+    assert_eq!(app.settings.preferences.tuner, global);
     click(&mut app, |target| matches!(target, Target::TunerPin));
     assert!(!app.tuner_pinned());
     assert_eq!(app.tuner_settings(), &global);
@@ -256,7 +256,7 @@ fn reset_preserves_the_pin_and_unpin_restores_global_fx_without_changing_other_t
     // Drop must flush the latest pin/removal even without another UI tick.
     drop(app);
     let app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.tuner, global);
+    assert_eq!(app.settings.preferences.tuner, global);
     assert!(!app.settings.track_tuners.contains_key(&tracks[0].path));
     assert_eq!(app.settings.track_tuners[&tracks[1].path], other);
 }
@@ -310,17 +310,17 @@ fn pin_requires_a_playing_track_and_legacy_track_fx_are_normalized_on_load() {
 fn tuner_keys_wheel_drag_and_reset_preserve_equalizer_and_adjust_one_percent() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    let equalizer = app.settings.equalizer.clone();
+    let equalizer = app.settings.preferences.equalizer.clone();
     key(&mut app, Key::F(5));
     assert!(matches!(
         app.view.dialog,
         Some(Dialog::PlaybackTuner { selected: 0 })
     ));
     key(&mut app, Key::Right);
-    assert_eq!(app.settings.tuner.speed, 101);
+    assert_eq!(app.settings.preferences.tuner.speed, 101);
     key(&mut app, Key::Down);
     key(&mut app, Key::PageUp);
-    assert_eq!(app.settings.tuner.tempo, 110);
+    assert_eq!(app.settings.preferences.tuner.tempo, 110);
     render(&mut app, 120, 50);
     let bar = app
         .view
@@ -336,40 +336,40 @@ fn tuner_keys_wheel_drag_and_reset_preserve_equalizer_and_adjust_one_percent() {
         y: bar.y,
         delta: -99,
     });
-    assert_eq!(app.settings.tuner.pitch, 101);
-    assert_eq!(app.settings.tuner.tempo, 110);
+    assert_eq!(app.settings.preferences.tuner.pitch, 101);
+    assert_eq!(app.settings.preferences.tuner.tempo, 110);
     app.handle(Input::Click {
         x: bar.x,
         y: bar.y,
         double: false,
     });
-    assert_eq!(app.settings.tuner.pitch, 50);
+    assert_eq!(app.settings.preferences.tuner.pitch, 50);
     app.handle(Input::Drag {
         x: bar.right() + 50,
         y: bar.y + 40,
     });
-    assert_eq!(app.settings.tuner.pitch, 200);
+    assert_eq!(app.settings.preferences.tuner.pitch, 200);
     app.handle(Input::Release {
         x: bar.right() + 50,
         y: bar.y + 40,
     });
     assert!(app.view.workspace.gesture.is_none());
     key(&mut app, Key::Home);
-    assert_eq!(app.settings.tuner.pitch, 100);
+    assert_eq!(app.settings.preferences.tuner.pitch, 100);
     key(&mut app, Key::Down);
     for _ in 0..120 {
         key(&mut app, Key::Right);
     }
-    assert_eq!(app.settings.tuner.bass, 100);
+    assert_eq!(app.settings.preferences.tuner.bass, 100);
     for _ in 0..120 {
         key(&mut app, Key::Left);
     }
-    assert_eq!(app.settings.tuner.bass, 0);
+    assert_eq!(app.settings.preferences.tuner.bass, 0);
     key(&mut app, Key::Char(' '));
-    assert!(app.settings.tuner.reverse);
+    assert!(app.settings.preferences.tuner.reverse);
     key(&mut app, Key::Char('r'));
-    assert_eq!(app.settings.tuner, TunerSettings::default());
-    assert_eq!(app.settings.equalizer, equalizer);
+    assert_eq!(app.settings.preferences.tuner, TunerSettings::default());
+    assert_eq!(app.settings.preferences.equalizer, equalizer);
     key(&mut app, Key::F(5));
     assert!(app.view.dialog.is_none());
 }
@@ -396,7 +396,7 @@ fn player_button_and_menu_expose_tuner_with_shortcut_and_changes_save_per_profil
     key(&mut app, Key::Down);
     key(&mut app, Key::Right);
     click(&mut app, |target| matches!(target, Target::TunerReverse));
-    let expected = app.settings.tuner.clone();
+    let expected = app.settings.preferences.tuner.clone();
     assert_eq!(
         expected,
         TunerSettings {
@@ -411,10 +411,10 @@ fn player_button_and_menu_expose_tuner_with_shortcut_and_changes_save_per_profil
     let mut profile = app.settings.profile_preferences();
     profile.tuner = Default::default();
     app.settings.apply_preferences(profile);
-    assert_eq!(app.settings.tuner, TunerSettings::default());
+    assert_eq!(app.settings.preferences.tuner, TunerSettings::default());
     drop(app);
     let mut app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.tuner, expected);
+    assert_eq!(app.settings.preferences.tuner, expected);
     assert_eq!(app.settings.profiles[0].preferences.tuner, expected);
     app.view.dialog = Some(Dialog::Commands {
         menu: CommandMenu::Player,
@@ -436,7 +436,7 @@ fn player_button_and_menu_expose_tuner_with_shortcut_and_changes_save_per_profil
         matches!(target, Target::Action(Action::PlaybackTuner))
     });
     click(&mut app, |target| matches!(target, Target::TunerReset));
-    assert_eq!(app.settings.tuner, TunerSettings::default());
+    assert_eq!(app.settings.preferences.tuner, TunerSettings::default());
 }
 
 #[test]
@@ -444,7 +444,7 @@ fn tuner_keeps_sliders_accessible_in_both_languages_and_narrow_windows() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         for (width, height) in [(140, 45), (70, 30), (32, 26), (32, 18)] {
             app.action(Action::PlaybackTuner).unwrap();
             for index in 0..4 {
@@ -501,21 +501,23 @@ fn legacy_settings_and_conflicting_shortcuts_migrate_without_changing_user_bindi
             .remove("tuner");
     }
     let mut settings: almavorn::model::Settings = serde_json::from_value(legacy).unwrap();
-    assert_eq!(settings.tuner, TunerSettings::default());
+    assert_eq!(settings.preferences.tuner, TunerSettings::default());
     assert_eq!(
         settings.profiles[0].preferences.tuner,
         TunerSettings::default()
     );
     settings
+        .preferences
         .bindings
         .retain(|binding| binding.action != Action::PlaybackTuner);
     let stop = settings
+        .preferences
         .bindings
         .iter_mut()
         .find(|binding| binding.action == Action::Stop)
         .unwrap();
     stop.key = KeyPress::plain(Key::F(5));
-    settings.tuner = TunerSettings {
+    settings.preferences.tuner = TunerSettings {
         speed: 0,
         tempo: 900,
         pitch: 400,
@@ -527,6 +529,7 @@ fn legacy_settings_and_conflicting_shortcuts_migrate_without_changing_user_bindi
     let app = App::new(&directory.0).unwrap();
     assert_eq!(
         app.settings
+            .preferences
             .bindings
             .iter()
             .find(|binding| binding.action == Action::Stop)
@@ -536,6 +539,7 @@ fn legacy_settings_and_conflicting_shortcuts_migrate_without_changing_user_bindi
     );
     assert_ne!(
         app.settings
+            .preferences
             .bindings
             .iter()
             .find(|binding| binding.action == Action::PlaybackTuner)
@@ -544,7 +548,7 @@ fn legacy_settings_and_conflicting_shortcuts_migrate_without_changing_user_bindi
         KeyPress::plain(Key::F(5))
     );
     assert_eq!(
-        app.settings.tuner,
+        app.settings.preferences.tuner,
         TunerSettings {
             speed: 50,
             tempo: 200,

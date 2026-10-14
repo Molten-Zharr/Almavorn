@@ -29,7 +29,7 @@ pub(super) fn render(
         .expect("color dialog has picker state");
     let role =
         if let TextPurpose::Settings(SettingsEdit::PaletteColor { token, .. }) = &dialog.purpose {
-            color_role_name(token, app.settings.language)
+            color_role_name(token, app.settings.preferences.language)
         } else {
             ""
         };
@@ -109,7 +109,7 @@ pub(super) fn render(
                 "{}: {:.0}{unit}",
                 ColorPicker::label(
                     index,
-                    app.settings.language,
+                    app.settings.preferences.language,
                     step == 1 || controls.width < 28
                 ),
                 color.channel(index)

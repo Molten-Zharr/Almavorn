@@ -130,7 +130,7 @@ fn v4_library_upgrades_without_changing_music_or_settings_and_history_survives_u
     let mut store = Store::open(directory.path()).unwrap();
     let ids = seed(&mut store, directory.path());
     let mut settings = store.settings().unwrap();
-    settings.language = Language::Russian;
+    settings.preferences.language = Language::Russian;
     store.save_settings(&settings).unwrap();
     let before = store.snapshot("order").unwrap();
     let path = store.path.clone();
@@ -140,7 +140,10 @@ fn v4_library_upgrades_without_changing_music_or_settings_and_history_survives_u
     drop(connection);
     let mut store = Store::open(directory.path()).unwrap();
     assert_eq!(before, store.snapshot("order").unwrap());
-    assert_eq!(store.settings().unwrap().language, Language::Russian);
+    assert_eq!(
+        store.settings().unwrap().preferences.language,
+        Language::Russian
+    );
     assert_eq!(store.listening_statistics().unwrap().summary.starts, 0);
     store
         .record_listening(&[record("kept", ids[0], 90_000, true, 1_700_000_000_000)])
@@ -208,7 +211,7 @@ fn wait(app: &mut App) {
 fn statistics_menu_shortcut_tabs_sorting_and_compact_mouse_controls_work_in_both_frontends() {
     let directory = tempfile::tempdir().unwrap();
     let mut app = App::new(directory.path()).unwrap();
-    app.settings.language = Language::Russian;
+    app.settings.preferences.language = Language::Russian;
     let ids = seed(&mut app.store, directory.path());
     app.store
         .record_listening(&[

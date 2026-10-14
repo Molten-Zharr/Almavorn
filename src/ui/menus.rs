@@ -44,8 +44,12 @@ pub(super) fn render(
         width,
         height,
     );
-    let block = block(menu.title(app.settings.language).into(), palette, false)
-        .border_style(palette.text().fg(palette.separator));
+    let block = block(
+        menu.title(app.settings.preferences.language).into(),
+        palette,
+        false,
+    )
+    .border_style(palette.text().fg(palette.separator));
     let inner = block.inner(outer);
     app.view.overlay_area = outer;
     app.view.hits.push(Hit {

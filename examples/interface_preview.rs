@@ -19,8 +19,8 @@ mod gui_fonts;
 
 fn render(app: &mut App, output: &Path, name: &str, columns: u16, rows: u16) -> Result<()> {
     let backend = gui_fonts::backend(
-        app.settings.appearance.font,
-        app.settings.appearance.font_size,
+        app.settings.preferences.appearance.font,
+        app.settings.preferences.appearance.font_size,
         columns,
         rows,
     );
@@ -46,10 +46,11 @@ fn main() -> Result<()> {
     fs::create_dir_all(&output)?;
     let data = output.join(format!("data-{}", std::process::id()));
     let mut app = App::new(&data)?;
-    app.settings.language = Language::Russian;
-    app.settings.appearance.palette_ids = ["classic-violet".into(), "classic-violet".into()];
-    app.settings.playlist_placement = Placement::Left;
-    app.settings.player_placement = Placement::Bottom;
+    app.settings.preferences.language = Language::Russian;
+    app.settings.preferences.appearance.palette_ids =
+        ["classic-violet".into(), "classic-violet".into()];
+    app.settings.preferences.playlist_placement = Placement::Left;
+    app.settings.preferences.player_placement = Placement::Bottom;
     render(&mut app, &output, "empty", 140, 45)?;
     app.set_mode(Mode::Chaos)?;
     app.action(Action::ToggleDesk)?;

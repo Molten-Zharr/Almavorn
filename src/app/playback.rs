@@ -40,32 +40,32 @@ pub(super) struct WaveformJob {
 
 impl App {
     pub(super) fn set_playback_timeline(&mut self, choice: PlaybackTimeline) -> Result<()> {
-        if self.settings.appearance.playback_timeline != choice {
+        if self.settings.preferences.appearance.playback_timeline != choice {
             self.cancel_workspace_drag();
-            self.settings.appearance.playback_timeline = choice;
+            self.settings.preferences.appearance.playback_timeline = choice;
             self.save_settings()?;
         }
         Ok(())
     }
 
     pub(super) fn adjust_volume(&mut self, step: i16) -> Result<()> {
-        let percent = (self.settings.volume * 100.0).round() as i16;
+        let percent = (self.settings.preferences.volume * 100.0).round() as i16;
         self.set_volume((percent + step).clamp(0, 100) as f32 / 100.0)
     }
 
     pub(super) fn set_volume(&mut self, volume: f32) -> Result<()> {
         let volume = volume.clamp(0.0, 1.0);
-        if self.settings.volume == volume {
+        if self.settings.preferences.volume == volume {
             return Ok(());
         }
-        self.settings.volume = volume;
+        self.settings.preferences.volume = volume;
         self.sync_volume();
         self.save_settings()
     }
 
     pub(super) fn sync_volume(&self) {
         if let Some(audio) = &self.playback.audio {
-            audio.volume(self.settings.volume);
+            audio.volume(self.settings.preferences.volume);
         }
     }
 
@@ -279,8 +279,8 @@ impl App {
             .map_or(&self.playback.queue, |request| &request.queue);
         queue.can_step(
             QueueStep::manual(direction),
-            self.settings.repeat,
-            self.settings.shuffle,
+            self.settings.preferences.repeat,
+            self.settings.preferences.shuffle,
         )
     }
 
@@ -403,7 +403,7 @@ impl App {
         // Keep the platform audio device on its owning thread; only file access
         // and decoder preparation run in a blocking worker.
         if self.playback.audio.is_none() {
-            self.playback.audio = Some(Audio::open(self.settings.volume)?);
+            self.playback.audio = Some(Audio::open(self.settings.preferences.volume)?);
         }
         self.finish_listening();
         let audio = self
@@ -411,7 +411,7 @@ impl App {
             .audio
             .as_mut()
             .context(AppError::AudioUnavailable)?;
-        audio.equalizer(&self.settings.equalizer);
+        audio.equalizer(&self.settings.preferences.equalizer);
         audio.tuner(&tuner);
         audio.play_prepared(source, request.paused);
         let entry = request.entry();
@@ -425,7 +425,7 @@ impl App {
         self.playback.queue = request.queue;
         self.playback.current = Some(track.clone());
         self.playback.waveform = None;
-        if self.settings.appearance.playback_timeline == PlaybackTimeline::Waveform {
+        if self.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Waveform {
             self.playback.pending_waveform =
                 Some((track.path.clone(), self.playback.preparation.generation()));
             self.start_waveform_job();
@@ -488,11 +488,11 @@ impl App {
         } else {
             QueueStep::manual(direction)
         };
-        if let Some(queue) =
-            request
-                .queue
-                .advance(step, self.settings.repeat, self.settings.shuffle)
-        {
+        if let Some(queue) = request.queue.advance(
+            step,
+            self.settings.preferences.repeat,
+            self.settings.preferences.shuffle,
+        ) {
             request.queue = queue;
             request.paused = false;
             self.request_playback(request)
@@ -690,7 +690,7 @@ impl App {
     }
 
     pub(super) fn tick_waveform(&mut self) {
-        if self.settings.appearance.playback_timeline == PlaybackTimeline::Progress {
+        if self.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Progress {
             self.cancel_waveform();
         } else if self.playback.waveform.is_none()
             && !self.preparing_playback()
@@ -829,7 +829,7 @@ mod tests {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         library_queue(&mut app, 3, 1);
-        app.settings.repeat = RepeatMode::Track;
+        app.settings.preferences.repeat = RepeatMode::Track;
         app.play_marked().unwrap();
         for expected in [2, 0, 1] {
             assert!(app.can_step_playback(1));
@@ -841,8 +841,8 @@ mod tests {
 
         app.stop_playback();
         app.library.marked = HashSet::from([2]);
-        app.settings.shuffle = true;
-        app.settings.repeat = RepeatMode::Off;
+        app.settings.preferences.shuffle = true;
+        app.settings.preferences.repeat = RepeatMode::Off;
         app.play_marked().unwrap();
         for _ in 0..3 {
             assert!(app.can_step_playback(1));
@@ -987,7 +987,7 @@ mod tests {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         queue(&mut app, 2, 0);
-        app.settings.shuffle = true;
+        app.settings.preferences.shuffle = true;
         app.next(1, true).unwrap();
         assert!(app.can_step_playback(-1));
         app.prepare_playback(app.playback.queue.entries().to_vec().into(), 99, 0)
@@ -1007,7 +1007,7 @@ mod tests {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         queue(&mut app, 3, 0);
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         let pinned_path = app.playback.queue.entries()[1].track.path.clone();
         app.settings
             .track_tuners
@@ -1020,14 +1020,14 @@ mod tests {
         let generation = app.playback.preparation.generation();
         let cancel = app.playback.preparation_cancel.clone().unwrap();
         // Changes to global FX cannot replace a pinned destination's decode.
-        app.settings.tuner.reverse = false;
+        app.settings.preferences.tuner.reverse = false;
         app.sync_tuner().unwrap();
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         app.sync_tuner().unwrap();
         assert_eq!(app.playback.preparation.generation(), generation);
         assert!(!cancel.load(Ordering::Relaxed));
 
-        app.settings.repeat = RepeatMode::Track;
+        app.settings.preferences.repeat = RepeatMode::Track;
         app.next(1, false).unwrap();
         assert_eq!(requested_index(&app), 1);
         assert!(!app.requested_playback().unwrap().reverse);
@@ -1044,7 +1044,7 @@ mod tests {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         queue(&mut app, 2, 0);
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         let path = app.playback.current.as_ref().unwrap().path.clone();
         app.settings
             .track_tuners
@@ -1061,7 +1061,7 @@ mod tests {
         assert!(!cancel.load(Ordering::Relaxed));
         assert!(app.requested_playback().unwrap().paused);
 
-        app.settings.tuner.reverse = false;
+        app.settings.preferences.tuner.reverse = false;
         app.sync_tuner().unwrap();
         assert!(cancel.load(Ordering::Relaxed));
         let request = app.requested_playback().unwrap();
@@ -1075,7 +1075,7 @@ mod tests {
         assert!(app.playback.seek.requested().unwrap().reverse);
         app.cancel_seek();
         app.settings.track_tuners.get_mut(&path).unwrap().reverse = false;
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         app.seek_to(300);
         let seek = app.playback.seek.requested().unwrap();
         assert!(!seek.reverse);
@@ -1094,7 +1094,7 @@ mod tests {
         app.playback.preparation.requested_mut().unwrap().paused = true;
         let cancel = app.playback.preparation_cancel.clone().unwrap();
         let generation = app.playback.preparation.generation();
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         app.sync_tuner().unwrap();
         assert!(cancel.load(Ordering::Relaxed));
         assert!(app.playback.preparation.generation() > generation);
@@ -1103,7 +1103,7 @@ mod tests {
         assert!(request.paused);
         assert_eq!(requested_index(&app), 1);
         assert_eq!(request.playlist_id, 42);
-        app.settings.tuner.reverse = false;
+        app.settings.preferences.tuner.reverse = false;
         app.sync_tuner().unwrap();
         assert!(!app.requested_playback().unwrap().reverse);
         assert!(app.requested_playback().unwrap().paused);
@@ -1125,7 +1125,7 @@ mod tests {
         let cancel = app.playback.preparation_cancel.clone().unwrap();
         let seek_cancel = app.playback.seek_cancel.clone().unwrap();
         // Persistence must not apply even an unapplied direction change.
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         app.save_settings().unwrap();
         app.open_settings_page(super::super::SettingsPage::Typography);
         app.adjust_setting(1, 1).unwrap();
@@ -1183,9 +1183,9 @@ mod tests {
             app.adjust_setting(0, 1).unwrap();
             app.setting(1).unwrap();
             assert_eq!(app.settings.active_profile, "reverse");
-            assert_eq!(app.settings.volume, 0.25);
-            assert!(app.settings.equalizer.enabled);
-            assert!(app.settings.tuner.reverse);
+            assert_eq!(app.settings.preferences.volume, 0.25);
+            assert!(app.settings.preferences.equalizer.enabled);
+            assert!(app.settings.preferences.tuner.reverse);
             assert_eq!(app.settings.track_tuners.len(), usize::from(pinned));
             assert_eq!(app.requested_playback().unwrap().reverse, !pinned);
             assert!(app.requested_playback().unwrap().paused);

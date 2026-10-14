@@ -107,10 +107,10 @@ mod tests {
         app.persistence.job = Some(receiver);
 
         app.set_volume(0.25).unwrap();
-        app.settings.appearance.font_size = 20;
+        app.settings.preferences.appearance.font_size = 20;
         app.save_settings().unwrap();
         app.set_volume(0.65).unwrap();
-        app.settings.appearance.font_size = 24;
+        app.settings.preferences.appearance.font_size = 24;
         app.save_settings().unwrap();
         app.tick_settings().unwrap();
         assert!(app.persistence.job.is_some());
@@ -160,7 +160,7 @@ mod tests {
             app.set_volume(0.45).unwrap();
             finish_saving(&mut app);
             let saved = app.store.settings().unwrap();
-            assert_eq!(saved.volume, 0.45);
+            assert_eq!(saved.preferences.volume, 0.45);
             assert_eq!(saved.profiles[0].preferences.volume, 0.45);
         }
     }
@@ -192,7 +192,7 @@ mod tests {
     fn shutdown_retries_a_failed_write_when_there_is_no_newer_snapshot() {
         let directory = tempfile::tempdir().unwrap();
         let mut app = App::new(directory.path()).unwrap();
-        app.settings.volume = 0.35;
+        app.settings.preferences.volume = 0.35;
         app.settings.sync_active_profile();
         let expected = serde_json::to_value(&app.settings).unwrap();
         let (sender, receiver) = oneshot::channel();

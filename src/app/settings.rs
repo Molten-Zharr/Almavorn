@@ -172,13 +172,14 @@ impl App {
         ensure!(
             !self
                 .settings
+                .preferences
                 .bindings
                 .iter()
                 .enumerate()
                 .any(|(other, binding)| other != index && binding.key == key),
             AppError::ShortcutConflict
         );
-        self.settings.bindings[index].key = key;
+        self.settings.preferences.bindings[index].key = key;
         self.save_settings()?;
         self.view.settings.page = SettingsPage::Shortcuts;
         self.view.settings.selected = 1 + index;
@@ -439,7 +440,7 @@ impl App {
                 );
             }
             SettingControl::PaletteApply => {
-                self.settings.appearance.palette_ids[self.settings.mode.index()] =
+                self.settings.preferences.appearance.palette_ids[self.settings.mode.index()] =
                     self.selected_settings_palette().id.clone();
                 self.save_settings()?;
             }
@@ -457,14 +458,14 @@ impl App {
                 let style = self.settings.current_style();
                 let index = self.selected_settings_preset_index();
                 self.settings.presets[index].style = style;
-                self.settings.appearance.preset_ids[self.settings.mode.index()] =
+                self.settings.preferences.appearance.preset_ids[self.settings.mode.index()] =
                     Some(self.settings.presets[index].id.clone());
                 self.save_settings()?;
             }
             SettingControl::DeleteCatalog => self.request_settings_delete()?,
             SettingControl::FontSize => self.settings_text(
                 SettingsEdit::FontSize,
-                self.settings.appearance.font_size.to_string(),
+                self.settings.preferences.appearance.font_size.to_string(),
             ),
             SettingControl::Binding(index) => {
                 self.view.settings.binding_modifiers = [false; 3];
@@ -472,7 +473,7 @@ impl App {
                 self.view.dialog = Some(Dialog::CaptureBinding { index });
             }
             SettingControl::ResetBindings => {
-                self.settings.bindings = crate::input::default_bindings();
+                self.settings.preferences.bindings = crate::input::default_bindings();
                 self.save_settings()?;
             }
             _ => self.adjust_setting(row, 1)?,
@@ -489,38 +490,40 @@ impl App {
         self.select_setting(row);
         match item.control {
             SettingControl::Language => {
-                self.settings.language = cycle(
-                    self.settings.language,
+                self.settings.preferences.language = cycle(
+                    self.settings.preferences.language,
                     &[Language::English, Language::Russian],
                     direction,
                 )
             }
             SettingControl::Volume => {
-                return self.set_volume(self.settings.volume + direction as f32 * 0.05);
+                return self.set_volume(self.settings.preferences.volume + direction as f32 * 0.05);
             }
-            SettingControl::Desk => self.settings.sorting_desk = !self.settings.sorting_desk,
+            SettingControl::Desk => {
+                self.settings.preferences.sorting_desk = !self.settings.preferences.sorting_desk
+            }
             SettingControl::Visualizer => return self.cycle_visualizer(direction),
             SettingControl::AnimationBrightness => {
-                self.settings.appearance.animation_brightness =
-                    (i128::from(self.settings.appearance.animation_brightness)
+                self.settings.preferences.appearance.animation_brightness =
+                    (i128::from(self.settings.preferences.appearance.animation_brightness)
                         + i128::from(direction) * 5)
                         .clamp(10, 70) as u8;
             }
             SettingControl::ButtonShortcuts => {
-                self.settings.appearance.show_button_shortcuts =
-                    !self.settings.appearance.show_button_shortcuts;
+                self.settings.preferences.appearance.show_button_shortcuts =
+                    !self.settings.preferences.appearance.show_button_shortcuts;
             }
             SettingControl::PlaybackTimeline => {
                 return self.set_playback_timeline(cycle(
-                    self.settings.appearance.playback_timeline,
+                    self.settings.preferences.appearance.playback_timeline,
                     &[PlaybackTimeline::Waveform, PlaybackTimeline::Progress],
                     direction,
                 ));
             }
             SettingControl::PlaylistPlacement => {
-                self.settings.workspace.root = None;
-                self.settings.playlist_placement = cycle(
-                    self.settings.playlist_placement,
+                self.settings.preferences.workspace.root = None;
+                self.settings.preferences.playlist_placement = cycle(
+                    self.settings.preferences.playlist_placement,
                     &[
                         Placement::Left,
                         Placement::Right,
@@ -531,9 +534,9 @@ impl App {
                 )
             }
             SettingControl::PlayerPlacement => {
-                self.settings.workspace.root = None;
-                self.settings.player_placement = cycle(
-                    self.settings.player_placement,
+                self.settings.preferences.workspace.root = None;
+                self.settings.preferences.player_placement = cycle(
+                    self.settings.preferences.player_placement,
                     &[
                         Placement::Left,
                         Placement::Right,
@@ -573,33 +576,39 @@ impl App {
                     .settings
                     .palettes
                     .iter()
-                    .position(|p| p.id == self.settings.appearance.palette_ids[mode.index()])
+                    .position(|p| {
+                        p.id == self.settings.preferences.appearance.palette_ids[mode.index()]
+                    })
                     .unwrap_or(0);
-                self.settings.appearance.palette_ids[mode.index()] = self.settings.palettes
-                    [cycle_index(selected, self.settings.palettes.len(), direction)]
+                self.settings.preferences.appearance.palette_ids[mode.index()] = self
+                    .settings
+                    .palettes[cycle_index(selected, self.settings.palettes.len(), direction)]
                 .id
                 .clone();
             }
             SettingControl::Font => {
-                self.settings.appearance.font =
-                    cycle(self.settings.appearance.font, &FontFace::ALL, direction)
+                self.settings.preferences.appearance.font = cycle(
+                    self.settings.preferences.appearance.font,
+                    &FontFace::ALL,
+                    direction,
+                )
             }
             SettingControl::FontSize => {
-                self.settings.appearance.font_size = (i64::from(self.settings.appearance.font_size)
-                    + direction)
-                    .clamp(i64::from(MIN_FONT_SIZE), i64::from(MAX_FONT_SIZE))
-                    as u16
+                self.settings.preferences.appearance.font_size =
+                    (i64::from(self.settings.preferences.appearance.font_size) + direction)
+                        .clamp(i64::from(MIN_FONT_SIZE), i64::from(MAX_FONT_SIZE))
+                        as u16
             }
             SettingControl::Borders => {
-                self.settings.appearance.borders = cycle(
-                    self.settings.appearance.borders,
+                self.settings.preferences.appearance.borders = cycle(
+                    self.settings.preferences.appearance.borders,
                     &BorderWeight::ALL,
                     direction,
                 )
             }
             SettingControl::Corners => {
-                self.settings.appearance.corners = cycle(
-                    self.settings.appearance.corners,
+                self.settings.preferences.appearance.corners = cycle(
+                    self.settings.preferences.appearance.corners,
                     &[Corners::Square, Corners::Rounded],
                     direction,
                 )

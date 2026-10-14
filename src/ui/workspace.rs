@@ -21,11 +21,11 @@ use ratatui::{
 fn automatic(app: &App, area: Rect) -> Dock {
     let list_horizontal = area.width >= 55
         && matches!(
-            app.settings.playlist_placement,
+            app.settings.preferences.playlist_placement,
             Placement::Left | Placement::Right
         );
     let list_first = matches!(
-        app.settings.playlist_placement,
+        app.settings.preferences.playlist_placement,
         Placement::Left | Placement::Top
     );
     let list_ratio = if list_horizontal { 220 } else { 200 };
@@ -50,11 +50,11 @@ fn automatic(app: &App, area: Rect) -> Dock {
     );
     let side_player = area.width >= 80
         && matches!(
-            app.settings.player_placement,
+            app.settings.preferences.player_placement,
             Placement::Left | Placement::Right
         );
     let player_first = matches!(
-        app.settings.player_placement,
+        app.settings.preferences.player_placement,
         Placement::Left | Placement::Top
     );
     let player_ratio = if side_player {
@@ -92,12 +92,12 @@ fn automatic(app: &App, area: Rect) -> Dock {
 fn min_width(app: &App, node: &Dock) -> u16 {
     match node {
         Dock::Panel(panel) => {
-            if app.settings.workspace.hidden.contains(panel) {
+            if app.settings.preferences.workspace.hidden.contains(panel) {
                 0
             } else {
                 match panel {
                     Panel::Playlists => (title_reserved(app, *panel)
-                        + Span::raw(panel.name(app.settings.language)).width() as u16)
+                        + Span::raw(panel.name(app.settings.preferences.language)).width() as u16)
                         .max(18),
                     Panel::Tracks => 30,
                     _ => 20,
@@ -145,10 +145,10 @@ fn axis(app: &App, desired: Axis, first: &Dock, second: &Dock, width: u16) -> Ax
 fn minimum(app: &App, node: &Dock, width: u16, compact: bool) -> u16 {
     match node {
         Dock::Panel(panel) => {
-            if app.settings.workspace.hidden.contains(panel) {
+            if app.settings.preferences.workspace.hidden.contains(panel) {
                 return 0;
             }
-            if app.settings.workspace.collapsed.contains(panel) {
+            if app.settings.preferences.workspace.collapsed.contains(panel) {
                 return if compact { 1 } else { 2 };
             }
             if *panel == Panel::Player {
@@ -220,7 +220,7 @@ fn width_cut(app: &App, width: u16, ratio: u16, first: &Dock, second: &Dock) -> 
 fn arrange(app: &mut App, node: &Dock, area: Rect, compact: bool, path: &mut Vec<bool>) {
     match node {
         Dock::Panel(panel) => {
-            if !app.settings.workspace.hidden.contains(panel) {
+            if !app.settings.preferences.workspace.hidden.contains(panel) {
                 app.view.workspace.areas.push((*panel, area));
             }
         }
@@ -306,8 +306,8 @@ fn arrange(app: &mut App, node: &Dock, area: Rect, compact: bool, path: &mut Vec
 fn all_collapsed(app: &App, node: &Dock) -> bool {
     match node {
         Dock::Panel(panel) => {
-            app.settings.workspace.hidden.contains(panel)
-                || app.settings.workspace.collapsed.contains(panel)
+            app.settings.preferences.workspace.hidden.contains(panel)
+                || app.settings.preferences.workspace.collapsed.contains(panel)
         }
         Dock::Split { first, second, .. } => {
             all_collapsed(app, first) && all_collapsed(app, second)
@@ -354,10 +354,10 @@ fn chrome(
     let title_width = area.width.saturating_sub(title_reserved(app, panel));
     let heading = if panel == Panel::Tracks {
         app.playlist()
-            .map(|playlist| playlist.display_name(app.settings.language))
-            .unwrap_or(panel.name(app.settings.language))
+            .map(|playlist| playlist.display_name(app.settings.preferences.language))
+            .unwrap_or(panel.name(app.settings.preferences.language))
     } else {
-        panel.name(app.settings.language)
+        panel.name(app.settings.preferences.language)
     };
     let title = heading
         .chars()
@@ -413,7 +413,12 @@ fn chrome(
         }
         return inner;
     }
-    let collapsed = app.settings.workspace.collapsed.contains(&panel);
+    let collapsed = app
+        .settings
+        .preferences
+        .workspace
+        .collapsed
+        .contains(&panel);
     for (index, (label, target)) in [
         ("[↕]", Target::PanelMove(panel)),
         (
@@ -468,6 +473,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     app.view.tracks_area = Rect::default();
     let root = app
         .settings
+        .preferences
         .workspace
         .root
         .clone()
@@ -490,7 +496,13 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     app.view.workspace.root = Some(root);
     for (panel, rect) in app.view.workspace.areas.clone() {
         let inner = chrome(frame, app, panel, rect, compact, palette);
-        if app.settings.workspace.collapsed.contains(&panel) {
+        if app
+            .settings
+            .preferences
+            .workspace
+            .collapsed
+            .contains(&panel)
+        {
             continue;
         }
         match panel {

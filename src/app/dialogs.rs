@@ -175,7 +175,7 @@ impl App {
         self.view.dialog = Some(Dialog::Text(TextDialog {
             purpose,
             text,
-            keyboard: self.settings.language,
+            keyboard: self.settings.preferences.language,
             upper: false,
             selected_all,
             color_picker,
@@ -383,7 +383,7 @@ impl App {
                             .filter(|_| value.len() == 6)
                             .context(AppError::InvalidLegacyColor);
                         color.and_then(|color| {
-                            self.settings.themes[self.settings.mode.index()].accent =
+                            self.settings.preferences.themes[self.settings.mode.index()].accent =
                                 [(color >> 16) as u8, (color >> 8) as u8, color as u8];
                             self.save_settings()
                         })

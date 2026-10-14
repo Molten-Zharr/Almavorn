@@ -191,23 +191,12 @@ pub struct Theme {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    pub language: Language,
+    /// Current profile values keep their historical top-level JSON keys.
+    #[serde(flatten)]
+    pub preferences: crate::preferences::ProfilePreferences,
     pub mode: Mode,
-    pub volume: f32,
-    pub repeat: RepeatMode,
-    pub shuffle: bool,
-    pub equalizer: crate::equalizer::EqualizerSettings,
-    pub tuner: crate::tuner::TunerSettings,
     /// File-specific FX belong to the library and are shared by all profiles.
     pub track_tuners: BTreeMap<PathBuf, crate::tuner::TunerSettings>,
-    pub sorting_desk: bool,
-    pub scan_subfolders: bool,
-    pub playlist_placement: Placement,
-    pub player_placement: Placement,
-    pub workspace: crate::workspace::WorkspaceLayout,
-    pub themes: [Theme; 2],
-    pub bindings: Vec<crate::input::Binding>,
-    pub appearance: crate::preferences::Appearance,
     pub palettes: Vec<crate::preferences::NamedPalette>,
     pub presets: Vec<crate::preferences::ThemePreset>,
     pub profiles: Vec<crate::preferences::SettingsProfile>,
@@ -218,31 +207,9 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            language: Language::Russian,
+            preferences: Default::default(),
             mode: Mode::Order,
-            volume: 0.7,
-            repeat: RepeatMode::Off,
-            shuffle: false,
-            equalizer: Default::default(),
-            tuner: Default::default(),
             track_tuners: Default::default(),
-            sorting_desk: true,
-            scan_subfolders: true,
-            playlist_placement: Placement::Left,
-            player_placement: Placement::Bottom,
-            workspace: Default::default(),
-            themes: [
-                Theme {
-                    accent: [232, 158, 74],
-                    light: false,
-                },
-                Theme {
-                    accent: [188, 125, 228],
-                    light: false,
-                },
-            ],
-            bindings: crate::input::default_bindings(),
-            appearance: Default::default(),
             palettes: crate::preferences::default_palettes(),
             presets: crate::preferences::default_presets(),
             profiles: Vec::new(),

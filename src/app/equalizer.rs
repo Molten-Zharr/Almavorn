@@ -8,7 +8,7 @@ use anyhow::Result;
 impl App {
     pub(super) fn sync_equalizer(&self) {
         if let Some(audio) = &self.playback.audio {
-            audio.equalizer(&self.settings.equalizer);
+            audio.equalizer(&self.settings.preferences.equalizer);
         }
     }
 
@@ -30,19 +30,20 @@ impl App {
         self.view.dialog = Some(Dialog::Equalizer {
             selected: 0,
             presets: false,
-            preset_selected: self.settings.equalizer.preset().unwrap_or(0),
+            preset_selected: self.settings.preferences.equalizer.preset().unwrap_or(0),
         });
     }
 
     pub(super) fn equalizer_target(&mut self, target: Target) -> Result<()> {
         match target {
             Target::EqualizerToggle => {
-                self.settings.equalizer.enabled = !self.settings.equalizer.enabled;
+                self.settings.preferences.equalizer.enabled =
+                    !self.settings.preferences.equalizer.enabled;
                 self.sync_equalizer();
                 self.save_settings()?;
             }
             Target::EqualizerPresets => {
-                let current = self.settings.equalizer.preset().unwrap_or(0);
+                let current = self.settings.preferences.equalizer.preset().unwrap_or(0);
                 if let Some(Dialog::Equalizer {
                     presets,
                     preset_selected,
@@ -55,8 +56,8 @@ impl App {
             }
             Target::EqualizerPreset(index) => {
                 if let Some(preset) = PRESETS.get(index) {
-                    self.settings.equalizer.preamp = preset.preamp;
-                    self.settings.equalizer.bands = preset.bands;
+                    self.settings.preferences.equalizer.preamp = preset.preamp;
+                    self.settings.preferences.equalizer.bands = preset.bands;
                     if let Some(Dialog::Equalizer {
                         presets,
                         preset_selected,
@@ -71,8 +72,8 @@ impl App {
                 }
             }
             Target::EqualizerReset => {
-                self.settings.equalizer.preamp = 0;
-                self.settings.equalizer.bands = [0; 10];
+                self.settings.preferences.equalizer.preamp = 0;
+                self.settings.preferences.equalizer.bands = [0; 10];
                 self.sync_equalizer();
                 self.save_settings()?;
             }
@@ -120,8 +121,8 @@ impl App {
     }
 
     fn set_equalizer_gain(&mut self, index: usize, gain: i8) -> Result<()> {
-        if self.settings.equalizer.gain(index) != Some(gain.clamp(MIN_GAIN, MAX_GAIN)) {
-            self.settings.equalizer.set_gain(index, gain);
+        if self.settings.preferences.equalizer.gain(index) != Some(gain.clamp(MIN_GAIN, MAX_GAIN)) {
+            self.settings.preferences.equalizer.set_gain(index, gain);
             self.sync_equalizer();
             self.save_settings()?;
         }
@@ -129,7 +130,7 @@ impl App {
     }
 
     pub(super) fn adjust_equalizer_gain(&mut self, index: usize, step: i8) -> Result<()> {
-        if let Some(gain) = self.settings.equalizer.gain(index) {
+        if let Some(gain) = self.settings.preferences.equalizer.gain(index) {
             self.select_equalizer(index);
             self.set_equalizer_gain(index, gain.saturating_add(step))?;
         }

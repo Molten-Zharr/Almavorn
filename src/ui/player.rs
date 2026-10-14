@@ -25,7 +25,10 @@ fn controls(app: &App) -> Vec<(Action, &'static str)> {
         (Action::Next, "›"),
         (
             Action::CycleRepeat,
-            match (app.settings.repeat, app.settings.appearance.font) {
+            match (
+                app.settings.preferences.repeat,
+                app.settings.preferences.appearance.font,
+            ) {
                 (RepeatMode::Off, FontFace::DejaVuMono) => "[↻]",
                 (RepeatMode::Playlist, FontFace::DejaVuMono) => "[↻∞]",
                 (RepeatMode::Track, FontFace::DejaVuMono) => "[↻1]",
@@ -36,7 +39,7 @@ fn controls(app: &App) -> Vec<(Action, &'static str)> {
         ),
         (
             Action::ToggleShuffle,
-            if app.settings.appearance.font == FontFace::DejaVuMono {
+            if app.settings.preferences.appearance.font == FontFace::DejaVuMono {
                 "[⇄]"
             } else {
                 "[↔]"
@@ -58,7 +61,7 @@ pub(super) fn preferred_height(app: &App, width: u16) -> u16 {
 pub(super) fn content_height(app: &App, width: u16) -> u16 {
     base_height(app, width)
         + if app.playback_active()
-            && app.settings.appearance.playback_timeline == PlaybackTimeline::Waveform
+            && app.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Waveform
         {
             4
         } else {
@@ -253,7 +256,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         progress.width.saturating_sub(time_width + 1),
         1,
     );
-    if app.settings.appearance.playback_timeline == PlaybackTimeline::Progress {
+    if app.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Progress {
         app.view.progress_area = seek;
         slider(frame, seek, ratio, palette);
         app.view.hits.push(Hit {
@@ -273,7 +276,7 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     );
     let wave_y = area.y + base_height(app, area.width);
     if app.playback_active()
-        && app.settings.appearance.playback_timeline == PlaybackTimeline::Waveform
+        && app.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Waveform
         && wave_y + 4 <= area.bottom()
     {
         let wave = Rect::new(area.x, wave_y, area.width, 4);
@@ -363,7 +366,7 @@ fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palet
 }
 
 fn volume(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    let percent = (app.settings.volume.clamp(0.0, 1.0) * 100.0).round() as u16;
+    let percent = (app.settings.preferences.volume.clamp(0.0, 1.0) * 100.0).round() as u16;
     let label = if area.width >= 20 {
         app.text("Vol", "Громк")
     } else {

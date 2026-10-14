@@ -1,0 +1,305 @@
+{
+  "language": "English",
+  "mode": "Chaos",
+  "volume": 0.45,
+  "repeat": "Track",
+  "shuffle": true,
+  "equalizer": {
+    "enabled": true,
+    "preamp": -3,
+    "bands": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      -1,
+      -2,
+      -3,
+      -4
+    ]
+  },
+  "tuner": {
+    "speed": 125,
+    "tempo": 80,
+    "pitch": 110,
+    "reverse": true,
+    "bass": 35
+  },
+  "track_tuners": {
+    "/music/pinned.wav": {
+      "speed": 100,
+      "tempo": 100,
+      "pitch": 100,
+      "reverse": false,
+      "bass": 0
+    }
+  },
+  "sorting_desk": false,
+  "scan_subfolders": false,
+  "playlist_placement": "Top",
+  "player_placement": "Right",
+  "workspace": {
+    "version": 3,
+    "root": null,
+    "hidden": [
+      "Playlists"
+    ],
+    "collapsed": [
+      "Add"
+    ],
+    "hidden_controls": [
+      {
+        "Mode": "Order"
+      }
+    ]
+  },
+  "themes": [
+    {
+      "accent": [
+        12,
+        34,
+        56
+      ],
+      "light": false
+    },
+    {
+      "accent": [
+        188,
+        125,
+        228
+      ],
+      "light": true
+    }
+  ],
+  "bindings": [
+    {
+      "action": "Quit",
+      "key": {
+        "key": {
+          "F": 10
+        },
+        "ctrl": false,
+        "alt": false,
+        "shift": false
+      }
+    }
+  ],
+  "appearance": {
+    "palette_ids": [
+      "molten-zharr",
+      "molten-zharr"
+    ],
+    "preset_ids": [
+      "molten-zharr",
+      "molten-zharr"
+    ],
+    "font": "FiraCodeBold",
+    "font_size": 23,
+    "borders": "Thick",
+    "corners": "Rounded",
+    "playback_timeline": "Progress",
+    "show_button_shortcuts": false,
+    "visualizer": "Off",
+    "animation_brightness": 60
+  },
+  "palettes": [
+    {
+      "id": "molten-zharr",
+      "name": "Molten-Zharr",
+      "colors": {
+        "active": [
+          255,
+          0,
+          0
+        ],
+        "background": [
+          0,
+          0,
+          0
+        ],
+        "button_text": [
+          249,
+          249,
+          254
+        ],
+        "confirm_background": [
+          255,
+          184,
+          108
+        ],
+        "error": [
+          215,
+          0,
+          0
+        ],
+        "folder_icon": [
+          255,
+          82,
+          46
+        ],
+        "folder_path": [
+          255,
+          153,
+          153
+        ],
+        "gradient_dark": [
+          114,
+          0,
+          0
+        ],
+        "help_heading": [
+          255,
+          102,
+          102
+        ],
+        "inactive_file_border": [
+          154,
+          0,
+          0
+        ],
+        "inactive_panel_border": [
+          121,
+          0,
+          0
+        ],
+        "selected_file_background": [
+          82,
+          69,
+          73
+        ],
+        "selection_accent": [
+          255,
+          141,
+          52
+        ],
+        "separator": [
+          97,
+          82,
+          80
+        ],
+        "sidebar_title": [
+          221,
+          0,
+          0
+        ],
+        "text": [
+          248,
+          248,
+          242
+        ]
+      }
+    }
+  ],
+  "presets": [
+    {
+      "id": "molten-zharr",
+      "name": "Molten-Zharr",
+      "style": {
+        "palette_id": "molten-zharr",
+        "font": "FiraCode",
+        "font_size": 16,
+        "borders": "Single",
+        "corners": "Square"
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "id": "default",
+      "name": "Default",
+      "preferences": {
+        "language": "Russian",
+        "volume": 0.7,
+        "repeat": "Off",
+        "shuffle": false,
+        "equalizer": {
+          "enabled": false,
+          "preamp": 0,
+          "bands": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "tuner": {
+          "speed": 100,
+          "tempo": 100,
+          "pitch": 100,
+          "reverse": false,
+          "bass": 0
+        },
+        "sorting_desk": true,
+        "scan_subfolders": true,
+        "playlist_placement": "Left",
+        "player_placement": "Bottom",
+        "workspace": {
+          "version": 3,
+          "root": null,
+          "hidden": [],
+          "collapsed": [],
+          "hidden_controls": []
+        },
+        "themes": [
+          {
+            "accent": [
+              232,
+              158,
+              74
+            ],
+            "light": false
+          },
+          {
+            "accent": [
+              188,
+              125,
+              228
+            ],
+            "light": false
+          }
+        ],
+        "bindings": [
+          {
+            "action": "Quit",
+            "key": {
+              "key": {
+                "Char": "q"
+              },
+              "ctrl": false,
+              "alt": false,
+              "shift": false
+            }
+          }
+        ],
+        "appearance": {
+          "palette_ids": [
+            "molten-zharr",
+            "molten-zharr"
+          ],
+          "preset_ids": [
+            "molten-zharr",
+            "molten-zharr"
+          ],
+          "font": "FiraCode",
+          "font_size": 16,
+          "borders": "Single",
+          "corners": "Square",
+          "playback_timeline": "Waveform",
+          "show_button_shortcuts": true,
+          "visualizer": "Bombardment",
+          "animation_brightness": 35
+        }
+      }
+    }
+  ],
+  "active_profile": "default",
+  "next_settings_id": 42
+}

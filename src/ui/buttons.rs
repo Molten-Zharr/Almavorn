@@ -109,6 +109,7 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
                 Action::PlaylistDown
             };
             app.settings
+                .preferences
                 .bindings
                 .iter()
                 .find(|binding| binding.action == action)
@@ -116,18 +117,21 @@ pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         }
         Target::CommandMenu(crate::app::CommandMenu::Visualizer) => app
             .settings
+            .preferences
             .bindings
             .iter()
             .find(|binding| binding.action == Action::CycleVisualizer)
             .map(|binding| binding.key.label()),
         Target::Action(action) => app
             .settings
+            .preferences
             .bindings
             .iter()
             .find(|binding| binding.action == *action)
             .map(|binding| binding.key.label()),
         Target::Mode(mode) if *mode != app.settings.mode => app
             .settings
+            .preferences
             .bindings
             .iter()
             .find(|binding| binding.action == crate::input::Action::SwitchMode)
@@ -188,7 +192,7 @@ pub(super) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
 fn displayed_shortcut(app: &App, target: &Target) -> Option<String> {
     if help_button(target) {
         Some("F1".into())
-    } else if app.settings.appearance.show_button_shortcuts {
+    } else if app.settings.preferences.appearance.show_button_shortcuts {
         button_shortcut(app, target)
     } else {
         None
@@ -311,18 +315,20 @@ fn quiet(
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
         Target::Action(Action::ToggleEdit) => app.view.editing,
-        Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
-        Target::Action(Action::CycleRepeat) => app.settings.repeat != crate::model::RepeatMode::Off,
-        Target::Action(Action::ToggleShuffle) => app.settings.shuffle,
+        Target::Action(Action::ToggleDesk) => app.settings.preferences.sorting_desk,
+        Target::Action(Action::CycleRepeat) => {
+            app.settings.preferences.repeat != crate::model::RepeatMode::Off
+        }
+        Target::Action(Action::ToggleShuffle) => app.settings.preferences.shuffle,
         Target::Action(Action::PlaybackTuner) => app.tuner_settings() != &Default::default(),
         Target::Action(Action::CycleVisualizer)
         | Target::CommandMenu(crate::app::CommandMenu::Visualizer) => {
-            app.settings.appearance.visualizer != crate::visualizer::VisualizerKind::Off
+            app.settings.preferences.appearance.visualizer != crate::visualizer::VisualizerKind::Off
         }
         Target::TunerReverse => app.tuner_settings().reverse,
         Target::TunerPin => app.tuner_pinned(),
         Target::Action(Action::Equalizer) | Target::EqualizerToggle => {
-            app.settings.equalizer.enabled
+            app.settings.preferences.equalizer.enabled
         }
         Target::Action(Action::Filter) => app.view.filter_editing || !app.library.query.is_empty(),
         _ => false,

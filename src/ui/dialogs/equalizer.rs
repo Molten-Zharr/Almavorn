@@ -44,15 +44,15 @@ pub(super) fn render(
         return;
     }
     *selected = (*selected).min(SLIDERS - 1);
-    let name = app.settings.equalizer.preset().map_or_else(
+    let name = app.settings.preferences.equalizer.preset().map_or_else(
         || app.text("Custom", "Пользовательский"),
-        |index| PRESETS[index].name(app.settings.language),
+        |index| PRESETS[index].name(app.settings.preferences.language),
     );
     let entries = vec![
         (
             format!(
                 "[{}] {}",
-                if app.settings.equalizer.enabled {
+                if app.settings.preferences.equalizer.enabled {
                     'x'
                 } else {
                     ' '
@@ -141,7 +141,7 @@ fn vertical(frame: &mut Frame, app: &mut App, selected: usize, area: Rect, palet
         } else {
             palette.text()
         };
-        let gain = app.settings.equalizer.gain(index).unwrap_or(0);
+        let gain = app.settings.preferences.equalizer.gain(index).unwrap_or(0);
         frame.render_widget(
             Paragraph::new(format!("{gain:+}"))
                 .alignment(Alignment::Center)
@@ -207,7 +207,7 @@ fn horizontal(frame: &mut Frame, app: &mut App, selected: usize, area: Rect, pal
         } else {
             palette.text()
         };
-        let gain = app.settings.equalizer.gain(index).unwrap_or(0);
+        let gain = app.settings.preferences.equalizer.gain(index).unwrap_or(0);
         frame.render_widget(
             Paragraph::new(format!("{} {gain:+} dB", label(app, index))).style(style),
             Rect::new(area.x, y, area.width.min(13), 1),
@@ -269,7 +269,7 @@ fn dropdown(frame: &mut Frame, app: &mut App, selected: &mut usize, inner: Rect,
     frame.render_widget(block, outer);
     let capacity = usize::from(body.height);
     let offset = visible_offset(0, *selected, capacity, PRESETS.len());
-    let current = app.settings.equalizer.preset();
+    let current = app.settings.preferences.equalizer.preset();
     for (index, preset) in PRESETS.iter().enumerate().skip(offset).take(capacity) {
         let row = Rect::new(body.x, body.y + (index - offset) as u16, body.width, 1);
         let style = if index == *selected {
@@ -284,7 +284,7 @@ fn dropdown(frame: &mut Frame, app: &mut App, selected: &mut usize, inner: Rect,
             Paragraph::new(format!(
                 "{} {}",
                 if current == Some(index) { "●" } else { " " },
-                preset.name(app.settings.language)
+                preset.name(app.settings.preferences.language)
             ))
             .style(style),
             row,

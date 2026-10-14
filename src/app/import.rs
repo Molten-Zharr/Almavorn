@@ -67,7 +67,7 @@ impl App {
     }
 
     pub(super) fn import_target(&self) -> Option<i64> {
-        if self.settings.sorting_desk {
+        if self.settings.preferences.sorting_desk {
             self.library
                 .playlists
                 .iter()
@@ -165,7 +165,7 @@ impl App {
             paths,
             known,
             ImportDestination::Existing(target),
-            self.settings.scan_subfolders,
+            self.settings.preferences.scan_subfolders,
             None,
         )
     }
@@ -196,7 +196,7 @@ impl App {
         );
         let mut worker_store = self.store.try_clone()?;
         let unlocked = self.view.editing;
-        let language = self.settings.language;
+        let language = self.settings.preferences.language;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();
         let progress = Arc::new(AtomicUsize::new(0));

@@ -194,6 +194,7 @@ fn text_selection_and_backspace_take_priority_over_global_shortcuts() {
     let directory = tempfile::tempdir().unwrap();
     let mut app = App::new(directory.path()).unwrap();
     app.settings
+        .preferences
         .bindings
         .iter_mut()
         .find(|binding| binding.action == Action::Quit)
@@ -220,17 +221,18 @@ fn binding_capture_rejects_reserved_and_conflicting_keys_and_normalizes_assignme
     let mut app = App::new(directory.path()).unwrap();
     let index = app
         .settings
+        .preferences
         .bindings
         .iter()
         .position(|binding| binding.action == Action::Settings)
         .unwrap();
-    let original = app.settings.bindings[index].key;
+    let original = app.settings.preferences.bindings[index].key;
     app.open_settings_page(SettingsPage::Shortcuts);
     app.view.dialog = Some(Dialog::CaptureBinding { index });
     for invalid in [Key::Up, Key::F(1)] {
         key(&mut app, invalid);
         assert!(app.view.notice_error);
-        assert_eq!(app.settings.bindings[index].key, original);
+        assert_eq!(app.settings.preferences.bindings[index].key, original);
         assert!(matches!(
             app.view.dialog,
             Some(Dialog::CaptureBinding { .. })
@@ -238,7 +240,7 @@ fn binding_capture_rejects_reserved_and_conflicting_keys_and_normalizes_assignme
     }
     key(&mut app, Key::Escape);
     assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
-    assert_eq!(app.settings.bindings[index].key, original);
+    assert_eq!(app.settings.preferences.bindings[index].key, original);
     app.view.dialog = Some(Dialog::CaptureBinding { index });
     press(
         &mut app,
@@ -250,7 +252,7 @@ fn binding_capture_rejects_reserved_and_conflicting_keys_and_normalizes_assignme
         },
     );
     assert_eq!(
-        app.settings.bindings[index].key,
+        app.settings.preferences.bindings[index].key,
         KeyPress {
             key: Key::Char('j'),
             ctrl: true,
@@ -444,9 +446,9 @@ fn folder_management_keys_edit_remove_and_toggle_scan_options() {
     );
     key(&mut app, Key::Escape);
     app.action(Action::PlaylistFolders).unwrap();
-    let scans_subfolders = app.settings.scan_subfolders;
+    let scans_subfolders = app.settings.preferences.scan_subfolders;
     key(&mut app, Key::Char(' '));
-    assert_eq!(app.settings.scan_subfolders, !scans_subfolders);
+    assert_eq!(app.settings.preferences.scan_subfolders, !scans_subfolders);
     assert!(matches!(app.view.dialog, Some(Dialog::Folders { .. })));
 }
 
@@ -478,13 +480,25 @@ fn panel_tree_keys_expand_categories_and_toggle_visibility_with_modifier_guards(
         matches!(&app.view.dialog, Some(Dialog::Panels { selected, .. }) if *selected == category + 1)
     );
     key(&mut app, Key::Char(' '));
-    assert!(app.settings.workspace.hidden_controls.contains(&control));
+    assert!(
+        app.settings
+            .preferences
+            .workspace
+            .hidden_controls
+            .contains(&control)
+    );
     key(&mut app, Key::Left);
     assert!(
         matches!(&app.view.dialog, Some(Dialog::Panels { selected, expanded }) if *selected == category && !expanded.contains(&Panel::Application))
     );
     key(&mut app, Key::Char(' '));
-    assert!(app.settings.workspace.hidden.contains(&Panel::Application));
+    assert!(
+        app.settings
+            .preferences
+            .workspace
+            .hidden
+            .contains(&Panel::Application)
+    );
     assert!(matches!(app.view.dialog, Some(Dialog::Panels { .. })));
 }
 

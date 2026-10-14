@@ -98,9 +98,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         Target::Action(action) => Some(format!(
             "{}{}",
             buttons::button_shortcut(app, target).map_or(String::new(), |key| format!("{key} · ")),
-            action.description(app.settings.language)
+            action.description(app.settings.preferences.language)
         )),
-        Target::CommandMenu(menu) => Some(menu.title(app.settings.language).to_owned()),
+        Target::CommandMenu(menu) => Some(menu.title(app.settings.preferences.language).to_owned()),
         _ => None,
     });
     let message = if app.view.notice_error || app.busy() || app.importing() {

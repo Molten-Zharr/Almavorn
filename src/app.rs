@@ -70,16 +70,12 @@ impl App {
             .context("Cannot start background workers")?;
         let store = Store::open(directory)?;
         let mut settings = store.settings()?;
-        settings.volume = settings.volume.clamp(0.0, 1.0);
-        settings.workspace.normalize();
-        settings.ensure_bindings();
-        settings.equalizer.normalize();
-        settings.tuner.normalize();
+        settings.preferences.normalize();
         for tuner in settings.track_tuners.values_mut() {
             tuner.normalize();
         }
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
-        let view = UiState::new(settings.language);
+        let view = UiState::new(settings.preferences.language);
         Ok(Self {
             store,
             runtime: Some(runtime),
@@ -95,7 +91,7 @@ impl App {
     }
 
     pub fn text(&self, english: &'static str, russian: &'static str) -> &'static str {
-        self.settings.language.text(english, russian)
+        self.settings.preferences.language.text(english, russian)
     }
 
     fn message(&mut self, text: String) {
@@ -104,7 +100,7 @@ impl App {
     }
 
     fn failure(&mut self, error: anyhow::Error) {
-        let reason = crate::errors::message(&error, self.settings.language);
+        let reason = crate::errors::message(&error, self.settings.preferences.language);
         self.view.notice = format!(
             "{}: {}",
             self.text("Action failed", "Действие не выполнено"),

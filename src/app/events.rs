@@ -75,7 +75,7 @@ impl App {
         }
         let percent = (ratio.clamp(0.0, 1.0) * 100.0).round() as i16;
         if let Err(error) =
-            self.adjust_volume(percent - (self.settings.volume * 100.0).round() as i16)
+            self.adjust_volume(percent - (self.settings.preferences.volume * 100.0).round() as i16)
         {
             self.failure(error);
         }
@@ -132,7 +132,7 @@ impl App {
                     if matches!(target, Target::Action(Action::CycleRepeat)) {
                         let repeat = if double {
                             RepeatMode::Playlist
-                        } else if self.settings.repeat == RepeatMode::Track {
+                        } else if self.settings.preferences.repeat == RepeatMode::Track {
                             RepeatMode::Off
                         } else {
                             RepeatMode::Track
@@ -319,6 +319,7 @@ impl App {
         if let Some(action) = self.view.dialog.as_ref().and_then(Dialog::opening_action)
             && (self
                 .settings
+                .preferences
                 .bindings
                 .iter()
                 .any(|binding| binding.action == action && binding.key == normalized)
@@ -358,6 +359,7 @@ impl App {
         }
         if let Some(action) = self
             .settings
+            .preferences
             .bindings
             .iter()
             .find(|binding| binding.key == normalized)
@@ -517,7 +519,9 @@ impl App {
                 let percent = (u32::from(self.last_pointer_x(area)) * 100
                     / u32::from(area.width.saturating_sub(1).max(1)))
                     as i16;
-                self.adjust_volume(percent - (self.settings.volume * 100.0).round() as i16)?;
+                self.adjust_volume(
+                    percent - (self.settings.preferences.volume * 100.0).round() as i16,
+                )?;
             }
             Target::Seek(area) => {
                 if self.view.workspace.gesture.is_none() {
@@ -568,7 +572,8 @@ impl App {
                         || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none()),
                     AppError::FolderNotReady
                 );
-                self.settings.scan_subfolders = !self.settings.scan_subfolders;
+                self.settings.preferences.scan_subfolders =
+                    !self.settings.preferences.scan_subfolders;
                 self.save_settings()?;
             }
             Target::Text(c) => {

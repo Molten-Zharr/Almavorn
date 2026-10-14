@@ -166,13 +166,15 @@ pub(super) fn help_dialog(
             app.text(en, ru).into(),
         ));
     }
-    for binding in &app.settings.bindings {
+    for binding in &app.settings.preferences.bindings {
         entries.push((
             Some(binding.key),
             format!(
                 "{}\n{}",
-                binding.action.name(app.settings.language),
-                binding.action.description(app.settings.language)
+                binding.action.name(app.settings.preferences.language),
+                binding
+                    .action
+                    .description(app.settings.preferences.language)
             ),
         ));
     }
@@ -339,7 +341,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let mut app = App::new(directory.path()).unwrap();
         for language in [Language::Russian, Language::English] {
-            app.settings.language = language;
+            app.settings.preferences.language = language;
             let marker = app.text("LAST LINE", "ПОСЛЕДНЯЯ");
             for (width, height) in [(86, 36), (64, 21), (26, 9)] {
                 let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();

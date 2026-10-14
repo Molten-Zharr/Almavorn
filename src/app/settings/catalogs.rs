@@ -114,7 +114,8 @@ impl App {
                 )?;
                 let id = self.settings.fresh_id("preset");
                 let style = self.settings.current_style();
-                self.settings.appearance.preset_ids[self.settings.mode.index()] = Some(id.clone());
+                self.settings.preferences.appearance.preset_ids[self.settings.mode.index()] =
+                    Some(id.clone());
                 self.settings.presets.push(ThemePreset { id, name, style });
                 self.view.settings.preset = self.settings.presets.len() - 1;
             }
@@ -140,7 +141,7 @@ impl App {
                     (MIN_FONT_SIZE..=MAX_FONT_SIZE).contains(&size),
                     AppError::InvalidFontSize
                 );
-                self.settings.appearance.font_size = size;
+                self.settings.preferences.appearance.font_size = size;
             }
             SettingsEdit::ExportPalette { id, directory } => {
                 self.start_palette_export(&id, &directory, text)?;

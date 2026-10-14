@@ -51,8 +51,8 @@ impl Palette {
             confirm_background: color("confirm_background"),
             help_heading: color("help_heading"),
             separator: color("separator"),
-            borders: app.settings.appearance.borders,
-            corners: app.settings.appearance.corners,
+            borders: app.settings.preferences.appearance.borders,
+            corners: app.settings.preferences.appearance.corners,
         }
     }
     pub(super) fn text(self) -> Style {

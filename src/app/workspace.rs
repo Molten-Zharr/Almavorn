@@ -47,13 +47,24 @@ impl App {
                 }
             }
             PanelRow::Control(control) => {
-                if self.settings.workspace.hidden_controls.contains(&control) {
+                if self
+                    .settings
+                    .preferences
+                    .workspace
+                    .hidden_controls
+                    .contains(&control)
+                {
                     self.settings
+                        .preferences
                         .workspace
                         .hidden_controls
                         .retain(|value| *value != control);
                 } else {
-                    self.settings.workspace.hidden_controls.push(control);
+                    self.settings
+                        .preferences
+                        .workspace
+                        .hidden_controls
+                        .push(control);
                 }
                 self.save_settings()?;
             }
@@ -116,8 +127,8 @@ impl App {
     }
 
     pub(crate) fn close_panel(&mut self, panel: Panel) -> Result<()> {
-        if !self.settings.workspace.hidden.contains(&panel) {
-            self.settings.workspace.hidden.push(panel);
+        if !self.settings.preferences.workspace.hidden.contains(&panel) {
+            self.settings.preferences.workspace.hidden.push(panel);
         }
         if self.view.workspace.focus == panel {
             let index = self
@@ -136,7 +147,7 @@ impl App {
                 .skip(index + 1)
                 .take(self.view.workspace.areas.len())
                 .map(|(panel, _)| *panel)
-                .find(|panel| !self.settings.workspace.hidden.contains(panel));
+                .find(|panel| !self.settings.preferences.workspace.hidden.contains(panel));
             if let Some(next) = next {
                 self.focus_panel(next);
             }
@@ -146,13 +157,20 @@ impl App {
 
     pub(crate) fn toggle_panel(&mut self, panel: Panel) -> Result<()> {
         self.focus_panel(panel);
-        if self.settings.workspace.collapsed.contains(&panel) {
+        if self
+            .settings
+            .preferences
+            .workspace
+            .collapsed
+            .contains(&panel)
+        {
             self.settings
+                .preferences
                 .workspace
                 .collapsed
                 .retain(|value| *value != panel);
         } else {
-            self.settings.workspace.collapsed.push(panel);
+            self.settings.preferences.workspace.collapsed.push(panel);
         }
         self.save_settings()
     }
@@ -164,8 +182,9 @@ impl App {
                 .position(|row| matches!(row, PanelRow::Category(value) if *value == panel))
                 .unwrap_or(*selected);
         }
-        if self.settings.workspace.hidden.contains(&panel) {
+        if self.settings.preferences.workspace.hidden.contains(&panel) {
             self.settings
+                .preferences
                 .workspace
                 .hidden
                 .retain(|value| *value != panel);
@@ -180,7 +199,7 @@ impl App {
         self.view.workspace.gesture = None;
         self.view.workspace.drop = None;
         self.view.workspace.root = None;
-        self.settings.workspace = Default::default();
+        self.settings.preferences.workspace = Default::default();
         self.focus_panel(Panel::Tracks);
         self.save_settings()
     }
@@ -226,7 +245,7 @@ impl App {
                     *ratio =
                         ((u32::from(cut) * 1000 / u32::from(length.max(1))) as u16).clamp(1, 999);
                     if crate::ui::workspace_fits(self, &root) {
-                        self.settings.workspace.root = Some(root.clone());
+                        self.settings.preferences.workspace.root = Some(root.clone());
                         self.view.workspace.root = Some(root);
                     }
                 }
@@ -321,7 +340,7 @@ impl App {
                         root = remaining;
                     }
                     if crate::ui::workspace_fits(self, &root) {
-                        self.settings.workspace.root = Some(root.clone());
+                        self.settings.preferences.workspace.root = Some(root.clone());
                         self.view.workspace.root = Some(root);
                         self.save_settings()?;
                     } else {
@@ -345,7 +364,7 @@ impl App {
         match gesture {
             Gesture::Resize { before, .. } => {
                 self.view.workspace.root = Some(before.clone());
-                self.settings.workspace.root = Some(before);
+                self.settings.preferences.workspace.root = Some(before);
             }
             Gesture::Seek(_) => self.cancel_seek(),
             _ => {}
@@ -451,7 +470,7 @@ impl App {
             {
                 root.swap(panel, neighbor);
                 if crate::ui::workspace_fits(self, &root) {
-                    self.settings.workspace.root = Some(root.clone());
+                    self.settings.preferences.workspace.root = Some(root.clone());
                     self.view.workspace.root = Some(root);
                     self.save_settings()?;
                 }
@@ -475,7 +494,7 @@ impl App {
                     ratio.saturating_add(30).min(999)
                 };
                 if crate::ui::workspace_fits(self, &root) {
-                    self.settings.workspace.root = Some(root.clone());
+                    self.settings.preferences.workspace.root = Some(root.clone());
                     self.view.workspace.root = Some(root);
                     self.save_settings()?;
                 }

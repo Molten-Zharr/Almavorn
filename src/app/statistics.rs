@@ -190,8 +190,10 @@ impl App {
                         self.statistics.enqueue(record);
                     }
                     self.statistics.retry_at = Some(Instant::now() + Duration::from_secs(5));
-                    self.statistics.view.error =
-                        Some(crate::errors::message(&error, self.settings.language));
+                    self.statistics.view.error = Some(crate::errors::message(
+                        &error,
+                        self.settings.preferences.language,
+                    ));
                     self.failure(error);
                 }
             }
@@ -206,8 +208,10 @@ impl App {
                     self.statistics.view.error = None;
                 }
                 Err(error) => {
-                    self.statistics.view.error =
-                        Some(crate::errors::message(&error, self.settings.language))
+                    self.statistics.view.error = Some(crate::errors::message(
+                        &error,
+                        self.settings.preferences.language,
+                    ))
                 }
             }
         }
@@ -308,6 +312,7 @@ impl App {
             _ => {
                 if let Some(action) = self
                     .settings
+                    .preferences
                     .bindings
                     .iter()
                     .find(|binding| binding.key == key)

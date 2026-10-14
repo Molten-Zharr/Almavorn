@@ -306,7 +306,7 @@ fn mix(a: [u8; 3], b: [u8; 3], amount: f32) -> [u8; 3] {
 /// selections, buttons and hit targets keep their original content and priority.
 pub(super) fn render(frame: &mut Frame, app: &App, palette: Palette) {
     let state = &app.playback.visualizer;
-    let kind = app.settings.appearance.visualizer;
+    let kind = app.settings.preferences.appearance.visualizer;
     if !state.available || kind == VisualizerKind::Off {
         return;
     }
@@ -322,7 +322,13 @@ pub(super) fn render(frame: &mut Frame, app: &App, palette: Palette) {
         VisualizerKind::Bombardment => canvas.bombardment(state),
     }
     let background = rgb(palette.background);
-    let brightness = f32::from(app.settings.appearance.animation_brightness.clamp(10, 70)) / 100.0;
+    let brightness = f32::from(
+        app.settings
+            .preferences
+            .appearance
+            .animation_brightness
+            .clamp(10, 70),
+    ) / 100.0;
     let buffer = frame.buffer_mut();
     for (index, dot) in canvas.cells.into_iter().enumerate() {
         if dot.bits == 0 || dot.strength <= 0.01 {

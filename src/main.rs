@@ -30,8 +30,8 @@ fn run() -> Result<()> {
         app.start_import(options.files)?;
     }
     let mut font_settings = (
-        app.settings.appearance.font,
-        app.settings.appearance.font_size,
+        app.settings.preferences.appearance.font,
+        app.settings.preferences.appearance.font_size,
     );
     let backend = gui_fonts::backend(font_settings.0, font_settings.1, 120, 50);
     let mut terminal = Terminal::new(RataguiBackend::new("almavorn", backend))?;
@@ -55,8 +55,8 @@ fn run() -> Result<()> {
             .show_inside(root, |ui| {
                 let pixels_per_point = ctx.pixels_per_point();
                 let requested_font = (
-                    app.settings.appearance.font,
-                    (f32::from(app.settings.appearance.font_size) * pixels_per_point)
+                    app.settings.preferences.appearance.font,
+                    (f32::from(app.settings.preferences.appearance.font_size) * pixels_per_point)
                         .round()
                         .clamp(1.0, f32::from(u16::MAX)) as u16,
                 );
@@ -923,26 +923,26 @@ mod tests {
                     position.y += 40.0;
                     frame(&mut app, vec![egui::Event::PointerMoved(position)]);
                     assert_eq!(
-                        (app.settings.volume * 100.0).round() as u16,
+                        (app.settings.preferences.volume * 100.0).round() as u16,
                         percent,
                         "settings={settings}, columns={columns}"
                     );
                 }
                 frame(&mut app, vec![button(point(51), false)]);
-                assert_eq!((app.settings.volume * 100.0).round() as u16, 51);
+                assert_eq!((app.settings.preferences.volume * 100.0).round() as u16, 51);
                 assert!(app.view.workspace.gesture.is_none());
                 assert!(!app.view.notice_error, "{}", app.view.notice);
                 // The frame fallback must not turn a precise value into a cell value.
                 frame(&mut app, vec![button(point(50), true)]);
                 release_pointer(&mut app, image, size, point(51));
-                assert_eq!((app.settings.volume * 100.0).round() as u16, 51);
+                assert_eq!((app.settings.preferences.volume * 100.0).round() as u16, 51);
                 assert!(app.view.workspace.gesture.is_none());
                 frame(&mut app, vec![button(point(51), false)]);
             }
         }
         drop(app);
         let app = App::new(directory.path()).unwrap();
-        assert_eq!((app.settings.volume * 100.0).round() as u16, 51);
+        assert_eq!((app.settings.preferences.volume * 100.0).round() as u16, 51);
     }
 
     #[test]
@@ -1007,7 +1007,7 @@ mod tests {
                         &mut app, image, size, position, false, false
                     ));
                     assert_eq!(
-                        app.settings.tuner.value(index),
+                        app.settings.preferences.tuner.value(index),
                         Some(value),
                         "{columns} cols"
                     );
@@ -1024,7 +1024,7 @@ mod tests {
                         false,
                         false
                     ));
-                    assert_eq!(app.settings.tuner.value(index), Some(expected));
+                    assert_eq!(app.settings.preferences.tuner.value(index), Some(expected));
                 }
                 let value = if index == 3 { 50 } else { 100 };
                 assert!(slider_pointer(
@@ -1035,7 +1035,7 @@ mod tests {
                     false,
                     true
                 ));
-                assert_eq!(app.settings.tuner.value(index), Some(value));
+                assert_eq!(app.settings.preferences.tuner.value(index), Some(value));
                 assert!(app.view.workspace.gesture.is_none());
                 assert!(!app.view.notice_error, "{}", app.view.notice);
                 if index == 3 {
@@ -1057,7 +1057,7 @@ mod tests {
                         false,
                         false,
                     ));
-                    assert_eq!(app.settings.tuner.value(index), Some(value));
+                    assert_eq!(app.settings.preferences.tuner.value(index), Some(value));
                 }
                 app.handle(Input::Key(KeyPress::plain(Key::Tab)));
             }
@@ -1076,10 +1076,10 @@ mod tests {
             app.view.dialog,
             Some(Dialog::PlaybackTuner { .. })
         ));
-        let expected = app.settings.tuner.clone();
+        let expected = app.settings.preferences.tuner.clone();
         drop(app);
         let app = App::new(directory.path()).unwrap();
-        assert_eq!(app.settings.tuner, expected);
+        assert_eq!(app.settings.preferences.tuner, expected);
     }
 
     #[test]

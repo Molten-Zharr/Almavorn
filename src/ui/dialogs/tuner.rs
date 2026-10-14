@@ -133,7 +133,7 @@ pub(super) fn render(
         frame.render_widget(
             Paragraph::new(format!(
                 "{}: {value}%{detail}",
-                TunerSettings::label(index, app.settings.language)
+                TunerSettings::label(index, app.settings.preferences.language)
             ))
             .style(style),
             label_area,
@@ -179,8 +179,11 @@ pub(super) fn render(
         }
         if !compact {
             frame.render_widget(
-                Paragraph::new(TunerSettings::description(index, app.settings.language))
-                    .style(palette.text().fg(palette.muted)),
+                Paragraph::new(TunerSettings::description(
+                    index,
+                    app.settings.preferences.language,
+                ))
+                .style(palette.text().fg(palette.muted)),
                 Rect::new(body.x, y + 2, body.width, 1),
             );
         }

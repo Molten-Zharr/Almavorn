@@ -77,7 +77,7 @@ impl App {
             failed: false,
             selected_all: false,
             keyboard_visible: false,
-            keyboard: self.settings.language,
+            keyboard: self.settings.preferences.language,
             upper: false,
             results_area: Rect::default(),
             playlists_area: Rect::default(),
@@ -298,13 +298,25 @@ impl App {
             self.view.filter_keyboard = false;
             return Ok(());
         }
-        let hidden = self.settings.workspace.hidden.contains(&Panel::Tracks)
-            || self.settings.workspace.collapsed.contains(&Panel::Tracks);
+        let hidden = self
+            .settings
+            .preferences
+            .workspace
+            .hidden
+            .contains(&Panel::Tracks)
+            || self
+                .settings
+                .preferences
+                .workspace
+                .collapsed
+                .contains(&Panel::Tracks);
         self.settings
+            .preferences
             .workspace
             .hidden
             .retain(|p| *p != Panel::Tracks);
         self.settings
+            .preferences
             .workspace
             .collapsed
             .retain(|p| *p != Panel::Tracks);
@@ -313,14 +325,14 @@ impl App {
         }
         self.view.filter_before = self.library.query.clone();
         self.view.filter_selected_all = !self.library.query.is_empty();
-        self.view.filter_keyboard_language = self.settings.language;
+        self.view.filter_keyboard_language = self.settings.preferences.language;
         self.view.filter_editing = true;
         self.focus_panel(Panel::Tracks);
         Ok(())
     }
 
     pub(super) fn filter_key(&mut self, key: KeyPress) -> Result<()> {
-        if self.settings.bindings.iter().any(|binding| {
+        if self.settings.preferences.bindings.iter().any(|binding| {
             binding.action == crate::input::Action::Filter && binding.key == key.normalized()
         }) {
             self.edit_filter()?;
