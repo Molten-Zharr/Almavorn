@@ -3,6 +3,7 @@ use crate::{
     errors::AppError,
     input::{Key, KeyPress},
     model::{Entry, Language, Playlist},
+    track_query::{TrackQuery, TrackText},
     workspace::Panel,
 };
 use anyhow::{Context, Result};
@@ -17,7 +18,7 @@ pub enum SearchFocus {
     Playlists,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SearchHit {
     playlist: usize,
     entry: usize,
@@ -26,7 +27,7 @@ pub(crate) struct SearchHit {
 struct SearchItem {
     hit: SearchHit,
     playlist_id: i64,
-    text: String,
+    text: TrackText,
 }
 
 #[derive(Clone)]
@@ -56,6 +57,30 @@ pub(super) struct SearchRequest {
     index: Arc<[SearchItem]>,
     query: String,
     playlists: HashSet<i64>,
+}
+
+const MAX_QUERY_CHARS: usize = 512;
+
+fn append_query_text(query: &mut String, selected_all: &mut bool, text: &str) {
+    if *selected_all {
+        query.clear();
+        *selected_all = false;
+    }
+    let remaining = MAX_QUERY_CHARS.saturating_sub(query.chars().count());
+    query.extend(
+        text.chars()
+            .filter(|character| !character.is_control())
+            .take(remaining),
+    );
+}
+
+fn backspace_query_text(query: &mut String, selected_all: &mut bool) {
+    if *selected_all {
+        query.clear();
+        *selected_all = false;
+    } else {
+        query.pop();
+    }
 }
 
 impl App {
@@ -114,14 +139,7 @@ impl App {
                         .map(move |(entry, e)| SearchItem {
                             hit: SearchHit { playlist, entry },
                             playlist_id: p.id,
-                            text: format!(
-                                "{} {} {} {}",
-                                e.track.title,
-                                e.track.artist,
-                                e.track.album,
-                                e.track.path.display()
-                            )
-                            .to_lowercase(),
+                            text: TrackText::new(&e.track),
                         })
                 })
                 .collect::<Vec<_>>()
@@ -147,15 +165,14 @@ impl App {
         let runtime = self.runtime.as_ref().expect("runtime is alive");
         self.search_job.start(|request| {
             let index = request.index.clone();
-            let query = request.query.to_lowercase();
+            let query = request.query.clone();
             let playlists = request.playlists.clone();
             background(runtime, move || {
-                let words: Vec<_> = query.split_whitespace().collect();
+                let query = TrackQuery::new(&query);
                 Ok(index
                     .iter()
                     .filter(|item| {
-                        playlists.contains(&item.playlist_id)
-                            && words.iter().all(|word| item.text.contains(word))
+                        playlists.contains(&item.playlist_id) && query.matches(&item.text)
                     })
                     .map(|item| item.hit)
                     .collect())
@@ -252,12 +269,7 @@ impl App {
             }
             Key::Backspace => {
                 search.focus = SearchFocus::Input;
-                if search.selected_all {
-                    search.query.clear();
-                    search.selected_all = false;
-                } else {
-                    search.query.pop();
-                }
+                backspace_query_text(&mut search.query, &mut search.selected_all);
             }
             Key::Up => self.search_navigate(-1),
             Key::Down => self.search_navigate(1),
@@ -352,12 +364,7 @@ impl App {
             }
             Key::Char('a') if key.ctrl => self.view.filter_selected_all = true,
             Key::Backspace => {
-                if self.view.filter_selected_all {
-                    self.library.query.clear();
-                    self.view.filter_selected_all = false;
-                } else {
-                    self.library.query.pop();
-                }
+                backspace_query_text(&mut self.library.query, &mut self.view.filter_selected_all);
                 self.refresh()?;
             }
             Key::Up => self.navigate(-1),
@@ -370,24 +377,17 @@ impl App {
     }
 
     pub(super) fn query_text(&mut self, text: &str) -> Result<bool> {
-        let input = text.chars().filter(|c| !c.is_control());
         if let Some(Dialog::Search(search)) = &mut self.view.dialog {
             search.focus = SearchFocus::Input;
-            if search.selected_all {
-                search.query.clear();
-                search.selected_all = false;
-            }
-            let remaining = 512usize.saturating_sub(search.query.chars().count());
-            search.query.extend(input.take(remaining));
+            append_query_text(&mut search.query, &mut search.selected_all, text);
             return Ok(true);
         }
         if self.view.dialog.is_none() && self.view.filter_editing {
-            if self.view.filter_selected_all {
-                self.library.query.clear();
-                self.view.filter_selected_all = false;
-            }
-            let remaining = 512usize.saturating_sub(self.library.query.chars().count());
-            self.library.query.extend(input.take(remaining));
+            append_query_text(
+                &mut self.library.query,
+                &mut self.view.filter_selected_all,
+                text,
+            );
             self.view.track_offset = 0;
             self.refresh()?;
             return Ok(true);
@@ -395,3 +395,6 @@ impl App {
         Ok(false)
     }
 }
+
+#[cfg(test)]
+mod tests;

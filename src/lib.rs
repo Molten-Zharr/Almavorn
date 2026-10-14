@@ -10,6 +10,7 @@ pub mod model;
 pub mod preferences;
 pub mod statistics;
 pub mod store;
+mod track_query;
 pub mod tuner;
 pub mod ui;
 pub mod visualizer;

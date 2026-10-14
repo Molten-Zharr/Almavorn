@@ -1,5 +1,6 @@
 use super::{App, Focus, Sort, bounded};
 use crate::model::{Entry, Mode, Playlist, PlaylistKind};
+use crate::track_query::TrackQuery;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
@@ -73,26 +74,12 @@ impl App {
                 && cache.descending == self.library.sort_descending
         });
         if !valid {
-            let query = self.library.query.to_lowercase();
-            let words: Vec<_> = query.split_whitespace().collect();
+            let query = TrackQuery::new(&self.library.query);
             let mut indices: Vec<_> = playlist
                 .entries
                 .iter()
                 .enumerate()
-                .filter(|(_, entry)| {
-                    if words.is_empty() {
-                        return true;
-                    }
-                    let text = format!(
-                        "{} {} {} {}",
-                        entry.track.title,
-                        entry.track.artist,
-                        entry.track.album,
-                        entry.track.path.display()
-                    )
-                    .to_lowercase();
-                    words.iter().all(|word| text.contains(word))
-                })
+                .filter(|(_, entry)| query.matches_track(&entry.track))
                 .map(|(index, _)| index)
                 .collect();
             let entries = &playlist.entries;
