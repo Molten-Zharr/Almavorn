@@ -6,7 +6,6 @@ use crate::{
     store::{Change, Store},
 };
 use anyhow::{Result, ensure};
-use tokio::runtime::Runtime;
 
 pub(super) enum DatabaseOutcome {
     Changed(Change),
@@ -29,42 +28,6 @@ pub(super) struct LibraryJob {
 impl App {
     pub(super) fn database_busy(&self) -> bool {
         self.library.database.is_some() || self.library.revision != self.store.revision()
-    }
-
-    pub(super) fn save_settings(&mut self) -> Result<()> {
-        self.sync_tuner()?;
-        if let Some(audio) = &self.playback.audio {
-            audio.equalizer(&self.settings.equalizer);
-        }
-        self.settings.sync_active_profile();
-        self.persistence.pending = Some(self.settings.clone());
-        self.persistence.failed = false;
-        self.start_settings()
-    }
-
-    pub fn settings_saving(&self) -> bool {
-        self.persistence.job.is_some() || self.persistence.pending.is_some()
-    }
-
-    pub(super) fn runtime(&self) -> &Runtime {
-        self.runtime
-            .as_ref()
-            .expect("runtime is alive while the interface runs")
-    }
-
-    pub(super) fn start_settings(&mut self) -> Result<()> {
-        if !self.persistence.failed
-            && self.persistence.job.is_none()
-            && let Some(settings) = &self.persistence.pending
-        {
-            let mut store = self.store.try_clone()?;
-            let settings = settings.clone();
-            self.persistence.job = Some(background(self.runtime(), move || {
-                store.save_settings(&settings)
-            }));
-            self.persistence.pending = None;
-        }
-        Ok(())
     }
 
     pub(super) fn start_database(
@@ -196,20 +159,5 @@ impl App {
             });
         }
         Ok(())
-    }
-
-    pub(super) fn tick_settings(&mut self) -> Result<()> {
-        let result = self.persistence.job.as_mut().and_then(poll);
-        if let Some(result) = result {
-            self.persistence.job = None;
-            if let Err(error) = result {
-                self.persistence
-                    .pending
-                    .get_or_insert_with(|| self.settings.clone());
-                self.persistence.failed = true;
-                return Err(error);
-            }
-        }
-        self.start_settings()
     }
 }

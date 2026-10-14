@@ -6,6 +6,12 @@ use crate::{
 use anyhow::Result;
 
 impl App {
+    pub(super) fn sync_equalizer(&self) {
+        if let Some(audio) = &self.playback.audio {
+            audio.equalizer(&self.settings.equalizer);
+        }
+    }
+
     pub(super) fn close_equalizer_presets(&mut self) -> bool {
         if self.view.workspace.gesture.is_some() {
             return false;
@@ -32,6 +38,7 @@ impl App {
         match target {
             Target::EqualizerToggle => {
                 self.settings.equalizer.enabled = !self.settings.equalizer.enabled;
+                self.sync_equalizer();
                 self.save_settings()?;
             }
             Target::EqualizerPresets => {
@@ -59,12 +66,14 @@ impl App {
                         *presets = false;
                         *preset_selected = index;
                     }
+                    self.sync_equalizer();
                     self.save_settings()?;
                 }
             }
             Target::EqualizerReset => {
                 self.settings.equalizer.preamp = 0;
                 self.settings.equalizer.bands = [0; 10];
+                self.sync_equalizer();
                 self.save_settings()?;
             }
             Target::EqualizerSelect(index) => self.select_equalizer(index),
@@ -113,6 +122,7 @@ impl App {
     fn set_equalizer_gain(&mut self, index: usize, gain: i8) -> Result<()> {
         if self.settings.equalizer.gain(index) != Some(gain.clamp(MIN_GAIN, MAX_GAIN)) {
             self.settings.equalizer.set_gain(index, gain);
+            self.sync_equalizer();
             self.save_settings()?;
         }
         Ok(())

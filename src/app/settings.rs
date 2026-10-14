@@ -1,6 +1,7 @@
 mod catalogs;
 mod files;
 mod items;
+mod persistence;
 
 use super::{App, Dialog, Target, TextPurpose, bounded};
 use crate::{
@@ -495,7 +496,7 @@ impl App {
                 )
             }
             SettingControl::Volume => {
-                return self.set_settings_volume(self.settings.volume + direction as f32 * 0.05);
+                return self.set_volume(self.settings.volume + direction as f32 * 0.05);
             }
             SettingControl::Desk => self.settings.sorting_desk = !self.settings.sorting_desk,
             SettingControl::Visualizer => return self.cycle_visualizer(direction),
@@ -604,13 +605,6 @@ impl App {
                 )
             }
             _ => return Ok(()),
-        }
-        self.save_settings()
-    }
-    pub(super) fn set_settings_volume(&mut self, volume: f32) -> Result<()> {
-        self.settings.volume = volume.clamp(0.0, 1.0);
-        if let Some(audio) = &self.playback.audio {
-            audio.volume(self.settings.volume);
         }
         self.save_settings()
     }

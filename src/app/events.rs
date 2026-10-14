@@ -736,7 +736,7 @@ impl App {
                     }
                     self.select_setting(index);
                     let point = self.last_pointer_x(area);
-                    self.set_settings_volume(
+                    self.set_volume(
                         f32::from(point) / f32::from(area.width.saturating_sub(1).max(1)),
                     )?;
                 }

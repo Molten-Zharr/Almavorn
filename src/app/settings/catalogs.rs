@@ -163,9 +163,9 @@ impl App {
         self.settings.sync_active_profile();
         self.settings.apply_preferences(profile.preferences);
         self.settings.active_profile = profile.id;
-        if let Some(audio) = &self.playback.audio {
-            audio.volume(self.settings.volume);
-        }
+        self.sync_volume();
+        self.sync_tuner()?;
+        self.sync_equalizer();
         self.save_settings()?;
         self.show_settings();
         self.message(self.text("Profile activated", "Профиль включён").into());

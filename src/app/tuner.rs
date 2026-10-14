@@ -53,6 +53,7 @@ impl App {
                 .insert(path, self.settings.tuner.clone());
         }
         self.cancel_workspace_drag();
+        self.sync_tuner()?;
         self.save_settings()
     }
 
@@ -110,6 +111,7 @@ impl App {
         let value = value.clamp(TunerSettings::minimum(index), TunerSettings::maximum(index));
         if self.tuner_settings().value(index) != Some(value) && index < SLIDERS {
             self.editable_tuner().set_value(index, value);
+            self.sync_tuner()?;
             self.save_settings()?;
         }
         Ok(())
@@ -159,10 +161,12 @@ impl App {
             Target::TunerReverse => {
                 let tuner = self.editable_tuner();
                 tuner.reverse = !tuner.reverse;
+                self.sync_tuner()?;
                 self.save_settings()?;
             }
             Target::TunerReset => {
                 *self.editable_tuner() = Default::default();
+                self.sync_tuner()?;
                 self.save_settings()?;
             }
             Target::TunerPin => self.toggle_tuner_pin()?,

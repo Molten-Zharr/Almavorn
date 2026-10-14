@@ -50,15 +50,23 @@ impl App {
 
     pub(super) fn adjust_volume(&mut self, step: i16) -> Result<()> {
         let percent = (self.settings.volume * 100.0).round() as i16;
-        let volume = (percent + step).clamp(0, 100) as f32 / 100.0;
+        self.set_volume((percent + step).clamp(0, 100) as f32 / 100.0)
+    }
+
+    pub(super) fn set_volume(&mut self, volume: f32) -> Result<()> {
+        let volume = volume.clamp(0.0, 1.0);
         if self.settings.volume == volume {
             return Ok(());
         }
         self.settings.volume = volume;
-        if let Some(audio) = &self.playback.audio {
-            audio.volume(volume);
-        }
+        self.sync_volume();
         self.save_settings()
+    }
+
+    pub(super) fn sync_volume(&self) {
+        if let Some(audio) = &self.playback.audio {
+            audio.volume(self.settings.volume);
+        }
     }
 
     pub fn position_ms(&self) -> u64 {
@@ -1102,5 +1110,93 @@ mod tests {
         app.stop_playback();
         assert!(!app.preparing_playback());
         assert!(app.playback.reverse_cache.is_none());
+    }
+
+    #[test]
+    fn saving_settings_and_editing_appearance_volume_or_eq_leave_decode_and_seek_alone() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 2, 0);
+        app.next(1, true).unwrap();
+        app.playback.preparation.requested_mut().unwrap().paused = true;
+        app.seek_to(400);
+        let preparation = app.playback.preparation.generation();
+        let seek = app.playback.seek.generation();
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
+        let seek_cancel = app.playback.seek_cancel.clone().unwrap();
+        // Persistence must not apply even an unapplied direction change.
+        app.settings.tuner.reverse = true;
+        app.save_settings().unwrap();
+        app.open_settings_page(super::super::SettingsPage::Typography);
+        app.adjust_setting(1, 1).unwrap();
+        app.adjust_volume(5).unwrap();
+        app.equalizer_target(super::super::Target::EqualizerToggle)
+            .unwrap();
+
+        assert_eq!(app.playback.preparation.generation(), preparation);
+        assert_eq!(app.playback.seek.generation(), seek);
+        assert!(!cancel.load(Ordering::Relaxed));
+        assert!(!seek_cancel.load(Ordering::Relaxed));
+        assert!(app.requested_playback().unwrap().paused);
+        assert!(!app.requested_playback().unwrap().reverse);
+        assert_eq!(app.playback.seek_preview, Some(400));
+        assert!(app.settings_saving());
+
+        // FX editing still applies the direction immediately and preserves pause.
+        app.tuner_target(super::super::Target::TunerReset).unwrap();
+        app.tuner_target(super::super::Target::TunerReverse)
+            .unwrap();
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(seek_cancel.load(Ordering::Relaxed));
+        assert!(app.requested_playback().unwrap().reverse);
+        assert!(app.requested_playback().unwrap().paused);
+    }
+
+    #[test]
+    fn applying_a_profile_updates_pending_direction_but_preserves_a_pinned_destination() {
+        for pinned in [false, true] {
+            let directory = Directory::new();
+            let mut app = App::new(&directory.0).unwrap();
+            queue(&mut app, 2, 0);
+            if pinned {
+                app.settings.track_tuners.insert(
+                    app.playback.queue.entries()[1].track.path.clone(),
+                    Default::default(),
+                );
+            }
+            app.next(1, true).unwrap();
+            app.playback.preparation.requested_mut().unwrap().paused = true;
+            let generation = app.playback.preparation.generation();
+            let cancel = app.playback.preparation_cancel.clone().unwrap();
+            let mut preferences = app.settings.profile_preferences();
+            preferences.volume = 0.25;
+            preferences.equalizer.enabled = true;
+            preferences.tuner.reverse = true;
+            app.settings
+                .profiles
+                .push(crate::preferences::SettingsProfile {
+                    id: "reverse".into(),
+                    name: "Reverse".into(),
+                    preferences,
+                });
+            app.open_settings_page(super::super::SettingsPage::Profiles);
+            app.adjust_setting(0, 1).unwrap();
+            app.setting(1).unwrap();
+            assert_eq!(app.settings.active_profile, "reverse");
+            assert_eq!(app.settings.volume, 0.25);
+            assert!(app.settings.equalizer.enabled);
+            assert!(app.settings.tuner.reverse);
+            assert_eq!(app.settings.track_tuners.len(), usize::from(pinned));
+            assert_eq!(app.requested_playback().unwrap().reverse, !pinned);
+            assert!(app.requested_playback().unwrap().paused);
+            assert_eq!(requested_index(&app), 1);
+            if pinned {
+                assert_eq!(app.playback.preparation.generation(), generation);
+                assert!(!cancel.load(Ordering::Relaxed));
+            } else {
+                assert!(app.playback.preparation.generation() > generation);
+                assert!(cancel.load(Ordering::Relaxed));
+            }
+        }
     }
 }
