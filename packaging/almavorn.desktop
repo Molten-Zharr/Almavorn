@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Almavorn
+Comment=Local music player
+Comment[ru]=Локальный музыкальный плеер
+Exec=almavorn %F
+TryExec=almavorn
+Icon=almavorn
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=almavorn
+Keywords=Music;Player;Audio;

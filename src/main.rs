@@ -37,6 +37,7 @@ fn run() -> Result<()> {
     let mut terminal = Terminal::new(RataguiBackend::new("almavorn", backend))?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_app_id("almavorn")
             .with_inner_size([1100.0, 760.0])
             .with_min_inner_size([382.0, 420.0]),
         ..Default::default()
@@ -45,7 +46,7 @@ fn run() -> Result<()> {
     let mut image_cache = gui_renderer::ImageCache::default();
     let mut playback_painter = gui_renderer::PlaybackPainter::default();
     let mut color_painter = gui_color_picker::ColorPickerPainter::default();
-    eframe::run_ui_native("Almavorn · GUITUI", options, move |root, _| {
+    eframe::run_ui_native("Almavorn", options, move |root, _| {
         let ctx = root.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(16));
         app.tick();

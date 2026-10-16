@@ -1,5 +1,10 @@
 # Almavorn
 
+Выпуск для Linux включает графическую и консольную версии. Архив и SHA256SUMS
+доступны в [GitHub Releases](https://github.com/Molten-Zharr/Almavorn/releases).
+[Установка, требования к системе и подготовка выпуска](docs/RELEASE.md).
+Код проекта распространяется по [MIT](LICENSE); зависимости сохраняют свои лицензии.
+
 [English](README.md) | [Русский](README.ru.md)
 
 Стек: Rust, Ratatui, Tokio, Rodio, SQLite, Crossterm, egui, eframe, egui_ratatui.

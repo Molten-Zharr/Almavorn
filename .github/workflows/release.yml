@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Build release archive
+        run: python3 scripts/package-release.py
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          version = json.loads(subprocess.check_output([
+              'cargo', 'read-manifest', '--manifest-path', 'Cargo.toml'
+          ]))['version']
+          tag = os.environ['GITHUB_REF_NAME']
+          if tag != f'v{version}':
+              raise SystemExit('Tag and Cargo.toml version differ')
+          assets = sorted(pathlib.Path('target/dist', version).iterdir())
+          subprocess.run([
+              'gh', 'release', 'create', tag, '--verify-tag', '--draft',
+              '--title', f'Almavorn {version}', '--notes-file', f'releases/v{version}.md',
+              *map(str, assets)
+          ], check=True)
+          PY

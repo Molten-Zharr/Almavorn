@@ -1,6 +1,9 @@
 [package]
 name = "almavorn"
 version = "0.1.0"
+description = "A local music player with graphical and terminal interfaces"
+license = "MIT"
+repository = "https://github.com/Molten-Zharr/Almavorn"
 edition = "2024"
 publish = false
 default-run = "almavorn"
@@ -8,6 +11,9 @@ default-run = "almavorn"
 [profile.dev]
 # The GUI rasterizes fonts and converts pixels on the CPU, also during development.
 opt-level = 1
+
+[profile.release]
+strip = "debuginfo"
 
 [features]
 default = ["guitui"]

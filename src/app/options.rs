@@ -16,8 +16,12 @@ impl Options {
         while let Some(argument) = arguments.next() {
             if argument == "--help" || argument == "-h" {
                 println!(
-                    "Almavorn\nUsage: almavorn [--data-dir DIRECTORY] [MUSIC FILES...]\nИспользование: almavorn [--data-dir КАТАЛОГ] [МУЗЫКАЛЬНЫЕ ФАЙЛЫ...]\nF1: help / помощь. Q: quit / выход."
+                    "Almavorn {}\nUsage: almavorn [--data-dir DIRECTORY] [MUSIC FILES...]\nИспользование: almavorn [--data-dir КАТАЛОГ] [МУЗЫКАЛЬНЫЕ ФАЙЛЫ...]\n--version: version / версия. F1: help / помощь. Q: quit / выход.",
+                    env!("CARGO_PKG_VERSION")
                 );
+                return Ok(None);
+            } else if argument == "--version" || argument == "-V" {
+                println!("Almavorn {}", env!("CARGO_PKG_VERSION"));
                 return Ok(None);
             } else if argument == "--data-dir" {
                 directory = PathBuf::from(

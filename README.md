@@ -4,7 +4,10 @@
 
 Stack: Rust, Ratatui, Tokio, Rodio, SQLite, Crossterm, egui, eframe, egui_ratatui.
 
-Releases: TUI-only and GUITUI.
+Linux releases include both graphical and terminal executables. Download the
+archive and SHA256SUMS from [GitHub Releases](https://github.com/Molten-Zharr/Almavorn/releases).
+See [installation, system requirements, and release builds](docs/RELEASE.md).
+The project is [MIT licensed](LICENSE); dependencies retain their own licenses.
 
 Build and run:
 
