@@ -518,7 +518,43 @@ pub struct SplitArea {
     pub minimum: (u16, u16),
 }
 
+#[derive(Clone, Copy)]
+pub struct ListScroll {
+    pub panel: Panel,
+    pub area: Rect,
+    pub total: usize,
+    pub visible: usize,
+    pub offset: usize,
+}
+
+impl ListScroll {
+    pub fn thumb(self) -> Rect {
+        let height = usize::from(self.area.height);
+        let length = (height * self.visible / self.total.max(1))
+            .max(2.min(height))
+            .min(height.saturating_sub(1).max(1));
+        let travel = height.saturating_sub(length);
+        let maximum = self.total.saturating_sub(self.visible);
+        let top = (self.offset.min(maximum) * travel + maximum / 2) / maximum.max(1);
+        Rect::new(self.area.x, self.area.y + top as u16, 1, length as u16)
+    }
+
+    pub fn offset_at(self, y: u16, grab: u16) -> usize {
+        let travel = self.area.height.saturating_sub(self.thumb().height);
+        let top = y
+            .saturating_sub(self.area.y)
+            .saturating_sub(grab)
+            .min(travel);
+        let maximum = self.total.saturating_sub(self.visible);
+        (usize::from(top) * maximum + usize::from(travel) / 2) / usize::from(travel).max(1)
+    }
+}
+
 pub enum Gesture {
+    ListScroll {
+        scroll: ListScroll,
+        origin: u16,
+    },
     Playlist {
         id: i64,
         target: Option<i64>,

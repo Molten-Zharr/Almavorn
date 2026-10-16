@@ -60,6 +60,7 @@ pub enum Target {
     PanelVisibility(crate::workspace::Panel),
     PanelRow(usize),
     PanelResize(usize),
+    ListScroll(crate::workspace::ListScroll),
     ResetWorkspace,
     Action(Action),
     Mode(Mode),

@@ -145,6 +145,13 @@ fn run() -> Result<()> {
                     let cursor = match target {
                         _ if matches!(
                             app.view.workspace.gesture,
+                            Some(almavorn::workspace::Gesture::ListScroll { .. })
+                        ) =>
+                        {
+                            egui::CursorIcon::ResizeVertical
+                        }
+                        _ if matches!(
+                            app.view.workspace.gesture,
                             Some(almavorn::workspace::Gesture::Playlist { .. })
                         ) =>
                         {
@@ -160,6 +167,7 @@ fn run() -> Result<()> {
                             | Target::ColorSlider(_, _),
                         ) => egui::CursorIcon::ResizeHorizontal,
                         Some(Target::ColorWheel(_)) => egui::CursorIcon::Crosshair,
+                        Some(Target::ListScroll(_)) => egui::CursorIcon::ResizeVertical,
                         Some(Target::ColorHex) => egui::CursorIcon::Text,
                         Some(Target::ColorSelect(_) | Target::ColorReset) => {
                             egui::CursorIcon::PointingHand

@@ -377,6 +377,7 @@ impl App {
             let remaining = 512usize.saturating_sub(self.library.query.chars().count());
             self.library.query.extend(input.take(remaining));
             self.view.track_offset = 0;
+            self.view.track_scroll_selected = None;
             self.refresh()?;
             return Ok(true);
         }

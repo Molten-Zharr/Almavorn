@@ -196,6 +196,10 @@ impl App {
                     Some(Target::PlaybackVolume(_))
                 ) {
                     self.adjust_volume(-delta)?;
+                } else if let Some(Target::ListScroll(scroll)) =
+                    self.target_at(Position::new(x, y)).cloned()
+                {
+                    self.scroll_list(scroll, i64::from(delta));
                 } else if self.view.playlist_area.contains(Position::new(x, y)) {
                     if matches!(
                         self.view.workspace.gesture,
@@ -212,9 +216,11 @@ impl App {
                         );
                         return self.drag_workspace(Position::new(x, y));
                     }
+                    self.view.playlist_scroll_selected = None;
                     self.focus_panel(crate::workspace::Panel::Playlists);
                     self.navigate(delta as i64);
                 } else if self.view.tracks_area.contains(Position::new(x, y)) {
+                    self.view.track_scroll_selected = None;
                     self.focus_panel(crate::workspace::Panel::Tracks);
                     self.navigate(delta as i64);
                 }
@@ -280,6 +286,28 @@ impl App {
                 }
             }
             Input::Key(key) => {
+                if self.view.dialog.is_none()
+                    && self.view.toolbar_selected.is_none()
+                    && matches!(
+                        self.view.workspace.focus,
+                        crate::workspace::Panel::Playlists | crate::workspace::Panel::Tracks
+                    )
+                    && matches!(
+                        key.key,
+                        Key::Up
+                            | Key::Down
+                            | Key::PageUp
+                            | Key::PageDown
+                            | Key::Home
+                            | Key::End
+                            | Key::Enter
+                    )
+                {
+                    match self.view.focus {
+                        Focus::Playlists => self.view.playlist_scroll_selected = None,
+                        Focus::Tracks => self.view.track_scroll_selected = None,
+                    }
+                }
                 let was_settings = self.view.dialog.as_ref().is_some_and(Dialog::is_settings);
                 let result = self.key(key);
                 if was_settings || self.view.dialog.as_ref().is_some_and(Dialog::is_settings) {
@@ -685,10 +713,24 @@ impl App {
                     });
                 }
             }
+            Target::ListScroll(scroll) => {
+                let thumb = scroll.thumb();
+                let offset = if thumb.contains(self.view.pointer) {
+                    scroll.offset
+                } else {
+                    scroll.offset_at(self.view.pointer.y, thumb.height / 2)
+                };
+                self.scroll_list(scroll, offset as i64 - scroll.offset as i64);
+                self.view.workspace.gesture = Some(crate::workspace::Gesture::ListScroll {
+                    scroll: crate::workspace::ListScroll { offset, ..scroll },
+                    origin: self.view.pointer.y,
+                });
+            }
             Target::ResetWorkspace => self.reset_workspace()?,
             Target::Action(action) => self.action(action)?,
             Target::Mode(mode) => self.set_mode(mode)?,
             Target::Playlist(id) => {
+                self.view.playlist_scroll_selected = None;
                 self.select_playlist(id);
                 self.view.focus = Focus::Playlists;
                 if self.playlist_movable(id) {
@@ -697,6 +739,7 @@ impl App {
                 }
             }
             Target::Track(id) => {
+                self.view.track_scroll_selected = None;
                 self.library.selected_entry = Some(id);
                 self.view.focus = Focus::Tracks;
                 if double {
@@ -704,11 +747,13 @@ impl App {
                 }
             }
             Target::Mark(id) => {
+                self.view.track_scroll_selected = None;
                 self.library.selected_entry = Some(id);
                 self.view.focus = Focus::Tracks;
                 self.toggle_mark(id)?;
             }
             Target::SortColumn(sort) => {
+                self.view.track_scroll_selected = None;
                 self.library.sort_descending =
                     self.library.sort == sort && !self.library.sort_descending;
                 self.library.sort = sort;
@@ -722,6 +767,7 @@ impl App {
                 }
             }
             Target::ClearFilter => {
+                self.view.track_scroll_selected = None;
                 self.library.query.clear();
                 self.view.filter_editing = false;
                 self.view.filter_keyboard = false;

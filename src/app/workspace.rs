@@ -166,6 +166,17 @@ impl App {
 
     pub(crate) fn drag_workspace(&mut self, point: Position) -> Result<()> {
         match &self.view.workspace.gesture {
+            Some(Gesture::ListScroll { scroll, origin }) => {
+                let maximum = scroll.total.saturating_sub(scroll.visible);
+                let travel = scroll
+                    .area
+                    .height
+                    .saturating_sub(scroll.thumb().height)
+                    .max(1);
+                let delta =
+                    (i64::from(point.y) - i64::from(*origin)) * maximum as i64 / i64::from(travel);
+                self.scroll_list(*scroll, delta);
+            }
             Some(Gesture::Playlist { id, .. }) => {
                 let id = *id;
                 // A wheel event changes the viewport before hit regions are redrawn.
@@ -271,6 +282,30 @@ impl App {
             None => {}
         }
         Ok(())
+    }
+
+    fn set_list_offset(&mut self, scroll: crate::workspace::ListScroll, offset: usize) {
+        let offset = offset.min(scroll.total.saturating_sub(scroll.visible));
+        match scroll.panel {
+            Panel::Playlists => {
+                self.view.playlist_offset = offset;
+                self.view.playlist_scroll_selected = self.library.selected_playlist;
+            }
+            Panel::Tracks => {
+                self.view.track_offset = offset;
+                self.view.track_scroll_selected = self.library.selected_entry;
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn scroll_list(&mut self, scroll: crate::workspace::ListScroll, delta: i64) {
+        let offset = super::bounded(
+            scroll.offset,
+            delta,
+            scroll.total.saturating_sub(scroll.visible) + 1,
+        );
+        self.set_list_offset(scroll, offset);
     }
 
     pub(crate) fn release_workspace(&mut self, point: Position) -> Result<()> {

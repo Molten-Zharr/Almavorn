@@ -5,7 +5,7 @@ use super::{
 use crate::{
     app::{App, Hit, Sort, Target},
     model::{Entry, duration_text},
-    workspace::Gesture,
+    workspace::{Gesture, ListScroll, Panel},
 };
 use ratatui::{
     Frame,
@@ -40,7 +40,11 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .position(|(id, _, _)| Some(*id) == app.library.selected_playlist)
         .unwrap_or(0);
     let dragging = matches!(app.view.workspace.gesture, Some(Gesture::Playlist { .. }));
-    app.view.playlist_offset = if dragging {
+    if app.view.playlist_scroll_selected != app.library.selected_playlist {
+        app.view.playlist_scroll_selected = None;
+    }
+    let manual_scroll = app.view.playlist_scroll_selected.is_some();
+    app.view.playlist_offset = if dragging || manual_scroll {
         app.view
             .playlist_offset
             .min(items.len().saturating_sub(usize::from(inner.height)))
@@ -138,6 +142,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
             enabled: true,
         });
     }
+    list_scrollbar(frame, app, inner, Panel::Playlists, items.len(), palette);
 }
 
 fn ellipsize_name(name: &str, width: usize) -> String {
@@ -271,7 +276,15 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         .iter()
         .position(|row| matches!(row, TrackTableRow::Track(entry) if Some(entry.id) == app.library.selected_entry))
         .unwrap_or(0);
-    let offset = visible_offset(app.view.track_offset, selected, capacity, display.len());
+    let offset = if app.view.track_scroll_selected.is_some()
+        && app.view.track_scroll_selected == app.library.selected_entry
+    {
+        app.view
+            .track_offset
+            .min(display.len().saturating_sub(capacity))
+    } else {
+        visible_offset(app.view.track_offset, selected, capacity, display.len())
+    };
     let ids: Vec<Option<i64>> = display
         .iter()
         .skip(offset)
@@ -352,6 +365,10 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         })
         .collect();
     let empty = entries.is_empty();
+    let total = display.len();
+    if app.view.track_scroll_selected != app.library.selected_entry {
+        app.view.track_scroll_selected = None;
+    }
     app.view.track_offset = offset;
     let columns = if inner.width < 55 {
         vec![
@@ -495,6 +512,78 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             target: Target::Mark(id),
             enabled: true,
         });
+    }
+    list_scrollbar(
+        frame,
+        app,
+        Rect::new(inner.x, inner.y + 1, inner.width, capacity as u16),
+        Panel::Tracks,
+        total,
+        palette,
+    );
+}
+
+fn list_scrollbar(
+    frame: &mut Frame,
+    app: &mut App,
+    rows: Rect,
+    panel: Panel,
+    total: usize,
+    palette: Palette,
+) {
+    if app.view.dialog.is_some()
+        || app.view.layout_editing
+        || rows.height < 2
+        || rows.width == 0
+        || total <= usize::from(rows.height)
+    {
+        return;
+    }
+    let Some((_, outer)) = app
+        .view
+        .workspace
+        .areas
+        .iter()
+        .find(|(value, _)| *value == panel)
+    else {
+        return;
+    };
+    // Paint over the existing right border; reserve no column in the list.
+    let rail = Rect::new(outer.right().saturating_sub(1), rows.y, 1, rows.height);
+    let scroll = ListScroll {
+        panel,
+        area: rail,
+        total,
+        visible: usize::from(rows.height),
+        offset: if panel == Panel::Playlists {
+            app.view.playlist_offset
+        } else {
+            app.view.track_offset
+        },
+    };
+    app.view.hits.push(Hit {
+        area: rail,
+        target: Target::ListScroll(scroll),
+        enabled: true,
+    });
+    let edge = Rect::new(rail.x.saturating_sub(1).max(rows.x), rail.y, 2, rail.height);
+    let dragging = matches!(
+        app.view.workspace.gesture,
+        Some(Gesture::ListScroll { scroll, .. }) if scroll.panel == panel
+    );
+    if !app.hovered(edge) && !dragging {
+        return;
+    }
+    for y in rail.y..rail.bottom() {
+        frame.buffer_mut()[(rail.x, y)]
+            .set_symbol("│")
+            .set_style(palette.text().fg(palette.inactive_panel_border));
+    }
+    let thumb = scroll.thumb();
+    for y in thumb.y..thumb.bottom() {
+        frame.buffer_mut()[(thumb.x, y)]
+            .set_symbol("█")
+            .set_style(palette.text().fg(palette.accent));
     }
 }
 

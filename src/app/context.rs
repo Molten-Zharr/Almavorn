@@ -76,6 +76,8 @@ pub struct UiState {
     pub tracks_area: Rect,
     pub playlist_offset: usize,
     pub track_offset: usize,
+    pub(crate) playlist_scroll_selected: Option<i64>,
+    pub(crate) track_scroll_selected: Option<i64>,
     pub notice: String,
     pub notice_error: bool,
     pub quit: bool,

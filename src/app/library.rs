@@ -218,6 +218,7 @@ impl App {
             .map(|entry| entry.id);
         self.restore_playback_marks();
         self.view.track_offset = 0;
+        self.view.track_scroll_selected = None;
     }
 
     pub fn set_mode(&mut self, mode: Mode) -> Result<()> {
