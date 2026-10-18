@@ -1,4 +1,6 @@
 use super::theme::Palette;
+use crate::layout::buttons::{button_caption, displayed_shortcut};
+pub(super) use crate::layout::buttons::{button_shortcut, button_width};
 use crate::{
     app::{App, Hit, Target},
     input::Action,
@@ -96,114 +98,6 @@ pub(super) fn quiet_button(
         },
         palette,
     );
-}
-
-pub(super) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
-    match target {
-        Target::Action(action @ (Action::MoveUp | Action::MoveDown))
-            if app.view.focus == crate::app::Focus::Playlists =>
-        {
-            let action = if *action == Action::MoveUp {
-                Action::PlaylistUp
-            } else {
-                Action::PlaylistDown
-            };
-            app.settings
-                .bindings
-                .iter()
-                .find(|binding| binding.action == action)
-                .map(|binding| binding.key.label())
-        }
-        Target::CommandMenu(crate::app::CommandMenu::Visualizer) => app
-            .settings
-            .bindings
-            .iter()
-            .find(|binding| binding.action == Action::CycleVisualizer)
-            .map(|binding| binding.key.label()),
-        Target::Action(action) => app
-            .settings
-            .bindings
-            .iter()
-            .find(|binding| binding.action == *action)
-            .map(|binding| binding.key.label()),
-        Target::Mode(mode) if *mode != app.settings.mode => app
-            .settings
-            .bindings
-            .iter()
-            .find(|binding| binding.action == crate::input::Action::SwitchMode)
-            .map(|binding| binding.key.label()),
-        Target::Submit | Target::BrowserOpen => Some("Enter".into()),
-        Target::SearchPlay => Some("Enter".into()),
-        Target::Setting(_) => Some("Enter".into()),
-        Target::EqualizerToggle => Some("Space".into()),
-        Target::EqualizerPresets => Some("Enter".into()),
-        Target::EqualizerPreset(index) => Some((index + 1).to_string()),
-        Target::EqualizerReset => Some("R".into()),
-        Target::TunerReverse => Some("Space".into()),
-        Target::TunerReset => Some("R".into()),
-        Target::TunerPin => Some("P".into()),
-        Target::SettingHelp(_) => Some("F1".into()),
-        Target::CloseDialog => Some("Esc".into()),
-        Target::BrowserParent => Some("Backspace".into()),
-        Target::BrowserMarkAll => Some("Ctrl+A".into()),
-        Target::BrowserClearMarks => Some("Ctrl+D".into()),
-        Target::BrowserAdd => Some("Ctrl+Enter".into()),
-        Target::BrowserCurrentFolder => Some("Ctrl+Shift+Enter".into()),
-        Target::PlaylistAutoName => Some("Ctrl+F".into()),
-        Target::CreateFolderGroups => Some("Ctrl+G".into()),
-        Target::FolderAdd => Some("Insert".into()),
-        Target::FolderEdit => Some("F3".into()),
-        Target::FolderRemove => Some("Delete".into()),
-        Target::FolderScan => Some("R".into()),
-        Target::ScanSubfolders => Some("Space".into()),
-        Target::ComposeMove(direction) => Some(
-            if *direction < 0 {
-                "Ctrl+Up"
-            } else {
-                "Ctrl+Down"
-            }
-            .into(),
-        ),
-        _ => None,
-    }
-}
-
-pub(super) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
-    let label = button_caption(label, target);
-    // Keep room for the repeat mode marker between the two clicks.
-    let label_width = if matches!(target, Target::Action(Action::CycleRepeat)) {
-        Span::raw(label).width().max(4)
-    } else {
-        Span::raw(label).width()
-    };
-    let shortcut = displayed_shortcut(app, target);
-    (label_width
-        + shortcut.as_ref().map_or(0, |key| {
-            Span::raw(key).width() + if label.is_empty() { 0 } else { 3 }
-        })
-        + 2)
-    .min(usize::from(u16::MAX)) as u16
-}
-
-fn displayed_shortcut(app: &App, target: &Target) -> Option<String> {
-    if help_button(target) {
-        Some("F1".into())
-    } else if app.settings.appearance.show_button_shortcuts {
-        button_shortcut(app, target)
-    } else {
-        None
-    }
-}
-
-fn help_button(target: &Target) -> bool {
-    matches!(
-        target,
-        Target::Action(crate::input::Action::Help) | Target::SettingHelp(_)
-    )
-}
-
-fn button_caption<'a>(label: &'a str, target: &Target) -> &'a str {
-    if help_button(target) { "" } else { label }
 }
 
 fn standard(
@@ -311,18 +205,20 @@ fn quiet(
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
         Target::Action(Action::ToggleEdit) => app.view.editing,
-        Target::Action(Action::ToggleDesk) => app.settings.sorting_desk,
-        Target::Action(Action::CycleRepeat) => app.settings.repeat != crate::model::RepeatMode::Off,
-        Target::Action(Action::ToggleShuffle) => app.settings.shuffle,
+        Target::Action(Action::ToggleDesk) => app.settings.preferences.sorting_desk,
+        Target::Action(Action::CycleRepeat) => {
+            app.settings.preferences.repeat != crate::model::RepeatMode::Off
+        }
+        Target::Action(Action::ToggleShuffle) => app.settings.preferences.shuffle,
         Target::Action(Action::PlaybackTuner) => app.tuner_settings() != &Default::default(),
         Target::Action(Action::CycleVisualizer)
         | Target::CommandMenu(crate::app::CommandMenu::Visualizer) => {
-            app.settings.appearance.visualizer != crate::visualizer::VisualizerKind::Off
+            app.settings.preferences.appearance.visualizer != crate::visualizer::VisualizerKind::Off
         }
         Target::TunerReverse => app.tuner_settings().reverse,
         Target::TunerPin => app.tuner_pinned(),
         Target::Action(Action::Equalizer) | Target::EqualizerToggle => {
-            app.settings.equalizer.enabled
+            app.settings.preferences.equalizer.enabled
         }
         Target::Action(Action::Filter) => app.view.filter_editing || !app.library.query.is_empty(),
         _ => false,

@@ -348,11 +348,13 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         });
         ui.painter().rect_stroke(
             rect,
-            egui::CornerRadius::same(if app.settings.appearance.corners == Corners::Rounded {
-                4
-            } else {
-                0
-            }),
+            egui::CornerRadius::same(
+                if app.settings.preferences.appearance.corners == Corners::Rounded {
+                    4
+                } else {
+                    0
+                },
+            ),
             egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(r, g, b)),
             egui::StrokeKind::Inside,
         );
@@ -441,7 +443,9 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
             face.center(),
             egui::Align2::CENTER_CENTER,
             &cap.label,
-            egui::FontId::monospace((f32::from(app.settings.appearance.font_size) * 0.75).max(8.0)),
+            egui::FontId::monospace(
+                (f32::from(app.settings.preferences.appearance.font_size) * 0.75).max(8.0),
+            ),
             egui::Color32::from_rgb(r, g, b),
         );
     }
@@ -466,8 +470,8 @@ mod tests {
             let mut terminal = Terminal::new(RataguiBackend::new(
                 "selection-regression",
                 crate::gui_fonts::backend(
-                    app.settings.appearance.font,
-                    app.settings.appearance.font_size,
+                    app.settings.preferences.appearance.font,
+                    app.settings.preferences.appearance.font_size,
                     columns,
                     rows,
                 ),
@@ -498,8 +502,8 @@ mod tests {
                     }
                 }
                 let mut fresh = crate::gui_fonts::backend(
-                    app.settings.appearance.font,
-                    app.settings.appearance.font_size,
+                    app.settings.preferences.appearance.font,
+                    app.settings.preferences.appearance.font_size,
                     columns,
                     rows,
                 );

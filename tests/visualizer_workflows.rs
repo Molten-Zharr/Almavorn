@@ -43,13 +43,13 @@ fn every_scene_is_a_background_and_preserves_text_selection_and_hit_areas() {
     let mut app = App::new(directory.path()).unwrap();
     app.playback.visualizer.advance(Some(music()), 0.05, true);
     for palette in ["molten-zharr", "light"] {
-        app.settings.appearance.palette_ids = [palette.into(), palette.into()];
+        app.settings.preferences.appearance.palette_ids = [palette.into(), palette.into()];
         for (width, height) in [(32, 26), (80, 30), (140, 45)] {
             for kind in VisualizerKind::ALL
                 .into_iter()
                 .filter(|kind| *kind != VisualizerKind::Off)
             {
-                app.settings.appearance.visualizer = kind;
+                app.settings.preferences.appearance.visualizer = kind;
                 app.playback.visualizer.available = false;
                 let plain = render(&mut app, width, height);
                 let hits: Vec<_> = app
@@ -122,7 +122,7 @@ fn settings_and_dialogs_cover_the_animation_and_pause_keeps_the_same_frame() {
     app.view.dialog = Some(Dialog::Help { offset: 0 });
     let animated = render(&mut app, 120, 40);
     let overlay = app.view.overlay_area;
-    app.settings.appearance.visualizer = VisualizerKind::Off;
+    app.settings.preferences.appearance.visualizer = VisualizerKind::Off;
     let plain = render(&mut app, 120, 40);
     assert!(overlay.width > 0 && overlay.height > 0);
     for y in overlay.y..overlay.bottom() {
@@ -138,13 +138,19 @@ fn shortcut_and_settings_save_the_animation_in_the_active_profile() {
     {
         let mut app = App::new(directory.path()).unwrap();
         assert_eq!(
-            app.settings.appearance.visualizer,
+            app.settings.preferences.appearance.visualizer,
             VisualizerKind::Bombardment
         );
         app.handle(Input::Key(KeyPress::plain(Key::F(6))));
-        assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Off);
+        assert_eq!(
+            app.settings.preferences.appearance.visualizer,
+            VisualizerKind::Off
+        );
         app.action(Action::CycleVisualizer).unwrap();
-        assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Spectrum);
+        assert_eq!(
+            app.settings.preferences.appearance.visualizer,
+            VisualizerKind::Spectrum
+        );
         app.open_settings_page(SettingsPage::General);
         for target in [(7, 1), (8, 1)] {
             render(&mut app, 120, 50);
@@ -155,8 +161,11 @@ fn shortcut_and_settings_save_the_animation_in_the_active_profile() {
                 double: false,
             });
         }
-        assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Wave);
-        assert_eq!(app.settings.appearance.animation_brightness, 40);
+        assert_eq!(
+            app.settings.preferences.appearance.visualizer,
+            VisualizerKind::Wave
+        );
+        assert_eq!(app.settings.preferences.appearance.animation_brightness, 40);
         let profile = app
             .settings
             .profiles
@@ -170,8 +179,11 @@ fn shortcut_and_settings_save_the_animation_in_the_active_profile() {
         assert_eq!(profile.preferences.appearance.animation_brightness, 40);
     }
     let app = App::new(directory.path()).unwrap();
-    assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Wave);
-    assert_eq!(app.settings.appearance.animation_brightness, 40);
+    assert_eq!(
+        app.settings.preferences.appearance.visualizer,
+        VisualizerKind::Wave
+    );
+    assert_eq!(app.settings.preferences.appearance.animation_brightness, 40);
     let legacy: Appearance = serde_json::from_str("{}").unwrap();
     assert_eq!(legacy.visualizer, VisualizerKind::Bombardment);
     assert_eq!(legacy.animation_brightness, 35);
@@ -183,9 +195,9 @@ fn vis_dropdown_marks_the_current_scene_and_supports_mouse_keyboard_and_cancel()
     {
         let mut app = App::new(directory.path()).unwrap();
         for language in [Language::Russian, Language::English] {
-            app.settings.language = language;
+            app.settings.preferences.language = language;
             for (width, height) in [(32, 26), (80, 30), (140, 45)] {
-                app.settings.appearance.visualizer = VisualizerKind::Bombardment;
+                app.settings.preferences.appearance.visualizer = VisualizerKind::Bombardment;
                 render(&mut app, width, height);
                 let button = app
                     .view
@@ -200,7 +212,7 @@ fn vis_dropdown_marks_the_current_scene_and_supports_mouse_keyboard_and_cancel()
                     double: false,
                 });
                 assert_eq!(
-                    app.settings.appearance.visualizer,
+                    app.settings.preferences.appearance.visualizer,
                     VisualizerKind::Bombardment,
                     "Opening VIS must keep the playing scene"
                 );
@@ -261,7 +273,10 @@ fn vis_dropdown_marks_the_current_scene_and_supports_mouse_keyboard_and_cancel()
                     double: false,
                 });
                 assert!(app.view.dialog.is_none());
-                assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Wave);
+                assert_eq!(
+                    app.settings.preferences.appearance.visualizer,
+                    VisualizerKind::Wave
+                );
                 render(&mut app, width, height);
                 app.handle(Input::Click {
                     x: button.x,
@@ -276,7 +291,10 @@ fn vis_dropdown_marks_the_current_scene_and_supports_mouse_keyboard_and_cancel()
                     app.handle(Input::Key(KeyPress::plain(Key::Down)));
                 }
                 app.handle(Input::Key(KeyPress::plain(Key::Enter)));
-                assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Off);
+                assert_eq!(
+                    app.settings.preferences.appearance.visualizer,
+                    VisualizerKind::Off
+                );
                 render(&mut app, width, height);
                 app.handle(Input::Click {
                     x: button.x,
@@ -289,12 +307,15 @@ fn vis_dropdown_marks_the_current_scene_and_supports_mouse_keyboard_and_cancel()
                 app.handle(Input::Key(KeyPress::plain(Key::Escape)));
                 assert!(app.view.dialog.is_none());
                 assert_eq!(
-                    app.settings.appearance.visualizer,
+                    app.settings.preferences.appearance.visualizer,
                     VisualizerKind::Off,
                     "Esc must keep the saved scene"
                 );
                 app.handle(Input::Key(KeyPress::plain(Key::F(6))));
-                assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Spectrum);
+                assert_eq!(
+                    app.settings.preferences.appearance.visualizer,
+                    VisualizerKind::Spectrum
+                );
             }
         }
         let profile = app
@@ -309,5 +330,8 @@ fn vis_dropdown_marks_the_current_scene_and_supports_mouse_keyboard_and_cancel()
         );
     }
     let app = App::new(directory.path()).unwrap();
-    assert_eq!(app.settings.appearance.visualizer, VisualizerKind::Spectrum);
+    assert_eq!(
+        app.settings.preferences.appearance.visualizer,
+        VisualizerKind::Spectrum
+    );
 }

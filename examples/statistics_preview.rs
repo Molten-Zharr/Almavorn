@@ -19,7 +19,7 @@ mod gui_fonts;
 
 fn render(app: &mut App, output: &Path, name: &str, columns: u16, rows: u16) -> Result<()> {
     let mut terminal = Terminal::new(gui_fonts::backend(
-        app.settings.appearance.font,
+        app.settings.preferences.appearance.font,
         16,
         columns,
         rows,
@@ -54,7 +54,7 @@ fn main() -> Result<()> {
     fs::create_dir_all(&output)?;
     let directory = tempfile::tempdir()?;
     let mut app = App::new(directory.path())?;
-    app.settings.language = Language::Russian;
+    app.settings.preferences.language = Language::Russian;
     load(&mut app)?;
     render(&mut app, &output, "empty", 110, 36)?;
     let playlist = app.store.playlists()?[0].id;
@@ -119,7 +119,7 @@ fn main() -> Result<()> {
         render(&mut app, &output, name, 110, 36)?;
         render(&mut app, &output, &format!("{name}-small"), 32, 26)?;
     }
-    app.settings.appearance.palette_ids = ["light".into(), "light".into()];
+    app.settings.preferences.appearance.palette_ids = ["light".into(), "light".into()];
     render(&mut app, &output, "recent-light", 110, 36)?;
     println!("Listening statistics previews: {}", output.display());
     Ok(())

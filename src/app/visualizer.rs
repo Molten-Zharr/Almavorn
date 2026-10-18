@@ -5,19 +5,26 @@ use std::time::Instant;
 
 impl App {
     pub fn cycle_visualizer(&mut self, direction: i64) -> Result<()> {
-        self.set_visualizer(self.settings.appearance.visualizer.next(direction))
+        self.set_visualizer(
+            self.settings
+                .preferences
+                .appearance
+                .visualizer
+                .next(direction),
+        )
     }
 
     pub fn set_visualizer(&mut self, kind: VisualizerKind) -> Result<()> {
-        self.settings.appearance.visualizer = kind;
+        self.settings.preferences.appearance.visualizer = kind;
         self.tick_visualizer();
         self.message(format!(
             "{}: {}",
             self.text("Background animation", "Анимация фона"),
             self.settings
+                .preferences
                 .appearance
                 .visualizer
-                .name(self.settings.language)
+                .name(self.settings.preferences.language)
         ));
         self.save_settings()
     }
@@ -28,7 +35,7 @@ impl App {
             .visualizer_tick
             .replace(now)
             .map_or(0.0, |previous| now.duration_since(previous).as_secs_f32());
-        let enabled = self.settings.appearance.visualizer != VisualizerKind::Off;
+        let enabled = self.settings.preferences.appearance.visualizer != VisualizerKind::Off;
         let Some(audio) = &mut self.playback.audio else {
             self.playback.visualizer.reset();
             return;

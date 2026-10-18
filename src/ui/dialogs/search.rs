@@ -147,7 +147,7 @@ pub(super) fn render(
         let playing = app.playback_active()
             && app.playback.playing_playlist == Some(playlist.id)
             && app.playback.playing_entry == Some(entry.id);
-        let name = clean(playlist.display_name(app.settings.language));
+        let name = clean(playlist.display_name(app.settings.preferences.language));
         let prefix = if playing {
             format!("[{}] ", if app.current_paused() { "‖" } else { "▶" })
         } else {
@@ -311,8 +311,8 @@ pub(super) fn render(
                     } else {
                         " "
                     },
-                    clean(p.display_name(app.settings.language)),
-                    p.mode.name(app.settings.language)
+                    clean(p.display_name(app.settings.preferences.language)),
+                    p.mode.name(app.settings.preferences.language)
                 ),
             )
         })

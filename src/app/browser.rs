@@ -1,5 +1,6 @@
-use super::{App, Dialog, SettingsEdit, TextDialog, TextPurpose, background::background};
+use super::{App, Dialog, SettingsEdit, Target, TextDialog, TextPurpose, background::background};
 use crate::errors::AppError;
+use crate::input::{Key, KeyPress};
 use crate::media;
 use anyhow::{Context, Result, ensure};
 use std::{
@@ -129,6 +130,54 @@ impl Browser {
 }
 
 impl App {
+    pub(super) fn browser_key(&mut self, key: KeyPress) -> Result<()> {
+        if key.ctrl
+            && key.key == Key::Char('g')
+            && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder_playlists.is_some())
+        {
+            return self.target(Target::CreateFolderGroups, false);
+        }
+        if key.key == Key::Char(' ')
+            && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.playlist_name.is_none() && browser.palette_file.is_none())
+        {
+            return self.target(Target::ScanSubfolders, false);
+        }
+        if key.key == Key::Char('a') && key.ctrl {
+            return self.target(Target::BrowserMarkAll, false);
+        }
+        if key.key == Key::Char('d') && key.ctrl {
+            return self.target(Target::BrowserClearMarks, false);
+        }
+        if (key.key == Key::Enter && key.ctrl) || key.key == Key::Char('a') {
+            if key.key == Key::Enter
+                && key.shift
+                && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.palette_file.is_none())
+            {
+                return self.browser_add_current_folder();
+            }
+            return self.browser_add();
+        }
+        match key.key {
+            Key::Backspace => return self.target(Target::BrowserParent, false),
+            Key::Home | Key::End => {
+                self.scroll_dialog(if key.key == Key::Home {
+                    i16::MIN
+                } else {
+                    i16::MAX
+                });
+                return Ok(());
+            }
+            Key::Char(' ') | Key::Insert => {
+                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+                    browser.toggle_mark(browser.selected);
+                }
+                return Ok(());
+            }
+            _ => {}
+        }
+        self.dialog_navigation_key(key)
+    }
+
     pub(super) fn show_folder_playlists(&mut self, directory: PathBuf) {
         self.show_browser(directory, true);
         if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {

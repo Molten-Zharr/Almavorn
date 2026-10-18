@@ -1,36 +1,30 @@
 use super::{
     App,
     background::{Background, background, poll},
+    playback_queue::{PlaybackQueue, QueueStep, QueueUpdate},
 };
 use crate::errors::AppError;
-use crate::{
-    audio::Audio,
-    model::{Entry, RepeatMode},
-    preferences::PlaybackTimeline,
-};
+use crate::{audio::Audio, model::Entry, preferences::PlaybackTimeline};
 use anyhow::{Context, Result, ensure};
 use rodio::Source;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::{
-    collections::{HashSet, VecDeque},
-    path::PathBuf,
-    time::Duration,
-};
-
-const SHUFFLE_HISTORY_LIMIT: usize = 256;
+use std::{collections::HashSet, path::PathBuf, time::Duration};
 
 #[derive(Clone)]
 pub(super) struct PlaybackRequest {
-    queue: Arc<[Entry]>,
+    queue: PlaybackQueue,
     playlist_id: i64,
-    index: usize,
     paused: bool,
-    shuffle_history: VecDeque<usize>,
     reverse: bool,
-    marked_only: bool,
+}
+
+impl PlaybackRequest {
+    fn entry(&self) -> &Entry {
+        self.queue.current().expect("playback request has an entry")
+    }
 }
 
 pub(super) struct SeekRequest {
@@ -46,25 +40,33 @@ pub(super) struct WaveformJob {
 
 impl App {
     pub(super) fn set_playback_timeline(&mut self, choice: PlaybackTimeline) -> Result<()> {
-        if self.settings.appearance.playback_timeline != choice {
+        if self.settings.preferences.appearance.playback_timeline != choice {
             self.cancel_workspace_drag();
-            self.settings.appearance.playback_timeline = choice;
+            self.settings.preferences.appearance.playback_timeline = choice;
             self.save_settings()?;
         }
         Ok(())
     }
 
     pub(super) fn adjust_volume(&mut self, step: i16) -> Result<()> {
-        let percent = (self.settings.volume * 100.0).round() as i16;
-        let volume = (percent + step).clamp(0, 100) as f32 / 100.0;
-        if self.settings.volume == volume {
+        let percent = (self.settings.preferences.volume * 100.0).round() as i16;
+        self.set_volume((percent + step).clamp(0, 100) as f32 / 100.0)
+    }
+
+    pub(super) fn set_volume(&mut self, volume: f32) -> Result<()> {
+        let volume = volume.clamp(0.0, 1.0);
+        if self.settings.preferences.volume == volume {
             return Ok(());
         }
-        self.settings.volume = volume;
-        if let Some(audio) = &self.playback.audio {
-            audio.volume(volume);
-        }
+        self.settings.preferences.volume = volume;
+        self.sync_volume();
         self.save_settings()
+    }
+
+    pub(super) fn sync_volume(&self) {
+        if let Some(audio) = &self.playback.audio {
+            audio.volume(self.settings.preferences.volume);
+        }
     }
 
     pub fn position_ms(&self) -> u64 {
@@ -109,11 +111,15 @@ impl App {
     fn marked_queue(&self) -> Option<(i64, &[Entry])> {
         if let Some(request) = self.requested_playback() {
             return request
-                .marked_only
-                .then_some((request.playlist_id, &request.queue));
+                .queue
+                .marked_only()
+                .then_some((request.playlist_id, request.queue.entries()));
         }
-        self.playback.marked_only.then_some(())?;
-        Some((self.playback.playing_playlist?, &self.playback.queue))
+        self.playback.queue.marked_only().then_some(())?;
+        Some((
+            self.playback.playing_playlist?,
+            self.playback.queue.entries(),
+        ))
     }
     pub fn marked_playback_count(&self) -> Option<usize> {
         self.marked_queue().map(|(_, queue)| queue.len())
@@ -133,11 +139,8 @@ impl App {
             Some(PlaybackRequest {
                 queue: self.playback.queue.clone(),
                 playlist_id: self.playback.playing_playlist?,
-                index: self.playback.queue_index,
                 paused: self.paused(),
-                shuffle_history: self.playback.shuffle_history.clone(),
                 reverse: false,
-                marked_only: self.playback.marked_only,
             })
         })
     }
@@ -158,13 +161,10 @@ impl App {
             .position(|entry| Some(entry.id) == self.library.selected_entry)
             .unwrap_or(0);
         self.request_playback(PlaybackRequest {
-            queue,
+            queue: PlaybackQueue::new(queue, index, true),
             playlist_id,
-            index,
             paused: false,
-            shuffle_history: VecDeque::new(),
             reverse: false,
-            marked_only: true,
         })
     }
     pub(super) fn toggle_mark(&mut self, id: i64) -> Result<()> {
@@ -174,9 +174,9 @@ impl App {
         self.sync_marked_playback()
     }
     pub(super) fn play_whole_playlist(&mut self) -> Result<()> {
-        let Some(mut request) = self
+        let Some(request) = self
             .playback_request()
-            .filter(|request| request.marked_only)
+            .filter(|request| request.queue.marked_only())
         else {
             return Ok(());
         };
@@ -190,8 +190,7 @@ impl App {
             return Ok(());
         };
         let queue = playlist.entries.clone().into();
-        request.marked_only = false;
-        self.update_playback_queue(request, queue)?;
+        self.update_playback_queue(request, queue, false)?;
         self.message(
             self.text(
                 "Playing the whole playlist",
@@ -204,7 +203,7 @@ impl App {
     pub(super) fn sync_marked_playback(&mut self) -> Result<()> {
         let Some(request) = self
             .playback_request()
-            .filter(|request| request.marked_only)
+            .filter(|request| request.queue.marked_only())
         else {
             return Ok(());
         };
@@ -218,7 +217,12 @@ impl App {
             return Ok(());
         };
         // Marks in another playlist belong to that view, not to the playing set.
-        let active: HashSet<_> = request.queue.iter().map(|entry| entry.id).collect();
+        let active: HashSet<_> = request
+            .queue
+            .entries()
+            .iter()
+            .map(|entry| entry.id)
+            .collect();
         let queue = playlist
             .entries
             .iter()
@@ -231,46 +235,28 @@ impl App {
             })
             .cloned()
             .collect();
-        self.update_playback_queue(request, queue)
+        self.update_playback_queue(request, queue, true)
     }
     fn update_playback_queue(
         &mut self,
         mut request: PlaybackRequest,
         queue: Arc<[Entry]>,
+        marked_only: bool,
     ) -> Result<()> {
-        if queue.is_empty() {
+        let update = request.queue.replace(queue.clone(), marked_only);
+        if update == QueueUpdate::Empty {
             self.stop_playback();
             return Ok(());
         }
-        let target = &request.queue[request.index];
-        let kept = queue
-            .iter()
-            .position(|entry| entry.id == target.id && entry.track.path == target.track.path);
-        let index = kept.unwrap_or_else(|| {
-            queue
-                .iter()
-                .position(|entry| entry.position > target.position)
-                .unwrap_or(0)
-        });
-        request.shuffle_history = remap_history(&request.queue, &queue, &request.shuffle_history);
-        request.queue = queue.clone();
-        request.index = index;
-        let current_kept = self.playback.playing_playlist == Some(request.playlist_id)
-            && self
-                .playback
-                .playing_entry
-                .is_some_and(|id| queue.iter().any(|entry| entry.id == id));
-        if current_kept {
-            self.playback.shuffle_history =
-                remap_history(&self.playback.queue, &queue, &self.playback.shuffle_history);
-            self.playback.queue_index = queue
-                .iter()
-                .position(|entry| Some(entry.id) == self.playback.playing_entry)
-                .expect("current entry is in the queue");
-            self.playback.queue = queue;
-            self.playback.marked_only = request.marked_only;
+        let current_index = self
+            .playback
+            .playing_entry
+            .filter(|_| self.playback.playing_playlist == Some(request.playlist_id))
+            .and_then(|id| queue.iter().position(|entry| entry.id == id));
+        if let Some(index) = current_index {
+            self.playback.queue.retarget(queue, index, marked_only);
         }
-        if kept.is_some() {
+        if update == QueueUpdate::Kept {
             if let Some(pending) = self.playback.preparation.requested_mut() {
                 // The prepared source is still for the same entry and path.
                 request.reverse = pending.reverse;
@@ -279,40 +265,23 @@ impl App {
         } else {
             self.request_playback(request)?;
         }
-        if !current_kept && let Some(audio) = &self.playback.audio {
+        if current_index.is_none()
+            && let Some(audio) = &self.playback.audio
+        {
             // Never continue playing a track removed from the active set.
             audio.set_paused(true);
         }
         Ok(())
     }
     pub(super) fn can_step_playback(&self, direction: i64) -> bool {
-        let (length, index, history) = self
+        let queue = self
             .requested_playback()
-            .map(|request| (request.queue.len(), request.index, &request.shuffle_history))
-            .unwrap_or((
-                self.playback.queue.len(),
-                self.playback.queue_index,
-                &self.playback.shuffle_history,
-            ));
-        if length == 0 || index >= length {
-            return false;
-        }
-        let marked_only = self.marked_playback_count().is_some();
-        if self.settings.shuffle {
-            return if direction < 0 {
-                !history.is_empty()
-            } else {
-                length > 1 || marked_only
-            };
-        }
-        if marked_only || self.settings.repeat == RepeatMode::Playlist {
-            return true;
-        }
-        if direction < 0 {
-            index > 0
-        } else {
-            index + 1 < length
-        }
+            .map_or(&self.playback.queue, |request| &request.queue);
+        queue.can_step(
+            QueueStep::manual(direction),
+            self.settings.preferences.repeat,
+            self.settings.preferences.shuffle,
+        )
     }
 
     pub(super) fn play_selected(&mut self) -> Result<()> {
@@ -335,25 +304,20 @@ impl App {
         index: usize,
     ) -> Result<()> {
         self.request_playback(PlaybackRequest {
-            queue,
+            queue: PlaybackQueue::new(queue, index, false),
             playlist_id,
-            index,
             paused: false,
-            shuffle_history: VecDeque::new(),
             reverse: false,
-            marked_only: false,
         })
     }
 
     fn request_playback(&mut self, mut request: PlaybackRequest) -> Result<()> {
         ensure!(
-            request.index < request.queue.len(),
+            request.queue.current().is_some(),
             AppError::TrackSelectionRequired
         );
-        let title = request.queue[request.index].track.title.clone();
-        request.reverse = self
-            .tuner_for_path(&request.queue[request.index].track.path)
-            .reverse;
+        let title = request.entry().track.title.clone();
+        request.reverse = self.tuner_for_path(&request.entry().track.path).reverse;
         self.cancel_seek();
         self.cancel_audio_preparation();
         self.cancel_waveform();
@@ -371,7 +335,7 @@ impl App {
         let cached = self.playback.reverse_cache.clone();
         self.playback.preparation.start(|request| {
             let reverse = request.reverse;
-            let path = request.queue[request.index].track.path.clone();
+            let path = request.entry().track.path.clone();
             let cache = cached
                 .filter(|(cached_path, _)| *cached_path == path)
                 .map(|(_, cache)| cache);
@@ -389,10 +353,7 @@ impl App {
     }
     pub(super) fn sync_playback_direction(&mut self) -> Result<()> {
         if let Some(request) = self.requested_playback()
-            && request.reverse
-                != self
-                    .tuner_for_path(&request.queue[request.index].track.path)
-                    .reverse
+            && request.reverse != self.tuner_for_path(&request.entry().track.path).reverse
         {
             self.request_playback(request.clone())?;
         }
@@ -411,9 +372,10 @@ impl App {
             Ok(source) => source,
             Err(error) => {
                 if !self.playback.audio.as_ref().is_some_and(Audio::has_track)
-                    || (request.marked_only
+                    || (request.queue.marked_only()
                         && !request
                             .queue
+                            .entries()
                             .iter()
                             .any(|entry| Some(entry.id) == self.playback.playing_entry))
                 {
@@ -422,7 +384,7 @@ impl App {
                 return Err(error);
             }
         };
-        let path = request.queue[request.index].track.path.clone();
+        let path = request.entry().track.path.clone();
         if let Some(cache) = &source.cache {
             self.playback.reverse_cache = Some((path.clone(), cache.clone()));
         } else if self
@@ -441,7 +403,7 @@ impl App {
         // Keep the platform audio device on its owning thread; only file access
         // and decoder preparation run in a blocking worker.
         if self.playback.audio.is_none() {
-            self.playback.audio = Some(Audio::open(self.settings.volume)?);
+            self.playback.audio = Some(Audio::open(self.settings.preferences.volume)?);
         }
         self.finish_listening();
         let audio = self
@@ -449,10 +411,10 @@ impl App {
             .audio
             .as_mut()
             .context(AppError::AudioUnavailable)?;
-        audio.equalizer(&self.settings.equalizer);
+        audio.equalizer(&self.settings.preferences.equalizer);
         audio.tuner(&tuner);
         audio.play_prepared(source, request.paused);
-        let entry = &request.queue[request.index];
+        let entry = request.entry();
         let mut track = entry.track.clone();
         if let Some(duration) = duration {
             track.duration_ms = duration.as_millis().min(u128::from(u64::MAX)) as u64;
@@ -461,12 +423,9 @@ impl App {
         self.playback.playing_entry = Some(entry.id);
         self.playback.playing_playlist = Some(request.playlist_id);
         self.playback.queue = request.queue;
-        self.playback.queue_index = request.index;
-        self.playback.shuffle_history = request.shuffle_history;
-        self.playback.marked_only = request.marked_only;
         self.playback.current = Some(track.clone());
         self.playback.waveform = None;
-        if self.settings.appearance.playback_timeline == PlaybackTimeline::Waveform {
+        if self.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Waveform {
             self.playback.pending_waveform =
                 Some((track.path.clone(), self.playback.preparation.generation()));
             self.start_waveform_job();
@@ -513,10 +472,7 @@ impl App {
         self.playback.playing_playlist = None;
         self.playback.waveform = None;
         self.cancel_waveform();
-        self.playback.queue = Arc::from([]);
-        self.playback.queue_index = 0;
-        self.playback.marked_only = false;
-        self.clear_shuffle_history();
+        self.playback.queue = PlaybackQueue::default();
         self.message(
             self.text("Playback stopped", "Воспроизведение остановлено")
                 .into(),
@@ -524,84 +480,22 @@ impl App {
     }
 
     pub(super) fn next(&mut self, direction: i64, explicit: bool) -> Result<()> {
-        let Some((queue, playlist_id, index, mut history, marked_only)) = self
-            .requested_playback()
-            .map(|request| {
-                (
-                    request.queue.clone(),
-                    request.playlist_id,
-                    request.index,
-                    request.shuffle_history.clone(),
-                    request.marked_only,
-                )
-            })
-            .or_else(|| {
-                self.playback.playing_playlist.map(|id| {
-                    (
-                        self.playback.queue.clone(),
-                        id,
-                        self.playback.queue_index,
-                        self.playback.shuffle_history.clone(),
-                        self.playback.marked_only,
-                    )
-                })
-            })
-        else {
+        let Some(mut request) = self.playback_request() else {
             return Ok(());
         };
-        if queue.is_empty() || index >= queue.len() {
-            if !explicit {
-                self.stop_playback();
-            }
-            return Ok(());
-        }
-        // Repeating one track only intercepts completion, never a manual skip.
-        let next = if !marked_only
-            && !explicit
-            && direction > 0
-            && self.settings.repeat == RepeatMode::Track
-        {
-            Some(index)
-        } else if marked_only && queue.len() == 1 {
-            Some(0)
-        } else if self.settings.shuffle {
-            if direction < 0 {
-                history.pop_back()
-            } else if queue.len() > 1 {
-                // Sample all other positions uniformly without retries. Earlier
-                // tracks remain eligible, as only the current track is excluded.
-                let choice = fastrand::usize(..queue.len() - 1);
-                history.push_back(index);
-                if history.len() > SHUFFLE_HISTORY_LIMIT {
-                    history.pop_front();
-                }
-                Some(choice + usize::from(choice >= index))
-            } else {
-                None
-            }
+        let step = if !explicit && direction > 0 {
+            QueueStep::Finished
         } else {
-            history.clear();
-            if direction < 0 {
-                index.checked_sub(1).or_else(|| {
-                    (marked_only || self.settings.repeat == RepeatMode::Playlist)
-                        .then_some(queue.len() - 1)
-                })
-            } else if index + 1 < queue.len() {
-                Some(index + 1)
-            } else {
-                (marked_only || self.settings.repeat == RepeatMode::Playlist).then_some(0)
-            }
+            QueueStep::manual(direction)
         };
-        if let Some(index) = next {
-            self.request_playback(PlaybackRequest {
-                queue,
-                playlist_id,
-                index,
-                paused: false,
-                shuffle_history: history,
-                reverse: false,
-                marked_only,
-            })
+        if let Some(queue) = request.queue.advance(
+            step,
+            self.settings.preferences.repeat,
+            self.settings.preferences.shuffle,
+        ) {
+            request.queue = queue;
+            request.paused = false;
+            self.request_playback(request)
         } else {
             if !explicit {
                 self.stop_playback();
@@ -611,9 +505,9 @@ impl App {
     }
 
     pub(super) fn clear_shuffle_history(&mut self) {
-        self.playback.shuffle_history.clear();
+        self.playback.queue.clear_history();
         if let Some(request) = self.playback.preparation.requested_mut() {
-            request.shuffle_history.clear();
+            request.queue.clear_history();
         }
     }
 
@@ -796,7 +690,7 @@ impl App {
     }
 
     pub(super) fn tick_waveform(&mut self) {
-        if self.settings.appearance.playback_timeline == PlaybackTimeline::Progress {
+        if self.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Progress {
             self.cancel_waveform();
         } else if self.playback.waveform.is_none()
             && !self.preparing_playback()
@@ -838,20 +732,10 @@ impl App {
     }
 }
 
-fn remap_history(old: &[Entry], new: &[Entry], history: &VecDeque<usize>) -> VecDeque<usize> {
-    history
-        .iter()
-        .filter_map(|index| {
-            let id = old.get(*index)?.id;
-            new.iter().position(|entry| entry.id == id)
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Track;
+    use crate::model::{RepeatMode, Track};
     use std::{fs, sync::atomic::AtomicU64};
 
     struct Directory(PathBuf);
@@ -876,7 +760,7 @@ mod tests {
     }
 
     fn queue(app: &mut App, length: usize, index: usize) {
-        app.playback.queue = (0..length)
+        let entries = (0..length)
             .map(|index| Entry {
                 id: index as i64 + 1,
                 position: index as i64,
@@ -895,20 +779,156 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .into();
-        app.playback.queue_index = index;
+        app.playback.queue = PlaybackQueue::new(entries, index, false);
         app.playback.playing_playlist = Some(42);
-        app.playback.playing_entry = app.playback.queue.get(index).map(|entry| entry.id);
+        app.playback.playing_entry = app.playback.queue.current().map(|entry| entry.id);
         app.playback.current = app
             .playback
             .queue
-            .get(index)
+            .current()
             .map(|entry| entry.track.clone());
     }
 
     fn requested_index(app: &App) -> usize {
-        app.requested_playback()
-            .expect("Next track is being prepared")
-            .index
+        let request = app
+            .requested_playback()
+            .expect("Next track is being prepared");
+        request
+            .queue
+            .entries()
+            .iter()
+            .position(|entry| entry.id == request.entry().id)
+            .unwrap()
+    }
+
+    fn library_queue(app: &mut App, length: usize, index: usize) {
+        queue(app, length, index);
+        app.library.playlists = vec![crate::model::Playlist {
+            id: 42,
+            name: "Playback test".into(),
+            mode: crate::model::Mode::Chaos,
+            kind: crate::model::PlaylistKind::Normal,
+            position: 0,
+            entries: app.playback.queue.entries().to_vec(),
+            folders: Vec::new(),
+            group_folders: false,
+        }];
+        app.library.selected_playlist = Some(42);
+        app.library.selected_entry = app.playback.playing_entry;
+        app.library.marked = app
+            .playback
+            .queue
+            .entries()
+            .iter()
+            .map(|entry| entry.id)
+            .collect();
+    }
+
+    #[test]
+    fn marked_playback_wraps_the_set_and_repeats_a_single_mark_even_with_shuffle() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        library_queue(&mut app, 3, 1);
+        app.settings.preferences.repeat = RepeatMode::Track;
+        app.play_marked().unwrap();
+        for expected in [2, 0, 1] {
+            assert!(app.can_step_playback(1));
+            app.next(1, false).unwrap();
+            assert_eq!(requested_index(&app), expected);
+        }
+        app.next(-1, true).unwrap();
+        assert_eq!(requested_index(&app), 0);
+
+        app.stop_playback();
+        app.library.marked = HashSet::from([2]);
+        app.settings.preferences.shuffle = true;
+        app.settings.preferences.repeat = RepeatMode::Off;
+        app.play_marked().unwrap();
+        for _ in 0..3 {
+            assert!(app.can_step_playback(1));
+            app.next(1, false).unwrap();
+            assert_eq!(requested_index(&app), 0);
+            assert_eq!(app.requested_playback().unwrap().entry().id, 2);
+        }
+    }
+
+    #[test]
+    fn removing_the_playing_mark_selects_its_successor_and_empty_marks_stop() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        library_queue(&mut app, 4, 1);
+        let entries = app.playback.queue.entries().to_vec().into();
+        app.playback.queue = PlaybackQueue::new(entries, 1, true);
+        app.toggle_mark(2).unwrap();
+        let request = app.requested_playback().unwrap();
+        assert_eq!(request.entry().id, 3);
+        assert!(request.queue.marked_only());
+
+        for id in [1, 3, 4] {
+            app.toggle_mark(id).unwrap();
+        }
+        assert!(!app.preparing_playback());
+        assert!(app.playback.current.is_none());
+        assert!(app.playback.queue.entries().is_empty());
+    }
+
+    #[test]
+    fn changing_marks_keeps_a_pending_decode_for_the_same_entry_and_preserves_pause() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        library_queue(&mut app, 4, 0);
+        app.library.selected_entry = Some(2);
+        app.play_marked().unwrap();
+        app.playback.preparation.requested_mut().unwrap().paused = true;
+        let generation = app.playback.preparation.generation();
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
+
+        app.toggle_mark(1).unwrap();
+        assert_eq!(app.playback.preparation.generation(), generation);
+        assert!(!cancel.load(Ordering::Relaxed));
+        let request = app.requested_playback().unwrap();
+        assert_eq!(requested_index(&app), 0);
+        assert_eq!(request.entry().id, 2);
+        assert_eq!(
+            request
+                .queue
+                .entries()
+                .iter()
+                .map(|e| e.id)
+                .collect::<Vec<_>>(),
+            [2, 3, 4]
+        );
+        assert!(request.paused);
+    }
+
+    #[test]
+    fn removing_a_pending_mark_cancels_its_decode_and_retargets_the_latest_queue() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        library_queue(&mut app, 4, 0);
+        app.library.selected_entry = Some(2);
+        app.play_marked().unwrap();
+        app.playback.preparation.requested_mut().unwrap().paused = true;
+        let generation = app.playback.preparation.generation();
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
+
+        app.toggle_mark(2).unwrap();
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(app.playback.preparation.generation() > generation);
+        let request = app.requested_playback().unwrap();
+        assert_eq!(request.entry().id, 3);
+        assert_eq!(
+            request
+                .queue
+                .entries()
+                .iter()
+                .map(|e| e.id)
+                .collect::<Vec<_>>(),
+            [1, 3, 4]
+        );
+        assert!(request.paused);
+        assert_eq!(app.playback.current.as_ref().unwrap().id, 1);
+        assert_eq!(app.playback.queue.current().unwrap().id, 1);
     }
 
     #[test]
@@ -934,131 +954,43 @@ mod tests {
         assert!(!app.preparing_playback());
         assert!(app.playback.current.is_none());
         assert!(app.playback.playing_playlist.is_none());
-        assert!(app.playback.queue.is_empty());
+        assert!(app.playback.queue.entries().is_empty());
     }
 
     #[test]
-    fn track_repeat_restarts_on_completion_but_does_not_trap_manual_skips() {
+    fn whole_playlist_restores_normal_navigation_without_restarting_a_kept_decode() {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
-        queue(&mut app, 3, 1);
-        app.settings.repeat = RepeatMode::Track;
-        app.next(1, false).unwrap();
-        assert_eq!(requested_index(&app), 1);
-        app.next(1, true).unwrap();
-        assert_eq!(requested_index(&app), 2);
-        app.next(1, false).unwrap();
-        assert_eq!(requested_index(&app), 2);
-        app.next(-1, true).unwrap();
-        assert_eq!(requested_index(&app), 1);
-    }
+        library_queue(&mut app, 4, 0);
+        app.library.marked = HashSet::from([2, 4]);
+        app.library.selected_entry = Some(2);
+        app.play_marked().unwrap();
+        app.playback.preparation.requested_mut().unwrap().paused = true;
+        let generation = app.playback.preparation.generation();
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
 
-    #[test]
-    fn playlist_repeat_wraps_in_both_directions_including_pending_requests() {
-        let directory = Directory::new();
-        let mut app = App::new(&directory.0).unwrap();
-        queue(&mut app, 3, 2);
-        app.settings.repeat = RepeatMode::Playlist;
-        assert!(app.can_step_playback(1));
-        app.next(1, false).unwrap();
-        assert_eq!(requested_index(&app), 0);
-        assert!(app.can_step_playback(-1));
+        app.play_whole_playlist().unwrap();
+        assert_eq!(app.playback.preparation.generation(), generation);
+        assert!(!cancel.load(Ordering::Relaxed));
+        let request = app.requested_playback().unwrap();
+        assert_eq!(request.entry().id, 2);
+        assert!(request.paused);
+        assert_eq!(request.queue.entries().len(), 4);
+        assert!(app.marked_playback_count().is_none());
         app.next(-1, true).unwrap();
-        assert_eq!(requested_index(&app), 2);
-        app.next(1, true).unwrap();
-        assert_eq!(requested_index(&app), 0);
-        app.settings.repeat = RepeatMode::Off;
+        assert_eq!(app.requested_playback().unwrap().entry().id, 1);
         assert!(!app.can_step_playback(-1));
-        app.next(-1, true).unwrap();
-        assert_eq!(requested_index(&app), 0);
     }
 
     #[test]
-    fn shuffle_excludes_only_the_current_track_and_previous_retraces_history() {
-        fastrand::seed(7);
-        let directory = Directory::new();
-        let mut app = App::new(&directory.0).unwrap();
-        queue(&mut app, 5, 4);
-        app.settings.shuffle = true;
-        assert!(app.can_step_playback(1));
-        assert!(!app.can_step_playback(-1));
-        let mut indices = vec![4];
-        for _ in 0..128 {
-            app.next(1, false).unwrap();
-            let index = requested_index(&app);
-            assert!(index < 5);
-            assert_ne!(index, *indices.last().unwrap());
-            assert_eq!(app.requested_playback().unwrap().playlist_id, 42);
-            indices.push(index);
-        }
-        assert!((0..5).all(|index| indices.contains(&index)));
-        for index in indices[..indices.len() - 1].iter().rev() {
-            assert!(app.can_step_playback(-1));
-            app.next(-1, true).unwrap();
-            assert_eq!(requested_index(&app), *index);
-        }
-        assert!(!app.can_step_playback(-1));
-        app.next(-1, true).unwrap();
-        assert_eq!(requested_index(&app), 4);
-    }
-
-    #[test]
-    fn track_repeat_takes_priority_over_shuffle_and_skip_still_chooses_another_track() {
-        let directory = Directory::new();
-        let mut app = App::new(&directory.0).unwrap();
-        queue(&mut app, 2, 1);
-        app.settings.shuffle = true;
-        app.settings.repeat = RepeatMode::Track;
-        app.next(1, false).unwrap();
-        assert_eq!(requested_index(&app), 1);
-        app.next(1, true).unwrap();
-        assert_eq!(requested_index(&app), 0);
-        app.next(1, false).unwrap();
-        assert_eq!(requested_index(&app), 0);
-        app.next(-1, true).unwrap();
-        assert_eq!(requested_index(&app), 1);
-    }
-
-    #[test]
-    fn empty_and_single_track_playlists_handle_every_mode_without_invalid_requests() {
-        let directory = Directory::new();
-        for shuffle in [false, true] {
-            for repeat in [RepeatMode::Off, RepeatMode::Playlist, RepeatMode::Track] {
-                let mut app = App::new(&directory.0).unwrap();
-                app.settings.shuffle = shuffle;
-                app.settings.repeat = repeat;
-                queue(&mut app, 0, 0);
-                assert!(!app.can_step_playback(1));
-                assert!(!app.can_step_playback(-1));
-                app.next(1, false).unwrap();
-                assert!(!app.preparing_playback());
-                queue(&mut app, 1, 0);
-                app.next(1, false).unwrap();
-                if repeat == RepeatMode::Track || (!shuffle && repeat == RepeatMode::Playlist) {
-                    assert_eq!(requested_index(&app), 0);
-                } else {
-                    assert!(app.playback.current.is_none());
-                    assert!(!app.preparing_playback());
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn shuffle_history_is_bounded_and_resets_on_explicit_selection_and_stop() {
+    fn shuffle_history_resets_on_explicit_selection_and_stop() {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         queue(&mut app, 2, 0);
-        app.settings.shuffle = true;
-        for _ in 0..SHUFFLE_HISTORY_LIMIT + 10 {
-            app.next(1, true).unwrap();
-        }
-        assert_eq!(
-            app.requested_playback().unwrap().shuffle_history.len(),
-            SHUFFLE_HISTORY_LIMIT
-        );
+        app.settings.preferences.shuffle = true;
+        app.next(1, true).unwrap();
         assert!(app.can_step_playback(-1));
-        app.prepare_playback(app.playback.queue.clone(), 99, 0)
+        app.prepare_playback(app.playback.queue.entries().to_vec().into(), 99, 0)
             .unwrap();
         assert!(!app.can_step_playback(-1));
         assert_eq!(app.requested_playback().unwrap().playlist_id, 99);
@@ -1067,7 +999,7 @@ mod tests {
         app.stop_playback();
         assert!(!app.can_step_playback(-1));
         assert!(!app.can_step_playback(1));
-        assert!(app.playback.shuffle_history.is_empty());
+        assert!(app.playback.queue.current().is_none());
     }
 
     #[test]
@@ -1075,8 +1007,8 @@ mod tests {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         queue(&mut app, 3, 0);
-        app.settings.tuner.reverse = true;
-        let pinned_path = app.playback.queue[1].track.path.clone();
+        app.settings.preferences.tuner.reverse = true;
+        let pinned_path = app.playback.queue.entries()[1].track.path.clone();
         app.settings
             .track_tuners
             .insert(pinned_path, Default::default());
@@ -1088,14 +1020,14 @@ mod tests {
         let generation = app.playback.preparation.generation();
         let cancel = app.playback.preparation_cancel.clone().unwrap();
         // Changes to global FX cannot replace a pinned destination's decode.
-        app.settings.tuner.reverse = false;
+        app.settings.preferences.tuner.reverse = false;
         app.sync_tuner().unwrap();
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         app.sync_tuner().unwrap();
         assert_eq!(app.playback.preparation.generation(), generation);
         assert!(!cancel.load(Ordering::Relaxed));
 
-        app.settings.repeat = RepeatMode::Track;
+        app.settings.preferences.repeat = RepeatMode::Track;
         app.next(1, false).unwrap();
         assert_eq!(requested_index(&app), 1);
         assert!(!app.requested_playback().unwrap().reverse);
@@ -1112,12 +1044,12 @@ mod tests {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         queue(&mut app, 2, 0);
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         let path = app.playback.current.as_ref().unwrap().path.clone();
         app.settings
             .track_tuners
             .insert(path.clone(), Default::default());
-        app.prepare_playback(app.playback.queue.clone(), 42, 1)
+        app.prepare_playback(app.playback.queue.entries().to_vec().into(), 42, 1)
             .unwrap();
         app.playback.preparation.requested_mut().unwrap().paused = true;
         let generation = app.playback.preparation.generation();
@@ -1129,13 +1061,13 @@ mod tests {
         assert!(!cancel.load(Ordering::Relaxed));
         assert!(app.requested_playback().unwrap().paused);
 
-        app.settings.tuner.reverse = false;
+        app.settings.preferences.tuner.reverse = false;
         app.sync_tuner().unwrap();
         assert!(cancel.load(Ordering::Relaxed));
         let request = app.requested_playback().unwrap();
         assert!(!request.reverse);
         assert!(request.paused);
-        assert_eq!(request.index, 1);
+        assert_eq!(requested_index(&app), 1);
         assert_eq!(request.playlist_id, 42);
         app.cancel_audio_preparation();
         app.playback.preparation.cancel();
@@ -1143,7 +1075,7 @@ mod tests {
         assert!(app.playback.seek.requested().unwrap().reverse);
         app.cancel_seek();
         app.settings.track_tuners.get_mut(&path).unwrap().reverse = false;
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         app.seek_to(300);
         let seek = app.playback.seek.requested().unwrap();
         assert!(!seek.reverse);
@@ -1157,26 +1089,114 @@ mod tests {
         let directory = Directory::new();
         let mut app = App::new(&directory.0).unwrap();
         queue(&mut app, 3, 1);
-        app.prepare_playback(app.playback.queue.clone(), 42, 1)
+        app.prepare_playback(app.playback.queue.entries().to_vec().into(), 42, 1)
             .unwrap();
         app.playback.preparation.requested_mut().unwrap().paused = true;
         let cancel = app.playback.preparation_cancel.clone().unwrap();
         let generation = app.playback.preparation.generation();
-        app.settings.tuner.reverse = true;
+        app.settings.preferences.tuner.reverse = true;
         app.sync_tuner().unwrap();
         assert!(cancel.load(Ordering::Relaxed));
         assert!(app.playback.preparation.generation() > generation);
         let request = app.requested_playback().unwrap();
         assert!(request.reverse);
         assert!(request.paused);
-        assert_eq!(request.index, 1);
+        assert_eq!(requested_index(&app), 1);
         assert_eq!(request.playlist_id, 42);
-        app.settings.tuner.reverse = false;
+        app.settings.preferences.tuner.reverse = false;
         app.sync_tuner().unwrap();
         assert!(!app.requested_playback().unwrap().reverse);
         assert!(app.requested_playback().unwrap().paused);
         app.stop_playback();
         assert!(!app.preparing_playback());
         assert!(app.playback.reverse_cache.is_none());
+    }
+
+    #[test]
+    fn saving_settings_and_editing_appearance_volume_or_eq_leave_decode_and_seek_alone() {
+        let directory = Directory::new();
+        let mut app = App::new(&directory.0).unwrap();
+        queue(&mut app, 2, 0);
+        app.next(1, true).unwrap();
+        app.playback.preparation.requested_mut().unwrap().paused = true;
+        app.seek_to(400);
+        let preparation = app.playback.preparation.generation();
+        let seek = app.playback.seek.generation();
+        let cancel = app.playback.preparation_cancel.clone().unwrap();
+        let seek_cancel = app.playback.seek_cancel.clone().unwrap();
+        // Persistence must not apply even an unapplied direction change.
+        app.settings.preferences.tuner.reverse = true;
+        app.save_settings().unwrap();
+        app.open_settings_page(super::super::SettingsPage::Typography);
+        app.adjust_setting(1, 1).unwrap();
+        app.adjust_volume(5).unwrap();
+        app.equalizer_target(super::super::Target::EqualizerToggle)
+            .unwrap();
+
+        assert_eq!(app.playback.preparation.generation(), preparation);
+        assert_eq!(app.playback.seek.generation(), seek);
+        assert!(!cancel.load(Ordering::Relaxed));
+        assert!(!seek_cancel.load(Ordering::Relaxed));
+        assert!(app.requested_playback().unwrap().paused);
+        assert!(!app.requested_playback().unwrap().reverse);
+        assert_eq!(app.playback.seek_preview, Some(400));
+        assert!(app.settings_saving());
+
+        // FX editing still applies the direction immediately and preserves pause.
+        app.tuner_target(super::super::Target::TunerReset).unwrap();
+        app.tuner_target(super::super::Target::TunerReverse)
+            .unwrap();
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(seek_cancel.load(Ordering::Relaxed));
+        assert!(app.requested_playback().unwrap().reverse);
+        assert!(app.requested_playback().unwrap().paused);
+    }
+
+    #[test]
+    fn applying_a_profile_updates_pending_direction_but_preserves_a_pinned_destination() {
+        for pinned in [false, true] {
+            let directory = Directory::new();
+            let mut app = App::new(&directory.0).unwrap();
+            queue(&mut app, 2, 0);
+            if pinned {
+                app.settings.track_tuners.insert(
+                    app.playback.queue.entries()[1].track.path.clone(),
+                    Default::default(),
+                );
+            }
+            app.next(1, true).unwrap();
+            app.playback.preparation.requested_mut().unwrap().paused = true;
+            let generation = app.playback.preparation.generation();
+            let cancel = app.playback.preparation_cancel.clone().unwrap();
+            let mut preferences = app.settings.profile_preferences();
+            preferences.volume = 0.25;
+            preferences.equalizer.enabled = true;
+            preferences.tuner.reverse = true;
+            app.settings
+                .profiles
+                .push(crate::preferences::SettingsProfile {
+                    id: "reverse".into(),
+                    name: "Reverse".into(),
+                    preferences,
+                });
+            app.open_settings_page(super::super::SettingsPage::Profiles);
+            app.adjust_setting(0, 1).unwrap();
+            app.setting(1).unwrap();
+            assert_eq!(app.settings.active_profile, "reverse");
+            assert_eq!(app.settings.preferences.volume, 0.25);
+            assert!(app.settings.preferences.equalizer.enabled);
+            assert!(app.settings.preferences.tuner.reverse);
+            assert_eq!(app.settings.track_tuners.len(), usize::from(pinned));
+            assert_eq!(app.requested_playback().unwrap().reverse, !pinned);
+            assert!(app.requested_playback().unwrap().paused);
+            assert_eq!(requested_index(&app), 1);
+            if pinned {
+                assert_eq!(app.playback.preparation.generation(), generation);
+                assert!(!cancel.load(Ordering::Relaxed));
+            } else {
+                assert!(app.playback.preparation.generation() > generation);
+                assert!(cancel.load(Ordering::Relaxed));
+            }
+        }
     }
 }

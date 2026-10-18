@@ -1,8 +1,50 @@
-use super::{App, Dialog, TextPurpose};
+use super::{App, Dialog, Target, TextPurpose};
 use crate::errors::AppError;
+use crate::input::{Key, KeyPress};
 use anyhow::{Context, Result, ensure};
 
 impl App {
+    pub(super) fn composition_key(&mut self, key: KeyPress) -> Result<()> {
+        let Some(Dialog::ComposePlaylists { selected, .. }) = &self.view.dialog else {
+            return Ok(());
+        };
+        let selected = *selected;
+        if key.ctrl && !key.alt && matches!(key.key, Key::Up | Key::Down) {
+            self.move_composition_source(if key.key == Key::Up { -1 } else { 1 });
+            return Ok(());
+        }
+        if !key.ctrl && !key.alt && key.key == Key::Char(' ') {
+            self.toggle_compose_row(selected);
+            return Ok(());
+        }
+        if matches!(key.key, Key::Home | Key::End) {
+            self.scroll_dialog(if key.key == Key::Home {
+                i16::MIN
+            } else {
+                i16::MAX
+            });
+            return Ok(());
+        }
+        self.dialog_navigation_key(key)
+    }
+
+    pub(super) fn folders_key(&mut self, key: KeyPress) -> Result<()> {
+        if !key.ctrl && !key.alt {
+            let target = match key.key {
+                Key::Insert => Some(Target::FolderAdd),
+                Key::F(3) | Key::Enter => Some(Target::FolderEdit),
+                Key::Delete => Some(Target::FolderRemove),
+                Key::Char('r') => Some(Target::FolderScan),
+                Key::Char(' ') => Some(Target::ScanSubfolders),
+                _ => None,
+            };
+            if let Some(target) = target {
+                return self.target(target, false);
+            }
+        }
+        self.dialog_navigation_key(key)
+    }
+
     pub(crate) fn compose_choices(&self) -> Vec<&crate::model::Playlist> {
         self.visible_playlists()
             .into_iter()

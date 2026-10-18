@@ -30,7 +30,7 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .map(|playlist| {
             (
                 playlist.id,
-                clean(playlist.display_name(app.settings.language)),
+                clean(playlist.display_name(app.settings.preferences.language)),
                 playlist.entries.len(),
             )
         })

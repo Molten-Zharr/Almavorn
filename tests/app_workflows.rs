@@ -392,24 +392,25 @@ fn shortcut_capture_rejects_reserved_and_duplicate_keys() {
     let mut app = App::new(&directory.0).unwrap();
     let index = app
         .settings
+        .preferences
         .bindings
         .iter()
         .position(|b| b.action == Action::Quit)
         .unwrap();
-    let original = app.settings.bindings[index].key;
+    let original = app.settings.preferences.bindings[index].key;
     app.view.dialog = Some(Dialog::CaptureBinding { index });
     key(&mut app, Key::Down);
     assert!(app.view.notice_error);
-    assert_eq!(app.settings.bindings[index].key, original);
+    assert_eq!(app.settings.preferences.bindings[index].key, original);
     key(&mut app, Key::Char(' '));
     assert!(app.view.notice_error);
-    assert_eq!(app.settings.bindings[index].key, original);
+    assert_eq!(app.settings.preferences.bindings[index].key, original);
     control(&mut app, 'j');
     assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     wait_for_settings(&mut app);
     assert_eq!(
-        app.store.settings().unwrap().bindings[index].key,
-        app.settings.bindings[index].key
+        app.store.settings().unwrap().preferences.bindings[index].key,
+        app.settings.preferences.bindings[index].key
     );
     key(&mut app, Key::Escape);
     control(&mut app, 'j');
@@ -421,15 +422,15 @@ fn dialogs_capture_clicks_and_render_across_languages_and_panel_positions() {
     let directory = TestDirectory::new();
     let mut app = App::new(&directory.0).unwrap();
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         for placement in [
             Placement::Left,
             Placement::Right,
             Placement::Top,
             Placement::Bottom,
         ] {
-            app.settings.playlist_placement = placement;
-            app.settings.player_placement = placement;
+            app.settings.preferences.playlist_placement = placement;
+            app.settings.preferences.player_placement = placement;
             for (width, height) in [(120, 50), (70, 30), (32, 18), (20, 8)] {
                 let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
                 terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
@@ -504,7 +505,8 @@ fn rendering_uses_the_palette_selected_for_each_mode() {
     use ratatui::style::Color;
     let directory = TestDirectory::new();
     let mut app = App::new(&directory.0).unwrap();
-    app.settings.appearance.palette_ids = ["classic-amber".into(), "classic-violet".into()];
+    app.settings.preferences.appearance.palette_ids =
+        ["classic-amber".into(), "classic-violet".into()];
     for (mode, accent) in [
         (Mode::Order, Color::Rgb(232, 158, 74)),
         (Mode::Chaos, Color::Rgb(188, 125, 228)),
@@ -516,7 +518,7 @@ fn rendering_uses_the_palette_selected_for_each_mode() {
             (Language::Russian, 120, 50),
             (Language::English, 120, 50),
         ] {
-            app.settings.language = language;
+            app.settings.preferences.language = language;
             let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
             terminal.draw(|frame| ui::render(&mut app, frame)).unwrap();
             let buffer = terminal.backend().buffer();

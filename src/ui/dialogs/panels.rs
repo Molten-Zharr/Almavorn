@@ -31,8 +31,8 @@ pub(super) fn render(
         .iter()
         .map(|row| {
             let (label, prefix) = match row {
-                PanelRow::Category(panel) => (panel.name(app.settings.language), 6),
-                PanelRow::Control(control) => (control.name(app.settings.language), 8),
+                PanelRow::Category(panel) => (panel.name(app.settings.preferences.language), 6),
+                PanelRow::Control(control) => (control.name(app.settings.preferences.language), 8),
                 PanelRow::Reset => (
                     app.text("Restore default layout", "Вернуть исходную раскладку"),
                     0,
@@ -68,13 +68,13 @@ pub(super) fn render(
                     (
                         format!(
                             "{indicator} [{}] ",
-                            if app.settings.workspace.hidden.contains(panel) {
+                            if app.settings.preferences.workspace.hidden.contains(panel) {
                                 ' '
                             } else {
                                 'x'
                             },
                         ),
-                        panel.name(app.settings.language),
+                        panel.name(app.settings.preferences.language),
                         false,
                     )
                 }
@@ -82,17 +82,25 @@ pub(super) fn render(
                     let category_hidden = crate::workspace::Panel::ALL
                         .iter()
                         .find(|panel| panel.controls().contains(control))
-                        .is_some_and(|panel| app.settings.workspace.hidden.contains(panel));
+                        .is_some_and(|panel| {
+                            app.settings.preferences.workspace.hidden.contains(panel)
+                        });
                     (
                         format!(
                             "    [{}] ",
-                            if app.settings.workspace.hidden_controls.contains(control) {
+                            if app
+                                .settings
+                                .preferences
+                                .workspace
+                                .hidden_controls
+                                .contains(control)
+                            {
                                 ' '
                             } else {
                                 'x'
                             },
                         ),
-                        control.name(app.settings.language),
+                        control.name(app.settings.preferences.language),
                         category_hidden,
                     )
                 }

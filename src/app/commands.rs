@@ -36,6 +36,42 @@ pub struct CommandItem {
 }
 
 impl App {
+    pub(super) fn commands_key(&mut self, key: KeyPress) -> Result<()> {
+        if self.view.toolbar_selected.is_some() && !key.ctrl && !key.alt {
+            if key.key == Key::Tab {
+                self.close_dialog();
+                self.workspace_key(key)?;
+                return Ok(());
+            }
+            if matches!(key.key, Key::Left | Key::Right) {
+                self.close_dialog();
+                self.toolbar_key(key)?;
+                if let Some(Target::CommandMenu(menu)) = self
+                    .view
+                    .toolbar_selected
+                    .and_then(|index| self.toolbar_items().into_iter().nth(index))
+                    .map(|item| item.target)
+                {
+                    self.open_commands(menu);
+                }
+                return Ok(());
+            }
+        }
+        let normalized = key.normalized();
+        if let Some(action) = self
+            .settings
+            .preferences
+            .bindings
+            .iter()
+            .find(|binding| binding.key == normalized)
+            .map(|binding| binding.action)
+        {
+            self.view.dialog = None;
+            return self.action(action);
+        }
+        self.dialog_navigation_key(key)
+    }
+
     pub(crate) fn command_selection(
         items: &[CommandItem],
         selected: usize,
@@ -130,7 +166,10 @@ impl App {
             ));
         }
         entries.push((
-            format!("{} ↓", self.settings.mode.name(self.settings.language)),
+            format!(
+                "{} ↓",
+                self.settings.mode.name(self.settings.preferences.language)
+            ),
             Target::CommandMenu(CommandMenu::Application),
             true,
         ));
@@ -145,9 +184,10 @@ impl App {
     }
 
     pub fn control_visible(&self, panel: Panel, action: Action) -> bool {
-        !self.settings.workspace.hidden.contains(&panel)
+        !self.settings.preferences.workspace.hidden.contains(&panel)
             && !self
                 .settings
+                .preferences
                 .workspace
                 .hidden_controls
                 .contains(&Control::Action(action))
@@ -161,12 +201,12 @@ impl App {
                 .map(|kind| CommandItem {
                     label: format!(
                         "{} {}",
-                        if self.settings.appearance.visualizer == kind {
+                        if self.settings.preferences.appearance.visualizer == kind {
                             "●"
                         } else {
                             " "
                         },
-                        kind.name(self.settings.language)
+                        kind.name(self.settings.preferences.language)
                     ),
                     target: Target::Visualizer(kind),
                     enabled: true,
@@ -234,11 +274,17 @@ impl App {
         };
         let mut items = Vec::new();
         if menu == CommandMenu::Application
-            && !self.settings.workspace.hidden.contains(&Panel::Application)
+            && !self
+                .settings
+                .preferences
+                .workspace
+                .hidden
+                .contains(&Panel::Application)
         {
             for mode in Mode::ALL {
                 if !self
                     .settings
+                    .preferences
                     .workspace
                     .hidden_controls
                     .contains(&Control::Mode(mode))
@@ -251,7 +297,7 @@ impl App {
                             } else {
                                 " "
                             },
-                            mode.name(self.settings.language)
+                            mode.name(self.settings.preferences.language)
                         ),
                         target: Target::Mode(mode),
                         enabled: !self.busy(),
@@ -263,8 +309,8 @@ impl App {
             if self.control_visible(panel, *action) {
                 let checked = match action {
                     ToggleEdit => Some(self.view.editing),
-                    ToggleDesk => Some(self.settings.sorting_desk),
-                    ToggleShuffle => Some(self.settings.shuffle),
+                    ToggleDesk => Some(self.settings.preferences.sorting_desk),
+                    ToggleShuffle => Some(self.settings.preferences.shuffle),
                     PlayMarked => Some(
                         self.marked_playback_playlist().is_some()
                             && self.library.selected_playlist == self.marked_playback_playlist(),
@@ -274,15 +320,18 @@ impl App {
                 let name = if *action == CycleRepeat {
                     format!(
                         "{}: {}",
-                        action.name(self.settings.language),
+                        action.name(self.settings.preferences.language),
                         if self.marked_playback_count().is_some() {
                             self.text("Checked tracks", "Отмеченные")
                         } else {
-                            self.settings.repeat.name(self.settings.language)
+                            self.settings
+                                .preferences
+                                .repeat
+                                .name(self.settings.preferences.language)
                         },
                     )
                 } else {
-                    action.name(self.settings.language).into()
+                    action.name(self.settings.preferences.language).into()
                 };
                 items.push(CommandItem {
                     label: checked.map_or_else(
@@ -337,7 +386,7 @@ impl App {
         let selected = if menu == CommandMenu::Visualizer {
             crate::visualizer::VisualizerKind::ALL
                 .iter()
-                .position(|kind| *kind == self.settings.appearance.visualizer)
+                .position(|kind| *kind == self.settings.preferences.appearance.visualizer)
                 .unwrap_or_default()
         } else {
             Self::command_selection(&self.command_items(menu), 0, 0)

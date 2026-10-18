@@ -111,7 +111,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             Paragraph::new(format!(
                 "{}{}",
                 if menu.width < 12 { " " } else { "  " },
-                page.name(app.settings.language)
+                page.name(app.settings.preferences.language)
             ))
             .style(style),
             row,
@@ -135,8 +135,13 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         content.height -= reserved;
     } else {
         frame.render_widget(
-            Paragraph::new(app.view.settings.page.name(app.settings.language))
-                .style(palette.text().fg(palette.sidebar_title)),
+            Paragraph::new(
+                app.view
+                    .settings
+                    .page
+                    .name(app.settings.preferences.language),
+            )
+            .style(palette.text().fg(palette.sidebar_title)),
             Rect::new(content.x, content.y, content.width, 1),
         );
         content.y += 2;
@@ -213,7 +218,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             if y + 2 + row_height > content.bottom() {
                 break;
             }
-            let title = format!("─ {} ", group.name(app.settings.language));
+            let title = format!("─ {} ", group.name(app.settings.preferences.language));
             let remaining = usize::from(content.width).saturating_sub(Span::raw(&title).width());
             frame.render_widget(
                 Paragraph::new(Line::from(vec![
@@ -450,13 +455,15 @@ fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         ),
         (profile, Target::SettingsPage(SettingsPage::Profiles)),
         (
-            page.section().name(app.settings.language).to_owned(),
+            page.section()
+                .name(app.settings.preferences.language)
+                .to_owned(),
             Target::SettingsPage(page.section()),
         ),
     ];
     if page.section() == SettingsPage::Themes {
         entries.push((
-            page.tab_name(app.settings.language).to_owned(),
+            page.tab_name(app.settings.preferences.language).to_owned(),
             Target::SettingsTab(page),
         ));
     }
@@ -501,11 +508,11 @@ fn theme_tabs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) ->
     let mut y = area.y;
     for page in SettingsPage::THEME_TABS {
         let label = if page == SettingsPage::Typography
-            && area.width < quiet_width(page.tab_name(app.settings.language))
+            && area.width < quiet_width(page.tab_name(app.settings.preferences.language))
         {
             app.text("Font", "Шрифт")
         } else {
-            page.tab_name(app.settings.language)
+            page.tab_name(app.settings.preferences.language)
         };
         let width = quiet_width(label).min(area.width);
         if x > area.x && x + width > area.right() {
@@ -593,7 +600,10 @@ fn volume(
                 target: Target::Setting(index),
                 enabled: true,
             },
-            &format!("{}%", (app.settings.volume * 100.0).round() as u16),
+            &format!(
+                "{}%",
+                (app.settings.preferences.volume * 100.0).round() as u16
+            ),
             style,
             palette,
         );
@@ -619,8 +629,9 @@ fn volume(
     );
     let scale = Rect::new(area.x + 3, area.y, area.width.saturating_sub(12).min(24), 1);
     if scale.width > 0 {
-        let point = (app.settings.volume.clamp(0.0, 1.0) * f32::from(scale.width.saturating_sub(1)))
-            .round() as u16;
+        let point = (app.settings.preferences.volume.clamp(0.0, 1.0)
+            * f32::from(scale.width.saturating_sub(1)))
+        .round() as u16;
         let spans: Vec<_> = (0..scale.width)
             .map(|column| {
                 Span::styled(
@@ -648,7 +659,10 @@ fn volume(
             target: Target::Setting(index),
             enabled: true,
         },
-        &format!("{}%", (app.settings.volume * 100.0).round() as u16),
+        &format!(
+            "{}%",
+            (app.settings.preferences.volume * 100.0).round() as u16
+        ),
         style,
         palette,
     );

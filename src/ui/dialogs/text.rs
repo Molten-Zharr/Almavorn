@@ -52,7 +52,7 @@ pub(super) fn text_dialog(
             "Поиск · название, исполнитель, альбом, путь",
         ),
         TextPurpose::Accent => app.text("Accent color · RRGGBB", "Цвет акцента · RRGGBB"),
-        TextPurpose::Settings(edit) => edit.title(app.settings.language),
+        TextPurpose::Settings(edit) => edit.title(app.settings.preferences.language),
     };
     let exporting = matches!(
         dialog.purpose,

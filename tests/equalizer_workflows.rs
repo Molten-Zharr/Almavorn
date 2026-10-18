@@ -80,12 +80,15 @@ fn equalizer_keys_wheel_and_dragging_change_only_the_targeted_gain() {
         app.view.dialog,
         Some(Dialog::Equalizer { selected: 0, .. })
     ));
-    assert_eq!(app.settings.equalizer, EqualizerSettings::default());
+    assert_eq!(
+        app.settings.preferences.equalizer,
+        EqualizerSettings::default()
+    );
     key(&mut app, Key::Char(' '));
-    assert!(app.settings.equalizer.enabled);
+    assert!(app.settings.preferences.equalizer.enabled);
     key(&mut app, Key::Right);
     key(&mut app, Key::Up);
-    assert_eq!(app.settings.equalizer.bands[0], 1);
+    assert_eq!(app.settings.preferences.equalizer.bands[0], 1);
     render(&mut app, 120, 50);
     let bar = app
         .view
@@ -105,38 +108,38 @@ fn equalizer_keys_wheel_and_dragging_change_only_the_targeted_gain() {
         y: bar.y,
         delta: -99,
     });
-    assert_eq!(app.settings.equalizer.bands[0], 2); // One dB per event.
+    assert_eq!(app.settings.preferences.equalizer.bands[0], 2); // One dB per event.
     app.handle(Input::Click {
         x: bar.x,
         y: bar.y,
         double: false,
     });
-    assert_eq!(app.settings.equalizer.bands[0], MAX_GAIN);
+    assert_eq!(app.settings.preferences.equalizer.bands[0], MAX_GAIN);
     app.handle(Input::Drag {
         x: bar.right() + 10,
         y: bar.bottom() + 10,
     });
-    assert_eq!(app.settings.equalizer.bands[0], MIN_GAIN);
+    assert_eq!(app.settings.preferences.equalizer.bands[0], MIN_GAIN);
     app.handle(Input::Release {
         x: bar.right() + 10,
         y: bar.bottom() + 10,
     });
     assert!(app.view.workspace.gesture.is_none());
-    assert_eq!(app.settings.equalizer.preamp, 0);
-    assert_eq!(&app.settings.equalizer.bands[1..], &[0; 9]);
+    assert_eq!(app.settings.preferences.equalizer.preamp, 0);
+    assert_eq!(&app.settings.preferences.equalizer.bands[1..], &[0; 9]);
     key(&mut app, Key::Home);
-    assert_eq!(app.settings.equalizer.bands, [0; 10]);
+    assert_eq!(app.settings.preferences.equalizer.bands, [0; 10]);
     for _ in 0..30 {
         key(&mut app, Key::Up);
     }
-    assert_eq!(app.settings.equalizer.bands[0], MAX_GAIN);
+    assert_eq!(app.settings.preferences.equalizer.bands[0], MAX_GAIN);
     for _ in 0..30 {
         key(&mut app, Key::Down);
     }
-    assert_eq!(app.settings.equalizer.bands[0], MIN_GAIN);
+    assert_eq!(app.settings.preferences.equalizer.bands[0], MIN_GAIN);
     key(&mut app, Key::Char('r'));
-    assert_eq!(app.settings.equalizer.bands, [0; 10]);
-    assert!(app.settings.equalizer.enabled);
+    assert_eq!(app.settings.preferences.equalizer.bands, [0; 10]);
+    assert!(app.settings.preferences.equalizer.enabled);
     key(&mut app, Key::F(4));
     assert!(app.view.dialog.is_none());
 }
@@ -179,9 +182,9 @@ fn presets_apply_from_the_dropdown_and_shortcuts_and_custom_values_survive_resta
     click(&mut app, |target| {
         matches!(target, Target::EqualizerPreset(1))
     });
-    assert_eq!(app.settings.equalizer.bands, PRESETS[1].bands);
-    assert_eq!(app.settings.equalizer.preamp, PRESETS[1].preamp);
-    assert!(!app.settings.equalizer.enabled); // Presets keep the on/off choice.
+    assert_eq!(app.settings.preferences.equalizer.bands, PRESETS[1].bands);
+    assert_eq!(app.settings.preferences.equalizer.preamp, PRESETS[1].preamp);
+    assert!(!app.settings.preferences.equalizer.enabled); // Presets keep the on/off choice.
     assert!(matches!(
         app.view.dialog,
         Some(Dialog::Equalizer { presets: false, .. })
@@ -189,11 +192,11 @@ fn presets_apply_from_the_dropdown_and_shortcuts_and_custom_values_survive_resta
     key(&mut app, Key::Char(' '));
     for index in 0..PRESETS.len() {
         key(&mut app, Key::Char(char::from(b'1' + index as u8)));
-        assert_eq!(app.settings.equalizer.preset(), Some(index));
-        assert!(app.settings.equalizer.enabled);
+        assert_eq!(app.settings.preferences.equalizer.preset(), Some(index));
+        assert!(app.settings.preferences.equalizer.enabled);
     }
     key(&mut app, Key::Up); // Customize the preamp of Vocal.
-    assert_eq!(app.settings.equalizer.preset(), None);
+    assert_eq!(app.settings.preferences.equalizer.preset(), None);
     let terminal = render(&mut app, 120, 50);
     let text: String = terminal
         .backend()
@@ -204,15 +207,15 @@ fn presets_apply_from_the_dropdown_and_shortcuts_and_custom_values_survive_resta
         .collect();
     assert!(text.contains("Пользовательский"));
     saved(&mut app);
-    let expected = app.settings.equalizer.clone();
+    let expected = app.settings.preferences.equalizer.clone();
     let defaults = EqualizerSettings::default();
     let mut profile = app.settings.profile_preferences();
     profile.equalizer = defaults.clone();
     app.settings.apply_preferences(profile);
-    assert_eq!(app.settings.equalizer, defaults);
+    assert_eq!(app.settings.preferences.equalizer, defaults);
     drop(app);
     let app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.equalizer, expected);
+    assert_eq!(app.settings.preferences.equalizer, expected);
     assert_eq!(app.settings.profiles[0].preferences.equalizer, expected);
 }
 
@@ -240,7 +243,10 @@ fn dropdown_dismissal_does_not_change_gains_and_escape_closes_it_before_the_equa
         y: bar.y,
         double: false,
     });
-    assert_eq!(app.settings.equalizer, EqualizerSettings::default());
+    assert_eq!(
+        app.settings.preferences.equalizer,
+        EqualizerSettings::default()
+    );
     assert!(matches!(
         app.view.dialog,
         Some(Dialog::Equalizer { presets: false, .. })
@@ -248,7 +254,7 @@ fn dropdown_dismissal_does_not_change_gains_and_escape_closes_it_before_the_equa
     key(&mut app, Key::Enter);
     key(&mut app, Key::Down);
     key(&mut app, Key::Enter);
-    assert_eq!(app.settings.equalizer.preset(), Some(1));
+    assert_eq!(app.settings.preferences.equalizer.preset(), Some(1));
     key(&mut app, Key::Enter);
     key(&mut app, Key::Escape);
     assert!(matches!(
@@ -264,7 +270,7 @@ fn equalizer_adapts_to_small_windows_and_keeps_every_slider_reachable() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         for (width, height) in [(140, 45), (70, 30), (32, 26)] {
             app.action(Action::Equalizer).unwrap();
             for index in 0..SLIDERS {
@@ -299,16 +305,16 @@ fn older_profiles_default_to_disabled_flat_eq_and_loaded_gains_are_clamped() {
             .remove("equalizer");
     }
     let mut settings: almavorn::model::Settings = serde_json::from_value(legacy).unwrap();
-    assert_eq!(settings.equalizer, EqualizerSettings::default());
+    assert_eq!(settings.preferences.equalizer, EqualizerSettings::default());
     assert_eq!(
         settings.profiles[0].preferences.equalizer,
         EqualizerSettings::default()
     );
-    settings.equalizer.preamp = 100;
-    settings.equalizer.bands = [-100; 10];
+    settings.preferences.equalizer.preamp = 100;
+    settings.preferences.equalizer.bands = [-100; 10];
     store.save_settings(&settings).unwrap();
     drop(store);
     let app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.equalizer.preamp, MAX_GAIN);
-    assert_eq!(app.settings.equalizer.bands, [MIN_GAIN; 10]);
+    assert_eq!(app.settings.preferences.equalizer.preamp, MAX_GAIN);
+    assert_eq!(app.settings.preferences.equalizer.bands, [MIN_GAIN; 10]);
 }

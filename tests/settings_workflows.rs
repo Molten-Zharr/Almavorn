@@ -183,7 +183,7 @@ fn click_row(app: &mut App, row: usize) {
     );
 }
 fn shortcut_row(app: &App, action: Action) -> usize {
-    let mut bindings: Vec<_> = app.settings.bindings.iter().collect();
+    let mut bindings: Vec<_> = app.settings.preferences.bindings.iter().collect();
     bindings.sort_by_key(|binding| binding.action.shortcut_group());
     1 + bindings
         .iter()
@@ -231,10 +231,10 @@ fn brand_palette_is_first_and_applies_all_approved_colors() {
     let mut app = App::new(&directory.0).unwrap();
     assert_eq!(app.settings.palettes[0].name, "Molten-Zharr");
     assert_eq!(
-        app.settings.appearance.palette_ids,
+        app.settings.preferences.appearance.palette_ids,
         [BRAND_PALETTE, BRAND_PALETTE]
     );
-    assert_eq!(app.settings.appearance.font, FontFace::FiraCode);
+    assert_eq!(app.settings.preferences.appearance.font, FontFace::FiraCode);
     let palette = app.settings.current_palette();
     assert_eq!(palette.colors.len(), 16);
     assert_eq!(color_roles().len(), 16);
@@ -282,9 +282,9 @@ fn pages_keep_mouse_keyboard_descriptions_and_footer_available() {
     click(&mut app, |target| {
         matches!(target, Target::SettingAdjust(1, 1))
     });
-    assert!((app.settings.volume - 0.75).abs() < 0.001);
+    assert!((app.settings.preferences.volume - 0.75).abs() < 0.001);
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         for page in SettingsPage::ALL {
             app.open_settings_page(page);
             for (width, height) in [(120, 50), (70, 30), (44, 22), (20, 8)] {
@@ -510,15 +510,15 @@ fn primary_and_secondary_clicks_change_settings_in_opposite_directions() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::General);
-    let placement = app.settings.playlist_placement;
+    let placement = app.settings.preferences.playlist_placement;
     click(&mut app, |target| {
         matches!(target, Target::SettingSelect(3))
     });
-    assert_ne!(app.settings.playlist_placement, placement);
+    assert_ne!(app.settings.preferences.playlist_placement, placement);
     secondary_click(&mut app, |target| {
         matches!(target, Target::SettingSelect(3))
     });
-    assert_eq!(app.settings.playlist_placement, placement);
+    assert_eq!(app.settings.preferences.playlist_placement, placement);
     app.open_settings_page(SettingsPage::Themes);
     click(&mut app, |target| {
         matches!(target, Target::SettingSelect(0))
@@ -527,25 +527,25 @@ fn primary_and_secondary_clicks_change_settings_in_opposite_directions() {
     secondary_click(&mut app, |target| matches!(target, Target::Setting(0)));
     assert_eq!(app.settings.current_palette().id, BRAND_PALETTE);
     app.open_settings_page(SettingsPage::Typography);
-    let size = app.settings.appearance.font_size;
+    let size = app.settings.preferences.appearance.font_size;
     click(&mut app, |target| {
         matches!(target, Target::SettingAdjust(1, 1))
     });
-    assert_eq!(app.settings.appearance.font_size, size + 1);
+    assert_eq!(app.settings.preferences.appearance.font_size, size + 1);
     secondary_click(&mut app, |target| {
         matches!(target, Target::SettingAdjust(1, 1))
     });
-    assert_eq!(app.settings.appearance.font_size, size);
+    assert_eq!(app.settings.preferences.appearance.font_size, size);
     for _ in 0..40 {
         secondary_click(&mut app, |target| {
             matches!(target, Target::SettingSelect(1))
         });
     }
-    assert_eq!(app.settings.appearance.font_size, 10);
+    assert_eq!(app.settings.preferences.appearance.font_size, 10);
     select_row(&mut app, 1);
     key(&mut app, Key::Enter);
     submit(&mut app, "23");
-    assert_eq!(app.settings.appearance.font_size, 23);
+    assert_eq!(app.settings.preferences.appearance.font_size, 23);
     saved(&mut app);
 }
 
@@ -571,7 +571,7 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
             y: scale.y,
             double: false,
         });
-        assert_eq!(app.settings.volume, expected);
+        assert_eq!(app.settings.preferences.volume, expected);
         app.handle(Input::Release { x, y: scale.y });
         assert!(app.view.workspace.gesture.is_none());
         let terminal = rendered(&mut app, 120, 50);
@@ -580,11 +580,11 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
     secondary_click(&mut app, |target| {
         matches!(target, Target::SettingsVolume(..))
     });
-    assert!((app.settings.volume - 0.95).abs() < 0.001);
+    assert!((app.settings.preferences.volume - 0.95).abs() < 0.001);
     click(&mut app, |target| {
         matches!(target, Target::SettingAdjust(1, 1))
     });
-    assert_eq!(app.settings.volume, 1.0);
+    assert_eq!(app.settings.preferences.volume, 1.0);
     app.handle(Input::Click {
         x: scale.x,
         y: scale.y,
@@ -604,7 +604,7 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
     });
     assert!(app.view.workspace.gesture.is_none());
     let expected = f32::from(scale.width / 2) / f32::from(scale.width - 1);
-    assert_eq!(app.settings.volume, expected);
+    assert_eq!(app.settings.preferences.volume, expected);
     let terminal = rendered(&mut app, 120, 50);
     let percentage = app
         .view
@@ -618,7 +618,7 @@ fn volume_scale_sets_full_range_and_saves_the_last_dragged_value() {
     saved(&mut app);
     drop(app);
     let app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.volume, expected);
+    assert_eq!(app.settings.preferences.volume, expected);
 }
 
 #[test]
@@ -754,8 +754,8 @@ fn settings_hover_highlights_rows_without_replacing_the_selected_parameter() {
     app.open_settings_page(SettingsPage::General);
     select_row(&mut app, 3);
     rendered(&mut app, 120, 50);
-    let placement = app.settings.playlist_placement;
-    let volume = app.settings.volume;
+    let placement = app.settings.preferences.playlist_placement;
+    let volume = app.settings.preferences.volume;
     let value = app
         .view
         .hits
@@ -771,7 +771,7 @@ fn settings_hover_highlights_rows_without_replacing_the_selected_parameter() {
         app.view.dialog,
         Some(Dialog::Settings { selected: 3 })
     ));
-    assert_eq!(app.settings.volume, volume);
+    assert_eq!(app.settings.preferences.volume, volume);
     let before = rendered(&mut app, 120, 50);
     let row = app
         .view
@@ -789,8 +789,8 @@ fn settings_hover_highlights_rows_without_replacing_the_selected_parameter() {
         Color::Rgb(r, g, b)
     );
     key(&mut app, Key::Right);
-    assert_ne!(app.settings.playlist_placement, placement);
-    assert_eq!(app.settings.volume, volume);
+    assert_ne!(app.settings.preferences.playlist_placement, placement);
+    assert_eq!(app.settings.preferences.volume, volume);
     assert!(!app.hovered(value));
     // Clicking a value deliberately changes the selection and its value once.
     click(&mut app, |target| {
@@ -800,7 +800,7 @@ fn settings_hover_highlights_rows_without_replacing_the_selected_parameter() {
         app.view.dialog,
         Some(Dialog::Settings { selected: 1 })
     ));
-    assert!((app.settings.volume - volume - 0.05).abs() < 0.001);
+    assert!((app.settings.preferences.volume - volume - 0.05).abs() < 0.001);
     app.handle(Input::Scroll {
         x: value.x,
         y: value.y,
@@ -830,7 +830,7 @@ fn moving_across_parameters_to_the_edit_footer_keeps_its_target_and_activates_on
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::Typography);
     select_row(&mut app, 1); // Exact font-size editor.
-    let original = app.settings.appearance.clone();
+    let original = app.settings.preferences.appearance.clone();
     for index in [0, 2, 3] {
         rendered(&mut app, 120, 50);
         let row = app
@@ -846,7 +846,7 @@ fn moving_across_parameters_to_the_edit_footer_keeps_its_target_and_activates_on
             Some(Dialog::Settings { selected: 1 })
         ));
         assert_eq!(
-            serde_json::to_value(&app.settings.appearance).unwrap(),
+            serde_json::to_value(&app.settings.preferences.appearance).unwrap(),
             serde_json::to_value(&original).unwrap()
         );
     }
@@ -876,14 +876,20 @@ fn moving_across_parameters_to_the_edit_footer_keeps_its_target_and_activates_on
     assert!(matches!(app.view.dialog, Some(Dialog::Text(ref dialog))
         if matches!(dialog.purpose, almavorn::app::TextPurpose::Settings(almavorn::app::SettingsEdit::FontSize))));
     assert_eq!(
-        serde_json::to_value(&app.settings.appearance).unwrap(),
+        serde_json::to_value(&app.settings.preferences.appearance).unwrap(),
         serde_json::to_value(&original).unwrap()
     );
     submit(&mut app, "21");
-    assert_eq!(app.settings.appearance.font_size, 21);
-    assert_eq!(app.settings.appearance.font, original.font);
-    assert_eq!(app.settings.appearance.borders, original.borders);
-    assert_eq!(app.settings.appearance.corners, original.corners);
+    assert_eq!(app.settings.preferences.appearance.font_size, 21);
+    assert_eq!(app.settings.preferences.appearance.font, original.font);
+    assert_eq!(
+        app.settings.preferences.appearance.borders,
+        original.borders
+    );
+    assert_eq!(
+        app.settings.preferences.appearance.corners,
+        original.corners
+    );
 }
 
 #[test]
@@ -904,15 +910,15 @@ fn playback_modes_save_in_the_active_profile_and_survive_restart() {
     assert!(active.preferences.shuffle);
     let looping = app.settings.profile_preferences();
     app.settings.apply_preferences(defaults);
-    assert_eq!(app.settings.repeat, RepeatMode::Off);
-    assert!(!app.settings.shuffle);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Off);
+    assert!(!app.settings.preferences.shuffle);
     app.settings.apply_preferences(looping);
-    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
-    assert!(app.settings.shuffle);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Playlist);
+    assert!(app.settings.preferences.shuffle);
     drop(app);
     let app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
-    assert!(app.settings.shuffle);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Playlist);
+    assert!(app.settings.preferences.shuffle);
 }
 
 #[test]
@@ -921,10 +927,12 @@ fn old_settings_default_playback_modes_and_add_shortcuts_without_overwriting_cus
     let mut store = Store::open(&directory.0).unwrap();
     let mut settings = store.settings().unwrap();
     settings
+        .preferences
         .bindings
         .retain(|binding| !matches!(binding.action, Action::CycleRepeat | Action::ToggleShuffle));
     for (action, key) in [(Action::Quit, 'l'), (Action::Help, 'h')] {
         settings
+            .preferences
             .bindings
             .iter_mut()
             .find(|binding| binding.action == action)
@@ -949,13 +957,14 @@ fn old_settings_default_playback_modes_and_add_shortcuts_without_overwriting_cus
     store.save_settings(&settings).unwrap();
     drop(store);
     let mut app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.repeat, RepeatMode::Off);
-    assert!(!app.settings.shuffle);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Off);
+    assert!(!app.settings.preferences.shuffle);
     assert_eq!(app.settings.profiles[0].preferences.repeat, RepeatMode::Off);
     assert!(!app.settings.profiles[0].preferences.shuffle);
     for (action, key) in [(Action::Quit, 'l'), (Action::Help, 'h')] {
         assert_eq!(
             app.settings
+                .preferences
                 .bindings
                 .iter()
                 .find(|binding| binding.action == action)
@@ -966,6 +975,7 @@ fn old_settings_default_playback_modes_and_add_shortcuts_without_overwriting_cus
     }
     let repeat = app
         .settings
+        .preferences
         .bindings
         .iter()
         .find(|binding| binding.action == Action::CycleRepeat)
@@ -973,6 +983,7 @@ fn old_settings_default_playback_modes_and_add_shortcuts_without_overwriting_cus
         .key;
     let shuffle = app
         .settings
+        .preferences
         .bindings
         .iter()
         .find(|binding| binding.action == Action::ToggleShuffle)
@@ -982,6 +993,7 @@ fn old_settings_default_playback_modes_and_add_shortcuts_without_overwriting_cus
     for key in [repeat, shuffle] {
         assert_eq!(
             app.settings
+                .preferences
                 .bindings
                 .iter()
                 .filter(|binding| binding.key == key)
@@ -990,9 +1002,9 @@ fn old_settings_default_playback_modes_and_add_shortcuts_without_overwriting_cus
         );
     }
     app.handle(Input::Key(repeat));
-    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Playlist);
     app.handle(Input::Key(shuffle));
-    assert!(app.settings.shuffle);
+    assert!(app.settings.preferences.shuffle);
 }
 
 #[test]
@@ -1016,7 +1028,10 @@ fn choosing_a_theme_applies_it_immediately_with_keyboard_and_mouse() {
     assert_eq!(app.settings.current_palette().id, "classic-violet");
     click_row(&mut app, 0);
     assert_eq!(app.settings.current_palette().id, "light");
-    assert_eq!(app.settings.appearance.palette_ids[1], BRAND_PALETTE);
+    assert_eq!(
+        app.settings.preferences.appearance.palette_ids[1],
+        BRAND_PALETTE
+    );
     saved(&mut app);
     drop(app);
     let mut app = App::new(&directory.0).unwrap();
@@ -1153,6 +1168,7 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
     let mut app = App::new(&directory.0).unwrap();
     let index = app
         .settings
+        .preferences
         .bindings
         .iter()
         .position(|b| b.action == Action::Settings)
@@ -1160,12 +1176,12 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
     app.open_settings_page(SettingsPage::Shortcuts);
     let row = shortcut_row(&app, Action::Settings);
     click_row(&mut app, row);
-    let original = app.settings.bindings[index].key;
+    let original = app.settings.preferences.bindings[index].key;
     click(&mut app, |target| {
         matches!(target, Target::BindingKey(Key::F(1)))
     });
     assert!(app.view.notice_error);
-    assert_eq!(app.settings.bindings[index].key, original);
+    assert_eq!(app.settings.preferences.bindings[index].key, original);
     assert!(matches!(
         app.view.dialog,
         Some(Dialog::CaptureBinding { .. })
@@ -1174,7 +1190,7 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
         matches!(target, Target::BindingKey(Key::Up))
     });
     assert!(app.view.notice_error);
-    assert_eq!(app.settings.bindings[index].key, original);
+    assert_eq!(app.settings.preferences.bindings[index].key, original);
     click(&mut app, |target| {
         matches!(target, Target::BindingModifier(0))
     });
@@ -1185,7 +1201,7 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
         matches!(target, Target::BindingKey(Key::Char('j')))
     });
     assert_eq!(
-        app.settings.bindings[index].key,
+        app.settings.preferences.bindings[index].key,
         KeyPress {
             key: Key::Char('j'),
             ctrl: true,
@@ -1196,25 +1212,29 @@ fn shortcuts_support_mouse_assignment_and_preserve_conflict_protection() {
     assert_eq!(app.settings_page(), SettingsPage::Shortcuts);
     assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     key(&mut app, Key::Escape);
-    app.handle(Input::Key(app.settings.bindings[index].key));
+    app.handle(Input::Key(app.settings.preferences.bindings[index].key));
     assert_eq!(app.settings_page(), SettingsPage::General);
     assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     saved(&mut app);
     drop(app);
     let app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.bindings[index].key.label(), "Ctrl+Alt+J");
+    assert_eq!(
+        app.settings.preferences.bindings[index].key.label(),
+        "Ctrl+Alt+J"
+    );
 }
 
 #[test]
 fn shortcut_dividers_skip_navigation_and_keep_original_binding_indices() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    app.settings.bindings.reverse();
-    let original = serde_json::to_value(&app.settings.bindings).unwrap();
+    app.settings.preferences.bindings.reverse();
+    let original = serde_json::to_value(&app.settings.preferences.bindings).unwrap();
     let indices: Vec<_> = ShortcutGroup::ALL
         .into_iter()
         .flat_map(|group| {
             app.settings
+                .preferences
                 .bindings
                 .iter()
                 .enumerate()
@@ -1224,7 +1244,7 @@ fn shortcut_dividers_skip_navigation_and_keep_original_binding_indices() {
         .collect();
 
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         app.open_settings_page(SettingsPage::Shortcuts);
         let terminal = rendered(&mut app, 140, 50);
         let text = screen_text(&terminal);
@@ -1298,7 +1318,7 @@ fn shortcut_dividers_skip_navigation_and_keep_original_binding_indices() {
         ));
     }
     assert_eq!(
-        serde_json::to_value(&app.settings.bindings).unwrap(),
+        serde_json::to_value(&app.settings.preferences.bindings).unwrap(),
         original
     );
 }
@@ -1378,7 +1398,7 @@ fn profiles_clone_autosave_switch_rename_delete_and_survive_restart() {
     key(&mut app, Key::Left);
     click_row(&mut app, 1);
     assert_eq!(app.settings.active_profile, "default");
-    assert!((app.settings.volume - 0.7).abs() < 0.001);
+    assert!((app.settings.preferences.volume - 0.7).abs() < 0.001);
     assert_eq!(app.settings.mode, mode);
     select_row(&mut app, 0);
     key(&mut app, Key::Right);
@@ -1395,7 +1415,7 @@ fn profiles_clone_autosave_switch_rename_delete_and_survive_restart() {
     drop(app);
     let mut app = App::new(&directory.0).unwrap();
     assert_eq!(app.settings.active_profile, id);
-    assert!((app.settings.volume - 0.75).abs() < 0.001);
+    assert!((app.settings.preferences.volume - 0.75).abs() < 0.001);
     app.open_settings_page(SettingsPage::Profiles);
     select_row(&mut app, 0);
     key(&mut app, Key::Right);
@@ -1498,7 +1518,7 @@ fn danger_zone_dividers_group_catalog_actions_and_skip_navigation() {
     let mut app = App::new(&directory.0).unwrap();
     let import = 4 + color_roles().len();
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         for (width, height) in [(120, 50), (70, 30), (32, 18)] {
             for (page, index) in [
                 (SettingsPage::Profiles, 4),
@@ -1565,7 +1585,7 @@ fn palette_file_picker_filters_json_imports_one_file_and_returns_to_settings() {
     let index = select_browser_path(&mut app, &input);
     ctrl(&mut app, 'a');
     key(&mut app, Key::Char(' '));
-    let scan = app.settings.scan_subfolders;
+    let scan = app.settings.preferences.scan_subfolders;
     let Some(Dialog::Browser(browser)) = &app.view.dialog else {
         unreachable!();
     };
@@ -1586,7 +1606,7 @@ fn palette_file_picker_filters_json_imports_one_file_and_returns_to_settings() {
     click(&mut app, |target| matches!(target, Target::BrowserAdd));
     until(&mut app, |app| app.settings.palettes.len() == before + 1);
     assert_eq!(app.settings.palettes.last().unwrap().colors, palette.colors);
-    assert_eq!(app.settings.scan_subfolders, scan);
+    assert_eq!(app.settings.preferences.scan_subfolders, scan);
     assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     ctrl(&mut app, 'e');
     until(&mut app, App::browser_ready);
@@ -1621,7 +1641,7 @@ fn palette_file_picker_filters_json_imports_one_file_and_returns_to_settings() {
         }
     }
     key(&mut app, Key::Char(' '));
-    assert_eq!(app.settings.scan_subfolders, scan);
+    assert_eq!(app.settings.preferences.scan_subfolders, scan);
     key(&mut app, Key::Escape);
     assert!(matches!(app.view.dialog, Some(Dialog::Settings { .. })));
     // A cancelled directory load cannot reopen a picker or change settings.
@@ -1868,7 +1888,7 @@ fn palette_picker_synchronizes_controls_and_only_saves_on_apply() {
 fn palette_picker_keeps_controls_and_exit_accessible_at_small_sizes() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    app.settings.language = Language::Russian;
+    app.settings.preferences.language = Language::Russian;
     app.open_settings_page(SettingsPage::Palettes);
     click_row(&mut app, 3);
     for graphical in [false, true] {
@@ -1926,12 +1946,18 @@ fn theme_presets_store_font_geometry_and_palette_with_full_crud() {
     let mut app = App::new(&directory.0).unwrap();
     app.open_settings_page(SettingsPage::Typography);
     click_row(&mut app, 0);
-    assert_eq!(app.settings.appearance.font, FontFace::FiraCodeBold);
+    assert_eq!(
+        app.settings.preferences.appearance.font,
+        FontFace::FiraCodeBold
+    );
     click_row(&mut app, 1);
     submit(&mut app, "24");
     select_row(&mut app, 2);
     key(&mut app, Key::Right);
-    assert_eq!(app.settings.appearance.borders, BorderWeight::Double);
+    assert_eq!(
+        app.settings.preferences.appearance.borders,
+        BorderWeight::Double
+    );
     app.open_settings_page(SettingsPage::Themes);
     key(&mut app, Key::Insert);
     submit(&mut app, "Large");
@@ -1944,10 +1970,13 @@ fn theme_presets_store_font_geometry_and_palette_with_full_crud() {
     app.open_settings_page(SettingsPage::Themes);
     select_row(&mut app, 0);
     key(&mut app, Key::Right);
-    assert_eq!(app.settings.appearance.font_size, 16);
+    assert_eq!(app.settings.preferences.appearance.font_size, 16);
     key(&mut app, Key::Left);
-    assert_eq!(app.settings.appearance.font_size, 24);
-    assert_eq!(app.settings.appearance.borders, BorderWeight::Double);
+    assert_eq!(app.settings.preferences.appearance.font_size, 24);
+    assert_eq!(
+        app.settings.preferences.appearance.borders,
+        BorderWeight::Double
+    );
     click_row(&mut app, 5);
     saved(&mut app);
     drop(app);
@@ -1960,7 +1989,7 @@ fn theme_presets_store_font_geometry_and_palette_with_full_crud() {
     key(&mut app, Key::Delete);
     key(&mut app, Key::Enter);
     assert!(!app.settings.presets.iter().any(|p| p.id == id));
-    assert_eq!(app.settings.appearance.font_size, 24);
+    assert_eq!(app.settings.preferences.appearance.font_size, 24);
     saved(&mut app);
 }
 
@@ -1975,14 +2004,14 @@ fn geometry_changes_rendered_borders_and_help_keeps_context() {
         (BorderWeight::Double, Corners::Square, "╔"),
         (BorderWeight::Thick, Corners::Square, "┏"),
     ] {
-        app.settings.appearance.borders = weight;
-        app.settings.appearance.corners = corners;
+        app.settings.preferences.appearance.borders = weight;
+        app.settings.preferences.appearance.corners = corners;
         assert_eq!(
             rendered(&mut app, 80, 30).backend().buffer()[(0, 0)].symbol(),
             symbol
         );
     }
-    app.settings.appearance.borders = BorderWeight::None;
+    app.settings.preferences.appearance.borders = BorderWeight::None;
     let terminal = rendered(&mut app, 80, 30);
     assert_ne!(terminal.backend().buffer()[(0, 0)].symbol(), "┌");
     select_row(&mut app, 1);
@@ -1994,13 +2023,13 @@ fn geometry_changes_rendered_borders_and_help_keeps_context() {
     submit(&mut app, "32");
     select_row(&mut app, 1);
     key(&mut app, Key::Right);
-    assert_eq!(app.settings.appearance.font_size, 32);
+    assert_eq!(app.settings.preferences.appearance.font_size, 32);
     click_row(&mut app, 1);
     ctrl(&mut app, 'a');
     app.handle(Input::Text("1000".into()));
     key(&mut app, Key::Enter);
     assert!(app.view.notice_error);
-    assert_eq!(app.settings.appearance.font_size, 32);
+    assert_eq!(app.settings.preferences.appearance.font_size, 32);
     key(&mut app, Key::Escape);
     assert_eq!(app.settings_page(), SettingsPage::Typography);
 }
@@ -2035,7 +2064,7 @@ fn legacy_settings_migrate_without_resetting_custom_colors() {
     assert_eq!(app.settings.current_palette().color("active"), [12, 34, 56]);
     assert_eq!(app.settings.palettes[0].id, BRAND_PALETTE);
     assert_eq!(app.settings.profiles.len(), 1);
-    assert!((app.settings.volume - 0.45).abs() < 0.001);
+    assert!((app.settings.preferences.volume - 0.45).abs() < 0.001);
     let count = app.settings.palettes.len();
     app.action(Action::VolumeDown).unwrap();
     saved(&mut app);
@@ -2043,7 +2072,7 @@ fn legacy_settings_migrate_without_resetting_custom_colors() {
     let app = App::new(&directory.0).unwrap();
     assert_eq!(app.settings.palettes.len(), count);
     assert_eq!(app.settings.current_palette().color("active"), [12, 34, 56]);
-    assert!((app.settings.volume - 0.4).abs() < 0.001);
+    assert!((app.settings.preferences.volume - 0.4).abs() < 0.001);
 }
 
 #[test]

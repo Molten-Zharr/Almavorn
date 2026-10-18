@@ -217,8 +217,8 @@ pub(super) fn render_dialog(
                 .map(|playlist| {
                     format!(
                         "{} · {}",
-                        playlist.display_name(app.settings.language),
-                        playlist.mode.name(app.settings.language)
+                        playlist.display_name(app.settings.preferences.language),
+                        playlist.mode.name(app.settings.preferences.language)
                     )
                 })
                 .collect();

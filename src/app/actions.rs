@@ -11,12 +11,12 @@ impl App {
         if self.marked_playback_count().is_some() {
             return Ok(());
         }
-        self.settings.repeat = repeat;
+        self.settings.preferences.repeat = repeat;
         self.save_settings()?;
         self.message(format!(
             "{}: {}",
-            Action::CycleRepeat.name(self.settings.language),
-            repeat.name(self.settings.language),
+            Action::CycleRepeat.name(self.settings.preferences.language),
+            repeat.name(self.settings.preferences.language),
         ));
         Ok(())
     }
@@ -157,8 +157,8 @@ impl App {
             CycleRepeat => self.marked_playback_count().is_none(),
             SeekForward | SeekBackward => self.playback.current.is_some(),
             Filter => self.playlist().is_some(),
-            VolumeUp => self.settings.volume < 1.0,
-            VolumeDown => self.settings.volume > 0.0,
+            VolumeUp => self.settings.preferences.volume < 1.0,
+            VolumeDown => self.settings.preferences.volume > 0.0,
             Transfer | Metadata | Mark => self.entry().is_some(),
             AddFiles | AddFolder => self.import_target().is_some(),
             AddNew => {
@@ -184,7 +184,7 @@ impl App {
     }
 
     fn playlist_move_unavailable(&self, action: Action) -> String {
-        let language = self.settings.language;
+        let language = self.settings.preferences.language;
         if self.database_busy() {
             return AppError::LibraryBusy.message(language).into();
         }
@@ -216,6 +216,7 @@ impl App {
         if !playlist.can_edit(self.view.editing) {
             let shortcut = self
                 .settings
+                .preferences
                 .bindings
                 .iter()
                 .find(|binding| binding.action == Action::ToggleEdit)
@@ -280,15 +281,15 @@ impl App {
             }
             Next => self.next(1, true)?,
             Previous => self.next(-1, true)?,
-            CycleRepeat => self.set_repeat(self.settings.repeat.next())?,
+            CycleRepeat => self.set_repeat(self.settings.preferences.repeat.next())?,
             ToggleShuffle => {
-                self.settings.shuffle = !self.settings.shuffle;
+                self.settings.preferences.shuffle = !self.settings.preferences.shuffle;
                 self.clear_shuffle_history();
                 self.save_settings()?;
                 self.message(format!(
                     "{}: {}",
-                    ToggleShuffle.name(self.settings.language),
-                    if self.settings.shuffle {
+                    ToggleShuffle.name(self.settings.preferences.language),
+                    if self.settings.preferences.shuffle {
                         self.text("On", "Включено")
                     } else {
                         self.text("Off", "Выключено")
@@ -319,7 +320,7 @@ impl App {
                 );
             }
             ToggleDesk => {
-                self.settings.sorting_desk = !self.settings.sorting_desk;
+                self.settings.preferences.sorting_desk = !self.settings.preferences.sorting_desk;
                 self.save_settings()?;
             }
             AddFiles | AddFolder | AddFolderPlaylists => {
@@ -357,7 +358,7 @@ impl App {
                 let base = format!(
                     "{} — {}",
                     source
-                        .display_name(self.settings.language)
+                        .display_name(self.settings.preferences.language)
                         .chars()
                         .take(130)
                         .collect::<String>(),
@@ -536,13 +537,15 @@ impl App {
                 }
             }
             PlaylistPanel => {
-                self.settings.playlist_placement = self.settings.playlist_placement.next();
-                self.settings.workspace.root = None;
+                self.settings.preferences.playlist_placement =
+                    self.settings.preferences.playlist_placement.next();
+                self.settings.preferences.workspace.root = None;
                 self.save_settings()?;
             }
             PlayerPanel => {
-                self.settings.player_placement = self.settings.player_placement.next();
-                self.settings.workspace.root = None;
+                self.settings.preferences.player_placement =
+                    self.settings.preferences.player_placement.next();
+                self.settings.preferences.workspace.root = None;
                 self.save_settings()?;
             }
             Panels => {

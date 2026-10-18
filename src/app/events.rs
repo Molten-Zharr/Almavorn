@@ -75,7 +75,7 @@ impl App {
         }
         let percent = (ratio.clamp(0.0, 1.0) * 100.0).round() as i16;
         if let Err(error) =
-            self.adjust_volume(percent - (self.settings.volume * 100.0).round() as i16)
+            self.adjust_volume(percent - (self.settings.preferences.volume * 100.0).round() as i16)
         {
             self.failure(error);
         }
@@ -132,7 +132,7 @@ impl App {
                     if matches!(target, Target::Action(Action::CycleRepeat)) {
                         let repeat = if double {
                             RepeatMode::Playlist
-                        } else if self.settings.repeat == RepeatMode::Track {
+                        } else if self.settings.preferences.repeat == RepeatMode::Track {
                             RepeatMode::Off
                         } else {
                             RepeatMode::Track
@@ -324,14 +324,7 @@ impl App {
             return self.filter_key(key);
         }
         if key.key == Key::Escape {
-            if matches!(
-                self.view.dialog,
-                Some(Dialog::Equalizer { presets: true, .. })
-            ) && self.view.workspace.gesture.is_none()
-            {
-                if let Some(Dialog::Equalizer { presets, .. }) = &mut self.view.dialog {
-                    *presets = false;
-                }
+            if self.close_equalizer_presets() {
                 return Ok(());
             }
             if self.cancel_workspace_drag() {
@@ -354,6 +347,7 @@ impl App {
         if let Some(action) = self.view.dialog.as_ref().and_then(Dialog::opening_action)
             && (self
                 .settings
+                .preferences
                 .bindings
                 .iter()
                 .any(|binding| binding.action == action && binding.key == normalized)
@@ -363,257 +357,8 @@ impl App {
             self.close_dialog();
             return Ok(());
         }
-        if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
-            return self.settings_key(key);
-        }
-        if matches!(self.view.dialog, Some(Dialog::Equalizer { .. })) {
-            return self.equalizer_key(normalized);
-        }
-        if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
-            return self.tuner_key(normalized);
-        }
-        if matches!(self.view.dialog, Some(Dialog::Statistics)) {
-            return self.statistics_key(normalized);
-        }
-        if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref() {
-            let index = *index;
-            let key = key.normalized();
-            ensure!(
-                !matches!(
-                    key.key,
-                    Key::Tab
-                        | Key::Up
-                        | Key::Down
-                        | Key::Left
-                        | Key::Right
-                        | Key::Home
-                        | Key::End
-                        | Key::PageUp
-                        | Key::PageDown
-                ) || key.ctrl
-                    || key.alt,
-                AppError::ReservedShortcut
-            );
-            ensure!(
-                !self
-                    .settings
-                    .bindings
-                    .iter()
-                    .enumerate()
-                    .any(|(other, binding)| other != index && binding.key == key),
-                AppError::ShortcutConflict
-            );
-            self.settings.bindings[index].key = key;
-            self.save_settings()?;
-            self.view.settings.page = super::SettingsPage::Shortcuts;
-            self.view.settings.selected = 1 + index;
-            self.view.settings.focus = super::SettingsFocus::Parameters;
-            self.show_settings();
-            return Ok(());
-        }
         if self.view.dialog.is_some() {
-            if self.color_picker_key(key) {
-                return Ok(());
-            }
-            if let Some(Dialog::RemovePlaylist { confirm, .. }) = &mut self.view.dialog
-                && !key.ctrl
-                && !key.alt
-            {
-                match key.key {
-                    Key::Left | Key::Up => *confirm = true,
-                    Key::Right | Key::Down => *confirm = false,
-                    Key::Tab => *confirm = !*confirm,
-                    Key::Char('y' | 'Y' | 'д' | 'Д') => {
-                        return self.target(Target::DeletePlaylistAnswer(true), false);
-                    }
-                    Key::Char('n' | 'N' | 'н' | 'Н') => {
-                        return self.target(Target::DeletePlaylistAnswer(false), false);
-                    }
-                    Key::Enter => self.submit()?,
-                    _ => {}
-                }
-                return Ok(());
-            }
-            if key.ctrl
-                && !key.alt
-                && key.key == Key::Char('g')
-                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::CreateFromFolder { .. }))
-            {
-                return self.target(Target::CreateFolderGroups, false);
-            }
-            if key.ctrl
-                && !key.alt
-                && key.key == Key::Char('f')
-                && matches!(self.view.dialog, Some(Dialog::Text(ref dialog)) if matches!(dialog.purpose, super::TextPurpose::Create | super::TextPurpose::CreateFromFolder { .. }))
-            {
-                return self.choose_playlist_name_folder();
-            }
-            if key.ctrl
-                && !key.alt
-                && key.key == Key::Char('f')
-                && matches!(&self.view.dialog, Some(Dialog::Text(dialog)) if matches!(dialog.purpose, super::TextPurpose::Settings(super::SettingsEdit::ExportPalette { .. })))
-            {
-                self.choose_palette_export_folder();
-                return Ok(());
-            }
-            if let Some(Dialog::ComposePlaylists { selected, .. }) = &self.view.dialog {
-                let selected = *selected;
-                if key.ctrl && !key.alt && matches!(key.key, Key::Up | Key::Down) {
-                    self.move_composition_source(if key.key == Key::Up { -1 } else { 1 });
-                    return Ok(());
-                }
-                if !key.ctrl && !key.alt && key.key == Key::Char(' ') {
-                    self.toggle_compose_row(selected);
-                    return Ok(());
-                }
-                if key.key == Key::Home {
-                    self.scroll_dialog(i16::MIN);
-                    return Ok(());
-                }
-                if key.key == Key::End {
-                    self.scroll_dialog(i16::MAX);
-                    return Ok(());
-                }
-            }
-            if matches!(self.view.dialog, Some(Dialog::Folders { .. })) && !key.ctrl && !key.alt {
-                let target = match key.key {
-                    Key::Insert => Some(Target::FolderAdd),
-                    Key::F(3) | Key::Enter => Some(Target::FolderEdit),
-                    Key::Delete => Some(Target::FolderRemove),
-                    Key::Char('r') => Some(Target::FolderScan),
-                    Key::Char(' ') => Some(Target::ScanSubfolders),
-                    _ => None,
-                };
-                if let Some(target) = target {
-                    return self.target(target, false);
-                }
-            }
-            if matches!(self.view.dialog, Some(Dialog::Search(_))) {
-                return self.search_key(key);
-            }
-            if matches!(self.view.dialog, Some(Dialog::Commands { .. }))
-                && self.view.toolbar_selected.is_some()
-                && !key.ctrl
-                && !key.alt
-            {
-                if key.key == Key::Tab {
-                    self.close_dialog();
-                    self.workspace_key(key)?;
-                    return Ok(());
-                }
-                if matches!(key.key, Key::Left | Key::Right) {
-                    self.close_dialog();
-                    self.toolbar_key(key)?;
-                    if let Some(Target::CommandMenu(menu)) = self
-                        .view
-                        .toolbar_selected
-                        .and_then(|index| self.toolbar_items().into_iter().nth(index))
-                        .map(|item| item.target)
-                    {
-                        self.open_commands(menu);
-                    }
-                    return Ok(());
-                }
-            }
-            if matches!(self.view.dialog, Some(Dialog::Commands { .. }))
-                && let Some(action) = self
-                    .settings
-                    .bindings
-                    .iter()
-                    .find(|binding| binding.key == normalized)
-                    .map(|binding| binding.action)
-            {
-                self.view.dialog = None;
-                return self.action(action);
-            }
-            if !key.ctrl
-                && !key.alt
-                && let Some(Dialog::Panels { selected, .. }) = &self.view.dialog
-            {
-                let selected = *selected;
-                match key.key {
-                    Key::Left | Key::Right => {
-                        self.expand_panel_category(key.key == Key::Right);
-                        return Ok(());
-                    }
-                    Key::Char(' ') => {
-                        self.activate_panel_row(selected, true)?;
-                        return Ok(());
-                    }
-                    _ => {}
-                }
-            }
-            if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
-                if key.ctrl
-                    && key.key == Key::Char('g')
-                    && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder_playlists.is_some())
-                {
-                    return self.target(Target::CreateFolderGroups, false);
-                }
-                if key.key == Key::Char(' ')
-                    && matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.folder_playlists.is_none() && browser.playlist_name.is_none() && browser.palette_file.is_none())
-                {
-                    return self.target(Target::ScanSubfolders, false);
-                }
-                if key.key == Key::Char('a') && key.ctrl {
-                    return self.target(Target::BrowserMarkAll, false);
-                }
-                if key.key == Key::Char('d') && key.ctrl {
-                    return self.target(Target::BrowserClearMarks, false);
-                }
-                if (key.key == Key::Enter && key.ctrl) || key.key == Key::Char('a') {
-                    if key.key == Key::Enter
-                        && key.shift
-                        && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.palette_file.is_none())
-                    {
-                        return self.browser_add_current_folder();
-                    }
-                    return self.browser_add();
-                }
-                if key.key == Key::Backspace {
-                    return self.target(Target::BrowserParent, false);
-                }
-                if key.key == Key::Home || key.key == Key::End {
-                    self.scroll_dialog(if key.key == Key::Home {
-                        i16::MIN
-                    } else {
-                        i16::MAX
-                    });
-                    return Ok(());
-                }
-            }
-            if key.ctrl
-                && key.key == Key::Char('a')
-                && let Some(Dialog::Text(dialog)) = &mut self.view.dialog
-            {
-                dialog.selected_all = true;
-                return Ok(());
-            }
-            match key.key {
-                Key::Enter => self.submit()?,
-                Key::Backspace => {
-                    if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
-                        if dialog.selected_all {
-                            dialog.text.clear();
-                            dialog.selected_all = false;
-                        } else {
-                            dialog.text.pop();
-                        }
-                        dialog.sync_color_text();
-                    }
-                }
-                Key::Up => self.scroll_dialog(-1),
-                Key::Down => self.scroll_dialog(1),
-                Key::PageUp => self.scroll_dialog(-8),
-                Key::PageDown => self.scroll_dialog(8),
-                Key::Char(' ') | Key::Insert => {
-                    if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
-                        browser.toggle_mark(browser.selected);
-                    }
-                }
-                _ => {}
-            }
-            return Ok(());
+            return self.dialog_key(key);
         }
         if self.toolbar_key(key)? {
             return Ok(());
@@ -642,6 +387,7 @@ impl App {
         }
         if let Some(action) = self
             .settings
+            .preferences
             .bindings
             .iter()
             .find(|binding| binding.key == normalized)
@@ -819,7 +565,9 @@ impl App {
                 let percent = (u32::from(self.last_pointer_x(area)) * 100
                     / u32::from(area.width.saturating_sub(1).max(1)))
                     as i16;
-                self.adjust_volume(percent - (self.settings.volume * 100.0).round() as i16)?;
+                self.adjust_volume(
+                    percent - (self.settings.preferences.volume * 100.0).round() as i16,
+                )?;
             }
             Target::Seek(area) => {
                 if self.view.workspace.gesture.is_none() {
@@ -870,7 +618,8 @@ impl App {
                         || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none()),
                     AppError::FolderNotReady
                 );
-                self.settings.scan_subfolders = !self.settings.scan_subfolders;
+                self.settings.preferences.scan_subfolders =
+                    !self.settings.preferences.scan_subfolders;
                 self.save_settings()?;
             }
             Target::Text(c) => {
@@ -1038,7 +787,7 @@ impl App {
                     }
                     self.select_setting(index);
                     let point = self.last_pointer_x(area);
-                    self.set_settings_volume(
+                    self.set_volume(
                         f32::from(point) / f32::from(area.width.saturating_sub(1).max(1)),
                     )?;
                 }

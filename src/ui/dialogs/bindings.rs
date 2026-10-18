@@ -21,9 +21,10 @@ pub(super) fn binding_dialog(
 ) {
     let name = app
         .settings
+        .preferences
         .bindings
         .get(index)
-        .map(|binding| binding.action.name(app.settings.language))
+        .map(|binding| binding.action.name(app.settings.preferences.language))
         .unwrap_or("");
     let inner = modal(
         frame,

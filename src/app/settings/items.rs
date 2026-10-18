@@ -66,7 +66,7 @@ pub(crate) struct SettingRow {
 }
 impl App {
     pub(crate) fn settings_rows(&self) -> Vec<SettingRow> {
-        let lang = self.settings.language;
+        let lang = self.settings.preferences.language;
         let make = |label: &str,
                     value: String,
                     description: &str,
@@ -74,7 +74,9 @@ impl App {
                     adjustable: bool| {
             let group = match &control {
                 SettingControl::Binding(index) => Some(SettingGroup::Shortcuts(
-                    self.settings.bindings[*index].action.shortcut_group(),
+                    self.settings.preferences.bindings[*index]
+                        .action
+                        .shortcut_group(),
                 )),
                 SettingControl::PaletteImport
                 | SettingControl::PaletteExport
@@ -98,14 +100,14 @@ impl App {
             SettingsPage::General => vec![
                 // Existing controls retain their keyboard order; animation controls follow them.
                 make(lang.text("Language", "Язык"), if lang == crate::model::Language::English { "English" } else { "Русский" }.into(), lang.text("Language of menus, descriptions, notices and keyboard hints.", "Язык меню, описаний, уведомлений и подсказок клавиш."), SettingControl::Language, true),
-                make(lang.text("Volume", "Громкость"), format!("{}%", (self.settings.volume*100.0).round() as u32), lang.text("Playback volume. Changes immediately; step: 5%.", "Громкость воспроизведения. Меняется сразу; шаг: 5%."), SettingControl::Volume, true),
-                make(lang.text("Sorting desk", "Сортировочный стол"), lang.text(if self.settings.sorting_desk { "On" } else { "Off" }, if self.settings.sorting_desk { "Включён" } else { "Выключен" }).into(), lang.text("Route added files to the editable desk instead of the selected playlist.", "Направлять добавляемые файлы на доступный для правки стол вместо выбранного плейлиста."), SettingControl::Desk, true),
-                make(lang.text("Playlists panel", "Панель плейлистов"), self.settings.playlist_placement.name(lang).into(), lang.text("Position of the playlist list relative to the tracks.", "Расположение списка плейлистов относительно композиций."), SettingControl::PlaylistPlacement, true),
-                make(lang.text("Player panel", "Панель проигрывателя"), self.settings.player_placement.name(lang).into(), lang.text("Position of playback controls relative to the library.", "Расположение управления воспроизведением относительно библиотеки."), SettingControl::PlayerPlacement, true),
-                make(lang.text("Playback timeline", "Дорожка проигрывания"), self.settings.appearance.playback_timeline.name(lang).into(), lang.text("Choose waveform or progress bar. Only the selected view is shown, in both GUI and TUI. Saves into the active profile.", "Выберите аудиоволну или обычную полосу. Показывается только выбранный вид, в GUI и TUI. Выбор сохраняется в активный профиль."), SettingControl::PlaybackTimeline, true),
-                make(lang.text("Shortcuts on buttons", "Клавиши на кнопках"), lang.text(if self.settings.appearance.show_button_shortcuts { "Shown" } else { "Hidden" }, if self.settings.appearance.show_button_shortcuts { "Показаны" } else { "Скрыты" }).into(), lang.text("Show assigned shortcuts on buttons. Help always shows F1. Other shortcuts work when hidden, and remain listed in Help and menus. Saved in the active profile.", "Показывать назначенные сочетания на кнопках. На справке всегда остается F1. Остальные клавиши работают при скрытии; их список остается в справке и меню. Выбор сохраняется в активном профиле."), SettingControl::ButtonShortcuts, true),
-                make(lang.text("Background animation", "Анимация фона"), self.settings.appearance.visualizer.name(lang).into(), lang.text("Music-driven background of the main window. VIS opens the scene menu; F6 cycles scenes. No animation is the last option. Pausing freezes the scene. Saved in the active profile.", "Музыкальный фон главного окна. VIS открывает список сцен, F6 переключает их по кругу. «Без анимации» — последний пункт. Пауза останавливает движение. Выбор сохраняется в активном профиле."), SettingControl::Visualizer, true),
-                make(lang.text("Animation brightness", "Яркость анимации"), format!("{}%", self.settings.appearance.animation_brightness.clamp(10, 70)), lang.text("Brightness of the background drawing, 10–70%; step: 5%. Text and controls stay above the animation.", "Яркость фонового рисунка: 10–70%; шаг: 5%. Текст и кнопки остаются поверх анимации."), SettingControl::AnimationBrightness, true),
+                make(lang.text("Volume", "Громкость"), format!("{}%", (self.settings.preferences.volume*100.0).round() as u32), lang.text("Playback volume. Changes immediately; step: 5%.", "Громкость воспроизведения. Меняется сразу; шаг: 5%."), SettingControl::Volume, true),
+                make(lang.text("Sorting desk", "Сортировочный стол"), lang.text(if self.settings.preferences.sorting_desk { "On" } else { "Off" }, if self.settings.preferences.sorting_desk { "Включён" } else { "Выключен" }).into(), lang.text("Route added files to the editable desk instead of the selected playlist.", "Направлять добавляемые файлы на доступный для правки стол вместо выбранного плейлиста."), SettingControl::Desk, true),
+                make(lang.text("Playlists panel", "Панель плейлистов"), self.settings.preferences.playlist_placement.name(lang).into(), lang.text("Position of the playlist list relative to the tracks.", "Расположение списка плейлистов относительно композиций."), SettingControl::PlaylistPlacement, true),
+                make(lang.text("Player panel", "Панель проигрывателя"), self.settings.preferences.player_placement.name(lang).into(), lang.text("Position of playback controls relative to the library.", "Расположение управления воспроизведением относительно библиотеки."), SettingControl::PlayerPlacement, true),
+                make(lang.text("Playback timeline", "Дорожка проигрывания"), self.settings.preferences.appearance.playback_timeline.name(lang).into(), lang.text("Choose waveform or progress bar. Only the selected view is shown, in both GUI and TUI. Saves into the active profile.", "Выберите аудиоволну или обычную полосу. Показывается только выбранный вид, в GUI и TUI. Выбор сохраняется в активный профиль."), SettingControl::PlaybackTimeline, true),
+                make(lang.text("Shortcuts on buttons", "Клавиши на кнопках"), lang.text(if self.settings.preferences.appearance.show_button_shortcuts { "Shown" } else { "Hidden" }, if self.settings.preferences.appearance.show_button_shortcuts { "Показаны" } else { "Скрыты" }).into(), lang.text("Show assigned shortcuts on buttons. Help always shows F1. Other shortcuts work when hidden, and remain listed in Help and menus. Saved in the active profile.", "Показывать назначенные сочетания на кнопках. На справке всегда остается F1. Остальные клавиши работают при скрытии; их список остается в справке и меню. Выбор сохраняется в активном профиле."), SettingControl::ButtonShortcuts, true),
+                make(lang.text("Background animation", "Анимация фона"), self.settings.preferences.appearance.visualizer.name(lang).into(), lang.text("Music-driven background of the main window. VIS opens the scene menu; F6 cycles scenes. No animation is the last option. Pausing freezes the scene. Saved in the active profile.", "Музыкальный фон главного окна. VIS открывает список сцен, F6 переключает их по кругу. «Без анимации» — последний пункт. Пауза останавливает движение. Выбор сохраняется в активном профиле."), SettingControl::Visualizer, true),
+                make(lang.text("Animation brightness", "Яркость анимации"), format!("{}%", self.settings.preferences.appearance.animation_brightness.clamp(10, 70)), lang.text("Brightness of the background drawing, 10–70%; step: 5%. Text and controls stay above the animation.", "Яркость фонового рисунка: 10–70%; шаг: 5%. Текст и кнопки остаются поверх анимации."), SettingControl::AnimationBrightness, true),
             ],
             SettingsPage::Profiles => {
                 let profile = &self.settings.profiles[self.view.settings.profile.min(self.settings.profiles.len()-1)];
@@ -120,7 +122,7 @@ impl App {
             SettingsPage::Themes => {
                 let preset = &self.settings.presets[self.selected_settings_preset_index()];
                 let active_name = self.settings.current_preset().map(|preset| preset.name.as_str()).unwrap_or(lang.text("Custom", "Пользовательская"));
-                let palette_name = |mode: Mode| self.settings.palettes.iter().find(|p| p.id == self.settings.appearance.palette_ids[mode.index()]).map(|p| p.name.clone()).unwrap_or_default();
+                let palette_name = |mode: Mode| self.settings.palettes.iter().find(|p| p.id == self.settings.preferences.appearance.palette_ids[mode.index()]).map(|p| p.name.clone()).unwrap_or_default();
                 let mut rows = vec![
                     make(lang.text("Theme preset", "Пресет темы"), active_name.into(), lang.text("Selection applies and saves immediately. Custom means the appearance differs from saved presets. Palette is per mode; font and geometry are shared.", "Выбор сразу применяет и сохраняет пресет. Пользовательская: оформление отличается от пресетов. Палитра для текущего режима, шрифт и геометрия общие."), SettingControl::PresetPick, true),
                     make(lang.text("Order palette", "Палитра Порядка"), palette_name(Mode::Order), lang.text("Colors used while the Order mode is active.", "Цвета интерфейса в режиме Порядка."), SettingControl::ModePalette(Mode::Order), true),
@@ -158,7 +160,7 @@ impl App {
                 rows
             }
             SettingsPage::Typography => {
-                let appearance = &self.settings.appearance;
+                let appearance = &self.settings.preferences.appearance;
                 let mut rows = vec![
                     make(lang.text("Font", "Шрифт"), appearance.font.name().into(), lang.text("Desktop font with Cyrillic support. In TUI, the terminal controls the font.", "Шрифт окна с поддержкой кириллицы. В TUI шрифтом управляет терминал."), SettingControl::Font, true),
                     make(lang.text("Font size", "Размер шрифта"), format!("{} px", appearance.font_size), lang.text("Desktop text size, 10-32 pixels. Arrows change by 1; Enter accepts an exact value. TUI uses terminal size.", "Размер текста в окне: 10-32 пикселя. Стрелки меняют на 1; Enter - точное значение. В TUI размер задаёт терминал."), SettingControl::FontSize, true),
@@ -168,7 +170,7 @@ impl App {
             }
             SettingsPage::Shortcuts => {
                 let mut rows = vec![make(lang.text("Reset shortcuts", "Сбросить горячие клавиши"), run, lang.text("Restore standard shortcuts in this profile. Settings navigation remains available.", "Восстановить стандартные сочетания в этом профиле. Навигация настроек остаётся доступной."), SettingControl::ResetBindings, false)];
-                let mut bindings: Vec<_> = self.settings.bindings.iter().enumerate().collect();
+                let mut bindings: Vec<_> = self.settings.preferences.bindings.iter().enumerate().collect();
                 bindings.sort_by_key(|(_, binding)| binding.action.shortcut_group());
                 rows.extend(bindings.into_iter().map(|(index, binding)| make(binding.action.name(lang), binding.key.label(), binding.action.description(lang), SettingControl::Binding(index), false)));
                 rows

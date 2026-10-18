@@ -509,7 +509,7 @@ impl Edge {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SplitArea {
     pub path: Vec<bool>,
     pub area: Rect,

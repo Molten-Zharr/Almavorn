@@ -11,10 +11,6 @@ mod visualizer;
 mod widgets;
 mod workspace;
 
-pub(crate) fn workspace_fits(app: &App, root: &crate::workspace::Dock) -> bool {
-    workspace::fits(app, root)
-}
-
 use self::{dialogs::render_dialog, theme::Palette};
 use crate::{
     app::{App, Target},
@@ -98,9 +94,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         Target::Action(action) => Some(format!(
             "{}{}",
             buttons::button_shortcut(app, target).map_or(String::new(), |key| format!("{key} · ")),
-            action.description(app.settings.language)
+            action.description(app.settings.preferences.language)
         )),
-        Target::CommandMenu(menu) => Some(menu.title(app.settings.language).to_owned()),
+        Target::CommandMenu(menu) => Some(menu.title(app.settings.preferences.language).to_owned()),
         _ => None,
     });
     let message = if app.view.notice_error || app.busy() || app.importing() {

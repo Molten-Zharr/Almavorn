@@ -335,23 +335,18 @@ pub fn default_presets() -> Vec<ThemePreset> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ProfilePreferences {
     pub language: Language,
     pub volume: f32,
-    #[serde(default)]
     pub repeat: RepeatMode,
-    #[serde(default)]
     pub shuffle: bool,
-    #[serde(default)]
     pub equalizer: crate::equalizer::EqualizerSettings,
-    #[serde(default)]
     pub tuner: crate::tuner::TunerSettings,
     pub sorting_desk: bool,
-    #[serde(default = "default_scan_subfolders")]
     pub scan_subfolders: bool,
     pub playlist_placement: Placement,
     pub player_placement: Placement,
-    #[serde(default)]
     pub workspace: crate::workspace::WorkspaceLayout,
     pub themes: [Theme; 2],
     pub bindings: Vec<Binding>,
@@ -363,10 +358,44 @@ pub struct SettingsProfile {
     pub name: String,
     pub preferences: ProfilePreferences,
 }
-fn default_scan_subfolders() -> bool {
-    true
+impl Default for ProfilePreferences {
+    fn default() -> Self {
+        Self {
+            language: Language::Russian,
+            volume: 0.7,
+            repeat: RepeatMode::Off,
+            shuffle: false,
+            equalizer: Default::default(),
+            tuner: Default::default(),
+            sorting_desk: true,
+            scan_subfolders: true,
+            playlist_placement: Placement::Left,
+            player_placement: Placement::Bottom,
+            workspace: Default::default(),
+            themes: [
+                Theme {
+                    accent: [232, 158, 74],
+                    light: false,
+                },
+                Theme {
+                    accent: [188, 125, 228],
+                    light: false,
+                },
+            ],
+            bindings: crate::input::default_bindings(),
+            appearance: Default::default(),
+        }
+    }
 }
-impl Settings {
+impl ProfilePreferences {
+    pub(crate) fn normalize(&mut self) {
+        self.volume = self.volume.clamp(0.0, 1.0);
+        self.workspace.normalize();
+        self.ensure_bindings();
+        self.equalizer.normalize();
+        self.tuner.normalize();
+    }
+
     pub(crate) fn ensure_bindings(&mut self) {
         for mut binding in crate::input::default_bindings() {
             if self
@@ -409,43 +438,14 @@ impl Settings {
             self.bindings.push(binding);
         }
     }
+}
+impl Settings {
     pub fn profile_preferences(&self) -> ProfilePreferences {
-        ProfilePreferences {
-            language: self.language,
-            volume: self.volume,
-            repeat: self.repeat,
-            shuffle: self.shuffle,
-            equalizer: self.equalizer.clone(),
-            tuner: self.tuner.clone(),
-            sorting_desk: self.sorting_desk,
-            scan_subfolders: self.scan_subfolders,
-            playlist_placement: self.playlist_placement,
-            player_placement: self.player_placement,
-            workspace: self.workspace.clone(),
-            themes: self.themes.clone(),
-            bindings: self.bindings.clone(),
-            appearance: self.appearance.clone(),
-        }
+        self.preferences.clone()
     }
-    pub fn apply_preferences(&mut self, preferences: ProfilePreferences) {
-        self.language = preferences.language;
-        self.volume = preferences.volume.clamp(0.0, 1.0);
-        self.repeat = preferences.repeat;
-        self.shuffle = preferences.shuffle;
-        self.equalizer = preferences.equalizer;
-        self.equalizer.normalize();
-        self.tuner = preferences.tuner;
-        self.tuner.normalize();
-        self.sorting_desk = preferences.sorting_desk;
-        self.scan_subfolders = preferences.scan_subfolders;
-        self.playlist_placement = preferences.playlist_placement;
-        self.player_placement = preferences.player_placement;
-        self.workspace = preferences.workspace;
-        self.workspace.normalize();
-        self.themes = preferences.themes;
-        self.bindings = preferences.bindings;
-        self.ensure_bindings();
-        self.appearance = preferences.appearance;
+    pub fn apply_preferences(&mut self, mut preferences: ProfilePreferences) {
+        preferences.normalize();
+        self.preferences = preferences;
     }
     pub fn sync_active_profile(&mut self) {
         let preferences = self.profile_preferences();
@@ -482,29 +482,29 @@ impl Settings {
     pub fn current_palette(&self) -> &NamedPalette {
         self.palettes
             .iter()
-            .find(|p| p.id == self.appearance.palette_ids[self.mode.index()])
+            .find(|p| p.id == self.preferences.appearance.palette_ids[self.mode.index()])
             .unwrap_or(&self.palettes[0])
     }
     pub fn current_style(&self) -> ThemeStyle {
         ThemeStyle {
             palette_id: self.current_palette().id.clone(),
-            font: self.appearance.font,
-            font_size: self.appearance.font_size,
-            borders: self.appearance.borders,
-            corners: self.appearance.corners,
+            font: self.preferences.appearance.font,
+            font_size: self.preferences.appearance.font_size,
+            borders: self.preferences.appearance.borders,
+            corners: self.preferences.appearance.corners,
         }
     }
     pub fn apply_style(&mut self, style: ThemeStyle) {
-        self.appearance.preset_ids[self.mode.index()] = None;
-        self.appearance.palette_ids[self.mode.index()] = style.palette_id;
-        self.appearance.font = style.font;
-        self.appearance.font_size = style.font_size;
-        self.appearance.borders = style.borders;
-        self.appearance.corners = style.corners;
+        self.preferences.appearance.preset_ids[self.mode.index()] = None;
+        self.preferences.appearance.palette_ids[self.mode.index()] = style.palette_id;
+        self.preferences.appearance.font = style.font;
+        self.preferences.appearance.font_size = style.font_size;
+        self.preferences.appearance.borders = style.borders;
+        self.preferences.appearance.corners = style.corners;
     }
     pub fn current_preset(&self) -> Option<&ThemePreset> {
         let style = self.current_style();
-        let selected = self.appearance.preset_ids[self.mode.index()].as_deref();
+        let selected = self.preferences.appearance.preset_ids[self.mode.index()].as_deref();
         self.presets
             .iter()
             .find(|preset| Some(preset.id.as_str()) == selected && preset.style == style)
@@ -519,13 +519,13 @@ impl Settings {
         let style = preset.style.clone();
         let id = preset.id.clone();
         self.apply_style(style);
-        self.appearance.preset_ids[self.mode.index()] = Some(id);
+        self.preferences.appearance.preset_ids[self.mode.index()] = Some(id);
         Ok(())
     }
     pub fn migrate_legacy_appearance(&mut self) {
         // Preserve customized legacy colors; the brand preset stays first in the catalog.
         for mode in Mode::ALL {
-            let theme = &self.themes[mode.index()];
+            let theme = &self.preferences.themes[mode.index()];
             let mut palette = default_palettes()[if theme.light { 3 } else { 1 }].clone();
             palette.id = format!("legacy-{}", mode.key());
             palette.name = format!("Legacy {}", mode.key());
@@ -537,10 +537,10 @@ impl Settings {
                     theme.accent
                 },
             );
-            self.appearance.palette_ids[mode.index()] = palette.id.clone();
+            self.preferences.appearance.palette_ids[mode.index()] = palette.id.clone();
             self.palettes.push(palette);
         }
-        self.appearance.corners = Corners::Rounded;
+        self.preferences.appearance.corners = Corners::Rounded;
     }
     pub fn validate_catalogs(&self) -> Result<()> {
         ensure!(
@@ -566,7 +566,7 @@ impl Settings {
             );
             Ok(())
         };
-        validate_appearance(&self.appearance)?;
+        validate_appearance(&self.preferences.appearance)?;
         let mut profile_ids = HashSet::new();
         for profile in &self.profiles {
             validate_name(&profile.name)?;
@@ -596,7 +596,7 @@ impl Settings {
                 AppError::InvalidFontSize
             );
         }
-        for appearance in std::iter::once(&self.appearance).chain(
+        for appearance in std::iter::once(&self.preferences.appearance).chain(
             self.profiles
                 .iter()
                 .map(|profile| &profile.preferences.appearance),
@@ -618,7 +618,7 @@ impl Settings {
             self.presets.iter().any(|preset| preset.id == id),
             "Preset no longer exists"
         );
-        for appearance in std::iter::once(&mut self.appearance).chain(
+        for appearance in std::iter::once(&mut self.preferences.appearance).chain(
             self.profiles
                 .iter_mut()
                 .map(|profile| &mut profile.preferences.appearance),
@@ -648,7 +648,7 @@ impl Settings {
                 }
             }
         };
-        replace(&mut self.appearance);
+        replace(&mut self.preferences.appearance);
         for profile in &mut self.profiles {
             replace(&mut profile.preferences.appearance);
         }

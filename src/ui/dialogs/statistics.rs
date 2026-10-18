@@ -145,7 +145,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
                     } else {
                         ""
                     },
-                    page.name(app.settings.language)
+                    page.name(app.settings.preferences.language)
                 ),
                 Target::StatisticsPage(page),
                 true,
@@ -166,7 +166,10 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             format!(
                 "{}: {} ↓",
                 app.text("Sort", "Сортировка"),
-                app.statistics.view.sort.name(app.settings.language)
+                app.statistics
+                    .view
+                    .sort
+                    .name(app.settings.preferences.language)
             ),
             Target::StatisticsSort,
             true,
@@ -288,7 +291,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         let show_artist = !compact && page != StatisticsPage::Artists;
         let show_date = recent && inner.width >= 80;
         let mut widths = vec![Constraint::Min(8)];
-        let mut header = vec![Cell::from(page.name(app.settings.language))];
+        let mut header = vec![Cell::from(page.name(app.settings.preferences.language))];
         if show_artist {
             widths.push(Constraint::Percentage(22));
             header.push(Cell::from(app.text("Artist", "Артист")));

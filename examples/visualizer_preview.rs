@@ -22,7 +22,7 @@ mod gui_fonts;
 
 fn render(app: &mut App, output: &Path, name: &str, columns: u16, rows: u16) -> Result<()> {
     let mut terminal = Terminal::new(gui_fonts::backend(
-        app.settings.appearance.font,
+        app.settings.preferences.appearance.font,
         16,
         columns,
         rows,
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
     fs::create_dir_all(&output)?;
     let directory = tempfile::tempdir()?;
     let mut app = App::new(directory.path())?;
-    app.settings.language = Language::Russian;
+    app.settings.preferences.language = Language::Russian;
     let change = app.store.create_playlist("Музыка", Mode::Chaos)?;
     let playlist = change
         .after
@@ -104,10 +104,10 @@ fn main() -> Result<()> {
             .advance(Some(music(index)), 0.05, true);
     }
     for kind in VisualizerKind::ALL {
-        app.settings.appearance.visualizer = kind;
+        app.settings.preferences.appearance.visualizer = kind;
         render(&mut app, &output, &format!("{kind:?}"), 140, 45)?;
     }
-    app.settings.appearance.visualizer = VisualizerKind::Bombardment;
+    app.settings.preferences.appearance.visualizer = VisualizerKind::Bombardment;
     render(&mut app, &output, "bombardment-compact", 80, 30)?;
     render(&mut app, &output, "bombardment-small", 32, 26)?;
     for (columns, rows, name) in [
@@ -142,7 +142,7 @@ fn main() -> Result<()> {
             35,
         )?;
     }
-    app.settings.appearance.palette_ids = ["light".into(), "light".into()];
+    app.settings.preferences.appearance.palette_ids = ["light".into(), "light".into()];
     render(&mut app, &output, "bombardment-light", 140, 45)?;
     println!("Background previews: {}", output.display());
     Ok(())

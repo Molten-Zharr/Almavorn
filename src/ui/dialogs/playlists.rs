@@ -23,7 +23,7 @@ pub(super) fn folders(
     let title = format!(
         "{} · {}",
         app.text("Playlist folders", "Папки плейлиста"),
-        playlist.display_name(app.settings.language)
+        playlist.display_name(app.settings.preferences.language)
     );
     let editable = playlist.can_edit(app.view.editing) && !app.busy();
     let paths: Vec<_> = playlist
@@ -73,7 +73,7 @@ pub(super) fn folders(
     let checkbox_y = inner.y + hints + u16::from(hints > 0);
     let checkbox = format!(
         "[{}] {}",
-        if app.settings.scan_subfolders {
+        if app.settings.preferences.scan_subfolders {
             'x'
         } else {
             ' '
@@ -186,7 +186,8 @@ pub(super) fn compose(
         .map(|item| {
             (
                 item.id,
-                item.display_name(app.settings.language).to_owned(),
+                item.display_name(app.settings.preferences.language)
+                    .to_owned(),
                 item.entries.len(),
             )
         })

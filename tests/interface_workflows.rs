@@ -160,7 +160,7 @@ fn command_menus_skip_unavailable_rows_and_stop_at_the_last_enabled_action() {
         selected: 0,
         anchor: ratatui::layout::Position::new(1, 1),
     });
-    app.settings.workspace.hidden_controls.extend(
+    app.settings.preferences.workspace.hidden_controls.extend(
         [
             Action::VolumeUp,
             Action::VolumeDown,
@@ -200,16 +200,16 @@ fn repeat_button_selects_track_on_single_click_and_playlist_on_double_click() {
         (RepeatMode::Track, RepeatMode::Off),
         (RepeatMode::Playlist, RepeatMode::Track),
     ] {
-        app.settings.repeat = before;
+        app.settings.preferences.repeat = before;
         click(&mut app, |target| {
             matches!(target, Target::Action(Action::CycleRepeat))
         });
-        assert_eq!(app.settings.repeat, after);
+        assert_eq!(app.settings.preferences.repeat, after);
         assert!(!app.view.notice_error, "{}", app.view.notice);
     }
     for (width, height) in [(140, 45), (80, 30), (32, 26)] {
         for before in [RepeatMode::Off, RepeatMode::Track, RepeatMode::Playlist] {
-            app.settings.repeat = before;
+            app.settings.preferences.repeat = before;
             render(&mut app, width, height);
             let repeat_area = |app: &App| {
                 app.view
@@ -233,7 +233,7 @@ fn repeat_button_selects_track_on_single_click_and_playlist_on_double_click() {
                 render(&mut app, width, height);
                 assert_eq!(repeat_area(&app), area);
             }
-            assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+            assert_eq!(app.settings.preferences.repeat, RepeatMode::Playlist);
             assert!(!app.view.notice_error, "{}", app.view.notice);
             assert_eq!(
                 app.settings
@@ -249,25 +249,25 @@ fn repeat_button_selects_track_on_single_click_and_playlist_on_double_click() {
     }
     drop(app);
     let app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Playlist);
 }
 
 #[test]
 fn repeat_and_shuffle_work_from_keys_buttons_and_the_player_menu() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    assert_eq!(app.settings.repeat, RepeatMode::Off);
-    assert!(!app.settings.shuffle);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Off);
+    assert!(!app.settings.preferences.shuffle);
     key(&mut app, Key::Char('l'));
-    assert_eq!(app.settings.repeat, RepeatMode::Playlist);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Playlist);
     click(&mut app, |target| {
         matches!(target, Target::Action(Action::CycleRepeat))
     });
-    assert_eq!(app.settings.repeat, RepeatMode::Track);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Track);
     click(&mut app, |target| {
         matches!(target, Target::Action(Action::ToggleShuffle))
     });
-    assert!(app.settings.shuffle);
+    assert!(app.settings.preferences.shuffle);
     let items = app.command_items(CommandMenu::Player);
     assert!(items.iter().any(|item| item.enabled
         && item.label.contains("Трек")
@@ -295,12 +295,12 @@ fn repeat_and_shuffle_work_from_keys_buttons_and_the_player_menu() {
     assert!(text.contains("L"));
     assert!(text.contains("H"));
     key(&mut app, Key::Enter);
-    assert!(!app.settings.shuffle);
+    assert!(!app.settings.preferences.shuffle);
     assert!(app.view.dialog.is_none());
     key(&mut app, Key::Char('l'));
-    assert_eq!(app.settings.repeat, RepeatMode::Off);
+    assert_eq!(app.settings.preferences.repeat, RepeatMode::Off);
     key(&mut app, Key::Char('р')); // Russian layout maps to H.
-    assert!(app.settings.shuffle);
+    assert!(app.settings.preferences.shuffle);
     // New controls remain reachable when the player wraps onto several rows.
     for (width, height) in [(140, 45), (80, 30), (32, 26)] {
         render(&mut app, width, height);
@@ -318,8 +318,17 @@ fn help_stops_at_its_last_page_and_keeps_wrapped_content_visible_after_resizing(
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         for (width, height) in [(140, 45), (70, 30), (32, 18)] {
+            // Request the final page directly, independently of keyboard scrolling.
+            // Its content can grow without changing the navigation expectation.
+            app.view.dialog = Some(Dialog::Help { offset: usize::MAX });
+            let expected = render(&mut app, width, height).backend().buffer().clone();
+            let expected_offset = match app.view.dialog {
+                Some(Dialog::Help { offset }) => offset,
+                _ => unreachable!(),
+            };
+            assert!(expected_offset > 0);
             app.action(Action::Help).unwrap();
             render(&mut app, width, height);
             let mut reached_bottom = false;
@@ -335,16 +344,11 @@ fn help_stops_at_its_last_page_and_keeps_wrapped_content_visible_after_resizing(
                     _ => unreachable!(),
                 };
                 if before == after {
-                    let text: String = terminal
-                        .backend()
-                        .buffer()
-                        .content
-                        .iter()
-                        .map(|cell| cell.symbol())
-                        .collect();
-                    assert!(
-                        text.contains(app.text("typing.", "мышью.")),
-                        "{width}x{height}: {text}"
+                    assert_eq!(after, expected_offset, "{width}x{height}");
+                    assert_eq!(
+                        terminal.backend().buffer(),
+                        &expected,
+                        "{width}x{height}: scrolling must reach the final help page"
                     );
                     reached_bottom = true;
                     break;
@@ -424,7 +428,7 @@ fn desktop_keycaps_leave_blank_pixels_in_the_gaps_across_fonts_and_scroll_frames
             );
             let mut terminal = Terminal::new(backend).unwrap();
             for palette in ["light", "classic-violet"] {
-                app.settings.appearance.palette_ids = [palette.into(), palette.into()];
+                app.settings.preferences.appearance.palette_ids = [palette.into(), palette.into()];
                 let background = app.settings.current_palette().color("background");
                 app.view.dialog = Some(Dialog::Help { offset: 0 });
                 for offset in [0, 15, 0] {
@@ -565,6 +569,7 @@ fn keyboard_toolbar_skips_hidden_and_disabled_actions_and_supports_adjacent_menu
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     app.settings
+        .preferences
         .workspace
         .hidden_controls
         .push(Control::Action(Action::Settings));
@@ -661,11 +666,11 @@ fn settings_values_share_a_right_column_and_narrow_windows_keep_font_values_read
             .collect();
         assert!(arrows.iter().all(|area| area.right() == 138));
     }
-    app.settings.language = Language::Russian;
+    app.settings.preferences.language = Language::Russian;
     app.open_settings_page(SettingsPage::Typography);
     for width in [44, 32] {
         for font in FontFace::ALL {
-            app.settings.appearance.font = font;
+            app.settings.preferences.appearance.font = font;
             let terminal = render(&mut app, width, 22);
             let text: String = terminal
                 .backend()
@@ -690,10 +695,10 @@ fn settings_values_share_a_right_column_and_narrow_windows_keep_font_values_read
 fn library_has_the_space_and_layout_controls_are_hidden_until_requested() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    app.settings.player_placement = Placement::Bottom;
-    app.settings.playlist_placement = Placement::Left;
+    app.settings.preferences.player_placement = Placement::Bottom;
+    app.settings.preferences.playlist_placement = Placement::Left;
     for language in [Language::Russian, Language::English] {
-        app.settings.language = language;
+        app.settings.preferences.language = language;
         for (width, height) in [(32, 26), (80, 30), (140, 45)] {
             let terminal = render(&mut app, width, height);
             assert_eq!(
@@ -758,7 +763,7 @@ fn library_has_the_space_and_layout_controls_are_hidden_until_requested() {
     key(&mut app, Key::Escape);
     assert!(!app.view.layout_editing);
     assert_eq!(app.library.query, "keep this query");
-    app.settings.appearance.borders = BorderWeight::None;
+    app.settings.preferences.appearance.borders = BorderWeight::None;
     let terminal = render(&mut app, 120, 50);
     let player = app
         .view
@@ -861,6 +866,7 @@ fn hidden_commands_and_order_protection_apply_inside_menus() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
     app.settings
+        .preferences
         .workspace
         .hidden_controls
         .push(Control::Action(Action::Delete));
@@ -894,7 +900,7 @@ fn hidden_commands_and_order_protection_apply_inside_menus() {
 fn compact_volume_supports_the_full_range_and_dragging() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    app.settings.player_placement = Placement::Bottom;
+    app.settings.preferences.player_placement = Placement::Bottom;
     render(&mut app, 120, 50);
     assert!(
         !app.view
@@ -920,12 +926,12 @@ fn compact_volume_supports_the_full_range_and_dragging() {
         y: bar.y,
         double: false,
     });
-    assert_eq!(app.settings.volume, 0.0);
+    assert_eq!(app.settings.preferences.volume, 0.0);
     app.handle(Input::Drag {
         x: bar.right() + 20,
         y: bar.y,
     });
-    assert_eq!(app.settings.volume, 1.0);
+    assert_eq!(app.settings.preferences.volume, 1.0);
     app.handle(Input::Release {
         x: bar.right() + 20,
         y: bar.y,
@@ -980,8 +986,8 @@ fn old_layouts_drop_command_blocks_and_content_layouts_survive_normalization() {
 fn resizing_in_layout_mode_persists_the_three_panel_arrangement() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    app.settings.playlist_placement = Placement::Left;
-    app.settings.player_placement = Placement::Bottom;
+    app.settings.preferences.playlist_placement = Placement::Left;
+    app.settings.preferences.player_placement = Placement::Bottom;
     ctrl_b(&mut app);
     render(&mut app, 120, 50);
     let split = app
@@ -1002,17 +1008,17 @@ fn resizing_in_layout_mode_persists_the_three_panel_arrangement() {
     assert!(app.view.workspace.gesture.is_some());
     app.handle(Input::Drag { x: x + 8, y });
     app.handle(Input::Release { x: x + 8, y });
-    let expected = app.settings.workspace.root.clone();
+    let expected = app.settings.preferences.workspace.root.clone();
     assert!(expected.is_some());
     let deadline = Instant::now() + Duration::from_secs(5);
-    while app.store.settings().unwrap().workspace.root != expected {
+    while app.store.settings().unwrap().preferences.workspace.root != expected {
         assert!(Instant::now() < deadline, "Layout was not saved");
         app.tick();
         std::thread::sleep(Duration::from_millis(1));
     }
     drop(app);
     let reopened = App::new(&directory.0).unwrap();
-    assert_eq!(reopened.settings.workspace.root, expected);
+    assert_eq!(reopened.settings.preferences.workspace.root, expected);
 }
 
 #[test]
@@ -1026,8 +1032,8 @@ fn border_geometry_applies_to_library_player_settings_and_command_menus() {
         (BorderWeight::Thick, Corners::Square, Some("┏")),
         (BorderWeight::None, Corners::Square, None),
     ] {
-        app.settings.appearance.borders = weight;
-        app.settings.appearance.corners = corners;
+        app.settings.preferences.appearance.borders = weight;
+        app.settings.preferences.appearance.corners = corners;
         for (width, height) in [(120, 50), (32, 18)] {
             let terminal = render(&mut app, width, height);
             for (_, area) in &app.view.workspace.areas {
@@ -1065,7 +1071,7 @@ fn border_geometry_applies_to_library_player_settings_and_command_menus() {
 fn settings_show_compact_rows_and_one_selected_description() {
     let directory = Directory::new();
     let mut app = App::new(&directory.0).unwrap();
-    app.settings.language = Language::Russian;
+    app.settings.preferences.language = Language::Russian;
     app.open_settings_page(SettingsPage::General);
     let terminal = render(&mut app, 120, 50);
     let rows: Vec<_> = app

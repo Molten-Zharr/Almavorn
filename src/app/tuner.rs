@@ -12,7 +12,7 @@ impl App {
         self.settings
             .track_tuners
             .get(path)
-            .unwrap_or(&self.settings.tuner)
+            .unwrap_or(&self.settings.preferences.tuner)
     }
 
     /// FX shown in the dialog and applied to the currently playing track.
@@ -20,7 +20,7 @@ impl App {
         self.playback
             .current
             .as_ref()
-            .map_or(&self.settings.tuner, |track| {
+            .map_or(&self.settings.preferences.tuner, |track| {
                 self.tuner_for_path(&track.path)
             })
     }
@@ -38,7 +38,7 @@ impl App {
         {
             tuner
         } else {
-            &mut self.settings.tuner
+            &mut self.settings.preferences.tuner
         }
     }
 
@@ -50,9 +50,10 @@ impl App {
         if self.settings.track_tuners.remove(&path).is_none() {
             self.settings
                 .track_tuners
-                .insert(path, self.settings.tuner.clone());
+                .insert(path, self.settings.preferences.tuner.clone());
         }
         self.cancel_workspace_drag();
+        self.sync_tuner()?;
         self.save_settings()
     }
 
@@ -110,6 +111,7 @@ impl App {
         let value = value.clamp(TunerSettings::minimum(index), TunerSettings::maximum(index));
         if self.tuner_settings().value(index) != Some(value) && index < SLIDERS {
             self.editable_tuner().set_value(index, value);
+            self.sync_tuner()?;
             self.save_settings()?;
         }
         Ok(())
@@ -159,10 +161,12 @@ impl App {
             Target::TunerReverse => {
                 let tuner = self.editable_tuner();
                 tuner.reverse = !tuner.reverse;
+                self.sync_tuner()?;
                 self.save_settings()?;
             }
             Target::TunerReset => {
                 *self.editable_tuner() = Default::default();
+                self.sync_tuner()?;
                 self.save_settings()?;
             }
             Target::TunerPin => self.toggle_tuner_pin()?,

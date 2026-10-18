@@ -13,6 +13,7 @@ mod import;
 mod library;
 mod options;
 mod playback;
+mod playback_queue;
 mod playlist_operations;
 mod search;
 mod settings;
@@ -34,7 +35,6 @@ pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
 pub use statistics::{StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
 
-use self::background::{Background, background};
 use crate::{audio::Audio, model::Settings, store::Store};
 use anyhow::{Context, Result};
 use std::{path::Path, sync::atomic::Ordering, time::Duration};
@@ -54,6 +54,12 @@ pub struct App {
 }
 
 impl App {
+    fn runtime(&self) -> &Runtime {
+        self.runtime
+            .as_ref()
+            .expect("runtime is alive while the interface runs")
+    }
+
     pub fn new(directory: &Path) -> Result<Self> {
         let runtime = Builder::new_multi_thread()
             .worker_threads(2)
@@ -64,16 +70,12 @@ impl App {
             .context("Cannot start background workers")?;
         let store = Store::open(directory)?;
         let mut settings = store.settings()?;
-        settings.volume = settings.volume.clamp(0.0, 1.0);
-        settings.workspace.normalize();
-        settings.ensure_bindings();
-        settings.equalizer.normalize();
-        settings.tuner.normalize();
+        settings.preferences.normalize();
         for tuner in settings.track_tuners.values_mut() {
             tuner.normalize();
         }
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
-        let view = UiState::new(settings.language);
+        let view = UiState::new(settings.preferences.language);
         Ok(Self {
             store,
             runtime: Some(runtime),
@@ -89,7 +91,7 @@ impl App {
     }
 
     pub fn text(&self, english: &'static str, russian: &'static str) -> &'static str {
-        self.settings.language.text(english, russian)
+        self.settings.preferences.language.text(english, russian)
     }
 
     fn message(&mut self, text: String) {
@@ -98,7 +100,7 @@ impl App {
     }
 
     fn failure(&mut self, error: anyhow::Error) {
-        let reason = crate::errors::message(&error, self.settings.language);
+        let reason = crate::errors::message(&error, self.settings.preferences.language);
         self.view.notice = format!(
             "{}: {}",
             self.text("Action failed", "Действие не выполнено"),
@@ -163,43 +165,7 @@ impl Drop for App {
                 "Almavorn: listening history was not saved / статистика не сохранена: {error:#}"
             );
         }
-        let wait = |job: Background<()>| {
-            runtime
-                .block_on(async {
-                    tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), job).await
-                })
-                .context("Settings save did not finish before shutdown")
-                .map(|result| {
-                    result
-                        .context("Settings save was interrupted")
-                        .and_then(|result| result)
-                })
-        };
-        let mut result = Ok(());
-        let mut expired = false;
-        if let Some(job) = self.persistence.job.take() {
-            match wait(job) {
-                Ok(saved) => {
-                    if saved.is_err() {
-                        self.persistence
-                            .pending
-                            .get_or_insert_with(|| self.settings.clone());
-                    }
-                    result = saved;
-                }
-                Err(error) => {
-                    expired = true;
-                    result = Err(error);
-                }
-            }
-        }
-        if !expired && let Some(settings) = self.persistence.pending.take() {
-            result = self.store.try_clone().and_then(|mut store| {
-                let job = background(&runtime, move || store.save_settings(&settings));
-                wait(job).and_then(|result| result)
-            });
-        }
-        if let Err(error) = result {
+        if let Err(error) = self.shutdown_settings(&runtime, deadline) {
             eprintln!("Almavorn: settings were not saved / настройки не сохранены: {error:#}");
         }
         runtime.shutdown_timeout(deadline.saturating_duration_since(std::time::Instant::now()));
