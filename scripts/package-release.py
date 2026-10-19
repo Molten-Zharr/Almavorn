@@ -48,6 +48,9 @@ def main():
             shutil.copy2(ROOT / path, package / path)
         shutil.copy2(ROOT / "scripts/install-user.py", package / "install.py")
         shutil.copy2(ROOT / "docs/RELEASE.md", package / "RELEASE.md")
+        (package / "docs").mkdir()
+        for filename in ("RELEASE.md", "GLOBAL_SHORTCUTS.md"):
+            shutil.copy2(ROOT / "docs" / filename, package / "docs" / filename)
         for relative in ("applications/almavorn.desktop", "icons/hicolor/scalable/apps/almavorn.svg"):
             destination = package / "share" / relative
             destination.parent.mkdir(parents=True, exist_ok=True)

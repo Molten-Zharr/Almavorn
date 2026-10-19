@@ -1,6 +1,6 @@
 [package]
 name = "almavorn"
-version = "0.1.1"
+version = "0.1.2"
 description = "A local music player with graphical and terminal interfaces"
 license = "MIT"
 repository = "https://github.com/Molten-Zharr/Almavorn"

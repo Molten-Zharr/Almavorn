@@ -49,7 +49,7 @@ Almavorn в меню приложений; права администратор
 
 ```sh
 sha256sum -c SHA256SUMS
-tar -xzf almavorn-0.1.1-linux-x86_64.tar.gz
+tar -xzf almavorn-0.1.2-linux-x86_64.tar.gz
 ```
 
 ## Лицензии и повторная сборка
@@ -102,11 +102,11 @@ python3 scripts/package-release.py
 python3 install.py внутри его папки.
 
 Поставьте тег на подготовленный коммит и отправьте его; пример для следующей
-версии 0.1.2:
+версии 0.1.3:
 
 ```sh
-git tag -a v0.1.2 -m "Almavorn 0.1.2"
-git push origin refs/tags/v0.1.2
+git tag -a v0.1.3 -m "Almavorn 0.1.3"
+git push origin refs/tags/v0.1.3
 ```
 
 GitHub Actions соберет архив на Ubuntu 22.04 и добавит его с SHA256SUMS
