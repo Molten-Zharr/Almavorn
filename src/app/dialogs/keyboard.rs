@@ -17,6 +17,24 @@ impl App {
             Some(Dialog::CaptureBinding { index }) => self.capture_binding_key(*index, key),
             Some(Dialog::Text(_)) => self.text_key(key),
             Some(Dialog::RemovePlaylist { .. }) => self.remove_playlist_key(key),
+            Some(Dialog::ConfirmResetBindings { confirm }) => {
+                let confirm = *confirm;
+                if !key.ctrl && !key.alt {
+                    match key.key {
+                        Key::Left | Key::Up | Key::Right | Key::Down | Key::Tab => {
+                            let confirm = match key.key {
+                                Key::Left | Key::Up => true,
+                                Key::Right | Key::Down => false,
+                                _ => !confirm,
+                            };
+                            self.view.dialog = Some(Dialog::ConfirmResetBindings { confirm });
+                        }
+                        Key::Enter | Key::Char(' ') => self.submit()?,
+                        _ => {}
+                    }
+                }
+                Ok(())
+            }
             Some(Dialog::ComposePlaylists { .. }) => self.composition_key(key),
             Some(Dialog::Folders { .. }) => self.folders_key(key),
             Some(Dialog::Search(_)) => self.search_key(key),

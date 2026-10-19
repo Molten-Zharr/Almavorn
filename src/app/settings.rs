@@ -262,6 +262,7 @@ impl App {
                     ..
                 })
                 | Dialog::ConfirmSettings { .. }
+                | Dialog::ConfirmResetBindings { .. }
                 | Dialog::SettingsHelp { .. }
                 | Dialog::CaptureBinding { .. },
             ) => {
@@ -473,8 +474,7 @@ impl App {
                 self.view.dialog = Some(Dialog::CaptureBinding { index });
             }
             SettingControl::ResetBindings => {
-                self.settings.preferences.bindings = crate::input::default_bindings();
-                self.save_settings()?;
+                self.view.dialog = Some(Dialog::ConfirmResetBindings { confirm: false });
             }
             _ => self.adjust_setting(row, 1)?,
         }

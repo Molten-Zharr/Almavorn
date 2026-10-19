@@ -100,6 +100,9 @@ pub enum Dialog {
         id: String,
         name: String,
     },
+    ConfirmResetBindings {
+        confirm: bool,
+    },
     SettingsHelp {
         title: String,
         description: String,
@@ -138,7 +141,10 @@ impl Dialog {
             Self::RemoveEntry { .. }
             | Self::RemovePlaylist { .. }
             | Self::ConfirmSettings { .. } => Some(Action::Delete),
-            Self::Text(_) | Self::CaptureBinding { .. } | Self::Commands { .. } => None,
+            Self::Text(_)
+            | Self::CaptureBinding { .. }
+            | Self::ConfirmResetBindings { .. }
+            | Self::Commands { .. } => None,
             Self::Search(_) => None,
         }
     }
@@ -153,6 +159,7 @@ impl Dialog {
                         ..
                     })
                     | Self::ConfirmSettings { .. }
+                    | Self::ConfirmResetBindings { .. }
                     | Self::SettingsHelp { .. }
                     | Self::CaptureBinding { .. }
             )
@@ -467,6 +474,13 @@ impl App {
                 self.browser_open()?;
             }
             Some(Dialog::Settings { selected }) => self.setting(selected)?,
+            Some(Dialog::ConfirmResetBindings { confirm }) => {
+                self.show_settings();
+                if confirm {
+                    self.settings.preferences.bindings = crate::input::default_bindings();
+                    self.save_settings()?;
+                }
+            }
             Some(Dialog::ConfirmSettings { catalog, id, name }) => {
                 if let Err(error) = self.delete_settings_item(catalog, &id) {
                     self.view.dialog = Some(Dialog::ConfirmSettings { catalog, id, name });

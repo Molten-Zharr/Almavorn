@@ -594,6 +594,12 @@ impl App {
                     self.submit()?;
                 }
             }
+            Target::ResetBindingsAnswer(answer) => {
+                if let Some(Dialog::ConfirmResetBindings { confirm }) = &mut self.view.dialog {
+                    *confirm = answer;
+                    self.submit()?;
+                }
+            }
             Target::ComposeRow(index) => self.toggle_compose_row(index),
             Target::ComposeMove(direction) => self.move_composition_source(direction),
             Target::FolderRow(index) => {

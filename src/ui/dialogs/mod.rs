@@ -271,6 +271,63 @@ pub(super) fn render_dialog(
             );
         }
         Dialog::Settings { .. } => super::settings::render_settings(frame, app, palette),
+        Dialog::ConfirmResetBindings { confirm } => {
+            let body = app.text(
+                "Replace this profile's shortcuts with the defaults?",
+                "Заменить горячие клавиши текущего профиля стандартными?",
+            );
+            let width = area.width.saturating_sub(6).clamp(1, 86);
+            let height = (Paragraph::new(body)
+                .wrap(Wrap { trim: false })
+                .line_count(width) as u16)
+                .saturating_add(5);
+            let inner = modal(
+                frame,
+                app,
+                area,
+                app.text("Reset shortcuts?", "Сбросить горячие клавиши?")
+                    .into(),
+                height,
+                palette,
+            );
+            frame.render_widget(
+                Paragraph::new(body)
+                    .style(palette.text())
+                    .wrap(Wrap { trim: false }),
+                Rect::new(
+                    inner.x,
+                    inner.y,
+                    inner.width,
+                    inner.height.saturating_sub(2),
+                ),
+            );
+            buttons(
+                frame,
+                app,
+                Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2),
+                vec![
+                    (
+                        app.text("Yes, reset", "Да, сбросить").into(),
+                        if *confirm {
+                            Target::Submit
+                        } else {
+                            Target::ResetBindingsAnswer(true)
+                        },
+                        true,
+                    ),
+                    (
+                        app.text("CANCEL!", "ОТМЕНА!").into(),
+                        if *confirm {
+                            Target::ResetBindingsAnswer(false)
+                        } else {
+                            Target::Submit
+                        },
+                        true,
+                    ),
+                ],
+                palette,
+            );
+        }
         Dialog::ConfirmSettings { catalog, name, .. } => {
             let inner = modal(
                 frame,

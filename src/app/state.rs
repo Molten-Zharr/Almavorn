@@ -81,6 +81,7 @@ pub enum Target {
     CloseDialog,
     Submit,
     DeletePlaylistAnswer(bool),
+    ResetBindingsAnswer(bool),
     Text(char),
     Backspace,
     KeyboardLanguage,

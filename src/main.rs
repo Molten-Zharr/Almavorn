@@ -193,6 +193,8 @@ fn run() -> Result<()> {
                             | Target::SettingsPage(_)
                             | Target::SettingsTab(_)
                             | Target::CloseDialog
+                            | Target::Submit
+                            | Target::ResetBindingsAnswer(_)
                             | Target::SearchResult(_)
                             | Target::SearchPlay
                             | Target::SearchPlaylist(_)
