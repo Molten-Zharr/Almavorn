@@ -75,7 +75,7 @@ impl App {
             tuner.normalize();
         }
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
-        let view = UiState::new(settings.preferences.language);
+        let view = UiState::default();
         Ok(Self {
             store,
             runtime: Some(runtime),
@@ -97,6 +97,7 @@ impl App {
     fn message(&mut self, text: String) {
         self.view.notice = text;
         self.view.notice_error = false;
+        self.view.notice_until = Some(std::time::Instant::now() + Duration::from_secs(4));
     }
 
     fn failure(&mut self, error: anyhow::Error) {
@@ -107,6 +108,7 @@ impl App {
             reason.replace('\n', " ")
         );
         self.view.notice_error = true;
+        self.view.notice_until = None;
     }
 
     pub fn tick(&mut self) {

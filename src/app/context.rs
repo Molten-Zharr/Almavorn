@@ -78,6 +78,7 @@ pub struct UiState {
     pub(crate) track_scroll_selected: Option<i64>,
     pub notice: String,
     pub notice_error: bool,
+    pub(crate) notice_until: Option<std::time::Instant>,
     pub quit: bool,
     pub editing: bool,
     pub layout_editing: bool,
@@ -122,20 +123,6 @@ impl LibraryState {
             selected_playlist,
             selected_entry,
             revision,
-            ..Default::default()
-        }
-    }
-}
-
-impl UiState {
-    pub(super) fn new(language: Language) -> Self {
-        Self {
-            notice: language
-                .text(
-                    "Ready. Add music or create a playlist.",
-                    "Готово. Добавьте музыку или создайте плейлист.",
-                )
-                .into(),
             ..Default::default()
         }
     }

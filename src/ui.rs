@@ -15,6 +15,7 @@ use self::{dialogs::render_dialog, theme::Palette};
 use crate::{
     app::{App, Target},
     input::Action,
+    model::{Mode, PlaylistKind},
 };
 use ratatui::{
     Frame,
@@ -87,8 +88,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     } else if app.busy() {
         app.text("Updating library…", "Обновление библиотеки…")
             .to_owned()
-    } else {
+    } else if app
+        .view
+        .notice_until
+        .is_some_and(|until| until > std::time::Instant::now())
+    {
         app.view.notice.clone()
+    } else {
+        context_hint(app, area.width < 120).into()
     };
     let tooltip = app.hovered_target().and_then(|target| match target {
         Target::Action(action) => Some(format!(
@@ -187,5 +194,93 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             render_dialog(frame, app, &mut dialog, palette);
         }
         app.view.dialog = Some(dialog);
+    }
+}
+
+fn context_hint(app: &App, compact: bool) -> &'static str {
+    if app.playlist().is_none() {
+        return match (app.settings.mode, compact) {
+            (Mode::Order, true) => {
+                app.text("Order: create a playlist", "Порядок: создайте плейлист")
+            }
+            (Mode::Chaos, true) => app.text("Chaos: create a playlist", "Хаос: создайте плейлист"),
+            (Mode::Order, false) => app.text(
+                "Order: create a playlist to collect and keep your music in order.",
+                "Порядок: создайте плейлист, чтобы собрать музыку и сохранить порядок композиций.",
+            ),
+            (Mode::Chaos, false) => app.text(
+                "Chaos: create a playlist for a freely editable music collection.",
+                "Хаос: создайте плейлист для свободной подборки музыки.",
+            ),
+        };
+    }
+    if !app.library.query.is_empty() {
+        return if compact {
+            app.text("Filter: this playlist", "Фильтр: внутри плейлиста")
+        } else {
+            app.text(
+                "Filter: matching tracks in this playlist. Clear the filter to see all tracks.",
+                "Фильтр: совпадения в текущем плейлисте. Очистите строку, чтобы вернуть все композиции.",
+            )
+        };
+    }
+    if app.view.focus == crate::app::Focus::Playlists {
+        return match (app.settings.mode, compact) {
+            (Mode::Order, true) => app.text("Order: manage playlists", "Порядок: работа с плейлистами"),
+            (Mode::Chaos, true) => app.text("Chaos: manage playlists", "Хаос: работа с плейлистами"),
+            (Mode::Order, false) => app.text(
+                "Order: choose, create and arrange saved playlists. Edit unlocks changes.",
+                "Порядок: выбирайте, создавайте и переставляйте плейлисты. Правка разрешает изменения.",
+            ),
+            (Mode::Chaos, false) => app.text(
+                "Chaos: choose, create and freely rearrange your playlists.",
+                "Хаос: выбирайте, создавайте и свободно переставляйте плейлисты.",
+            ),
+        };
+    }
+    if app
+        .playlist()
+        .is_some_and(|playlist| playlist.kind == PlaylistKind::SortingDesk)
+    {
+        return if compact {
+            app.text("Sorting desk: organize music", "Сортировочный стол: разбор")
+        } else {
+            app.text(
+                "Sorting desk: collect music, mark tracks and copy them to playlists.",
+                "Сортировочный стол: собирайте музыку, отмечайте композиции и копируйте их в плейлисты.",
+            )
+        };
+    }
+    if let Some(playlist) = app.playlist()
+        && playlist.entries.is_empty()
+    {
+        return if playlist.can_edit(app.view.editing) {
+            app.text(
+                "Empty playlist: add music",
+                "Плейлист пуст: добавьте музыку",
+            )
+        } else {
+            app.text(
+                "Empty playlist: enable Edit",
+                "Плейлист пуст: включите Правку",
+            )
+        };
+    }
+    match (app.settings.mode, app.view.editing, compact) {
+        (Mode::Chaos, _, true) => app.text("Chaos: a free collection", "Хаос: свободная подборка"),
+        (Mode::Chaos, _, false) => app.text(
+            "Chaos: freely collect, mark and rearrange tracks in your playlists.",
+            "Хаос: свободно собирайте подборки, отмечайте и переставляйте композиции.",
+        ),
+        (Mode::Order, true, true) => app.text("Order: editing playlists", "Порядок: правка плейлиста"),
+        (Mode::Order, true, false) => app.text(
+            "Order · Edit: add, mark, rearrange and remove tracks from playlists.",
+            "Порядок · Правка: добавляйте, отмечайте, переставляйте и убирайте композиции из плейлистов.",
+        ),
+        (Mode::Order, false, true) => app.text("Order: saved playlists", "Порядок: сохраненные плейлисты"),
+        (Mode::Order, false, false) => app.text(
+            "Order: listen to saved playlists. Enable Edit to change their contents.",
+            "Порядок: слушайте сохраненные плейлисты. Для изменения состава включите Правку.",
+        ),
     }
 }

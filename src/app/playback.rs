@@ -316,18 +316,12 @@ impl App {
             request.queue.current().is_some(),
             AppError::TrackSelectionRequired
         );
-        let title = request.entry().track.title.clone();
         request.reverse = self.tuner_for_path(&request.entry().track.path).reverse;
         self.cancel_seek();
         self.cancel_audio_preparation();
         self.cancel_waveform();
         self.playback.preparation.request(request);
         self.start_playback_job();
-        self.message(format!(
-            "{}: {}",
-            self.text("Preparing audio", "Подготовка аудио"),
-            title
-        ));
         Ok(())
     }
     fn start_playback_job(&mut self) {
@@ -430,11 +424,8 @@ impl App {
                 Some((track.path.clone(), self.playback.preparation.generation()));
             self.start_waveform_job();
         }
-        self.message(format!(
-            "{}: {}",
-            self.text("Playing", "Воспроизведение"),
-            track.title
-        ));
+        self.view.notice_error = false;
+        self.view.notice_until = None;
         Ok(())
     }
     pub(super) fn toggle_playback(&mut self) -> Result<()> {
