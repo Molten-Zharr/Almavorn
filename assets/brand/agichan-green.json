@@ -1,0 +1,88 @@
+{
+  "name": "Green",
+  "version": 2,
+  "source": "https://agichan.com/#board",
+  "source_theme": "green",
+  "colors": [
+    {
+      "token": "background",
+      "hex": "#001000",
+      "source_token": "--bg"
+    },
+    {
+      "token": "text",
+      "hex": "#33FF33",
+      "source_token": "--fg"
+    },
+    {
+      "token": "button_text",
+      "hex": "#9BFF9B",
+      "source_token": "--chipfg"
+    },
+    {
+      "token": "active",
+      "hex": "#66FF66",
+      "source_token": "--link"
+    },
+    {
+      "token": "sidebar_title",
+      "hex": "#9BFF9B",
+      "source_token": "--name"
+    },
+    {
+      "token": "error",
+      "hex": "#FF6B6B",
+      "source_token": "--hover"
+    },
+    {
+      "token": "inactive_file_border",
+      "hex": "#159915",
+      "source_token": "--label"
+    },
+    {
+      "token": "inactive_panel_border",
+      "hex": "#0C3C0C",
+      "source_token": "--edge"
+    },
+    {
+      "token": "gradient_dark",
+      "hex": "#159915",
+      "source_token": "--label"
+    },
+    {
+      "token": "folder_icon",
+      "hex": "#9BFF9B",
+      "source_token": "--name"
+    },
+    {
+      "token": "selection_accent",
+      "hex": "#CCFFCC",
+      "source_token": "--subject"
+    },
+    {
+      "token": "confirm_background",
+      "hex": "#002800",
+      "source_token": "--chip"
+    },
+    {
+      "token": "help_heading",
+      "hex": "#CCFFCC",
+      "source_token": "--subject"
+    },
+    {
+      "token": "folder_path",
+      "hex": "#27C427",
+      "source_token": "--muted"
+    },
+    {
+      "token": "separator",
+      "hex": "#0C3C0C",
+      "source_token": "--edge"
+    },
+    {
+      "token": "selected_file_background",
+      "hex": "#003000",
+      "source_token": "--hl"
+    }
+  ]
+}

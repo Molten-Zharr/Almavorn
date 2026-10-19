@@ -199,6 +199,8 @@ pub struct Settings {
     pub track_tuners: BTreeMap<PathBuf, crate::tuner::TunerSettings>,
     pub palettes: Vec<crate::preferences::NamedPalette>,
     pub presets: Vec<crate::preferences::ThemePreset>,
+    #[serde(default)]
+    pub bundled_themes_version: u32,
     pub profiles: Vec<crate::preferences::SettingsProfile>,
     pub active_profile: String,
     pub next_settings_id: u64,
@@ -212,6 +214,7 @@ impl Default for Settings {
             track_tuners: Default::default(),
             palettes: crate::preferences::default_palettes(),
             presets: crate::preferences::default_presets(),
+            bundled_themes_version: crate::preferences::BUNDLED_THEMES_VERSION,
             profiles: Vec::new(),
             active_profile: String::new(),
             next_settings_id: 1,

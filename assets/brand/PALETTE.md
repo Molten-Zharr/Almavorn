@@ -1,6 +1,6 @@
 # Molten-Zharr - palette
 
-One shared palette / Единственная общая палитра
+## Molten-Zharr
 
 | HEX | English | Русский |
 |---|---|---|
@@ -20,3 +20,10 @@ One shared palette / Единственная общая палитра
 | `#FF9999` | Current folder path | путь текущей папки |
 | `#615250` | Sidebar separators | разделители боковой панели |
 | `#524549` | Selected file background | фон выбранного файла |
+
+## Green и Amber
+
+Встроенные цветовые темы перенесены из [Green и Amber на agichan](https://agichan.com/#board).
+Исходники agichan-green.json и agichan-amber.json содержат все 16 ролей Almavorn;
+source_token указывает соответствующую CSS-переменную сайта.
+Темы доступны в настройках вместе с остальными пресетами и палитрами.

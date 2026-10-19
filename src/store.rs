@@ -113,6 +113,7 @@ impl Store {
                     settings.migrate_legacy_appearance();
                 }
                 settings.initialize_profiles();
+                settings.upgrade_bundled_themes();
                 settings.validate_catalogs()?;
                 Ok(settings)
             }

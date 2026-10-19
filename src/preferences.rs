@@ -12,6 +12,7 @@ use std::{
 };
 
 pub const BRAND_PALETTE: &str = "molten-zharr";
+pub(crate) const BUNDLED_THEMES_VERSION: u32 = 1;
 pub const MIN_FONT_SIZE: u16 = 10;
 pub const MAX_FONT_SIZE: u16 = 32;
 
@@ -300,7 +301,24 @@ pub fn default_palettes() -> Vec<NamedPalette> {
     ] {
         light.colors.insert(key.into(), color);
     }
-    vec![molten, amber, violet, light]
+    let mut palettes = vec![molten, amber, violet, light];
+    for (id, json) in [
+        (
+            "agichan-green",
+            include_str!("../assets/brand/agichan-green.json"),
+        ),
+        (
+            "agichan-amber",
+            include_str!("../assets/brand/agichan-amber.json"),
+        ),
+    ] {
+        let mut palette =
+            NamedPalette::from_brand(serde_json::from_str(json).expect("Bundled palette JSON"))
+                .expect("Bundled palette colors");
+        palette.id = id.into();
+        palettes.push(palette);
+    }
+    palettes
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -440,6 +458,34 @@ impl ProfilePreferences {
     }
 }
 impl Settings {
+    pub(crate) fn upgrade_bundled_themes(&mut self) {
+        if self.bundled_themes_version >= BUNDLED_THEMES_VERSION {
+            return;
+        }
+        for palette in default_palettes()
+            .into_iter()
+            .filter(|palette| matches!(palette.id.as_str(), "agichan-green" | "agichan-amber"))
+        {
+            if !self
+                .palettes
+                .iter()
+                .any(|existing| existing.id == palette.id)
+            {
+                self.palettes.push(palette);
+            }
+        }
+        for preset in default_presets()
+            .into_iter()
+            .filter(|preset| matches!(preset.id.as_str(), "agichan-green" | "agichan-amber"))
+        {
+            if !self.presets.iter().any(|existing| existing.id == preset.id) {
+                self.presets.push(preset);
+            }
+        }
+        // Remember installation so explicitly removed themes stay removed.
+        self.bundled_themes_version = BUNDLED_THEMES_VERSION;
+    }
+
     pub fn profile_preferences(&self) -> ProfilePreferences {
         self.preferences.clone()
     }
