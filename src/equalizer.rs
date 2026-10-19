@@ -74,7 +74,7 @@ impl Preset {
     }
 }
 
-pub const PRESETS: [Preset; 8] = [
+pub const PRESETS: [Preset; 24] = [
     Preset {
         english: "Flat",
         russian: "Ровный",
@@ -122,6 +122,102 @@ pub const PRESETS: [Preset; 8] = [
         russian: "Вокал",
         preamp: -4,
         bands: [-3, -2, -1, 0, 2, 4, 4, 2, 0, -1],
+    },
+    Preset {
+        english: "Hard Rock",
+        russian: "Хард-рок",
+        preamp: -6,
+        bands: [4, 6, 4, 0, -2, 1, 4, 5, 3, 2],
+    },
+    Preset {
+        english: "Metal",
+        russian: "Метал",
+        preamp: -6,
+        bands: [5, 6, 3, -2, -3, 0, 3, 5, 4, 2],
+    },
+    Preset {
+        english: "Alternative",
+        russian: "Альтернатива",
+        preamp: -4,
+        bands: [2, 3, 2, -1, 0, 2, 4, 3, 1, 0],
+    },
+    Preset {
+        english: "Acoustic",
+        russian: "Акустика",
+        preamp: -4,
+        bands: [0, 1, 2, 2, 1, 2, 3, 4, 2, 1],
+    },
+    Preset {
+        english: "Jazz",
+        russian: "Джаз",
+        preamp: -3,
+        bands: [2, 3, 2, 1, -1, -1, 0, 2, 3, 2],
+    },
+    Preset {
+        english: "Blues",
+        russian: "Блюз",
+        preamp: -3,
+        bands: [1, 2, 2, 1, 0, 2, 3, 2, 1, 0],
+    },
+    Preset {
+        english: "Hip-Hop",
+        russian: "Хип-хоп",
+        preamp: -6,
+        bands: [6, 5, 3, 1, -1, 0, 2, 1, 2, 1],
+    },
+    Preset {
+        english: "R&B",
+        russian: "R&B",
+        preamp: -4,
+        bands: [4, 3, 1, -1, 1, 3, 2, 1, 2, 3],
+    },
+    Preset {
+        english: "Electronic",
+        russian: "Электроника",
+        preamp: -5,
+        bands: [5, 4, 1, -1, -2, 0, 2, 3, 4, 3],
+    },
+    Preset {
+        english: "Techno",
+        russian: "Техно",
+        preamp: -6,
+        bands: [5, 6, 2, -2, -3, -1, 1, 3, 5, 4],
+    },
+    Preset {
+        english: "House",
+        russian: "Хаус",
+        preamp: -5,
+        bands: [4, 5, 3, 0, -1, 1, 2, 3, 3, 2],
+    },
+    Preset {
+        english: "Reggae",
+        russian: "Регги",
+        preamp: -5,
+        bands: [5, 4, 2, 0, -1, 1, 2, 1, 0, -1],
+    },
+    Preset {
+        english: "Latin",
+        russian: "Латино",
+        preamp: -4,
+        bands: [2, 3, 1, 0, 1, 2, 4, 3, 2, 1],
+    },
+    Preset {
+        english: "Soundtrack",
+        russian: "Саундтрек",
+        preamp: -4,
+        bands: [4, 3, 1, -1, 0, 1, 2, 3, 3, 2],
+    },
+    Preset {
+        english: "Speech",
+        russian: "Речь",
+        preamp: -4,
+        bands: [-6, -5, -3, -1, 1, 3, 4, 2, -1, -3],
+    },
+    Preset {
+        english: "Low volume",
+        russian: "Тихое прослушивание",
+        preamp: -5,
+        bands: [5, 4, 2, 0, -1, -1, 0, 1, 3, 4],
     },
 ];
 

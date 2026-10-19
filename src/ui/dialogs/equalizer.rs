@@ -88,10 +88,17 @@ pub(super) fn render(
         horizontal(frame, app, *selected, body, palette);
     }
     frame.render_widget(
-        Paragraph::new(app.text(
-            "←→: band · ↑↓/wheel: 1 dB · 1–8: preset",
-            "←→: полоса · ↑↓/колесо: 1 дБ · 1–8: пресет",
-        ))
+        Paragraph::new(if presets {
+            app.text(
+                "↑↓/wheel: preset · Enter: apply",
+                "↑↓/колесо: пресет · Enter: выбрать",
+            )
+        } else {
+            app.text(
+                "←→: band · ↑↓: dB · Enter: presets",
+                "←→: полоса · ↑↓: дБ · Enter: пресеты",
+            )
+        })
         .style(palette.text().fg(palette.muted)),
         Rect::new(inner.x, inner.bottom() - 2, inner.width, 1),
     );
@@ -261,13 +268,13 @@ fn dropdown(frame: &mut Frame, app: &mut App, selected: &mut usize, inner: Rect,
         inner.x + inner.width.saturating_sub(32) / 2,
         inner.y + 2,
         inner.width.min(32),
-        inner.height.saturating_sub(3).min(PRESETS.len() as u16 + 2),
+        inner.height.saturating_sub(4).min(PRESETS.len() as u16 + 3),
     );
     frame.render_widget(Clear, outer);
     let block = block(app.text("Presets", "Пресеты").into(), palette, true);
     let body = block.inner(outer);
     frame.render_widget(block, outer);
-    let capacity = usize::from(body.height);
+    let capacity = usize::from(body.height.saturating_sub(1));
     let offset = visible_offset(0, *selected, capacity, PRESETS.len());
     let current = app.settings.preferences.equalizer.preset();
     for (index, preset) in PRESETS.iter().enumerate().skip(offset).take(capacity) {
@@ -289,8 +296,13 @@ fn dropdown(frame: &mut Frame, app: &mut App, selected: &mut usize, inner: Rect,
             .style(style),
             row,
         );
+        let shortcut = match index {
+            0..=8 => (index + 1).to_string(),
+            9 => "0".into(),
+            _ => String::new(),
+        };
         frame.render_widget(
-            Paragraph::new((index + 1).to_string())
+            Paragraph::new(shortcut)
                 .alignment(Alignment::Right)
                 .style(style),
             row,
@@ -301,4 +313,14 @@ fn dropdown(frame: &mut Frame, app: &mut App, selected: &mut usize, inner: Rect,
             enabled: true,
         });
     }
+    frame.render_widget(
+        Paragraph::new(format!("↑↓ · {}/{}", *selected + 1, PRESETS.len()))
+            .style(palette.text().fg(palette.muted)),
+        Rect::new(
+            body.x,
+            body.bottom().saturating_sub(1),
+            body.width,
+            body.height.min(1),
+        ),
+    );
 }

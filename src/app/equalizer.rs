@@ -150,9 +150,13 @@ impl App {
         if key.ctrl || key.alt {
             return Ok(());
         }
-        if let Key::Char(character @ '1'..='8') = key.key {
-            return self
-                .equalizer_target(Target::EqualizerPreset(character as usize - '1' as usize));
+        if let Key::Char(character @ '0'..='9') = key.key {
+            let index = if character == '0' {
+                9
+            } else {
+                character as usize - '1' as usize
+            };
+            return self.equalizer_target(Target::EqualizerPreset(index));
         }
         match key.key {
             Key::Char(' ') => self.equalizer_target(Target::EqualizerToggle)?,
@@ -161,16 +165,25 @@ impl App {
                 self.equalizer_target(Target::EqualizerPreset(preset_selected))?
             }
             Key::Enter => self.equalizer_target(Target::EqualizerPresets)?,
-            Key::Up | Key::Down if presets => {
+            Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home | Key::End if presets => {
                 if let Some(Dialog::Equalizer {
                     preset_selected, ..
                 }) = &mut self.view.dialog
                 {
-                    *preset_selected = super::bounded(
-                        *preset_selected,
-                        if key.key == Key::Up { -1 } else { 1 },
-                        PRESETS.len(),
-                    );
+                    *preset_selected = match key.key {
+                        Key::Home => 0,
+                        Key::End => PRESETS.len() - 1,
+                        _ => super::bounded(
+                            *preset_selected,
+                            match key.key {
+                                Key::Up => -1,
+                                Key::PageUp => -8,
+                                Key::PageDown => 8,
+                                _ => 1,
+                            },
+                            PRESETS.len(),
+                        ),
+                    };
                 }
             }
             Key::Left | Key::Right | Key::Tab => {
