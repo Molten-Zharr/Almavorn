@@ -15,6 +15,7 @@ mod options;
 mod playback;
 mod playback_queue;
 mod playlist_operations;
+mod remote;
 mod search;
 mod settings;
 mod state;
@@ -51,6 +52,9 @@ pub struct App {
     browser_state: BrowserState,
     persistence: SettingsPersistence,
     search_job: background::LatestJob<search::SearchRequest, Vec<search::SearchHit>>,
+    command_program: std::path::PathBuf,
+    #[cfg(unix)]
+    remote: Option<crate::remote::Server>,
 }
 
 impl App {
@@ -87,6 +91,10 @@ impl App {
             browser_state: Default::default(),
             persistence: Default::default(),
             search_job: Default::default(),
+            command_program: std::env::current_exe()
+                .context("Cannot locate Almavorn executable")?,
+            #[cfg(unix)]
+            remote: None,
         })
     }
 
@@ -112,6 +120,8 @@ impl App {
     }
 
     pub fn tick(&mut self) {
+        #[cfg(unix)]
+        self.tick_remote();
         if let Err(error) = self.tick_inner() {
             self.failure(error);
         }

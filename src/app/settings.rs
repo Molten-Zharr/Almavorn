@@ -85,6 +85,7 @@ pub(crate) struct SettingsView {
     pub parameters_area: Rect,
     pub binding_modifiers: [bool; 3],
     pub binding_offset: usize,
+    pub binding_global_focus: Option<usize>,
     pub file_directory: Option<std::path::PathBuf>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,6 +111,7 @@ pub enum SettingsEdit {
     CreatePreset,
     RenamePreset(String),
     FontSize,
+    GlobalShortcut(crate::input::Action),
 }
 impl SettingsEdit {
     pub fn title(&self, language: Language) -> &'static str {
@@ -138,6 +140,9 @@ impl SettingsEdit {
             Self::FontSize => {
                 language.text("Font size - 10-32 pixels", "Размер шрифта - 10-32 пикселя")
             }
+            Self::GlobalShortcut(_) => {
+                language.text("Global shortcut · XKB name", "Глобальная клавиша · имя XKB")
+            }
         }
     }
 }
@@ -152,6 +157,33 @@ fn cycle_index(current: usize, length: usize, direction: i64) -> usize {
 
 impl App {
     pub(super) fn capture_binding_key(&mut self, index: usize, key: KeyPress) -> Result<()> {
+        if key.key == Key::Tab && !key.ctrl && !key.alt {
+            self.view.settings.binding_global_focus =
+                match (self.view.settings.binding_global_focus, key.shift) {
+                    (None, false) | (Some(1), true) => Some(0),
+                    (Some(0), false) | (None, true) => Some(1),
+                    _ => None,
+                };
+            return Ok(());
+        }
+        if let Some(selected) = self.view.settings.binding_global_focus {
+            match key.key {
+                Key::Left | Key::Up => self.view.settings.binding_global_focus = Some(0),
+                Key::Right | Key::Down => self.view.settings.binding_global_focus = Some(1),
+                Key::Enter | Key::Char(' ') => {
+                    return self.target(
+                        if selected == 0 {
+                            Target::BindingGlobal(index)
+                        } else {
+                            Target::BindingGlobalEdit(index)
+                        },
+                        false,
+                    );
+                }
+                _ => {}
+            }
+            return Ok(());
+        }
         let key = key.normalized();
         ensure!(
             !matches!(
@@ -182,7 +214,11 @@ impl App {
         self.settings.preferences.bindings[index].key = key;
         self.save_settings()?;
         self.view.settings.page = SettingsPage::Shortcuts;
-        self.view.settings.selected = 1 + index;
+        self.view.settings.selected = self
+            .settings_rows()
+            .iter()
+            .position(|row| matches!(row.control, SettingControl::Binding(value) if value == index))
+            .unwrap_or(0);
         self.view.settings.focus = SettingsFocus::Parameters;
         self.show_settings();
         Ok(())
@@ -471,11 +507,13 @@ impl App {
             SettingControl::Binding(index) => {
                 self.view.settings.binding_modifiers = [false; 3];
                 self.view.settings.binding_offset = 0;
+                self.view.settings.binding_global_focus = None;
                 self.view.dialog = Some(Dialog::CaptureBinding { index });
             }
             SettingControl::ResetBindings => {
                 self.view.dialog = Some(Dialog::ConfirmResetBindings { confirm: false });
             }
+            SettingControl::NiriBindings => self.show_niri_bindings()?,
             _ => self.adjust_setting(row, 1)?,
         }
         Ok(())

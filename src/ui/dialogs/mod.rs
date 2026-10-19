@@ -381,10 +381,25 @@ pub(super) fn render_dialog(
             offset,
         } => {
             let inner = modal(frame, app, area, title.clone(), 22, palette);
-            help::scroll_text(frame, app, offset,
-                Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)),
-                format!("{description}\n\n{}", app.text("Tab: switch panel. Arrows: select/change. Enter: edit/apply. Esc: return to settings.", "Tab: сменить панель. Стрелки: выбор и значение. Enter: изменить/применить. Esc: вернуться в настройки.")),
-                palette);
+            help::scroll_text(
+                frame,
+                app,
+                offset,
+                Rect::new(
+                    inner.x,
+                    inner.y,
+                    inner.width,
+                    inner.height.saturating_sub(3),
+                ),
+                format!(
+                    "{description}\n\n{}",
+                    app.text(
+                        "↑↓: scroll · Esc: return to settings.",
+                        "↑↓: прокрутка · Esc: вернуться в настройки."
+                    )
+                ),
+                palette,
+            );
             dialog_footer(frame, app, inner, palette);
         }
         Dialog::Help { offset } => {

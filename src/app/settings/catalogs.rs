@@ -143,6 +143,7 @@ impl App {
                 );
                 self.settings.preferences.appearance.font_size = size;
             }
+            SettingsEdit::GlobalShortcut(action) => self.set_global_shortcut(action, text)?,
             SettingsEdit::ExportPalette { id, directory } => {
                 self.start_palette_export(&id, &directory, text)?;
                 self.show_settings();

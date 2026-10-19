@@ -119,6 +119,8 @@ pub enum Target {
     SettingHelp(usize),
     BindingModifier(usize),
     BindingKey(Key),
+    BindingGlobal(usize),
+    BindingGlobalEdit(usize),
     EqualizerToggle,
     EqualizerPresets,
     EqualizerPreset(usize),

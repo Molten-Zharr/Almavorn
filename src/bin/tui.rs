@@ -43,7 +43,7 @@ fn run() -> Result<()> {
     let Some(options) = Options::parse()? else {
         return Ok(());
     };
-    let mut app = App::new(&options.directory)?;
+    let mut app = App::new_with_commands(&options.directory)?;
     if !options.files.is_empty() {
         app.start_import(options.files)?;
     }

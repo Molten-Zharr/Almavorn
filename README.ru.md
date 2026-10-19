@@ -4,6 +4,8 @@
 
 Стек: Rust, Ratatui, Tokio, Rodio, SQLite, Crossterm, egui, eframe, egui_ratatui.
 
+[Глобальные клавиши](docs/GLOBAL_SHORTCUTS.md): команды для управления работающим плеером через оконную систему.
+
 Версии: TUI-only и GUITUI.
 
 Сборка и запуск:

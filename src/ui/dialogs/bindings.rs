@@ -31,7 +31,7 @@ pub(super) fn binding_dialog(
         app,
         area,
         app.text("Set shortcut", "Назначить сочетание").into(),
-        27,
+        31,
         palette,
     );
     let header_height = inner.height.min(4);
@@ -39,8 +39,8 @@ pub(super) fn binding_dialog(
         Paragraph::new(format!(
             "{name}\n{}",
             app.text(
-                "Press a shortcut, or choose modifiers and a key below. Esc cancels.",
-                "Нажмите сочетание либо выберите модификаторы и клавишу ниже. Esc - отмена."
+                "Press a local shortcut. Tab: global controls. Esc: cancel.",
+                "Нажмите локальное сочетание. Tab: глобальные. Esc: отмена."
             )
         ))
         .style(palette.text())
@@ -75,9 +75,81 @@ pub(super) fn binding_dialog(
         modifiers,
         palette,
     );
+    let global_y = modifier_y + modifier_height;
+    let global = app
+        .settings
+        .preferences
+        .bindings
+        .get(index)
+        .and_then(|binding| {
+            app.settings
+                .preferences
+                .global_shortcuts
+                .iter()
+                .find(|global| global.action == binding.action)
+        });
+    let enabled = global.is_some_and(|global| global.enabled);
+    let key = global
+        .map(|global| global.key.clone())
+        .unwrap_or_else(|| app.text("Not set", "Не задана").into());
+    let global_height = footer_y.saturating_sub(global_y).min(2);
+    buttons(
+        frame,
+        app,
+        Rect::new(inner.x, global_y, inner.width, global_height),
+        vec![
+            (
+                format!(
+                    "[{}] {}",
+                    if enabled { 'x' } else { ' ' },
+                    app.text("Global", "Глобальная")
+                ),
+                if app.view.settings.binding_global_focus == Some(0) {
+                    Target::Submit
+                } else {
+                    Target::BindingGlobal(index)
+                },
+                true,
+            ),
+            (
+                app.text("Set global key…", "Задать глобальную…").into(),
+                if app.view.settings.binding_global_focus == Some(1) {
+                    Target::Submit
+                } else {
+                    Target::BindingGlobalEdit(index)
+                },
+                true,
+            ),
+        ],
+        palette,
+    );
+    let description_y = global_y + global_height;
+    let description = format!(
+        "{}: {key}\nalmavorn --command {}\n{}",
+        app.text("niri key", "Клавиша niri"),
+        app.settings
+            .preferences
+            .bindings
+            .get(index)
+            .map_or("", |binding| crate::remote::command_name(binding.action)),
+        app.text(
+            "Apply globals through niri's configuration.",
+            "Глобальные применяются через конфиг niri."
+        )
+    );
+    let description_height = (Paragraph::new(description.as_str())
+        .wrap(Wrap { trim: false })
+        .line_count(inner.width.max(1)) as u16)
+        .min(footer_y.saturating_sub(description_y));
+    frame.render_widget(
+        Paragraph::new(description)
+            .style(palette.text().fg(palette.muted))
+            .wrap(Wrap { trim: false }),
+        Rect::new(inner.x, description_y, inner.width, description_height),
+    );
     let keys: Vec<Key> = Key::shortcut_choices().collect();
     let columns = (inner.width / 8).max(1) as usize;
-    let key_y = modifier_y + modifier_height;
+    let key_y = description_y + description_height;
     let capacity = columns * usize::from(footer_y.saturating_sub(key_y));
     app.view.settings.binding_offset = app
         .view

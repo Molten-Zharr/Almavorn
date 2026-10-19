@@ -24,7 +24,7 @@ fn run() -> Result<()> {
     let Some(options) = Options::parse()? else {
         return Ok(());
     };
-    let mut app = App::new(&options.directory)?;
+    let mut app = App::new_with_commands(&options.directory)?;
     app.view.graphical_keycaps = true;
     if !options.files.is_empty() {
         app.start_import(options.files)?;
@@ -195,6 +195,8 @@ fn run() -> Result<()> {
                             | Target::CloseDialog
                             | Target::Submit
                             | Target::ResetBindingsAnswer(_)
+                            | Target::BindingGlobal(_)
+                            | Target::BindingGlobalEdit(_)
                             | Target::SearchResult(_)
                             | Target::SearchPlay
                             | Target::SearchPlaylist(_)

@@ -808,10 +808,17 @@ impl App {
                     && let Some(value) = self.view.settings.binding_modifiers.get_mut(index)
                 {
                     *value = !*value;
+                    self.view.settings.binding_global_focus = None;
                 }
             }
+            Target::BindingGlobal(index) => {
+                self.view.settings.binding_global_focus = Some(0);
+                self.toggle_global_shortcut(index)?;
+            }
+            Target::BindingGlobalEdit(index) => self.edit_global_shortcut(index),
             Target::BindingKey(key) => {
                 if matches!(self.view.dialog, Some(Dialog::CaptureBinding { .. })) {
+                    self.view.settings.binding_global_focus = None;
                     let [ctrl, alt, shift] = self.view.settings.binding_modifiers;
                     self.key(KeyPress {
                         key,

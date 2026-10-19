@@ -368,6 +368,7 @@ pub struct ProfilePreferences {
     pub workspace: crate::workspace::WorkspaceLayout,
     pub themes: [Theme; 2],
     pub bindings: Vec<Binding>,
+    pub global_shortcuts: Vec<crate::remote::GlobalShortcut>,
     pub appearance: Appearance,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -401,6 +402,7 @@ impl Default for ProfilePreferences {
                 },
             ],
             bindings: crate::input::default_bindings(),
+            global_shortcuts: Vec::new(),
             appearance: Default::default(),
         }
     }

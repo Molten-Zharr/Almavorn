@@ -8,6 +8,7 @@ mod layout;
 pub mod media;
 pub mod model;
 pub mod preferences;
+pub mod remote;
 pub mod statistics;
 pub mod store;
 mod track_query;

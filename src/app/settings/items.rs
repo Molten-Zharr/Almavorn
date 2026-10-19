@@ -38,6 +38,7 @@ pub(crate) enum SettingControl {
     Corners,
     Binding(usize),
     ResetBindings,
+    NiriBindings,
     DeleteCatalog,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,9 +171,14 @@ impl App {
             }
             SettingsPage::Shortcuts => {
                 let mut rows = vec![make(lang.text("Reset shortcuts", "Сбросить горячие клавиши"), run, lang.text("Restore standard shortcuts in this profile. Settings navigation remains available.", "Восстановить стандартные сочетания в этом профиле. Навигация настроек остаётся доступной."), SettingControl::ResetBindings, false)];
+                rows.push(make(lang.text("Global shortcuts · niri", "Глобальные клавиши · niri"), lang.text("Commands", "Команды").into(), lang.text("Set global keys in each shortcut editor, then add the generated block to niri's config.kdl. Export with --niri-bindings. Almavorn must be running.", "Задайте глобальные сочетания в окне каждой клавиши, затем добавьте готовый блок в config.kdl niri. Вывод в терминал: --niri-bindings. Плеер должен быть запущен."), SettingControl::NiriBindings, false));
                 let mut bindings: Vec<_> = self.settings.preferences.bindings.iter().enumerate().collect();
                 bindings.sort_by_key(|(_, binding)| binding.action.shortcut_group());
-                rows.extend(bindings.into_iter().map(|(index, binding)| make(binding.action.name(lang), binding.key.label(), binding.action.description(lang), SettingControl::Binding(index), false)));
+                rows.extend(bindings.into_iter().map(|(index, binding)| {
+                    let global = self.settings.preferences.global_shortcuts.iter().any(|global| global.action == binding.action && global.enabled);
+                    let value = if global { format!("{} · {}", binding.key.label(), lang.text("global", "глобальная")) } else { binding.key.label() };
+                    make(binding.action.name(lang), value, binding.action.description(lang), SettingControl::Binding(index), false)
+                }));
                 rows
             }
         }

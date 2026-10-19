@@ -274,6 +274,18 @@ impl App {
     }
 
     pub(super) fn submit(&mut self) -> Result<()> {
+        if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref()
+            && let Some(selected) = self.view.settings.binding_global_focus
+        {
+            return self.target(
+                if selected == 0 {
+                    super::Target::BindingGlobal(*index)
+                } else {
+                    super::Target::BindingGlobalEdit(*index)
+                },
+                false,
+            );
+        }
         if let Some(Dialog::Commands { selected, .. }) = &self.view.dialog {
             return self.activate_command(*selected);
         }
@@ -478,6 +490,7 @@ impl App {
                 self.show_settings();
                 if confirm {
                     self.settings.preferences.bindings = crate::input::default_bindings();
+                    self.settings.preferences.global_shortcuts.clear();
                     self.save_settings()?;
                 }
             }
