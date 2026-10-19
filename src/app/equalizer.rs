@@ -30,7 +30,13 @@ impl App {
         self.view.dialog = Some(Dialog::Equalizer {
             selected: 0,
             presets: false,
-            preset_selected: self.settings.preferences.equalizer.preset().unwrap_or(0),
+            preset_selected: self
+                .settings
+                .preferences
+                .equalizer
+                .preset()
+                .or(self.settings.preferences.equalizer_base_preset)
+                .unwrap_or(0),
         });
     }
 
@@ -43,7 +49,13 @@ impl App {
                 self.save_settings()?;
             }
             Target::EqualizerPresets => {
-                let current = self.settings.preferences.equalizer.preset().unwrap_or(0);
+                let current = self
+                    .settings
+                    .preferences
+                    .equalizer
+                    .preset()
+                    .or(self.settings.preferences.equalizer_base_preset)
+                    .unwrap_or(0);
                 if let Some(Dialog::Equalizer {
                     presets,
                     preset_selected,
@@ -58,6 +70,7 @@ impl App {
                 if let Some(preset) = PRESETS.get(index) {
                     self.settings.preferences.equalizer.preamp = preset.preamp;
                     self.settings.preferences.equalizer.bands = preset.bands;
+                    self.settings.preferences.equalizer_base_preset = Some(index);
                     if let Some(Dialog::Equalizer {
                         presets,
                         preset_selected,
@@ -74,6 +87,7 @@ impl App {
             Target::EqualizerReset => {
                 self.settings.preferences.equalizer.preamp = 0;
                 self.settings.preferences.equalizer.bands = [0; 10];
+                self.settings.preferences.equalizer_base_preset = Some(0);
                 self.sync_equalizer();
                 self.save_settings()?;
             }
@@ -122,6 +136,9 @@ impl App {
 
     fn set_equalizer_gain(&mut self, index: usize, gain: i8) -> Result<()> {
         if self.settings.preferences.equalizer.gain(index) != Some(gain.clamp(MIN_GAIN, MAX_GAIN)) {
+            if let Some(preset) = self.settings.preferences.equalizer.preset() {
+                self.settings.preferences.equalizer_base_preset = Some(preset);
+            }
             self.settings.preferences.equalizer.set_gain(index, gain);
             self.sync_equalizer();
             self.save_settings()?;

@@ -360,6 +360,7 @@ pub struct ProfilePreferences {
     pub repeat: RepeatMode,
     pub shuffle: bool,
     pub equalizer: crate::equalizer::EqualizerSettings,
+    pub equalizer_base_preset: Option<usize>,
     pub tuner: crate::tuner::TunerSettings,
     pub sorting_desk: bool,
     pub scan_subfolders: bool,
@@ -385,6 +386,7 @@ impl Default for ProfilePreferences {
             repeat: RepeatMode::Off,
             shuffle: false,
             equalizer: Default::default(),
+            equalizer_base_preset: None,
             tuner: Default::default(),
             sorting_desk: true,
             scan_subfolders: true,
@@ -413,6 +415,14 @@ impl ProfilePreferences {
         self.workspace.normalize();
         self.ensure_bindings();
         self.equalizer.normalize();
+        self.equalizer_base_preset = self
+            .equalizer_base_preset
+            .filter(|&index| index < crate::equalizer::PRESETS.len())
+            .or_else(|| {
+                crate::equalizer::PRESETS
+                    .iter()
+                    .position(|preset| preset.bands == self.equalizer.bands)
+            });
         self.tuner.normalize();
     }
 

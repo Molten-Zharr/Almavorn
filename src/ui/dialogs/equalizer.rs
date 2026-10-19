@@ -1,6 +1,6 @@
 use super::super::{
     theme::Palette,
-    widgets::{block, buttons, modal, visible_offset},
+    widgets::{block, button_width, buttons, modal, visible_offset},
 };
 use crate::{
     app::{App, Hit, Target},
@@ -44,10 +44,39 @@ pub(super) fn render(
         return;
     }
     *selected = (*selected).min(SLIDERS - 1);
-    let name = app.settings.preferences.equalizer.preset().map_or_else(
-        || app.text("Custom", "Пользовательский"),
-        |index| PRESETS[index].name(app.settings.preferences.language),
-    );
+    let language = app.settings.preferences.language;
+    let (name, custom) = if let Some(index) = app.settings.preferences.equalizer.preset() {
+        (PRESETS[index].name(language), false)
+    } else if let Some(preset) = app
+        .settings
+        .preferences
+        .equalizer_base_preset
+        .and_then(|index| PRESETS.get(index))
+    {
+        (preset.name(language), true)
+    } else {
+        (app.text("Custom", "Произвольный"), false)
+    };
+    let suffix = if custom {
+        format!(" ({}) ↓", app.text("custom", "произвольный"))
+    } else {
+        " ↓".into()
+    };
+    let preset_label = if button_width(app, &format!("{name}{suffix}"), &Target::EqualizerPresets)
+        > inner.width
+    {
+        let name_width = inner.width.saturating_sub(button_width(
+            app,
+            &format!("…{suffix}"),
+            &Target::EqualizerPresets,
+        ));
+        format!(
+            "{}…{suffix}",
+            name.chars().take(usize::from(name_width)).collect::<String>()
+        )
+    } else {
+        format!("{name}{suffix}")
+    };
     let entries = vec![
         (
             format!(
@@ -62,7 +91,7 @@ pub(super) fn render(
             Target::EqualizerToggle,
             true,
         ),
-        (format!("{name} ↓"), Target::EqualizerPresets, true),
+        (preset_label, Target::EqualizerPresets, true),
         (
             app.text("Reset", "Сброс").into(),
             Target::EqualizerReset,
