@@ -7,6 +7,8 @@ pub mod input;
 mod layout;
 pub mod media;
 pub mod model;
+#[cfg(target_os = "linux")]
+mod mpris;
 pub mod preferences;
 pub mod remote;
 pub mod statistics;

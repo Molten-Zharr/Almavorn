@@ -15,6 +15,8 @@ impl App {
         {
             app.remote = Some(server);
         }
+        #[cfg(target_os = "linux")]
+        app.start_mpris();
         Ok(app)
     }
 
@@ -214,16 +216,96 @@ impl App {
 
     pub(super) fn show_niri_bindings(&mut self) -> Result<()> {
         let configuration = self.niri_bindings()?;
+        let empty = !self
+            .settings
+            .preferences
+            .global_shortcuts
+            .iter()
+            .any(|binding| binding.enabled);
+        let explanation = if empty {
+            self.text(
+                "No niri keys are enabled. Open an action, set a niri key and check 'Export to niri'. MPRIS works independently of this export.",
+                "Клавиши niri пока не заданы. Откройте действие, задайте клавишу для niri и включите отметку \"В конфиг niri\". MPRIS работает независимо от этого экспорта."
+            )
+        } else {
+            self.text(
+                "Add this block to niri's config.kdl. Regenerate it after changing keys or the active profile.",
+                "Добавьте этот блок в config.kdl niri. После изменения клавиш или профиля обновите блок."
+            )
+        };
         self.view.dialog = Some(Dialog::SettingsHelp {
-            title: self.text("Global shortcuts · niri", "Глобальные клавиши · niri").into(),
-            description: format!("{}\n\n{configuration}\n{}", self.text(
-                "Add this block to niri's config.kdl. Regenerate it after changing keys or the active profile. Each argument is quoted separately.",
-                "Добавьте этот блок в config.kdl niri. После изменения клавиш или профиля обновите блок. Каждый аргумент команды заключен в отдельные кавычки."
-            ), self.text("Terminal export: --niri-bindings", "Вывод в терминал: --niri-bindings")),
+            title: self
+                .text("Manual configuration · niri", "Ручная настройка · niri")
+                .into(),
+            description: format!(
+                "{explanation}\n\n{}\n{}",
+                if empty { "" } else { &configuration },
+                self.text(
+                    "Terminal export: --niri-bindings",
+                    "Вывод в терминал: --niri-bindings"
+                )
+            ),
             offset: 0,
         });
         self.view.settings.focus = SettingsFocus::Parameters;
         self.view.settings.page = SettingsPage::Shortcuts;
         Ok(())
+    }
+
+    pub(crate) fn system_media_status(&self) -> String {
+        #[cfg(target_os = "linux")]
+        {
+            use crate::mpris::Status;
+            return match self
+                .mpris
+                .as_ref()
+                .map(|bridge| bridge.status.borrow().clone())
+            {
+                Some(Status::Connected(_)) => self.text("Connected", "Подключено"),
+                Some(Status::Connecting) => self.text("Connecting…", "Подключение…"),
+                Some(Status::Unavailable(_)) => {
+                    self.text("D-Bus unavailable", "Нет соединения D-Bus")
+                }
+                None => self.text("Not connected", "Не подключено"),
+            }
+            .into();
+        }
+        #[cfg(not(target_os = "linux"))]
+        self.text("Linux only", "Только Linux").into()
+    }
+
+    pub(super) fn show_system_media(&mut self) {
+        let mut details = self.system_media_status();
+        let mut player = "almavorn".to_owned();
+        #[cfg(target_os = "linux")]
+        if let Some(bridge) = &self.mpris {
+            match bridge.status.borrow().clone() {
+                crate::mpris::Status::Connected(name) => {
+                    player = name
+                        .trim_start_matches("org.mpris.MediaPlayer2.")
+                        .to_owned();
+                    details.push_str(&format!("\n{name}"));
+                }
+                crate::mpris::Status::Unavailable(error) => details.push_str(&format!(
+                    "\n{error}\n{}",
+                    self.text(
+                        "The player will retry automatically.",
+                        "Плеер повторит подключение автоматически."
+                    )
+                )),
+                _ => {}
+            }
+        }
+        self.view.dialog = Some(Dialog::SettingsHelp {
+            title: self.text("System media controls · MPRIS", "Системное управление · MPRIS").into(),
+            description: format!("{details}\n\n{}\n\n{}\nplayerctl --player={player} play-pause\nplayerctl --player={player} next\nplayerctl --player={player} volume 0.05+\n\n{}\nalmavorn --play-pause\nalmavorn --next", self.text(
+                "MPRIS connects this player to your desktop over the session D-Bus. Media keys and system panels can control playback without focusing Almavorn. Desktop support and the selected active player determine where media keys go.",
+                "MPRIS связывает плеер с окружением через сеансовую шину D-Bus. Медиаклавиши и системные панели могут управлять воспроизведением без фокуса Almavorn. Обработка медиаклавиш и выбор активного плеера зависят от окружения."
+            ), self.text("If playerctl is installed:", "Если установлен playerctl:"), self.text(
+                "Custom global shortcuts belong in your desktop's keyboard settings. MPRIS does not register arbitrary keys. Existing Almavorn commands also work:",
+                "Произвольные глобальные сочетания назначаются в настройках клавиатуры окружения. MPRIS сам их не регистрирует. Также работают команды Almavorn:"
+            )),
+            offset: 0,
+        });
     }
 }

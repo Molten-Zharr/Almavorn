@@ -537,6 +537,7 @@ impl App {
                 self.view.dialog = Some(Dialog::ConfirmResetBindings { confirm: false });
             }
             SettingControl::NiriBindings => self.show_niri_bindings()?,
+            SettingControl::SystemMedia => self.show_system_media(),
             _ => self.adjust_setting(row, 1)?,
         }
         Ok(())

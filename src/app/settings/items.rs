@@ -38,6 +38,7 @@ pub(crate) enum SettingControl {
     Corners,
     Binding(usize),
     ResetBindings,
+    SystemMedia,
     NiriBindings,
     DeleteCatalog,
 }
@@ -171,12 +172,13 @@ impl App {
             }
             SettingsPage::Shortcuts => {
                 let mut rows = vec![make(lang.text("Reset shortcuts", "Сбросить горячие клавиши"), run, lang.text("Restore standard shortcuts in this profile. Settings navigation remains available.", "Восстановить стандартные сочетания в этом профиле. Навигация настроек остаётся доступной."), SettingControl::ResetBindings, false)];
-                rows.push(make(lang.text("Global shortcuts · niri", "Глобальные клавиши · niri"), lang.text("Commands", "Команды").into(), lang.text("Set global keys in each shortcut editor, then add the generated block to niri's config.kdl. Export with --niri-bindings. Almavorn must be running.", "Задайте глобальные сочетания в окне каждой клавиши, затем добавьте готовый блок в config.kdl niri. Вывод в терминал: --niri-bindings. Плеер должен быть запущен."), SettingControl::NiriBindings, false));
+                rows.push(make(lang.text("Media controls · MPRIS", "Управление · MPRIS"), self.system_media_status(), lang.text("Playback controls over the session D-Bus: media keys, desktop panels and playerctl. Enabled automatically. Custom global keys are assigned in your desktop settings.", "Управление через D-Bus: медиаклавиши, системные панели и playerctl. Подключается автоматически. Произвольные глобальные сочетания назначаются в настройках окружения."), SettingControl::SystemMedia, false));
+                rows.push(make(lang.text("Additional setup · niri", "Дополнительно · niri"), lang.text("Configuration", "Конфиг").into(), lang.text("Optional manual export for niri. Set keys in each shortcut editor, then add this block to config.kdl. Other desktops can assign Almavorn commands or use MPRIS.", "Дополнительный ручной экспорт для niri. Задайте клавиши в окне действия, затем добавьте блок в config.kdl. В других окружениях назначайте команды Almavorn или используйте MPRIS."), SettingControl::NiriBindings, false));
                 let mut bindings: Vec<_> = self.settings.preferences.bindings.iter().enumerate().collect();
                 bindings.sort_by_key(|(_, binding)| binding.action.shortcut_group());
                 rows.extend(bindings.into_iter().map(|(index, binding)| {
                     let global = self.settings.preferences.global_shortcuts.iter().any(|global| global.action == binding.action && global.enabled);
-                    let value = if global { format!("{} · {}", binding.key.label(), lang.text("global", "глобальная")) } else { binding.key.label() };
+                    let value = if global { format!("{} · niri", binding.key.label()) } else { binding.key.label() };
                     make(binding.action.name(lang), value, binding.action.description(lang), SettingControl::Binding(index), false)
                 }));
                 rows

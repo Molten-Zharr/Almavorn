@@ -42,6 +42,18 @@ impl App {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    pub(super) fn set_mpris_rate(&mut self, rate: f64) -> Result<()> {
+        let tuner = self.editable_tuner();
+        let magnitude = rate.abs().clamp(0.25, 4.0);
+        tuner.reverse = rate < 0.0;
+        tuner.speed = (magnitude.clamp(0.5, 2.0) * 100.0).round() as u16;
+        tuner.tempo = ((magnitude / (f64::from(tuner.speed) / 100.0)) * 100.0).round() as u16;
+        tuner.normalize();
+        self.sync_tuner()?;
+        self.save_settings()
+    }
+
     fn toggle_tuner_pin(&mut self) -> Result<()> {
         let Some(track) = &self.playback.current else {
             return Ok(());

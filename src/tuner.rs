@@ -105,7 +105,7 @@ impl TunerSettings {
         }
     }
 
-    fn time_factor(&self) -> f64 {
+    pub(crate) fn time_factor(&self) -> f64 {
         f64::from(self.speed) * f64::from(self.tempo) / 10000.0
     }
     fn stretch(&self) -> bool {

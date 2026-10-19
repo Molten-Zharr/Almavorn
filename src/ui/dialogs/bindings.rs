@@ -39,8 +39,8 @@ pub(super) fn binding_dialog(
         Paragraph::new(format!(
             "{name}\n{}",
             app.text(
-                "Press a local shortcut. Tab: global controls. Esc: cancel.",
-                "Нажмите локальное сочетание. Tab: глобальные. Esc: отмена."
+                "Press a local shortcut. Tab: niri setup. Esc: cancel.",
+                "Нажмите локальное сочетание. Tab: настройка niri. Esc: отмена."
             )
         ))
         .style(palette.text())
@@ -118,7 +118,7 @@ pub(super) fn binding_dialog(
                 format!(
                     "[{}] {}",
                     if enabled { 'x' } else { ' ' },
-                    app.text("Global", "Глобальная")
+                    app.text("Export to niri", "В конфиг niri")
                 ),
                 if app.view.settings.binding_global_focus == Some(0) {
                     Target::Submit
@@ -128,7 +128,7 @@ pub(super) fn binding_dialog(
                 true,
             ),
             (
-                app.text("Set global key…", "Задать глобальную…").into(),
+                app.text("Set niri key…", "Клавиша для niri…").into(),
                 if app.view.settings.binding_global_focus == Some(1) {
                     Target::Submit
                 } else {

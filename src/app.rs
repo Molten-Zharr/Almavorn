@@ -11,6 +11,8 @@ mod events;
 mod history;
 mod import;
 mod library;
+#[cfg(target_os = "linux")]
+mod mpris;
 mod options;
 mod playback;
 mod playback_queue;
@@ -55,6 +57,8 @@ pub struct App {
     command_program: std::path::PathBuf,
     #[cfg(unix)]
     remote: Option<crate::remote::Server>,
+    #[cfg(target_os = "linux")]
+    mpris: Option<crate::mpris::Bridge>,
 }
 
 impl App {
@@ -95,6 +99,8 @@ impl App {
                 .context("Cannot locate Almavorn executable")?,
             #[cfg(unix)]
             remote: None,
+            #[cfg(target_os = "linux")]
+            mpris: None,
         })
     }
 
@@ -122,9 +128,13 @@ impl App {
     pub fn tick(&mut self) {
         #[cfg(unix)]
         self.tick_remote();
+        #[cfg(target_os = "linux")]
+        self.tick_mpris_commands();
         if let Err(error) = self.tick_inner() {
             self.failure(error);
         }
+        #[cfg(target_os = "linux")]
+        self.publish_mpris();
     }
 
     fn tick_inner(&mut self) -> Result<()> {
@@ -156,6 +166,8 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        #[cfg(target_os = "linux")]
+        self.mpris.take();
         if let Some(audio) = &self.playback.audio {
             audio.set_paused(true);
         }

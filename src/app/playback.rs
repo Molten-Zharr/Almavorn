@@ -616,6 +616,7 @@ impl App {
                         paused,
                         Duration::from_millis(completed.request.position_ms),
                     );
+                    self.playback.seek_serial = self.playback.seek_serial.wrapping_add(1);
                     if changed_direction {
                         self.message(
                             if completed.request.reverse {
