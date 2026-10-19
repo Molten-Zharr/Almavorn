@@ -448,7 +448,10 @@ fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         .unwrap_or_default();
     let page = app.view.settings.page;
     let mut entries = vec![
-        ("Almavorn".to_owned(), Target::CloseDialog),
+        (
+            format!("Almavorn {}", env!("CARGO_PKG_VERSION")),
+            Target::CloseDialog,
+        ),
         (
             app.text("Settings", "Настройки").to_owned(),
             Target::SettingsPage(SettingsPage::General),

@@ -47,8 +47,24 @@ pub(super) fn binding_dialog(
         .wrap(Wrap { trim: false }),
         Rect::new(inner.x, inner.y, inner.width, header_height),
     );
-    let modifier_y = inner.y + header_height;
-    let footer_y = inner.bottom().saturating_sub(2).max(modifier_y);
+    let error_y = inner.y + header_height;
+    let footer_y = inner.bottom().saturating_sub(2).max(error_y);
+    let error_height = if let Some(error) = &app.view.settings.binding_error {
+        let height = (Paragraph::new(error.as_str())
+            .wrap(Wrap { trim: false })
+            .line_count(inner.width.max(1)) as u16)
+            .min(footer_y.saturating_sub(error_y));
+        frame.render_widget(
+            Paragraph::new(error.as_str())
+                .style(palette.text().fg(palette.error))
+                .wrap(Wrap { trim: false }),
+            Rect::new(inner.x, error_y, inner.width, height),
+        );
+        height
+    } else {
+        0
+    };
+    let modifier_y = error_y + error_height;
     let modifier_height = (footer_y - modifier_y).min(2);
     let modifiers = ["Ctrl", "Alt", "Shift"]
         .into_iter()

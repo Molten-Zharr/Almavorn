@@ -12,7 +12,7 @@ use crate::{
         BorderWeight, Corners, FontFace, MAX_FONT_SIZE, MIN_FONT_SIZE, PlaybackTimeline, color_hex,
     },
 };
-use anyhow::{Result, ensure};
+use anyhow::Result;
 pub(crate) use files::SettingsFileJob;
 pub(crate) use items::{SettingControl, SettingGroup};
 use ratatui::layout::Rect;
@@ -86,6 +86,7 @@ pub(crate) struct SettingsView {
     pub binding_modifiers: [bool; 3],
     pub binding_offset: usize,
     pub binding_global_focus: Option<usize>,
+    pub binding_error: Option<String>,
     pub file_directory: Option<std::path::PathBuf>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,32 +186,48 @@ impl App {
             return Ok(());
         }
         let key = key.normalized();
-        ensure!(
-            !matches!(
-                key.key,
-                Key::Tab
-                    | Key::Up
-                    | Key::Down
-                    | Key::Left
-                    | Key::Right
-                    | Key::Home
-                    | Key::End
-                    | Key::PageUp
-                    | Key::PageDown
-            ) || key.ctrl
-                || key.alt,
-            AppError::ReservedShortcut
-        );
-        ensure!(
-            !self
-                .settings
-                .preferences
-                .bindings
-                .iter()
-                .enumerate()
-                .any(|(other, binding)| other != index && binding.key == key),
-            AppError::ShortcutConflict
-        );
+        self.view.settings.binding_error = None;
+        let error = if matches!(
+            key.key,
+            Key::Tab
+                | Key::Up
+                | Key::Down
+                | Key::Left
+                | Key::Right
+                | Key::Home
+                | Key::End
+                | Key::PageUp
+                | Key::PageDown
+        ) && !key.ctrl
+            && !key.alt
+        {
+            Some(
+                AppError::ReservedShortcut
+                    .message(self.settings.preferences.language)
+                    .to_owned(),
+            )
+        } else if let Some((_, binding)) = self
+            .settings
+            .preferences
+            .bindings
+            .iter()
+            .enumerate()
+            .find(|(other, binding)| *other != index && binding.key == key)
+        {
+            Some(format!(
+                "{} {} \"{}\". {}",
+                key.label(),
+                self.text("is assigned to", "уже назначено действию"),
+                binding.action.name(self.settings.preferences.language),
+                self.text("Choose another shortcut.", "Выберите другое сочетание.")
+            ))
+        } else {
+            None
+        };
+        if let Some(error) = error {
+            self.view.settings.binding_error = Some(error.clone());
+            anyhow::bail!("{error}");
+        }
         self.settings.preferences.bindings[index].key = key;
         self.save_settings()?;
         self.view.settings.page = SettingsPage::Shortcuts;
@@ -221,6 +238,11 @@ impl App {
             .unwrap_or(0);
         self.view.settings.focus = SettingsFocus::Parameters;
         self.show_settings();
+        self.message(format!(
+            "{}: {}",
+            self.text("Shortcut saved", "Сочетание сохранено"),
+            key.label()
+        ));
         Ok(())
     }
 
@@ -508,6 +530,7 @@ impl App {
                 self.view.settings.binding_modifiers = [false; 3];
                 self.view.settings.binding_offset = 0;
                 self.view.settings.binding_global_focus = None;
+                self.view.settings.binding_error = None;
                 self.view.dialog = Some(Dialog::CaptureBinding { index });
             }
             SettingControl::ResetBindings => {
