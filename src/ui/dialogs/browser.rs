@@ -157,7 +157,8 @@ pub(super) fn browser_dialog(
     if search_y < inner.bottom().saturating_sub(footer_height) {
         let (caption, color) = if browser.search.is_empty() {
             (
-                app.text("Type a name to search", "Наберите имя для поиска").into(),
+                app.text("Type a name to search", "Наберите имя для поиска")
+                    .into(),
                 palette.muted,
             )
         } else if app.browser_ready() && browser.search_failed() {
@@ -321,13 +322,9 @@ pub(super) fn browser_dialog(
             app.text("Current folder", "Текущую папку").into()
         }
     } else if browser.folder {
-        app.text("Add folder", "Добавить папку").into()
+        app.import_caption()
     } else {
-        format!(
-            "{} ({})",
-            app.text("Add selected", "Добавить выбранные"),
-            browser.marked.len()
-        )
+        format!("{} ({})", app.import_caption(), browser.marked.len())
     };
     let mut footer = vec![(
         add,
@@ -348,7 +345,11 @@ pub(super) fn browser_dialog(
     )];
     if current_choice {
         footer.push((
-            app.text("Current folder", "Текущую папку").into(),
+            format!(
+                "{} · {}",
+                app.text("Current folder", "Текущая папка"),
+                app.import_caption()
+            ),
             Target::BrowserCurrentFolder,
             app.browser_ready(),
         ));

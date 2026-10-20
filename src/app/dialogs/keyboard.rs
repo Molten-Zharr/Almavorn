@@ -11,7 +11,8 @@ impl App {
     pub(in crate::app) fn dialog_key(&mut self, key: KeyPress) -> Result<()> {
         match self.view.dialog.as_ref() {
             Some(Dialog::CopyableHelp { .. })
-                if key.ctrl && key.key == Key::Char('c') || key.key == Key::Enter => {
+                if key.ctrl && key.key == Key::Char('c') || key.key == Key::Enter =>
+            {
                 self.copy_help(None);
                 Ok(())
             }
@@ -40,7 +41,9 @@ impl App {
                 }
                 Ok(())
             }
-            Some(Dialog::ComposePlaylists { .. }) => self.composition_key(key),
+            Some(Dialog::ComposePlaylists { .. } | Dialog::ComposeTracks { .. }) => {
+                self.composition_key(key)
+            }
             Some(Dialog::Folders { .. }) => self.folders_key(key),
             Some(Dialog::Search(_)) => self.search_key(key),
             Some(Dialog::Commands { .. }) => self.commands_key(key),

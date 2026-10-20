@@ -33,6 +33,7 @@ pub(super) fn height(app: &App, width: u16) -> u16 {
     cells(app, width)
         .last()
         .map_or(1, |(rect, ..)| rect.bottom())
+        + u16::from(app.scope().is_some())
 }
 
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -58,5 +59,15 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         let rect = Rect::new(area.x + cell.x, area.y + cell.y, cell.width, 1).intersection(area);
         app.view.toolbar_areas.push(rect);
         quiet_button(frame, app, rect, &label, target, enabled, palette);
+    }
+    if app.scope().is_some() && area.height > 0 {
+        frame.render_widget(
+            Paragraph::new(app.text(
+                "Undo history lasts until exit",
+                "История отмены — до выхода",
+            ))
+            .style(palette.text().fg(palette.muted)),
+            Rect::new(area.x, area.bottom() - 1, area.width, 1),
+        );
     }
 }

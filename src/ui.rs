@@ -101,7 +101,18 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         Target::Action(action) => Some(format!(
             "{}{}",
             buttons::button_shortcut(app, target).map_or(String::new(), |key| format!("{key} · ")),
-            action.description(app.settings.preferences.language)
+            if matches!(action, Action::Undo | Action::Redo) {
+                format!(
+                    "{}. {}",
+                    app.history_caption(*action == Action::Redo),
+                    app.text(
+                        "History lasts until exit; file tags are not restored.",
+                        "История до закрытия приложения; теги в файлах не восстанавливаются."
+                    )
+                )
+            } else {
+                action.description(app.settings.preferences.language).into()
+            }
         )),
         Target::CommandMenu(menu) => Some(menu.title(app.settings.preferences.language).to_owned()),
         _ => None,
@@ -230,7 +241,7 @@ fn context_hint(app: &App, compact: bool) -> &'static str {
             (Mode::Chaos, true) => app.text("Chaos: manage playlists", "Хаос: работа с плейлистами"),
             (Mode::Order, false) => app.text(
                 "Order: choose, create and arrange saved playlists. Edit unlocks changes.",
-                "Порядок: выбирайте, создавайте и переставляйте плейлисты. Правка разрешает изменения.",
+                "Порядок: кнопка Редактировать открывает только выбранный плейлист. Готово снова защищает его.",
             ),
             (Mode::Chaos, false) => app.text(
                 "Chaos: choose, create and freely rearrange your playlists.",
@@ -246,15 +257,15 @@ fn context_hint(app: &App, compact: bool) -> &'static str {
             app.text("Sorting desk: organize music", "Сортировочный стол: разбор")
         } else {
             app.text(
-                "Sorting desk: collect music, mark tracks and copy them to playlists.",
-                "Сортировочный стол: собирайте музыку, отмечайте композиции и копируйте их в плейлисты.",
+                "Shared desk: organize music and copy it to playlists. Undo lasts until exit.",
+                "Общий стол: разбирайте музыку и добавляйте ее в плейлисты. Отмена доступна до закрытия приложения.",
             )
         };
     }
     if let Some(playlist) = app.playlist()
         && playlist.entries.is_empty()
     {
-        return if playlist.can_edit(app.view.editing) {
+        return if app.playlist_editable(playlist) {
             app.text(
                 "Empty playlist: add music",
                 "Плейлист пуст: добавьте музыку",
@@ -266,11 +277,11 @@ fn context_hint(app: &App, compact: bool) -> &'static str {
             )
         };
     }
-    match (app.settings.mode, app.view.editing, compact) {
+    match (app.settings.mode, app.selected_playlist_unlocked(), compact) {
         (Mode::Chaos, _, true) => app.text("Chaos: a free collection", "Хаос: свободная подборка"),
         (Mode::Chaos, _, false) => app.text(
-            "Chaos: freely collect, mark and rearrange tracks in your playlists.",
-            "Хаос: свободно собирайте подборки, отмечайте и переставляйте композиции.",
+            "Chaos: build mixes. Undo history lasts until you close the app.",
+            "Хаос: собирайте подборки. История отмены хранится до закрытия приложения.",
         ),
         (Mode::Order, true, true) => app.text("Order: editing playlists", "Порядок: правка плейлиста"),
         (Mode::Order, true, false) => app.text(

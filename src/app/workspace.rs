@@ -230,7 +230,7 @@ impl App {
                         self.visible_playlists()
                             .get(self.view.playlist_offset + row)
                             .map(|playlist| playlist.id)
-                            .filter(|target| *target != id && self.playlist_movable(*target))
+                            .filter(|target| *target != id && self.playlist_drop_target(*target))
                     } else {
                         None
                     };
@@ -358,8 +358,8 @@ impl App {
             Some(Gesture::Playlist {
                 id,
                 target: Some(target),
-            }) if self.playlist_movable(id) && self.playlist_movable(target) => {
-                let unlocked = self.view.editing;
+            }) if self.playlist_movable(id) && self.playlist_drop_target(target) => {
+                let unlocked = self.playlist_unlocked(id);
                 self.start_database(None, move |store| {
                     Ok(DatabaseOutcome::Changed(
                         store.move_playlist_to(id, target, unlocked)?,

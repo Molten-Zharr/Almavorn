@@ -97,7 +97,20 @@ pub(super) fn render_dialog(
             playlists::folders(frame, app, *playlist, selected, area, palette)
         }
         Dialog::ComposePlaylists { selected, ids } => {
-            playlists::compose(frame, app, selected, ids, area, palette)
+            playlists::compose(frame, app, selected, ids, None, area, palette)
+        }
+        Dialog::ComposeTracks {
+            selected,
+            entries,
+            included,
+            ..
+        } => {
+            let chosen: Vec<_> = entries
+                .iter()
+                .copied()
+                .filter(|id| included.contains(id))
+                .collect();
+            playlists::compose(frame, app, selected, &chosen, Some(entries), area, palette)
         }
         Dialog::RemovePlaylist { name, confirm, .. } => {
             let body = format!(
@@ -402,7 +415,11 @@ pub(super) fn render_dialog(
             );
             dialog_footer(frame, app, inner, palette);
         }
-        Dialog::CopyableHelp { title, description, offset } => {
+        Dialog::CopyableHelp {
+            title,
+            description,
+            offset,
+        } => {
             let inner = modal(frame, app, area, title.clone(), 24, palette);
             help::copyable_text(frame, app, offset, inner, description, palette);
         }
@@ -416,7 +433,10 @@ pub(super) fn render_dialog(
                 44,
                 palette,
             );
-            let mut lines=vec![app.text("Mouse: click to select; double-click a track to play; scroll lists.","Мышь: клик — выбор; двойной клик по композиции — играть; колесо — прокрутка.").to_owned(),app.text("Use track checkboxes to select several tracks for copying or looping.","Галочки композиций отмечают несколько файлов для копирования или повтора.").into(),String::new(),app.text("Order playlists are protected. Enable Edit to rename, remove or reorder.","Плейлисты Порядка защищены. Включите Правку для переименования, удаления и перемещения.").into(),app.text("The sorting desk is always editable. Order always sends added music there; in Chaos, choose the destination in settings.","Сортировочный стол всегда доступен для правки. В Порядке добавляемая музыка всегда попадает туда; в Хаосе направление выбирается в настройках.").into(),app.text("Chaos and the desk support undo/redo in this session. Concurrent edits in the same scope may reset history. Only one app process can open this library for writing.","Хаос и стол поддерживают отмену/повтор в этой сессии. Одновременная правка тех же списков может очистить историю. Библиотеку для записи открывает только один процесс приложения.").into(),app.text("Sorting and searching change the view, never stored positions or source tags.","Сортировка и поиск меняют вид, а не сохраненные позиции или теги исходных файлов.").into(),app.text("Add new scans the folders of the current tracks; duplicates are skipped.","Добавить новые проверяет папки текущих композиций; повторные файлы пропускаются.").into(),format!("{}: {}",app.text("Database","База"),app.store.path.display()),String::new()];
+            let mut lines=vec![app.text("Mouse: click to select; double-click a track to play; scroll lists.","Мышь: клик — выбор; двойной клик по композиции — играть; колесо — прокрутка.").to_owned(),app.text("Use track checkboxes to select several tracks for copying or looping.","Галочки композиций отмечают несколько файлов для копирования или повтора.").into(),String::new(),app.text("Order keeps your collection protected. Edit opens one selected playlist. Done protects it again; switching modes also finishes editing.","Порядок сохраняет коллекцию защищенной. Редактировать открывает один выбранный плейлист. Готово снова защищает его; переключение режима также завершает редактирование.").into(),app.text("The sorting desk is shared by both modes. Add music shows the destination. The Add to desk checkbox routes all imports there. Protected playlists also send imports to the desk. To distribute music, open the destination Order playlist for editing, return to the desk, mark tracks and copy them.","Сортировочный стол общий для обоих режимов. Кнопка добавления показывает назначение. Галочка Добавлять на стол направляет туда импорт. Из защищенного плейлиста импорт также идет на стол. Для распределения откройте нужный плейлист Порядка для редактирования, вернитесь на стол, отметьте композиции и скопируйте их.").into(),app.text("Chaos and the desk have separate undo histories, kept until exit. Buttons name the next action. Concurrent changes in the same area can reset its history. Order changes have no undo history.","У Хаоса и стола отдельная история отмены до закрытия приложения. Кнопки называют следующее действие. Одновременные изменения той же области могут очистить ее историю. Изменения Порядка не входят в историю отмены.").into(),app.text("Sorting and searching change the view, never stored positions or source tags.","Сортировка и поиск меняют вид, а не сохраненные позиции или теги исходных файлов.").into(),app.text("Add new scans the folders of the current tracks; duplicates are skipped.","Добавить новые проверяет папки текущих композиций; повторные файлы пропускаются.").into(),format!("{}: {}",app.text("Database","База"),app.store.path.display()),String::new()];
+            lines.push(app.text("Chaos · Build mix: select source playlists from either mode, choose tracks, change their order with Ctrl+Up/Down, then save with a name. Source playlists are kept. Repeated tracks are included once.", "Хаос · Собрать подборку: выберите источники из обоих режимов, отметьте композиции, задайте порядок через Ctrl+вверх/вниз и сохраните под новым названием. Исходные плейлисты сохранятся. Повторные композиции добавляются один раз.").into());
+            lines.push(app.text("Shuffle belongs to playback and works identically in both modes. The player header shows the playing source even while browsing another mode.", "Случайное воспроизведение одинаково работает в обоих режимах. Заголовок проигрывателя показывает источник музыки, даже когда открыт другой режим.").into());
+            lines.push(app.text("Writing tags to an audio file affects that file in every playlist. Playlist undo does not restore file tags.", "Запись тегов в аудиофайл меняет его во всех подборках. Отмена изменений плейлиста не восстанавливает теги файла.").into());
             lines.push(app.text("Blocks: drag [↕] or a title; drop at an edge to dock, in the center to swap. Hold a shared border to resize. [-]/[+] collapses; [x] hides. Restore through Blocks. Expand a category there to choose visible buttons. Layout and visibility are saved in the active profile.", "Блоки: тяните [↕] или заголовок; край другого блока — разместить рядом, центр — поменять местами. Зажмите общую границу для размера. [-]/[+] сворачивает; [x] скрывает. Вернуть через меню «Блоки». Раскройте категорию для выбора видимых кнопок. Раскладка и видимость сохраняются в активный профиль.").into());
             lines.push(app.text("File and folder pickers: type part of a name to select a match. Backspace edits the search; Esc clears it, then closes the window. Arrows return to list navigation. Alt+Up opens the parent folder. Insert marks an item; Ctrl+Enter confirms the selection.", "Выбор файлов и папок: наберите часть имени для поиска. Backspace исправляет запрос, Esc очищает его; повторный Esc закрывает окно. Стрелки возвращают навигацию по списку. Alt+Up открывает родительскую папку. Insert отмечает строку, Ctrl+Enter подтверждает выбор.").into());
             lines.push(

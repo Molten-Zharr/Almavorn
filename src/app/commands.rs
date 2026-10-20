@@ -96,11 +96,33 @@ impl App {
             .unwrap_or(0)
     }
 
+    pub fn edit_caption(&self) -> String {
+        if self.selected_playlist_unlocked() {
+            self.text("Editing · Done", "Редактирование · Готово")
+        } else {
+            self.text("Protected · Edit", "Защищен · Редактировать")
+        }
+        .into()
+    }
+
+    pub fn action_caption(&self, action: Action) -> String {
+        match action {
+            Action::ToggleEdit => self.edit_caption(),
+            Action::Undo | Action::Redo => self.history_caption(action == Action::Redo),
+            Action::AddFiles | Action::AddFolder | Action::AddNew => format!(
+                "{} · {}",
+                action.name(self.settings.preferences.language),
+                self.import_caption()
+            ),
+            _ => action.name(self.settings.preferences.language).into(),
+        }
+    }
+
     pub fn toolbar_items(&self) -> Vec<CommandItem> {
         let mut entries = Vec::new();
         if !self.command_items(CommandMenu::Add).is_empty() {
             entries.push((
-                self.text("Add ↓", "Добавить ↓").into(),
+                format!("{} ↓", self.import_caption()),
                 Target::CommandMenu(CommandMenu::Add),
                 true,
             ));
@@ -112,12 +134,42 @@ impl App {
                 true,
             ));
         }
-        for (action, label, panel) in [
-            (Action::Undo, "←", Panel::Add),
-            (Action::Redo, "→", Panel::Add),
-        ] {
+        if self.settings.mode == Mode::Chaos
+            && self.control_visible(Panel::PlaylistActions, Action::ComposePlaylists)
+        {
+            entries.insert(
+                0,
+                (
+                    self.text("Build mix", "Собрать подборку").into(),
+                    Target::Action(Action::ComposePlaylists),
+                    self.allowed(Action::ComposePlaylists),
+                ),
+            );
+        }
+        if self.allowed(Action::ToggleEdit) {
+            entries.push((
+                self.edit_caption(),
+                Target::Action(Action::ToggleEdit),
+                true,
+            ));
+        } else if let Some(playlist) = self
+            .playlists()
+            .iter()
+            .find(|p| self.playlist_unlocked(p.id))
+        {
+            entries.push((
+                format!("{}: {}", self.text("Done", "Готово"), playlist.name),
+                Target::FinishEdit,
+                !self.busy(),
+            ));
+        }
+        for (action, panel) in [(Action::Undo, Panel::Add), (Action::Redo, Panel::Add)] {
             if self.control_visible(panel, action) {
-                entries.push((label.into(), Target::Action(action), self.allowed(action)));
+                entries.push((
+                    self.history_caption(action == Action::Redo),
+                    Target::Action(action),
+                    self.allowed(action),
+                ));
             }
         }
         if self.control_visible(Panel::PlaylistActions, Action::Search) {
@@ -168,7 +220,9 @@ impl App {
         entries.push((
             format!(
                 "{} ↓",
-                self.settings.mode.name(self.settings.preferences.language)
+                self.settings
+                    .mode
+                    .caption(self.settings.preferences.language)
             ),
             Target::CommandMenu(CommandMenu::Application),
             true,
@@ -217,7 +271,7 @@ impl App {
             CommandMenu::Visualizer => unreachable!("Animation choices are built above"),
             CommandMenu::Add => (
                 Panel::Add,
-                &[AddFiles, AddFolder, AddFolderPlaylists, AddNew],
+                &[ToggleDesk, AddFiles, AddFolder, AddFolderPlaylists, AddNew],
             ),
             CommandMenu::Playlist => (
                 Panel::PlaylistActions,
@@ -226,6 +280,9 @@ impl App {
                     CopyPlaylist,
                     ComposePlaylists,
                     PlaylistFolders,
+                    ToggleEdit,
+                    Undo,
+                    Redo,
                     Rename,
                     Delete,
                     MoveUp,
@@ -250,10 +307,7 @@ impl App {
                     Filter,
                 ],
             ),
-            CommandMenu::Application => (
-                Panel::Application,
-                &[ToggleEdit, ToggleDesk, Statistics, Settings, Help, Quit],
-            ),
+            CommandMenu::Application => (Panel::Application, &[Statistics, Settings, Help, Quit]),
             CommandMenu::Player => (
                 Panel::Player,
                 &[
@@ -297,7 +351,7 @@ impl App {
                             } else {
                                 " "
                             },
-                            mode.name(self.settings.preferences.language)
+                            mode.caption(self.settings.preferences.language)
                         ),
                         target: Target::Mode(mode),
                         enabled: !self.busy(),
@@ -308,7 +362,7 @@ impl App {
         for action in actions {
             if self.control_visible(panel, *action) {
                 let checked = match action {
-                    ToggleEdit => Some(self.view.editing),
+                    ToggleEdit => None,
                     ToggleDesk => Some(self.settings.preferences.sorting_desk),
                     ToggleShuffle => Some(self.settings.preferences.shuffle),
                     PlayMarked => Some(
@@ -331,7 +385,7 @@ impl App {
                         },
                     )
                 } else {
-                    action.name(self.settings.preferences.language).into()
+                    self.action_caption(*action)
                 };
                 items.push(CommandItem {
                     label: checked.map_or_else(

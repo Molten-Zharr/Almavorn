@@ -30,7 +30,15 @@ pub(super) fn playlists(frame: &mut Frame, app: &mut App, area: Rect, palette: P
         .map(|playlist| {
             (
                 playlist.id,
-                clean(playlist.display_name(app.settings.preferences.language)),
+                if app.playlist_unlocked(playlist.id) {
+                    format!(
+                        "{} · {}",
+                        clean(playlist.display_name(app.settings.preferences.language)),
+                        app.text("Editing", "Редактирование")
+                    )
+                } else {
+                    clean(playlist.display_name(app.settings.preferences.language))
+                },
                 playlist.entries.len(),
             )
         })

@@ -61,10 +61,32 @@ fn chrome(
     let title_width = area.width.saturating_sub(title_reserved(app, panel));
     let heading = if panel == Panel::Tracks {
         app.playlist()
-            .map(|playlist| playlist.display_name(app.settings.preferences.language))
-            .unwrap_or(panel.name(app.settings.preferences.language))
+            .map(|playlist| {
+                let name = playlist.display_name(app.settings.preferences.language);
+                if playlist.kind == crate::model::PlaylistKind::SortingDesk {
+                    app.text(
+                        "Sorting desk · Organize music",
+                        "Сортировочный стол · Разобрать музыку",
+                    )
+                    .to_owned()
+                } else if playlist.mode == crate::model::Mode::Order {
+                    format!(
+                        "{} · {name}",
+                        if app.playlist_unlocked(playlist.id) {
+                            app.text("Editing", "Редактирование")
+                        } else {
+                            app.text("Protected", "Защищен")
+                        }
+                    )
+                } else {
+                    name.to_owned()
+                }
+            })
+            .unwrap_or_else(|| panel.name(app.settings.preferences.language).into())
+    } else if panel == Panel::Player {
+        app.playback_source_caption()
     } else {
-        panel.name(app.settings.preferences.language)
+        panel.name(app.settings.preferences.language).into()
     };
     let title = heading
         .chars()

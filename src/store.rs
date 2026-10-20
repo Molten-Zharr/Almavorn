@@ -53,6 +53,113 @@ pub struct Change {
     pub scope: &'static str,
     pub before: Snapshot,
     pub after: Snapshot,
+    description: std::sync::OnceLock<[String; 2]>,
+}
+
+impl Change {
+    pub fn description(&self, language: crate::model::Language) -> String {
+        let descriptions = self.description.get_or_init(|| {
+            [
+                self.describe(crate::model::Language::English),
+                self.describe(crate::model::Language::Russian),
+            ]
+        });
+        descriptions[usize::from(language == crate::model::Language::Russian)].clone()
+    }
+
+    fn describe(&self, language: crate::model::Language) -> String {
+        let added: Vec<_> = self
+            .after
+            .playlists
+            .iter()
+            .filter(|p| !self.before.playlists.iter().any(|old| old.id == p.id))
+            .collect();
+        let removed: Vec<_> = self
+            .before
+            .playlists
+            .iter()
+            .filter(|p| !self.after.playlists.iter().any(|new| new.id == p.id))
+            .collect();
+        if added.len() == 1 {
+            return format!(
+                "{} «{}»",
+                language.text("creation of", "создание подборки"),
+                added[0].name
+            );
+        }
+        if !added.is_empty() {
+            return format!(
+                "{}: {}",
+                language.text("playlist creation", "создание плейлистов"),
+                added.len()
+            );
+        }
+        if removed.len() == 1 {
+            return format!(
+                "{} «{}»",
+                language.text("deletion of", "удаление плейлиста"),
+                removed[0].name
+            );
+        }
+        if !removed.is_empty() {
+            return format!(
+                "{}: {}",
+                language.text("playlist deletion", "удаление плейлистов"),
+                removed.len()
+            );
+        }
+        let before: std::collections::HashSet<_> = self
+            .before
+            .playlists
+            .iter()
+            .flat_map(|p| p.entries.iter().map(|e| e.id))
+            .collect();
+        let after: std::collections::HashSet<_> = self
+            .after
+            .playlists
+            .iter()
+            .flat_map(|p| p.entries.iter().map(|e| e.id))
+            .collect();
+        let removed = before.difference(&after).count();
+        let added = after.difference(&before).count();
+        if removed > 0 {
+            return format!(
+                "{}: {removed}",
+                language.text("track removal", "удаление композиций")
+            );
+        }
+        if added > 0 {
+            return format!(
+                "{}: {added}",
+                language.text("track addition", "добавление композиций")
+            );
+        }
+        for (before, after) in self.before.playlists.iter().zip(&self.after.playlists) {
+            if before.id != after.id || before.position != after.position {
+                return language
+                    .text("playlist reordering", "перестановку плейлистов")
+                    .into();
+            }
+            if before.name != after.name {
+                return language
+                    .text("playlist renaming", "переименование плейлиста")
+                    .into();
+            }
+            if before.entries != after.entries {
+                return language
+                    .text("track reordering", "перестановку композиций")
+                    .into();
+            }
+            if before.folders != after.folders {
+                return language
+                    .text("linked folder changes", "изменение связанных папок")
+                    .into();
+            }
+        }
+        language
+            .text("playlist changes", "изменение плейлиста")
+            .into()
+    }
 }
 
 pub struct Store {
@@ -210,6 +317,7 @@ impl Store {
                 scope,
                 before,
                 after,
+                description: Default::default(),
             })
         })?;
         self.revision.fetch_add(1, Ordering::Release);
@@ -425,9 +533,9 @@ impl Store {
             ensure!(mode != Mode::Order || kind == PlaylistKind::SortingDesk || unlocked,
                 AppError::TrackRenameProtected);
             let protected: bool = transaction.query_row(
-                "SELECT EXISTS(SELECT 1 FROM entries e JOIN playlists p ON p.id=e.playlist_id WHERE e.track_id=?1 AND p.mode='order' AND p.kind='normal')",
-                [id], |row| row.get(0))?;
-            ensure!(unlocked || !protected, AppError::SharedTrackProtected);
+                "SELECT EXISTS(SELECT 1 FROM entries e JOIN playlists p ON p.id=e.playlist_id WHERE e.track_id=?1 AND p.mode='order' AND p.kind='normal' AND (?2 IS NULL OR p.id != ?2))",
+                params![id, unlocked.then_some(playlist)], |row| row.get(0))?;
+            ensure!(!protected, AppError::SharedTrackProtected);
             let belongs: bool = transaction.query_row(
                 "SELECT EXISTS(SELECT 1 FROM entries WHERE playlist_id=?1 AND track_id=?2)",
                 params![playlist, id], |row| row.get(0))?;

@@ -204,7 +204,7 @@ fn quiet(
     let active = match target {
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
-        Target::Action(Action::ToggleEdit) => app.view.editing,
+        Target::Action(Action::ToggleEdit) => app.selected_playlist_unlocked(),
         Target::Action(Action::ToggleDesk) => app.settings.preferences.sorting_desk,
         Target::Action(Action::CycleRepeat) => {
             app.settings.preferences.repeat != crate::model::RepeatMode::Off

@@ -14,6 +14,11 @@ pub enum TextPurpose {
         group_subfolders: bool,
     },
     ComposePlaylist(Vec<i64>),
+    ComposeSelection {
+        sources: Vec<i64>,
+        entries: Vec<i64>,
+        available: Vec<i64>,
+    },
     RenamePlaylist(i64),
     PlaylistFolder(i64, Option<String>),
     RemovePlaylistFolder(i64, String),
@@ -75,6 +80,12 @@ pub enum Dialog {
         selected: usize,
         ids: Vec<i64>,
     },
+    ComposeTracks {
+        sources: Vec<i64>,
+        selected: usize,
+        entries: Vec<i64>,
+        included: std::collections::HashSet<i64>,
+    },
     RemoveEntry {
         playlist: i64,
         entry: i64,
@@ -130,7 +141,9 @@ impl Dialog {
             Self::PlaybackTuner { .. } => Some(Action::PlaybackTuner),
             Self::Equalizer { .. } => Some(Action::Equalizer),
             Self::Panels { .. } => Some(Action::Panels),
-            Self::Help { .. } | Self::SettingsHelp { .. } | Self::CopyableHelp { .. } => Some(Action::Help),
+            Self::Help { .. } | Self::SettingsHelp { .. } | Self::CopyableHelp { .. } => {
+                Some(Action::Help)
+            }
             Self::Settings { .. } => Some(Action::Settings),
             Self::Browser(browser) if browser.palette_file.is_some() => None,
             Self::Browser(browser) if browser.playlist_name.is_some() => None,
@@ -141,7 +154,9 @@ impl Dialog {
             }),
             Self::Metadata { .. } => Some(Action::Metadata),
             Self::Folders { .. } => Some(Action::PlaylistFolders),
-            Self::ComposePlaylists { .. } => Some(Action::ComposePlaylists),
+            Self::ComposePlaylists { .. } | Self::ComposeTracks { .. } => {
+                Some(Action::ComposePlaylists)
+            }
             Self::Transfer { .. } => Some(Action::Transfer),
             Self::RemoveEntry { .. }
             | Self::RemovePlaylist { .. }
@@ -179,7 +194,9 @@ impl App {
         };
         let text = match line {
             Some(line) => {
-                let Some(text) = description.lines().nth(line) else { return false; };
+                let Some(text) = description.lines().nth(line) else {
+                    return false;
+                };
                 text.to_owned()
             }
             None => description.clone(),
@@ -190,13 +207,21 @@ impl App {
 
     pub fn clipboard_result(&mut self, result: std::result::Result<(), String>, terminal: bool) {
         match result {
-            Ok(()) => self.message(if terminal {
-                self.text("Copy request sent to the terminal", "Запрос копирования передан терминалу")
-            } else {
-                self.text("Copied", "Скопировано")
-            }.into()),
-            Err(error) => self.failure(anyhow::anyhow!("{}: {error}",
-                self.text("Could not copy text", "Не удалось скопировать текст"))),
+            Ok(()) => self.message(
+                if terminal {
+                    self.text(
+                        "Copy request sent to the terminal",
+                        "Запрос копирования передан терминалу",
+                    )
+                } else {
+                    self.text("Copied", "Скопировано")
+                }
+                .into(),
+            ),
+            Err(error) => self.failure(anyhow::anyhow!(
+                "{}: {error}",
+                self.text("Could not copy text", "Не удалось скопировать текст")
+            )),
         }
     }
 
@@ -254,6 +279,9 @@ impl App {
             return;
         }
         match &mut self.view.dialog {
+            Some(Dialog::ComposeTracks {
+                selected, entries, ..
+            }) => *selected = bounded(*selected, i64::from(direction), entries.len()),
             Some(Dialog::ComposePlaylists { selected, .. }) => {
                 *selected = bounded(*selected, i64::from(direction), compose_length)
             }
@@ -303,7 +331,7 @@ impl App {
             .iter()
             .filter(|playlist| {
                 Some(playlist.id) != self.library.selected_playlist
-                    && playlist.can_edit(self.view.editing)
+                    && self.playlist_editable(playlist)
             })
             .collect()
     }
@@ -329,18 +357,50 @@ impl App {
         }
         match self.view.dialog.take() {
             Some(Dialog::ComposePlaylists { selected, ids }) => {
-                if ids.len() < 2 {
+                if ids.is_empty() {
                     self.view.dialog = Some(Dialog::ComposePlaylists { selected, ids });
                     anyhow::bail!(
                         "{}",
+                        self.text("Select a source playlist", "Отметьте исходный плейлист.")
+                    );
+                }
+                self.open_composition_tracks(ids);
+            }
+            Some(Dialog::ComposeTracks {
+                sources,
+                selected,
+                entries,
+                included,
+            }) => {
+                let chosen: Vec<_> = entries
+                    .iter()
+                    .copied()
+                    .filter(|id| included.contains(id))
+                    .collect();
+                if chosen.is_empty() {
+                    self.view.dialog = Some(Dialog::ComposeTracks {
+                        sources,
+                        selected,
+                        entries,
+                        included,
+                    });
+                    anyhow::bail!(
+                        "{}",
                         self.text(
-                            "Select at least two playlists",
-                            "Отметьте минимум два плейлиста."
+                            "Select at least one track",
+                            "Отметьте хотя бы одну композицию"
                         )
                     );
                 }
-                let name = self.fresh_playlist_name(self.text("Compilation", "Сборка"));
-                self.text_dialog(TextPurpose::ComposePlaylist(ids), name);
+                let name = self.fresh_playlist_name(self.text("Mix", "Подборка"));
+                self.text_dialog(
+                    TextPurpose::ComposeSelection {
+                        sources,
+                        entries: chosen,
+                        available: entries,
+                    },
+                    name,
+                );
             }
             Some(Dialog::Panels { selected, expanded }) => {
                 self.view.dialog = Some(Dialog::Panels { selected, expanded });
@@ -350,7 +410,6 @@ impl App {
                 let recovery = Some(Dialog::Text(dialog.clone()));
                 let text = dialog.text.clone();
                 let mode = self.settings.mode;
-                let unlocked = self.view.editing;
                 let result = match &dialog.purpose {
                     TextPurpose::Create => self.start_database(recovery, move |store| {
                         Ok(DatabaseOutcome::Created(
@@ -370,12 +429,24 @@ impl App {
                         let ids = ids.clone();
                         self.start_database(recovery, move |store| {
                             Ok(DatabaseOutcome::Created(
-                                store.compose_playlists(&ids, &text, mode, unlocked)?,
+                                store.compose_playlists(&ids, &text, mode, true)?,
+                            ))
+                        })
+                    }
+                    TextPurpose::ComposeSelection {
+                        sources, entries, ..
+                    } => {
+                        let sources = sources.clone();
+                        let entries = entries.clone();
+                        self.start_database(recovery, move |store| {
+                            Ok(DatabaseOutcome::Created(
+                                store.compose_entries(&sources, &entries, &text, mode)?,
                             ))
                         })
                     }
                     TextPurpose::RenamePlaylist(id) => {
                         let id = *id;
+                        let unlocked = self.playlist_unlocked(id);
                         self.start_database(recovery, move |store| {
                             Ok(DatabaseOutcome::Changed(
                                 store.rename_playlist(id, &text, unlocked)?,
@@ -384,6 +455,7 @@ impl App {
                     }
                     TextPurpose::PlaylistFolder(id, previous) => {
                         let id = *id;
+                        let unlocked = self.playlist_unlocked(id);
                         let previous = previous.clone();
                         let folder = std::path::PathBuf::from(text.trim());
                         let result = self.start_database(recovery, move |store| {
@@ -404,6 +476,7 @@ impl App {
                     }
                     TextPurpose::RemovePlaylistFolder(id, folder) => {
                         let id = *id;
+                        let unlocked = self.playlist_unlocked(id);
                         let folder = folder.clone();
                         let result = self.start_database(recovery, move |store| {
                             Ok(DatabaseOutcome::Changed(
@@ -420,6 +493,7 @@ impl App {
                     }
                     TextPurpose::RenameTrack(track, playlist) => {
                         let (track, playlist) = (*track, *playlist);
+                        let unlocked = self.playlist_unlocked(playlist);
                         self.start_database(recovery, move |store| {
                             store.rename_track(track, &text, playlist, unlocked)?;
                             Ok(DatabaseOutcome::Renamed)
@@ -464,7 +538,7 @@ impl App {
                     name: name.clone(),
                     confirm: false,
                 };
-                let unlocked = self.view.editing;
+                let unlocked = self.playlist_unlocked(playlist);
                 if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
                     Ok(DatabaseOutcome::Changed(
                         store.delete_playlist(playlist, &name, unlocked)?,
@@ -484,7 +558,7 @@ impl App {
                     entry,
                     title,
                 };
-                let unlocked = self.view.editing;
+                let unlocked = self.playlist_unlocked(playlist);
                 if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
                     Ok(DatabaseOutcome::Changed(
                         store.remove_entry(playlist, entry, unlocked)?,
@@ -504,7 +578,7 @@ impl App {
                     ids: ids.clone(),
                     selected,
                 };
-                let unlocked = self.view.editing;
+                let unlocked = self.playlist_unlocked(destination);
                 if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
                     Ok(DatabaseOutcome::Changed(store.copy_tracks(
                         destination,

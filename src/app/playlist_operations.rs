@@ -5,10 +5,20 @@ use anyhow::{Context, Result, ensure};
 
 impl App {
     pub(super) fn composition_key(&mut self, key: KeyPress) -> Result<()> {
-        let Some(Dialog::ComposePlaylists { selected, .. }) = &self.view.dialog else {
-            return Ok(());
+        let selected = match &self.view.dialog {
+            Some(
+                Dialog::ComposePlaylists { selected, .. } | Dialog::ComposeTracks { selected, .. },
+            ) => *selected,
+            _ => return Ok(()),
         };
-        let selected = *selected;
+        if key.ctrl && !key.alt && key.key == Key::Char('a') {
+            self.composition_all(!key.shift);
+            return Ok(());
+        }
+        if !key.ctrl && !key.alt && key.key == Key::Backspace {
+            self.composition_back();
+            return Ok(());
+        }
         if key.ctrl && !key.alt && matches!(key.key, Key::Up | Key::Down) {
             self.move_composition_source(if key.key == Key::Up { -1 } else { 1 });
             return Ok(());
@@ -46,10 +56,7 @@ impl App {
     }
 
     pub(crate) fn compose_choices(&self) -> Vec<&crate::model::Playlist> {
-        self.visible_playlists()
-            .into_iter()
-            .filter(|item| item.can_edit(self.view.editing))
-            .collect()
+        self.library.playlists.iter().collect()
     }
 
     pub(super) fn fresh_playlist_name(&self, base: &str) -> String {
@@ -70,6 +77,21 @@ impl App {
     }
 
     pub(super) fn toggle_compose_row(&mut self, row: usize) {
+        if let Some(Dialog::ComposeTracks {
+            selected,
+            entries,
+            included,
+            ..
+        }) = &mut self.view.dialog
+        {
+            if let Some(id) = entries.get(row) {
+                *selected = row;
+                if !included.remove(id) {
+                    included.insert(*id);
+                }
+            }
+            return;
+        }
         let id = self.compose_choices().get(row).map(|item| item.id);
         if let Some(id) = id
             && let Some(Dialog::ComposePlaylists { selected, ids }) = &mut self.view.dialog
@@ -84,6 +106,17 @@ impl App {
     }
 
     pub(super) fn move_composition_source(&mut self, direction: i64) {
+        if let Some(Dialog::ComposeTracks {
+            selected, entries, ..
+        }) = &mut self.view.dialog
+        {
+            if !entries.is_empty() {
+                let target = super::bounded(*selected, direction, entries.len());
+                entries.swap(*selected, target);
+                *selected = target;
+            }
+            return;
+        }
         let id = if let Some(Dialog::ComposePlaylists { selected, .. }) = &self.view.dialog {
             self.compose_choices().get(*selected).map(|item| item.id)
         } else {
@@ -95,6 +128,60 @@ impl App {
         {
             let target = super::bounded(index, direction, ids.len());
             ids.swap(index, target);
+        }
+    }
+
+    pub(super) fn open_composition_tracks(&mut self, sources: Vec<i64>) {
+        let mut seen = std::collections::HashSet::new();
+        let entries: Vec<_> = sources
+            .iter()
+            .flat_map(|id| {
+                self.library
+                    .playlists
+                    .iter()
+                    .find(|p| p.id == *id)
+                    .into_iter()
+                    .flat_map(|p| &p.entries)
+            })
+            .filter(|entry| seen.insert(entry.track.id))
+            .map(|entry| entry.id)
+            .collect();
+        let included = entries.iter().copied().collect();
+        self.view.dialog = Some(Dialog::ComposeTracks {
+            sources,
+            selected: 0,
+            entries,
+            included,
+        });
+    }
+
+    pub(super) fn composition_all(&mut self, all: bool) {
+        let choices = self.compose_choices().iter().map(|p| p.id).collect();
+        match &mut self.view.dialog {
+            Some(Dialog::ComposeTracks {
+                entries, included, ..
+            }) => {
+                *included = if all {
+                    entries.iter().copied().collect()
+                } else {
+                    Default::default()
+                };
+            }
+            Some(Dialog::ComposePlaylists { ids, .. }) => {
+                *ids = if all { choices } else { Vec::new() }
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn composition_back(&mut self) {
+        if matches!(self.view.dialog, Some(Dialog::ComposeTracks { .. }))
+            && let Some(Dialog::ComposeTracks { sources, .. }) = self.view.dialog.take()
+        {
+            self.view.dialog = Some(Dialog::ComposePlaylists {
+                selected: 0,
+                ids: sources,
+            });
         }
     }
 
@@ -124,10 +211,7 @@ impl App {
             .iter()
             .find(|playlist| playlist.id == id)
             .context(AppError::PlaylistMissing)?;
-        ensure!(
-            playlist.can_edit(self.view.editing),
-            AppError::OrderProtected
-        );
+        ensure!(self.playlist_editable(playlist), AppError::OrderProtected);
         Ok(())
     }
 

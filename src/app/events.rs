@@ -358,8 +358,10 @@ impl App {
                 .bindings
                 .iter()
                 .any(|binding| binding.action == action && binding.key == normalized)
-                || (matches!(self.view.dialog, Some(Dialog::SettingsHelp { .. } | Dialog::CopyableHelp { .. }))
-                    && key == KeyPress::plain(Key::F(1))))
+                || (matches!(
+                    self.view.dialog,
+                    Some(Dialog::SettingsHelp { .. } | Dialog::CopyableHelp { .. })
+                ) && key == KeyPress::plain(Key::F(1))))
         {
             self.close_dialog();
             return Ok(());
@@ -612,6 +614,13 @@ impl App {
             }
             Target::ComposeRow(index) => self.toggle_compose_row(index),
             Target::ComposeMove(direction) => self.move_composition_source(direction),
+            Target::ComposeBack => self.composition_back(),
+            Target::ComposeAll(all) => self.composition_all(all),
+            Target::FinishEdit => {
+                if !self.busy() {
+                    self.view.editing_playlist = None;
+                }
+            }
             Target::FolderRow(index) => {
                 if let Some(Dialog::Folders { selected, .. }) = &mut self.view.dialog {
                     *selected = index;

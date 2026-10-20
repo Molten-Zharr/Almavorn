@@ -50,6 +50,13 @@ impl Mode {
             Self::Chaos => language.text("Chaos", "Хаос"),
         }
     }
+
+    pub fn caption(self, language: Language) -> &'static str {
+        match self {
+            Self::Order => language.text("Order · My collection", "Порядок · Моя коллекция"),
+            Self::Chaos => language.text("Chaos · Free mixes", "Хаос · Свободные подборки"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -66,12 +66,12 @@ impl AppError {
     pub fn message(self, language: Language) -> &'static str {
         match self {
             Self::OrderProtected => language.text(
-                "Enable Order editing before changing this playlist",
-                "Сначала включите редактирование Порядка.",
+                "Open this playlist and select Edit before changing it",
+                "Откройте этот плейлист и нажмите Редактировать.",
             ),
             Self::TrackRenameProtected => language.text(
-                "Enable Order editing before renaming tracks",
-                "Для переименования включите редактирование Порядка.",
+                "Open this playlist for editing before renaming tracks",
+                "Для переименования откройте этот плейлист для редактирования.",
             ),
             Self::SharedTrackProtected => language.text(
                 "Track is also used by a protected Order playlist",

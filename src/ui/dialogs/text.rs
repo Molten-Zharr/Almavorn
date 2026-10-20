@@ -24,6 +24,9 @@ pub(super) fn text_dialog(
         return;
     }
     let title = match &dialog.purpose {
+        TextPurpose::ComposeSelection { .. } => {
+            app.text("Save mix · name", "Сохранить подборку · название")
+        }
         TextPurpose::Create | TextPurpose::CreateFromFolder { .. } => {
             app.text("Create playlist", "Создать плейлист")
         }
@@ -77,47 +80,53 @@ pub(super) fn text_dialog(
         };
         modal(frame, app, area, title.into(), height, palette)
     };
-    let hint =
-        if let TextPurpose::Settings(SettingsEdit::ExportPalette { directory, .. }) =
-            &dialog.purpose
-        {
-            format!("{}: {}\n{}", app.text("Folder", "Папка"), directory.display(), app.text(
-            "Enter a file name; .json is added automatically. Existing files are kept.",
-            "Введите имя файла; .json добавится автоматически. Существующие файлы сохраняются.",
-        ))
-        } else if let TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose {
-            format!(
-                "{}: {name}",
-                app.text("Enter exact name or path", "Введите точное имя или путь")
-            )
-        } else if let TextPurpose::CreateFromFolder {
-            folder,
-            group_subfolders,
-        } = &dialog.purpose
-        {
-            format!(
-                "{}: {}\n{}",
-                app.text("Folder", "Папка"),
-                folder.display(),
-                if *group_subfolders {
-                    app.text(
-                        "Include subfolders as groups. Enter: create · Esc: cancel",
-                        "Подпапки станут группами. Enter: создать · Esc: отмена",
-                    )
-                } else {
-                    app.text(
-                        "Only files in this folder. Enter: create · Esc: cancel",
-                        "Только файлы этой папки. Enter: создать · Esc: отмена",
-                    )
-                }
-            )
-        } else {
+    let hint = if let TextPurpose::Settings(SettingsEdit::ExportPalette { directory, .. }) =
+        &dialog.purpose
+    {
+        format!(
+            "{}: {}\n{}",
+            app.text("Folder", "Папка"),
+            directory.display(),
             app.text(
-                "Enter: save · Esc: cancel",
-                "Enter: сохранить · Esc: отмена",
+                "Enter a file name; .json is added automatically. Existing files are kept.",
+                "Введите имя файла; .json добавится автоматически. Существующие файлы сохраняются.",
             )
-            .into()
-        };
+        )
+    } else if let TextPurpose::ComposeSelection { entries, .. } = &dialog.purpose {
+        format!("{}: {}. {}", app.text("Tracks", "Композиций"), entries.len(), app.text("Enter: save a new mix. Esc: back to tracks. Source playlists are kept.", "Enter: сохранить новую подборку. Esc: к композициям. Исходные плейлисты сохранятся."))
+    } else if let TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose {
+        format!(
+            "{}: {name}",
+            app.text("Enter exact name or path", "Введите точное имя или путь")
+        )
+    } else if let TextPurpose::CreateFromFolder {
+        folder,
+        group_subfolders,
+    } = &dialog.purpose
+    {
+        format!(
+            "{}: {}\n{}",
+            app.text("Folder", "Папка"),
+            folder.display(),
+            if *group_subfolders {
+                app.text(
+                    "Include subfolders as groups. Enter: create · Esc: cancel",
+                    "Подпапки станут группами. Enter: создать · Esc: отмена",
+                )
+            } else {
+                app.text(
+                    "Only files in this folder. Enter: create · Esc: cancel",
+                    "Только файлы этой папки. Enter: создать · Esc: отмена",
+                )
+            }
+        )
+    } else {
+        app.text(
+            "Enter: save · Esc: cancel",
+            "Enter: сохранить · Esc: отмена",
+        )
+        .into()
+    };
     let hint_height = (Paragraph::new(hint.clone())
         .wrap(Wrap { trim: false })
         .line_count(inner.width.max(1)) as u16
@@ -268,12 +277,22 @@ pub(super) fn text_dialog(
         Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2),
         vec![
             (
-                app.text("Confirm", "Подтвердить").into(),
+                if matches!(dialog.purpose, TextPurpose::ComposeSelection { .. }) {
+                    app.text("Save mix", "Сохранить подборку")
+                } else {
+                    app.text("Confirm", "Подтвердить")
+                }
+                .into(),
                 Target::Submit,
                 can_submit,
             ),
             (
-                app.text("Cancel", "Отмена").into(),
+                if matches!(dialog.purpose, TextPurpose::ComposeSelection { .. }) {
+                    app.text("Back to tracks", "К композициям")
+                } else {
+                    app.text("Cancel", "Отмена")
+                }
+                .into(),
                 Target::CloseDialog,
                 true,
             ),

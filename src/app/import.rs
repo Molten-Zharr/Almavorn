@@ -66,17 +66,31 @@ impl App {
             .map_or(0, |job| job.progress.load(Ordering::Relaxed))
     }
 
-    pub(super) fn import_target(&self) -> Option<i64> {
-        if self.settings.mode == Mode::Order || self.settings.preferences.sorting_desk {
-            self.library
-                .playlists
-                .iter()
-                .find(|playlist| playlist.kind == PlaylistKind::SortingDesk)
-                .map(|playlist| playlist.id)
-        } else {
-            self.playlist()
-                .filter(|playlist| playlist.can_edit(self.view.editing))
-                .map(|playlist| playlist.id)
+    pub(crate) fn import_target(&self) -> Option<i64> {
+        if !self.settings.preferences.sorting_desk
+            && let Some(playlist) = self
+                .playlist()
+                .filter(|playlist| self.playlist_editable(playlist))
+        {
+            return Some(playlist.id);
+        }
+        self.library
+            .playlists
+            .iter()
+            .find(|playlist| playlist.kind == PlaylistKind::SortingDesk)
+            .map(|playlist| playlist.id)
+    }
+
+    pub fn import_caption(&self) -> String {
+        match self
+            .import_target()
+            .and_then(|id| self.library.playlists.iter().find(|p| p.id == id))
+        {
+            Some(playlist) if playlist.kind == PlaylistKind::SortingDesk => {
+                self.text("Add to desk", "Добавить на стол").into()
+            }
+            Some(playlist) => format!("{} «{}»", self.text("Add to", "Добавить в"), playlist.name),
+            None => self.text("Add music", "Добавить музыку").into(),
         }
     }
 
@@ -195,7 +209,7 @@ impl App {
             }
         );
         let mut worker_store = self.store.try_clone()?;
-        let unlocked = self.view.editing;
+        let unlocked = target.is_some_and(|id| self.playlist_unlocked(id));
         let language = self.settings.preferences.language;
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = cancel.clone();

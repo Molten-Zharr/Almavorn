@@ -60,16 +60,14 @@ impl Store {
         sources: &[i64],
         name: &str,
         mode: Mode,
-        unlocked: bool,
+        _unlocked: bool,
     ) -> Result<Change> {
         ensure!(!sources.is_empty(), AppError::PlaylistSelectionRequired);
-        ensure!(mode != Mode::Order || unlocked, AppError::OrderProtected);
         let name = playlist_name(name)?;
         self.mutate(None, mode, true, |connection| {
             let mut group_folders = false;
             for &source in sources {
-                let (mode, kind) = playlist_access(connection, source)?;
-                ensure!(mode != Mode::Order || kind == crate::model::PlaylistKind::SortingDesk || unlocked, AppError::OrderProtected);
+                playlist_access(connection, source)?;
                 group_folders |= connection.query_row("SELECT group_folders FROM playlists WHERE id=?1", [source], |row| row.get::<_, bool>(0))?;
             }
             unique_playlist_name(connection, mode.key(), name, None)?;
@@ -88,6 +86,32 @@ impl Store {
                     }
                 }
                 connection.execute("INSERT INTO playlist_folders(playlist_id,path) SELECT ?1,path FROM playlist_folders WHERE playlist_id=?2 ON CONFLICT DO NOTHING", params![destination, source])?;
+            }
+            Ok(())
+        })
+    }
+
+    pub(crate) fn compose_entries(
+        &mut self,
+        sources: &[i64],
+        entries: &[i64],
+        name: &str,
+        mode: Mode,
+    ) -> Result<Change> {
+        ensure!(!entries.is_empty(), AppError::TrackSelectionRequired);
+        let name = playlist_name(name)?;
+        self.mutate(None, mode, true, |connection| {
+            unique_playlist_name(connection, mode.key(), name, None)?;
+            lock_ordering(connection, mode.key())?;
+            connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3))", params![name, name.to_lowercase(), mode.key()])?;
+            let destination = connection.last_insert_rowid();
+            for entry in entries {
+                let (source, track): (i64, i64) = connection.query_row(
+                    "SELECT playlist_id,track_id FROM entries WHERE id=?1", [entry],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                ).context(AppError::TrackNotInPlaylist)?;
+                ensure!(sources.contains(&source), AppError::TrackNotInPlaylist);
+                append_track(connection, destination, track)?;
             }
             Ok(())
         })

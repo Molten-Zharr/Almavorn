@@ -63,18 +63,14 @@ impl App {
         }
         let editable = self
             .playlist()
-            .is_some_and(|playlist| playlist.can_edit(self.view.editing));
+            .is_some_and(|playlist| self.playlist_editable(playlist));
         match action {
             PlaylistFolders => self.playlist().is_some(),
-            CopyPlaylist => {
-                !self.busy() && (self.settings.mode != Mode::Order || self.view.editing) && editable
-            }
-            ComposePlaylists => {
-                !self.busy()
-                    && (self.settings.mode != Mode::Order || self.view.editing)
-                    && self.compose_choices().len() >= 2
-            }
-            ToggleEdit => self.settings.mode == Mode::Order,
+            CopyPlaylist => !self.busy() && self.playlist().is_some(),
+            ComposePlaylists => !self.busy() && !self.compose_choices().is_empty(),
+            ToggleEdit => self.playlist().is_some_and(|playlist| {
+                playlist.mode == Mode::Order && playlist.kind == PlaylistKind::Normal
+            }),
             Rename | Delete => {
                 editable
                     && match self.view.focus {
@@ -83,10 +79,11 @@ impl App {
                             .is_some_and(|playlist| playlist.kind == PlaylistKind::Normal),
                         Focus::Tracks => self.entry().is_some_and(|entry| {
                             action == Delete
-                                || self.view.editing
                                 || !self.library.playlists.iter().any(|playlist| {
                                     playlist.mode == Mode::Order
                                         && playlist.kind == PlaylistKind::Normal
+                                        && !(self.playlist_unlocked(playlist.id)
+                                            && Some(playlist.id) == self.library.selected_playlist)
                                         && playlist
                                             .entries
                                             .iter()
@@ -213,7 +210,7 @@ impl App {
                 )
                 .into();
         }
-        if !playlist.can_edit(self.view.editing) {
+        if !self.playlist_editable(playlist) {
             let shortcut = self
                 .settings
                 .preferences
@@ -313,10 +310,29 @@ impl App {
                 Mode::Order
             })?,
             ToggleEdit => {
-                self.view.editing = !self.view.editing;
+                let id = self
+                    .library
+                    .selected_playlist
+                    .context(AppError::PlaylistSelectionRequired)?;
+                self.view.editing_playlist = if self.playlist_unlocked(id) {
+                    None
+                } else {
+                    Some(id)
+                };
                 self.message(
-                    self.text("Order editing changed", "Редактирование Порядка изменено")
-                        .into(),
+                    self.text(
+                        if self.playlist_unlocked(id) {
+                            "Selected playlist is open for editing"
+                        } else {
+                            "Playlist protected"
+                        },
+                        if self.playlist_unlocked(id) {
+                            "Выбранный плейлист открыт для редактирования"
+                        } else {
+                            "Плейлист защищен"
+                        },
+                    )
+                    .into(),
                 );
             }
             ToggleDesk => {
@@ -439,7 +455,7 @@ impl App {
                 if let Some(playlist) = self.library.selected_playlist {
                     let focus = self.view.focus;
                     let entry = self.library.selected_entry;
-                    let unlocked = self.view.editing;
+                    let unlocked = self.playlist_unlocked(playlist);
                     self.start_database(None, move |store| {
                         let change = if focus == Focus::Playlists {
                             store.move_playlist(playlist, direction, unlocked)?

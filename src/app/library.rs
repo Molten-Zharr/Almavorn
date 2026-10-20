@@ -40,15 +40,56 @@ impl App {
     }
 
     pub fn visible_playlists(&self) -> Vec<&Playlist> {
-        self.library
+        let mut playlists: Vec<_> = self
+            .library
             .playlists
             .iter()
-            .filter(|playlist| playlist.mode == self.settings.mode)
-            .collect()
+            .filter(|playlist| {
+                playlist.kind == PlaylistKind::SortingDesk || playlist.mode == self.settings.mode
+            })
+            .collect();
+        playlists.sort_by_key(|playlist| {
+            (
+                playlist.kind != PlaylistKind::SortingDesk,
+                playlist.position,
+                playlist.id,
+            )
+        });
+        playlists
+    }
+
+    fn default_playlist(&self) -> Option<i64> {
+        self.visible_playlists()
+            .into_iter()
+            .find(|playlist| {
+                self.settings.mode == Mode::Order || playlist.kind == PlaylistKind::Normal
+            })
+            .map(|playlist| playlist.id)
+    }
+
+    pub fn playlist_unlocked(&self, id: i64) -> bool {
+        self.view.editing_playlist == Some(id)
+    }
+
+    pub fn playlist_editable(&self, playlist: &Playlist) -> bool {
+        playlist.can_edit(self.playlist_unlocked(playlist.id))
+    }
+
+    pub fn selected_playlist_unlocked(&self) -> bool {
+        self.library
+            .selected_playlist
+            .is_some_and(|id| self.playlist_unlocked(id))
     }
 
     pub fn playlists(&self) -> &[Playlist] {
         &self.library.playlists
+    }
+
+    pub(crate) fn playlist_drop_target(&self, id: i64) -> bool {
+        self.library
+            .playlists
+            .iter()
+            .any(|p| p.id == id && p.mode == self.settings.mode && p.kind == PlaylistKind::Normal)
     }
 
     pub fn playlist_movable(&self, id: i64) -> bool {
@@ -57,7 +98,7 @@ impl App {
                 playlist.id == id
                     && playlist.mode == self.settings.mode
                     && playlist.kind == PlaylistKind::Normal
-                    && playlist.can_edit(self.view.editing)
+                    && self.playlist_editable(playlist)
             })
     }
 
@@ -141,13 +182,19 @@ impl App {
 
     pub(super) fn refresh(&mut self) -> Result<()> {
         let selected_playlist = self.library.selected_playlist;
+        if self
+            .view
+            .editing_playlist
+            .is_some_and(|id| !self.library.playlists.iter().any(|p| p.id == id))
+        {
+            self.view.editing_playlist = None;
+        }
         if !self
             .visible_playlists()
             .iter()
             .any(|playlist| Some(playlist.id) == self.library.selected_playlist)
         {
-            self.library.selected_playlist =
-                self.visible_playlists().first().map(|playlist| playlist.id);
+            self.library.selected_playlist = self.default_playlist();
         }
         if selected_playlist != self.library.selected_playlist {
             self.restore_playback_marks();
@@ -213,13 +260,12 @@ impl App {
             return Ok(());
         }
         self.settings.mode = mode;
-        self.view.editing = false;
+        self.view.editing_playlist = None;
         self.library.query.clear();
         self.view.filter_editing = false;
         self.view.filter_keyboard = false;
         self.library.marked.clear();
-        self.library.selected_playlist =
-            self.visible_playlists().first().map(|playlist| playlist.id);
+        self.library.selected_playlist = self.default_playlist();
         self.restore_playback_marks();
         self.view.track_offset = 0;
         self.view.playlist_offset = 0;

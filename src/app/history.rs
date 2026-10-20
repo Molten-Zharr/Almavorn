@@ -6,7 +6,31 @@ use crate::{
 use anyhow::Result;
 
 impl App {
-    pub(super) fn scope(&self) -> Option<&'static str> {
+    pub fn history_caption(&self, redo: bool) -> String {
+        let action = self.text(
+            if redo { "Redo" } else { "Undo" },
+            if redo {
+                "Повторить"
+            } else {
+                "Отменить"
+            },
+        );
+        let change = self
+            .scope()
+            .and_then(|scope| self.library.histories.get(scope))
+            .and_then(|(undo, redos)| if redo { redos.last() } else { undo.last() });
+        change.map_or_else(
+            || action.into(),
+            |change| {
+                format!(
+                    "{action} {}",
+                    change.description(self.settings.preferences.language)
+                )
+            },
+        )
+    }
+
+    pub(crate) fn scope(&self) -> Option<&'static str> {
         if self
             .playlist()
             .is_some_and(|playlist| playlist.kind == PlaylistKind::SortingDesk)

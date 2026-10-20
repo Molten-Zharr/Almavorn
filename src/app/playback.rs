@@ -39,6 +39,19 @@ pub(super) struct WaveformJob {
 }
 
 impl App {
+    pub fn playback_source_caption(&self) -> String {
+        let source = self.library.playlists.iter().find(|p| Some(p.id) == self.playback.playing_playlist)
+            .map(|p| (p.name.as_str(), p.mode, p.kind))
+            .or_else(|| self.playback.playing_source.as_ref().map(|(name, mode, kind)| (name.as_str(), *mode, *kind)));
+        let Some((name, mode, kind)) = source else { return self.text("Player", "Проигрыватель").into(); };
+        let source = if kind == crate::model::PlaylistKind::SortingDesk {
+            self.text("Sorting desk", "Сортировочный стол").to_owned()
+        } else {
+            format!("{name} · {}", mode.name(self.settings.preferences.language))
+        };
+        format!("{}: {source}", if self.current_paused() { self.text("Paused", "Пауза") } else { self.text("Playing", "Играет") })
+    }
+
     pub(super) fn set_playback_timeline(&mut self, choice: PlaybackTimeline) -> Result<()> {
         if self.settings.preferences.appearance.playback_timeline != choice {
             self.cancel_workspace_drag();
@@ -415,6 +428,9 @@ impl App {
         }
         self.begin_listening(track.id, track.duration_ms);
         self.playback.playing_entry = Some(entry.id);
+        if let Some(playlist) = self.library.playlists.iter().find(|p| p.id == request.playlist_id) {
+            self.playback.playing_source = Some((playlist.name.clone(), playlist.mode, playlist.kind));
+        }
         self.playback.playing_playlist = Some(request.playlist_id);
         self.playback.queue = request.queue;
         self.playback.current = Some(track.clone());
@@ -461,6 +477,7 @@ impl App {
         self.playback.current = None;
         self.playback.playing_entry = None;
         self.playback.playing_playlist = None;
+        self.playback.playing_source = None;
         self.playback.waveform = None;
         self.cancel_waveform();
         self.playback.queue = PlaybackQueue::default();

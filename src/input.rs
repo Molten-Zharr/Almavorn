@@ -248,8 +248,8 @@ impl Action {
             Self::SeekForward => language.text("Seek forward by five seconds if the file supports it.", "Перемотать вперёд на пять секунд, если файл поддерживает перемотку."),
             Self::SeekBackward => language.text("Seek backward by five seconds if the file supports it.", "Перемотать назад на пять секунд, если файл поддерживает перемотку."),
             Self::SwitchMode => language.text("Switch between Order and Chaos playlists.", "Переключить плейлисты Порядка и Хаоса."),
-            Self::ToggleEdit => language.text("Unlock or protect changes to Order playlists.", "Разрешить либо запретить изменение плейлистов Порядка."),
-            Self::ToggleDesk => language.text("Route imported files to the desk or selected playlist.", "Направлять добавляемые файлы на стол либо в выбранный плейлист."),
+            Self::ToggleEdit => language.text("Open only the selected Order playlist for editing; Done protects it again.", "Открыть для редактирования только выбранный плейлист Порядка. Готово снова защищает его."),
+            Self::ToggleDesk => language.text("Route imported files to the desk or selected playlist.", "Направлять импорт на общий стол. Без галочки — в выбранный доступный для правки плейлист; защищенный плейлист направит импорт на стол."),
             Self::AddFiles => language.text("Select music files to import.", "Выбрать музыкальные файлы для добавления."),
             Self::AddFolder => language.text("Select a folder and import its music.", "Выбрать папку и добавить её музыку."),
             Self::AddFolderPlaylists => language.text("Check folders and create one playlist per folder, named after it. Subfolders are skipped unless groups are enabled.", "Отметить папки и создать из каждой плейлист с ее названием. Подпапки пропускаются, если не включены группы."),
@@ -257,7 +257,7 @@ impl Action {
             Self::PlaylistFolders => language.text("View and manage folders used to find new tracks for this playlist.", "Просмотреть и настроить папки для поиска новых композиций этого плейлиста."),
             Self::NewPlaylist => language.text("Create an empty playlist in the current mode.", "Создать пустой плейлист в текущем режиме."),
             Self::CopyPlaylist => language.text("Create a copy with the same stored track positions and linked folders. Order requires editing.", "Создать копию с теми же сохраненными позициями композиций и связанными папками. В Порядке требуется редактирование."),
-            Self::ComposePlaylists => language.text("Build a new playlist from several lists in the chosen order, skipping repeated tracks. Original playlists are kept.", "Собрать новый плейлист из нескольких в выбранном порядке, пропуская повторные композиции. Исходные плейлисты сохраняются."),
+            Self::ComposePlaylists => language.text("Choose source playlists, select tracks and arrange them in a new mix. Source playlists are kept.", "Выбрать источники, отметить композиции и задать их порядок в новой подборке. Исходные плейлисты сохраняются."),
             Self::Rename => language.text("Rename the playlist or the local track title.", "Переименовать плейлист либо название композиции в базе."),
             Self::Delete => language.text("Confirm removal of a playlist or track entry; keep source files.", "Подтвердить удаление плейлиста либо композиции из списка; сохранить исходные файлы."),
             Self::MoveUp => language.text("Move the selection one position earlier in stored order.", "Переместить выбранный элемент на одну позицию выше в сохранённом порядке."),
@@ -299,7 +299,7 @@ impl Action {
             Self::SeekForward => language.text("Seek +5 seconds", "Вперед на 5 секунд"),
             Self::SeekBackward => language.text("Seek -5 seconds", "Назад на 5 секунд"),
             Self::SwitchMode => language.text("Switch mode", "Сменить режим"),
-            Self::ToggleEdit => language.text("Order editing", "Редактирование Порядка"),
+            Self::ToggleEdit => language.text("Edit selected playlist", "Редактировать плейлист"),
             Self::ToggleDesk => {
                 language.text("Add to sorting desk", "Добавлять в сортировочный стол")
             }
@@ -310,7 +310,7 @@ impl Action {
             Self::PlaylistFolders => language.text("Playlist folders", "Папки плейлиста"),
             Self::NewPlaylist => language.text("New playlist", "Создать плейлист"),
             Self::CopyPlaylist => language.text("Copy playlist", "Копия плейлиста"),
-            Self::ComposePlaylists => language.text("Compose playlists", "Собрать плейлист"),
+            Self::ComposePlaylists => language.text("Build mix", "Собрать подборку"),
             Self::Rename => language.text("Rename", "Переименовать"),
             Self::Delete => language.text("Remove", "Убрать"),
             Self::MoveUp => language.text("Move up", "Переместить выше"),

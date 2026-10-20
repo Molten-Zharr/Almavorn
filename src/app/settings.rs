@@ -314,6 +314,23 @@ impl App {
     }
     pub(super) fn close_dialog(&mut self) -> bool {
         match self.view.dialog.take() {
+            Some(Dialog::Text(super::TextDialog {
+                purpose:
+                    TextPurpose::ComposeSelection {
+                        sources,
+                        entries,
+                        available,
+                    },
+                ..
+            })) => {
+                self.view.dialog = Some(Dialog::ComposeTracks {
+                    sources,
+                    selected: 0,
+                    entries: available,
+                    included: entries.into_iter().collect(),
+                });
+                true
+            }
             Some(
                 Dialog::Text(super::TextDialog {
                     purpose: TextPurpose::Settings(_),
