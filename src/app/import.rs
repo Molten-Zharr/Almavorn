@@ -67,7 +67,7 @@ impl App {
     }
 
     pub(super) fn import_target(&self) -> Option<i64> {
-        if self.settings.preferences.sorting_desk {
+        if self.settings.mode == Mode::Order || self.settings.preferences.sorting_desk {
             self.library
                 .playlists
                 .iter()
