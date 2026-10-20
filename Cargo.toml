@@ -57,6 +57,7 @@ anyhow = "1"
 tokio = { version = "1.53.2", features = ["rt-multi-thread", "sync", "time", "macros"] }
 dirs = "6"
 lofty = "0.25.4"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 rodio = { version = "0.22.2", default-features = false, features = ["playback", "symphonia-all"] }
 rusqlite = { version = "0.40.2", default-features = false, features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
