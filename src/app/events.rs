@@ -11,6 +11,7 @@ impl App {
     pub fn accepts_text(&self) -> bool {
         matches!(self.view.dialog, Some(Dialog::Text(_)))
             || matches!(self.view.dialog, Some(Dialog::Search(_)))
+            || matches!(self.view.dialog, Some(Dialog::Browser(_)))
             || (self.view.dialog.is_none() && self.view.filter_editing)
     }
 
@@ -226,6 +227,9 @@ impl App {
                 }
             }
             Input::Text(text) => {
+                if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
+                    return self.browser_text(&text);
+                }
                 if self.query_text(&text)? {
                     return self.tick_search();
                 }
@@ -320,6 +324,9 @@ impl App {
     }
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
+        if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
+            return self.browser_key(key);
+        }
         if self.view.dialog.is_none() && self.view.filter_editing {
             return self.filter_key(key);
         }
@@ -706,6 +713,7 @@ impl App {
             }
             Target::BrowserRow(index) => {
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+                    browser.search.clear();
                     browser.selected = index;
                     browser.selection_explicit = browser.entries.get(index).is_some();
                     if browser.folder_playlists.is_none() {
@@ -718,6 +726,7 @@ impl App {
             }
             Target::BrowserMark(index) => {
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+                    browser.search.clear();
                     browser.selected = index;
                     browser.selection_explicit = browser.entries.get(index).is_some();
                     browser.toggle_mark(index);

@@ -54,7 +54,7 @@ pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::TunerPin => Some("P".into()),
         Target::SettingHelp(_) => Some("F1".into()),
         Target::CloseDialog => Some("Esc".into()),
-        Target::BrowserParent => Some("Backspace".into()),
+        Target::BrowserParent => Some("Alt+Up".into()),
         Target::BrowserMarkAll => Some("Ctrl+A".into()),
         Target::BrowserClearMarks => Some("Ctrl+D".into()),
         Target::BrowserAdd => Some("Ctrl+Enter".into()),
@@ -65,7 +65,7 @@ pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::FolderEdit => Some("F3".into()),
         Target::FolderRemove => Some("Delete".into()),
         Target::FolderScan => Some("R".into()),
-        Target::ScanSubfolders => Some("Space".into()),
+        Target::ScanSubfolders => Some("Ctrl+Space".into()),
         Target::ComposeMove(direction) => Some(
             if *direction < 0 {
                 "Ctrl+Up"

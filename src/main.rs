@@ -271,6 +271,14 @@ fn run() -> Result<()> {
                                 physical
                             };
                             if let Some(key) = convert_key(key) {
+                                if text_active
+                                    && matches!(key, Key::Char(_))
+                                    && !modifiers.ctrl
+                                    && !modifiers.command
+                                    && !modifiers.alt
+                                {
+                                    continue;
+                                }
                                 app.handle(Input::Key(KeyPress {
                                     key,
                                     ctrl: modifiers.ctrl || modifiers.command,

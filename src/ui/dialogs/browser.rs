@@ -63,7 +63,7 @@ pub(super) fn browser_dialog(
             }
             .into(),
             Target::BrowserOpen,
-            !browser.entries.is_empty(),
+            !browser.entries.is_empty() && !browser.search_failed(),
         ),
     ];
     if browser.palette_file.is_some() {
@@ -153,7 +153,34 @@ pub(super) fn browser_dialog(
     } else {
         2
     };
-    let list_top = inner.y + path_height + used;
+    let search_y = inner.y + path_height + used;
+    if search_y < inner.bottom().saturating_sub(footer_height) {
+        let (caption, color) = if browser.search.is_empty() {
+            (
+                app.text("Type a name to search", "Наберите имя для поиска").into(),
+                palette.muted,
+            )
+        } else if app.browser_ready() && browser.search_failed() {
+            (
+                format!(
+                    "{}: {}",
+                    app.text("No matches", "Нет совпадений"),
+                    browser.search
+                ),
+                palette.error,
+            )
+        } else {
+            (
+                format!("{}: {}", app.text("Search", "Поиск"), browser.search),
+                palette.accent,
+            )
+        };
+        frame.render_widget(
+            Paragraph::new(caption).style(palette.text().fg(color)),
+            Rect::new(inner.x, search_y, inner.width, 1),
+        );
+    }
+    let list_top = search_y.saturating_add(1);
     let list = Rect::new(
         inner.x,
         list_top,
@@ -236,7 +263,7 @@ pub(super) fn browser_dialog(
                 clean(&name),
                 if entry.directory { "/" } else { "" }
             ))
-            .style(if browser.selected == index {
+            .style(if browser.selected == index && !browser.search_failed() {
                 palette
                     .text()
                     .bg(palette.selection)
@@ -306,7 +333,9 @@ pub(super) fn browser_dialog(
         add,
         Target::BrowserAdd,
         app.browser_ready()
-            && if browser.folder_playlists.is_some() {
+            && if browser.search_failed() {
+                !browser.marked.is_empty()
+            } else if browser.folder_playlists.is_some() {
                 !browser.marked.is_empty()
             } else {
                 browser.folder

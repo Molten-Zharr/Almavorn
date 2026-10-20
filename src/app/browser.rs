@@ -36,6 +36,7 @@ pub struct Browser {
     pub offset: usize,
     pub selection_explicit: bool,
     pub marked: HashSet<PathBuf>,
+    pub search: String,
     pub folder: bool,
     /// Some(group_subfolders) selects one playlist per checked directory.
     pub folder_playlists: Option<bool>,
@@ -53,6 +54,7 @@ impl Browser {
             offset: 0,
             selection_explicit: false,
             marked: HashSet::new(),
+            search: String::new(),
             folder,
             folder_playlists: None,
             playlist_name: None,
@@ -119,6 +121,46 @@ impl Browser {
             }
     }
 
+    pub fn search_failed(&self) -> bool {
+        !self.search.is_empty()
+            && !self.entries.get(self.selected).is_some_and(|entry| {
+                entry
+                    .path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_lowercase()
+                    .contains(&self.search.to_lowercase())
+            })
+    }
+
+    fn select_search_match(&mut self) {
+        if self.search.is_empty() {
+            return;
+        }
+        let query = self.search.to_lowercase();
+        let mut first = None;
+        for (index, entry) in self.entries.iter().enumerate() {
+            let name = entry
+                .path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase();
+            if name.starts_with(&query) {
+                first = Some(index);
+                break;
+            }
+            if first.is_none() && name.contains(&query) {
+                first = Some(index);
+            }
+        }
+        if let Some(index) = first {
+            self.selected = index;
+            self.selection_explicit = true;
+        }
+    }
+
     pub(super) fn toggle_mark(&mut self, index: usize) {
         if let Some(entry) = self.entries.get(index)
             && self.can_mark(entry)
@@ -130,17 +172,61 @@ impl Browser {
 }
 
 impl App {
+    pub(super) fn browser_text(&mut self, text: &str) -> Result<()> {
+        let Some(Dialog::Browser(browser)) = &mut self.view.dialog else {
+            return Ok(());
+        };
+        if text == " " && browser.search.is_empty() {
+            if browser.folder
+                && browser.folder_playlists.is_none()
+                && browser.playlist_name.is_none()
+                && browser.palette_file.is_none()
+            {
+                return self.target(Target::ScanSubfolders, false);
+            }
+            browser.toggle_mark(browser.selected);
+        } else {
+            let remaining = 256usize.saturating_sub(browser.search.chars().count());
+            browser
+                .search
+                .extend(text.chars().filter(|c| !c.is_control()).take(remaining));
+            browser.select_search_match();
+        }
+        self.view.pointer = ratatui::layout::Position::new(u16::MAX, u16::MAX);
+        Ok(())
+    }
+
     pub(super) fn browser_key(&mut self, key: KeyPress) -> Result<()> {
+        if key.key == Key::Escape {
+            if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+                && !browser.search.is_empty()
+            {
+                browser.search.clear();
+            } else {
+                self.close_dialog();
+            }
+            return Ok(());
+        }
+        if key.alt && !key.ctrl && key.key == Key::Up {
+            return self.target(Target::BrowserParent, false);
+        }
+        if key.ctrl && !key.alt && key.key == Key::Char(' ') {
+            if matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.playlist_name.is_none() && browser.palette_file.is_none())
+            {
+                return self.target(Target::ScanSubfolders, false);
+            }
+            if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+                && !browser.search_failed()
+            {
+                browser.toggle_mark(browser.selected);
+            }
+            return Ok(());
+        }
         if key.ctrl
             && key.key == Key::Char('g')
             && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder_playlists.is_some())
         {
             return self.target(Target::CreateFolderGroups, false);
-        }
-        if key.key == Key::Char(' ')
-            && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.playlist_name.is_none() && browser.palette_file.is_none())
-        {
-            return self.target(Target::ScanSubfolders, false);
         }
         if key.key == Key::Char('a') && key.ctrl {
             return self.target(Target::BrowserMarkAll, false);
@@ -148,7 +234,7 @@ impl App {
         if key.key == Key::Char('d') && key.ctrl {
             return self.target(Target::BrowserClearMarks, false);
         }
-        if (key.key == Key::Enter && key.ctrl) || key.key == Key::Char('a') {
+        if key.key == Key::Enter && key.ctrl {
             if key.key == Key::Enter
                 && key.shift
                 && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.palette_file.is_none())
@@ -157,8 +243,21 @@ impl App {
             }
             return self.browser_add();
         }
+        if key.ctrl || key.alt {
+            return Ok(());
+        }
         match key.key {
-            Key::Backspace => return self.target(Target::BrowserParent, false),
+            Key::Char(character) => return self.browser_text(&character.to_string()),
+            Key::Backspace => {
+                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+                    && !browser.search.is_empty()
+                {
+                    browser.search.pop();
+                    browser.select_search_match();
+                    return Ok(());
+                }
+                return self.target(Target::BrowserParent, false);
+            }
             Key::Home | Key::End => {
                 self.scroll_dialog(if key.key == Key::Home {
                     i16::MIN
@@ -167,8 +266,10 @@ impl App {
                 });
                 return Ok(());
             }
-            Key::Char(' ') | Key::Insert => {
-                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            Key::Insert => {
+                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+                    && !browser.search_failed()
+                {
                     browser.toggle_mark(browser.selected);
                 }
                 return Ok(());
@@ -300,6 +401,7 @@ impl App {
             browser.selected = 0;
             browser.offset = 0;
             browser.selection_explicit = false;
+            browser.search.clear();
         }
         self.browser_state.job.request(BrowserRequest {
             directory,
@@ -369,6 +471,7 @@ impl App {
             browser.offset = loaded.offset;
             // Restoring navigation focus does not confirm a choice of that child folder.
             browser.selection_explicit = false;
+            browser.select_search_match();
             self.browser_state.ready = true;
             if !self.view.notice_error {
                 self.message(self.text("Folder loaded", "Папка прочитана").into());
@@ -401,6 +504,9 @@ impl App {
         }
     }
     pub(super) fn browser_open(&mut self) -> Result<()> {
+        if matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.search_failed()) {
+            return Ok(());
+        }
         if matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.palette_file.is_some()
             && browser.entries.get(browser.selected).is_some_and(|entry| !entry.directory))
         {
@@ -436,6 +542,11 @@ impl App {
 
     fn confirm_browser(&mut self, current_folder: bool) -> Result<()> {
         ensure!(self.browser_state.ready, AppError::FolderNotReady);
+        if !current_folder
+            && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.search_failed() && browser.marked.is_empty())
+        {
+            return Ok(());
+        }
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(group_subfolders) = browser.folder_playlists
         {

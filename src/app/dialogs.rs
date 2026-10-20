@@ -235,6 +235,7 @@ impl App {
                 )
             }
             Some(Dialog::Browser(browser)) => {
+                browser.search.clear();
                 browser.selected =
                     bounded(browser.selected, direction as i64, browser.entries.len());
                 browser.selection_explicit = !browser.entries.is_empty();
