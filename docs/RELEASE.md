@@ -109,8 +109,10 @@ git tag -a v0.1.4 -m "Almavorn 0.1.4"
 git push origin refs/tags/v0.1.4
 ```
 
-GitHub Actions соберет архив на Ubuntu 22.04 и добавит его с SHA256SUMS
-в черновик GitHub Release. Дождитесь успешного завершения Release в Actions,
-откройте [Releases](https://github.com/Molten-Zharr/Almavorn/releases),
-проверьте описание и файлы, затем нажмите Publish release для публичного
-скачивания. Раздел Packages для этих архивов не используется.
+GitHub Actions соберет архив на Ubuntu 22.04, создаст черновик GitHub Release
+и загрузит в него архив и SHA256SUMS. После успешной загрузки выпуск
+автоматически публикуется для скачивания. Если загрузка не завершилась,
+выпуск остается черновиком. Дождитесь успешного завершения Release в Actions
+и проверьте описание и файлы на странице
+[Releases](https://github.com/Molten-Zharr/Almavorn/releases).
+Раздел Packages для этих архивов не используется.
