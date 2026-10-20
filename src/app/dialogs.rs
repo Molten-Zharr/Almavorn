@@ -108,6 +108,11 @@ pub enum Dialog {
         description: String,
         offset: usize,
     },
+    CopyableHelp {
+        title: String,
+        description: String,
+        offset: usize,
+    },
     Metadata {
         track: Track,
         offset: usize,
@@ -125,7 +130,7 @@ impl Dialog {
             Self::PlaybackTuner { .. } => Some(Action::PlaybackTuner),
             Self::Equalizer { .. } => Some(Action::Equalizer),
             Self::Panels { .. } => Some(Action::Panels),
-            Self::Help { .. } | Self::SettingsHelp { .. } => Some(Action::Help),
+            Self::Help { .. } | Self::SettingsHelp { .. } | Self::CopyableHelp { .. } => Some(Action::Help),
             Self::Settings { .. } => Some(Action::Settings),
             Self::Browser(browser) if browser.palette_file.is_some() => None,
             Self::Browser(browser) if browser.playlist_name.is_some() => None,
@@ -161,12 +166,40 @@ impl Dialog {
                     | Self::ConfirmSettings { .. }
                     | Self::ConfirmResetBindings { .. }
                     | Self::SettingsHelp { .. }
+                    | Self::CopyableHelp { .. }
                     | Self::CaptureBinding { .. }
             )
     }
 }
 
 impl App {
+    pub fn copy_help(&mut self, line: Option<usize>) -> bool {
+        let Some(Dialog::CopyableHelp { description, .. }) = &self.view.dialog else {
+            return false;
+        };
+        let text = match line {
+            Some(line) => {
+                let Some(text) = description.lines().nth(line) else { return false; };
+                text.to_owned()
+            }
+            None => description.clone(),
+        };
+        self.view.clipboard_text = Some(text);
+        true
+    }
+
+    pub fn clipboard_result(&mut self, result: std::result::Result<(), String>, terminal: bool) {
+        match result {
+            Ok(()) => self.message(if terminal {
+                self.text("Copy request sent to the terminal", "Запрос копирования передан терминалу")
+            } else {
+                self.text("Copied", "Скопировано")
+            }.into()),
+            Err(error) => self.failure(anyhow::anyhow!("{}: {error}",
+                self.text("Could not copy text", "Не удалось скопировать текст"))),
+        }
+    }
+
     pub(super) fn text_dialog(&mut self, purpose: TextPurpose, text: String) {
         let selected_all = !text.is_empty();
         let color_picker = if matches!(
@@ -252,6 +285,7 @@ impl App {
             }
             Some(Dialog::Help { offset })
             | Some(Dialog::Metadata { offset, .. })
+            | Some(Dialog::CopyableHelp { offset, .. })
             | Some(Dialog::SettingsHelp { offset, .. }) => {
                 *offset = bounded(
                     *offset,

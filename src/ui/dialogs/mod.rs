@@ -402,6 +402,10 @@ pub(super) fn render_dialog(
             );
             dialog_footer(frame, app, inner, palette);
         }
+        Dialog::CopyableHelp { title, description, offset } => {
+            let inner = modal(frame, app, area, title.clone(), 24, palette);
+            help::copyable_text(frame, app, offset, inner, description, palette);
+        }
         Dialog::Help { offset } => {
             let inner = modal(
                 frame,

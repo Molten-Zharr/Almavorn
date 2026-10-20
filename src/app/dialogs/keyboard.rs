@@ -10,6 +10,11 @@ impl App {
     /// Every dialog owns its remaining keys, including keys it ignores.
     pub(in crate::app) fn dialog_key(&mut self, key: KeyPress) -> Result<()> {
         match self.view.dialog.as_ref() {
+            Some(Dialog::CopyableHelp { .. })
+                if key.ctrl && key.key == Key::Char('c') || key.key == Key::Enter => {
+                self.copy_help(None);
+                Ok(())
+            }
             Some(Dialog::Settings { .. }) => self.settings_key(key),
             Some(Dialog::Equalizer { .. }) => self.equalizer_key(key.normalized()),
             Some(Dialog::PlaybackTuner { .. }) => self.tuner_key(key.normalized()),
@@ -47,6 +52,7 @@ impl App {
                 | Dialog::Help { .. }
                 | Dialog::ConfirmSettings { .. }
                 | Dialog::SettingsHelp { .. }
+                | Dialog::CopyableHelp { .. }
                 | Dialog::Metadata { .. },
             ) => self.dialog_navigation_key(key),
             None => Ok(()),

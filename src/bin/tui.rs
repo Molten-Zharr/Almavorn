@@ -14,7 +14,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend, layout::Position};
 use std::{
-    io::stdout,
+    io::{Write, stdout},
     time::{Duration, Instant},
 };
 
@@ -30,6 +30,36 @@ impl Drop for TerminalSession {
             crossterm::cursor::Show
         );
     }
+}
+
+fn copy_to_terminal(text: &str) -> std::io::Result<()> {
+    // OSC 52 works without desktop clipboard utilities, including over SSH.
+    // The terminal decides whether clipboard writes are permitted.
+    const BASE64: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut sequence = Vec::with_capacity(8 + text.len().div_ceil(3) * 4);
+    sequence.extend_from_slice(b"\x1b]52;c;");
+    for chunk in text.as_bytes().chunks(3) {
+        let first = chunk[0];
+        let second = chunk.get(1).copied().unwrap_or(0);
+        let third = chunk.get(2).copied().unwrap_or(0);
+        sequence.push(BASE64[(first >> 2) as usize]);
+        sequence.push(BASE64[(((first & 3) << 4) | (second >> 4)) as usize]);
+        sequence.push(if chunk.len() > 1 {
+            BASE64[(((second & 15) << 2) | (third >> 6)) as usize]
+        } else {
+            b'='
+        });
+        sequence.push(if chunk.len() > 2 {
+            BASE64[(third & 63) as usize]
+        } else {
+            b'='
+        });
+    }
+    sequence.push(b'\x07');
+    let mut output = stdout().lock();
+    output.write_all(&sequence)?;
+    output.flush()
 }
 
 fn main() {
@@ -71,6 +101,9 @@ fn run() -> Result<()> {
     let mut previous_click: Option<(Position, Instant)> = None;
     while !app.view.quit {
         app.tick();
+        if let Some(text) = app.view.clipboard_text.take() {
+            app.clipboard_result(copy_to_terminal(&text).map_err(|error| error.to_string()), true);
+        }
         terminal.draw(|frame| ui::render(&mut app, frame))?;
         if !event::poll(Duration::from_millis(50))? {
             continue;
@@ -78,6 +111,9 @@ fn run() -> Result<()> {
         match event::read()? {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    if app.copy_help(None) {
+                        continue;
+                    }
                     app.action(Action::Quit)?;
                     continue;
                 }

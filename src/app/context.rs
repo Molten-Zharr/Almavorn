@@ -66,6 +66,7 @@ pub struct UiState {
     pub focus: Focus,
     pub workspace: crate::workspace::Workspace,
     pub dialog: Option<Dialog>,
+    pub clipboard_text: Option<String>,
     pub hits: Vec<Hit>,
     pub keycaps: Vec<Keycap>,
     pub graphical_keycaps: bool,

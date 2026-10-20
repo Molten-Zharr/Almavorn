@@ -213,6 +213,7 @@ fn run() -> Result<()> {
                             | Target::TunerSelect(_)
                             | Target::SettingsTimeline(_, _),
                         ) => egui::CursorIcon::PointingHand,
+                        Some(Target::CopyHelp(_)) => egui::CursorIcon::PointingHand,
                         Some(Target::SearchInput | Target::FilterInput) => egui::CursorIcon::Text,
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
                         Some(Target::PanelResize(index)) => {
@@ -255,6 +256,9 @@ fn run() -> Result<()> {
                         continue;
                     }
                     match event {
+                        egui::Event::Copy => {
+                            app.copy_help(None);
+                        }
                         egui::Event::Key {
                             key,
                             physical_key,
@@ -344,6 +348,10 @@ fn run() -> Result<()> {
                 color_painter.paint(ui, image_rect, &app, dimensions);
                 gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
             });
+        if let Some(text) = app.view.clipboard_text.take() {
+            ctx.copy_text(text);
+            app.clipboard_result(Ok(()), false);
+        }
         if app.view.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }

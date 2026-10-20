@@ -296,7 +296,7 @@ impl App {
                 _ => {}
             }
         }
-        self.view.dialog = Some(Dialog::SettingsHelp {
+        self.view.dialog = Some(Dialog::CopyableHelp {
             title: self.text("System media controls · MPRIS", "Системное управление · MPRIS").into(),
             description: format!("{details}\n\n{}\n\n{}\nplayerctl --player={player} play-pause\nplayerctl --player={player} next\nplayerctl --player={player} volume 0.05+\n\n{}\nalmavorn --play-pause\nalmavorn --next", self.text(
                 "MPRIS connects this player to your desktop over the session D-Bus. Media keys and system panels can control playback without focusing Almavorn. Desktop support and the selected active player determine where media keys go.",

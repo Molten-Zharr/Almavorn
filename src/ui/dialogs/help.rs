@@ -37,6 +37,63 @@ pub(super) fn scroll_text(
     frame.render_widget(paragraph.scroll((*offset as u16, 0)), body);
 }
 
+pub(super) fn copyable_text(
+    frame: &mut Frame,
+    app: &mut App,
+    offset: &mut usize,
+    inner: Rect,
+    description: &str,
+    palette: Palette,
+) {
+    let footer_height = inner.height.min(3);
+    let hint_height = inner.height.saturating_sub(footer_height).min(2);
+    let body = Rect::new(inner.x, inner.y, inner.width,
+        inner.height.saturating_sub(footer_height + hint_height));
+    let lines: Vec<_> = description.lines().map(|line| {
+        let height = Paragraph::new(line).wrap(Wrap { trim: false })
+            .line_count(body.width.max(1)).max(1);
+        (line, height)
+    }).collect();
+    let total: usize = lines.iter().map(|(_, height)| height).sum();
+    app.view.dialog_scroll_max = total.saturating_sub(body.height as usize);
+    *offset = (*offset).min(app.view.dialog_scroll_max);
+    let mut start = 0usize;
+    for (index, (line, height)) in lines.into_iter().enumerate() {
+        let end = start.saturating_add(height);
+        let visible_start = start.max(*offset);
+        let visible_end = end.min(offset.saturating_add(body.height as usize));
+        if visible_start < visible_end {
+            let row = Rect::new(body.x, body.y + (visible_start - *offset) as u16,
+                body.width, (visible_end - visible_start) as u16);
+            let copyable = !line.trim().is_empty();
+            let style = if copyable && app.hovered(row) {
+                palette.text().fg(palette.accent).add_modifier(Modifier::UNDERLINED)
+            } else {
+                palette.text()
+            };
+            frame.render_widget(Paragraph::new(line).style(style).wrap(Wrap { trim: false })
+                .scroll(((visible_start - start).min(u16::MAX as usize) as u16, 0)), row);
+            if copyable {
+                app.view.hits.push(Hit { area: row, target: Target::CopyHelp(Some(index)), enabled: true });
+            }
+        }
+        start = end;
+    }
+    frame.render_widget(Paragraph::new(app.text(
+        "Click a line to copy it. Ctrl+C: copy all text.",
+        "Нажмите строку для копирования. Ctrl+C: весь текст.",
+    )).style(palette.text().fg(palette.muted)).wrap(Wrap { trim: false }),
+        Rect::new(inner.x, body.bottom(), inner.width, hint_height));
+    super::super::widgets::buttons(frame, app,
+        Rect::new(inner.x, inner.bottom().saturating_sub(footer_height), inner.width, footer_height),
+        vec![
+            ("↑".into(), Target::DialogScroll(-5), *offset > 0),
+            ("↓".into(), Target::DialogScroll(5), *offset < app.view.dialog_scroll_max),
+            (app.text("Copy text", "Копировать текст").into(), Target::CopyHelp(None), true),
+            (app.text("Close", "Закрыть").into(), Target::CloseDialog, true),
+        ], palette);
+}
+
 pub(super) fn help_dialog(
     frame: &mut Frame,
     app: &mut App,

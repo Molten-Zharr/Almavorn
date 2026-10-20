@@ -322,6 +322,7 @@ impl App {
                 | Dialog::ConfirmSettings { .. }
                 | Dialog::ConfirmResetBindings { .. }
                 | Dialog::SettingsHelp { .. }
+                | Dialog::CopyableHelp { .. }
                 | Dialog::CaptureBinding { .. },
             ) => {
                 self.show_settings();

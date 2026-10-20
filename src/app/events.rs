@@ -358,7 +358,7 @@ impl App {
                 .bindings
                 .iter()
                 .any(|binding| binding.action == action && binding.key == normalized)
-                || (matches!(self.view.dialog, Some(Dialog::SettingsHelp { .. }))
+                || (matches!(self.view.dialog, Some(Dialog::SettingsHelp { .. } | Dialog::CopyableHelp { .. }))
                     && key == KeyPress::plain(Key::F(1))))
         {
             self.close_dialog();
@@ -430,6 +430,9 @@ impl App {
 
     pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
         match target {
+            Target::CopyHelp(line) => {
+                self.copy_help(line);
+            }
             Target::CommandMenu(menu) => self.open_commands(menu),
             Target::Visualizer(kind) => self.set_visualizer(kind)?,
             target @ (Target::StatisticsPage(_)
