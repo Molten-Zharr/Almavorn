@@ -1,4 +1,5 @@
 pub mod app;
+pub mod artwork;
 pub mod audio;
 pub mod color_picker;
 pub mod equalizer;
@@ -12,6 +13,7 @@ mod mpris;
 pub mod preferences;
 pub mod remote;
 pub mod statistics;
+pub mod tags;
 pub mod store;
 mod track_query;
 pub mod tuner;

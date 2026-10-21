@@ -16,6 +16,7 @@ impl App {
                 self.copy_help(None);
                 Ok(())
             }
+            Some(Dialog::Tags(_)) => self.tags_key(key),
             Some(Dialog::Settings { .. }) => self.settings_key(key),
             Some(Dialog::Equalizer { .. }) => self.equalizer_key(key.normalized()),
             Some(Dialog::PlaybackTuner { .. }) => self.tuner_key(key.normalized()),

@@ -114,7 +114,9 @@ fn run() -> Result<()> {
                     if app.copy_help(None) {
                         continue;
                     }
-                    app.action(Action::Quit)?;
+                    if !app.writing_tags() {
+                        app.action(Action::Quit)?;
+                    }
                     continue;
                 }
                 if app.accepts_text()

@@ -65,6 +65,10 @@ impl App {
             .playlist()
             .is_some_and(|playlist| self.playlist_editable(playlist));
         match action {
+            Quit if self.writing_tags() => false,
+            EditTags => !self.busy() && !self.writing_tags()
+                && self.playlist().is_some_and(|playlist| playlist.kind == PlaylistKind::SortingDesk)
+                && self.entry().is_some(),
             PlaylistFolders => self.playlist().is_some(),
             CopyPlaylist => !self.busy() && self.playlist().is_some(),
             ComposePlaylists => !self.busy() && !self.compose_choices().is_empty(),
@@ -547,6 +551,7 @@ impl App {
                     });
                 }
             }
+            EditTags => self.open_tag_editor()?,
             Mark => {
                 if let Some(id) = self.library.selected_entry {
                     self.toggle_mark(id)?;

@@ -361,6 +361,7 @@ pub struct ProfilePreferences {
     pub shuffle: bool,
     pub equalizer: crate::equalizer::EqualizerSettings,
     pub equalizer_base_preset: Option<usize>,
+    pub artwork: crate::artwork::ArtworkSettings,
     pub tuner: crate::tuner::TunerSettings,
     pub sorting_desk: bool,
     pub scan_subfolders: bool,
@@ -387,6 +388,7 @@ impl Default for ProfilePreferences {
             shuffle: false,
             equalizer: Default::default(),
             equalizer_base_preset: None,
+            artwork: Default::default(),
             tuner: Default::default(),
             sorting_desk: true,
             scan_subfolders: true,
@@ -438,6 +440,7 @@ impl ProfilePreferences {
             if matches!(
                 binding.action,
                 crate::input::Action::Filter
+                    | crate::input::Action::EditTags
                     | crate::input::Action::AddFolderPlaylists
                     | crate::input::Action::PlaylistFolders
                     | crate::input::Action::CopyPlaylist

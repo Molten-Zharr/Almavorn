@@ -11,6 +11,7 @@ pub(super) enum DatabaseOutcome {
     Changed(Change),
     Created(Change),
     Renamed,
+    TagsWritten(crate::model::Track, Option<std::path::PathBuf>),
     Restored { change: Change, redo: bool },
 }
 pub(super) struct DatabaseJob {
@@ -61,6 +62,9 @@ impl App {
             .database
             .take()
             .expect("database operation is present");
+        let writing_tags = self.tags.saving;
+        let mut preserved_tags = None;
+        self.tags.saving = false;
         match result {
             Ok(DatabaseOutcome::Changed(change)) => self.remember(change)?,
             Ok(DatabaseOutcome::Created(change)) => {
@@ -83,6 +87,15 @@ impl App {
                 }
             }
             Ok(DatabaseOutcome::Renamed) => {}
+            Ok(DatabaseOutcome::TagsWritten(track, preserved)) => {
+                preserved_tags = preserved;
+                self.update_playback_metadata(&track);
+                if self.playback.current.as_ref().is_some_and(|current| current.id == track.id) {
+                    self.playback.current = Some(track);
+                    self.invalidate_artwork();
+                }
+                self.view.dialog = None;
+            }
             Ok(DatabaseOutcome::Restored { change, redo }) => {
                 let history = self.library.histories.entry(change.scope).or_default();
                 if redo {
@@ -109,7 +122,15 @@ impl App {
                 return Err(error);
             }
         }
-        self.message(self.text("Library updated", "Библиотека обновлена").into());
+        self.message(if writing_tags {
+            self.text("File tags saved", "Теги записаны в файл и библиотеку")
+        } else {
+            self.text("Library updated", "Библиотека обновлена")
+        }.into());
+        if let Some(path) = preserved_tags {
+            self.message(format!("{}: {}", self.text("File tags saved. A concurrently modified original was kept", "Теги записаны. Исходник, измененный другой программой, сохранен"), path.display()));
+            self.view.notice_until = None;
+        }
         if self.library.revision == self.store.revision() && self.library.import.is_none() {
             self.validate_history();
         }

@@ -169,6 +169,7 @@ pub enum Action {
     Undo,
     Redo,
     Metadata,
+    EditTags,
     Mark,
     PlayMarked,
     PlayWholePlaylist,
@@ -270,7 +271,8 @@ impl Action {
             Self::Sort => language.text("Cycle view sorting; click a column header to sort, click again to reverse. Saved positions stay unchanged.", "Менять сортировку вида; клик по заголовку сортирует, повторный клик меняет направление. Позиции в базе сохраняются."),
             Self::Undo => language.text("Undo a library change in Chaos or the sorting desk.", "Отменить правку библиотеки в Хаосе либо на сортировочном столе."),
             Self::Redo => language.text("Repeat a library change that was undone.", "Повторить отменённую правку библиотеки."),
-            Self::Metadata => language.text("Show saved metadata and original imported tags.", "Показать сохранённые сведения и исходные импортированные теги."),
+            Self::Metadata => language.text("Show saved metadata and file tags.", "Показать сохраненные сведения и теги файла."),
+            Self::EditTags => language.text("Edit and clear tags on the sorting desk, then write them to the audio file.", "Изменить или очистить теги на сортировочном столе и записать их в аудиофайл."),
             Self::Mark => language.text("Toggle the selected track's checkbox for copying or looping checked tracks.", "Изменить отметку выбранной композиции для копирования или повтора отмеченных."),
             Self::PlayMarked => language.text("Loop checked tracks in this playlist. Checkboxes update the set immediately; clearing all stops playback. No playlist is created.", "Проигрывать отмеченные композиции этого плейлиста по кругу. Галочки сразу меняют набор; снятие всех отметок останавливает воспроизведение. Новый плейлист не создается."),
             Self::PlayWholePlaylist => language.text("Leave the checked-track loop and continue the whole playing playlist without restarting the current track.", "Выйти из повтора отмеченных и продолжить весь воспроизводимый плейлист без перезапуска текущей композиции."),
@@ -324,6 +326,7 @@ impl Action {
             Self::Undo => language.text("Undo", "Отменить"),
             Self::Redo => language.text("Redo", "Повторить"),
             Self::Metadata => language.text("Track information", "Сведения о композиции"),
+            Self::EditTags => language.text("Edit file tags", "Редактор тегов файла"),
             Self::Mark => language.text("Mark track", "Отметить композицию"),
             Self::PlayMarked => {
                 language.text("Play checked tracks only", "Прослушивать только отмеченные")
@@ -379,6 +382,7 @@ pub fn default_bindings() -> Vec<Binding> {
         (Search, Key::Char('/')),
         (Sort, Key::Char('o')),
         (Metadata, Key::Char('i')),
+        (EditTags, Key::F(8)),
         (Mark, Key::Insert),
     ];
     let mut bindings: Vec<_> = normal

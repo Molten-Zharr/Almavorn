@@ -49,6 +49,7 @@ pub const COMMANDS: &[(Action, &str)] = &[
     (Action::Undo, "undo"),
     (Action::Redo, "redo"),
     (Action::Metadata, "track-info"),
+    (Action::EditTags, "edit-file-tags"),
     (Action::Mark, "mark"),
     (Action::PlayMarked, "play-marked"),
     (Action::PlayWholePlaylist, "play-playlist"),

@@ -14,6 +14,7 @@ type WaveformKey = (usize, usize, egui::Rect, egui::Color32, egui::Color32);
 pub struct PlaybackPainter {
     waveform_key: Option<WaveformKey>,
     waveform_meshes: Option<(Arc<egui::Mesh>, Arc<egui::Mesh>)>,
+    artwork_texture: Option<(Arc<almavorn::artwork::ArtworkImage>, egui::TextureHandle)>,
 }
 
 impl PlaybackPainter {
@@ -24,9 +25,7 @@ impl PlaybackPainter {
         app: &App,
         size: ratatui::layout::Size,
     ) {
-        if (app.view.dialog.is_some() && app.view.overlay_area.is_empty())
-            || (app.view.progress_area.is_empty() && app.view.waveform_area.is_empty())
-        {
+        if app.view.dialog.is_some() && app.view.overlay_area.is_empty() {
             return;
         }
         let scale = egui::vec2(
@@ -42,6 +41,12 @@ impl PlaybackPainter {
                 ),
             )
         };
+        if !app.view.artwork_area.is_empty() {
+            self.paint_artwork(ui, image, map(app.view.artwork_area), app);
+        }
+        if app.view.progress_area.is_empty() && app.view.waveform_area.is_empty() {
+            return;
+        }
         let waveform = !app.view.waveform_area.is_empty();
         let wave = map(if waveform {
             app.view.waveform_area
@@ -156,6 +161,29 @@ impl PlaybackPainter {
             }
             painter.circle_filled(egui::pos2(x, wave.center().y), 2.5, active);
         }
+    }
+
+    fn paint_artwork(&mut self, ui: &egui::Ui, canvas: egui::Rect, area: egui::Rect, app: &App) {
+        let Some(image) = app.artwork_image() else {
+            self.artwork_texture = None;
+            return;
+        };
+        if self.artwork_texture.as_ref().is_none_or(|(cached, _)| !Arc::ptr_eq(cached, image)) {
+            let texture = ui.ctx().load_texture(
+                "almavorn-artwork",
+                egui::ColorImage::from_rgba_unmultiplied([image.width as usize, image.height as usize], &image.rgba),
+                egui::TextureOptions::LINEAR,
+            );
+            self.artwork_texture = Some((image.clone(), texture));
+        }
+        let Some((_, texture)) = &self.artwork_texture else { return };
+        let dimensions = egui::vec2(image.width as f32, image.height as f32);
+        let scale = (area.width() / dimensions.x).min(area.height() / dimensions.y);
+        let destination = egui::Rect::from_center_size(area.center(), dimensions * scale);
+        let painter = ui.painter().with_clip_rect(canvas.intersect(ui.clip_rect()));
+        let [r, g, b] = app.settings.current_palette().color("background");
+        painter.rect_filled(area, 0, egui::Color32::from_rgb(r, g, b));
+        painter.image(texture.id(), destination, egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
     }
 }
 

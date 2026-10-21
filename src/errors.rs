@@ -24,6 +24,8 @@ pub enum AppError {
     InvalidLegacyColor,
     InvalidColor,
     InvalidFontSize,
+    InvalidArtwork,
+    ArtworkTooLarge,
     InvalidCatalogName,
     CatalogNameConflict,
     PlaylistNameConflict,
@@ -144,6 +146,14 @@ impl AppError {
             Self::InvalidFontSize => language.text(
                 "Font size must be 10-32 pixels",
                 "Размер шрифта должен быть от 10 до 32 пикселей.",
+            ),
+            Self::InvalidArtwork => language.text(
+                "Cannot read the image. Choose an available PNG or JPEG file.",
+                "Не удалось прочитать картинку. Выберите доступный файл PNG или JPEG.",
+            ),
+            Self::ArtworkTooLarge => language.text(
+                "Image too large. Choose a file up to 32 MB and 8192 pixels per side.",
+                "Картинка слишком большая. Выберите файл до 32 МБ и до 8192 пикселей по каждой стороне.",
             ),
             Self::InvalidCatalogName => language.text(
                 "Name must contain 1-80 printable characters",

@@ -9,7 +9,8 @@ use ratatui::layout::{Position, Rect};
 
 impl App {
     pub fn accepts_text(&self) -> bool {
-        matches!(self.view.dialog, Some(Dialog::Text(_)))
+        matches!(&self.view.dialog, Some(Dialog::Tags(editor)) if editor.accepts_text() && !self.writing_tags())
+            || matches!(self.view.dialog, Some(Dialog::Text(_)))
             || matches!(self.view.dialog, Some(Dialog::Search(_)))
             || matches!(self.view.dialog, Some(Dialog::Browser(_)))
             || (self.view.dialog.is_none() && self.view.filter_editing)
@@ -227,6 +228,10 @@ impl App {
                 }
             }
             Input::Text(text) => {
+                if matches!(self.view.dialog, Some(Dialog::Tags(_))) {
+                    self.tags_text(&text);
+                    return Ok(());
+                }
                 if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
                     return self.browser_text(&text);
                 }
@@ -434,6 +439,13 @@ impl App {
         match target {
             Target::CopyHelp(line) => {
                 self.copy_help(line);
+            }
+            Target::Tags(action) => {
+                self.tag_action(action)?;
+                if double && let super::TagAction::Row(index) = action {
+                    let picker = matches!(&self.view.dialog, Some(Dialog::Tags(editor)) if editor.key_picker);
+                    self.tag_action(if picker { super::TagAction::ChooseKey(index) } else { super::TagAction::Edit })?;
+                }
             }
             Target::CommandMenu(menu) => self.open_commands(menu),
             Target::Visualizer(kind) => self.set_visualizer(kind)?,

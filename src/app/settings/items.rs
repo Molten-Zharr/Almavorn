@@ -14,6 +14,9 @@ pub(crate) enum SettingControl {
     PlayerPlacement,
     PlaybackTimeline,
     ButtonShortcuts,
+    ArtworkVisible,
+    ArtworkShared,
+    ArtworkPath,
     Visualizer,
     AnimationBrightness,
     ProfilePick,
@@ -110,6 +113,9 @@ impl App {
                 make(lang.text("Shortcuts on buttons", "Клавиши на кнопках"), lang.text(if self.settings.preferences.appearance.show_button_shortcuts { "Shown" } else { "Hidden" }, if self.settings.preferences.appearance.show_button_shortcuts { "Показаны" } else { "Скрыты" }).into(), lang.text("Show assigned shortcuts on buttons. Help always shows F1. Other shortcuts work when hidden, and remain listed in Help and menus. Saved in the active profile.", "Показывать назначенные сочетания на кнопках. На справке всегда остается F1. Остальные клавиши работают при скрытии; их список остается в справке и меню. Выбор сохраняется в активном профиле."), SettingControl::ButtonShortcuts, true),
                 make(lang.text("Background animation", "Анимация фона"), self.settings.preferences.appearance.visualizer.name(lang).into(), lang.text("Music-driven background of the main window. VIS opens the scene menu; F6 cycles scenes. No animation is the last option. Pausing freezes the scene. Saved in the active profile.", "Музыкальный фон главного окна. VIS открывает список сцен, F6 переключает их по кругу. «Без анимации» — последний пункт. Пауза останавливает движение. Выбор сохраняется в активном профиле."), SettingControl::Visualizer, true),
                 make(lang.text("Animation brightness", "Яркость анимации"), format!("{}%", self.settings.preferences.appearance.animation_brightness.clamp(10, 70)), lang.text("Brightness of the background drawing, 10–70%; step: 5%. Text and controls stay above the animation.", "Яркость фонового рисунка: 10–70%; шаг: 5%. Текст и кнопки остаются поверх анимации."), SettingControl::AnimationBrightness, true),
+                make(lang.text("Player artwork", "Обложка в проигрывателе"), if self.settings.preferences.artwork.visible { "[x]" } else { "[ ]" }.into(), lang.text("Show an image next to the playing track. When there is no artwork, show a music note.", "Показывать изображение рядом с текущей композицией. Если обложки нет, показывать музыкальную ноту."), SettingControl::ArtworkVisible, true),
+                make(lang.text("One image for all tracks", "Общая картинка"), if self.settings.preferences.artwork.shared { "[x]" } else { "[ ]" }.into(), lang.text("Use the image at the path below for every track. When unchecked, use the artwork embedded in the music file.", "Использовать картинку по указанному ниже пути для всех композиций. Если галочка снята, брать обложку из музыкального файла."), SettingControl::ArtworkShared, true),
+                make(lang.text("Shared image path", "Путь к общей картинке"), self.settings.preferences.artwork.path.as_ref().map_or_else(|| lang.text("Not selected", "Не выбрана").into(), |path| path.display().to_string()), lang.text("Full path to a PNG or JPEG image. Clear the field to remove the path.", "Полный путь к картинке PNG или JPEG. Очистите поле, чтобы убрать путь."), SettingControl::ArtworkPath, false),
             ],
             SettingsPage::Profiles => {
                 let profile = &self.settings.profiles[self.view.settings.profile.min(self.settings.profiles.len()-1)];

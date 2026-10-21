@@ -7,6 +7,7 @@ mod panels;
 mod playlists;
 mod search;
 mod statistics;
+mod tags;
 mod text;
 mod tuner;
 pub(crate) use text::keyboard;
@@ -63,6 +64,7 @@ pub(super) fn render_dialog(
         return;
     }
     match dialog {
+        Dialog::Tags(editor) => tags::render(frame, app, editor, area, palette),
         Dialog::Statistics => statistics::render(frame, app, area, palette),
         Dialog::PlaybackTuner { selected } => tuner::render(frame, app, selected, area, palette),
         Dialog::Equalizer {
@@ -456,6 +458,10 @@ pub(super) fn render_dialog(
             lines.push(app.text("Search always accepts text, spaces, paste and Backspace in its query field; Ctrl+A selects the query. Up/Down selects tracks; Enter or double-click plays the selection without ending input. Tab switches sections. In playlists, Left/Right selects a row and Ctrl+Space toggles it; Ctrl+L selects all playlists, Ctrl+D clears them. Mouse checkboxes work independently of typing. Filter edits the current playlist header immediately. Enter plays the selected track without ending input; with no matches it does nothing. Tab keeps the filter and ends input, Esc restores the previous filter, x clears it. Keyboard buttons allow mouse-only typing.", "Поиск всегда принимает текст, пробелы, вставку и Backspace в строку запроса; Ctrl+A выделяет запрос. Вверх/вниз выбирает композицию; Enter или двойной клик запускает ее, сохраняя возможность ввода. Tab переключает разделы. В плейлистах влево/вправо выбирает строку, Ctrl+Space меняет ее отметку; Ctrl+L выбирает все плейлисты, Ctrl+D снимает отметки. Чекбоксы работают мышью независимо от ввода. Фильтр сразу меняет вид текущего плейлиста в строке Композиций. Enter играет выбранную композицию, не прерывая ввод; без совпадений ничего не делает. Tab завершает ввод, сохраняя фильтр; Esc возвращает прежний фильтр, x очищает его. Кнопки клавиатуры позволяют вводить мышью.").into());
             lines.push(app.text("Checked-track loop: check tracks, then choose Play checked tracks only from the tracks context menu. It loops that set independently of the normal repeat setting, including a single checked track. Shuffle stays within the set. Changing checkboxes updates it immediately; removing the playing track skips forward, clearing all stops. Browsing other playlists preserves the set. All tracks in the player or Play the whole playlist in the menu exits without restarting the current track. Stop or playing a track with Enter/double-click also leaves the loop. No new playlist is created or saved.", "Повтор отмеченных: поставьте галочки и выберите в меню ПКМ по композициям Прослушивать только отмеченные. Набор идет по кругу независимо от обычной настройки повтора, даже с одним треком. Случайное проигрывание остается внутри набора. Галочки сразу меняют состав; снятие с играющего трека переходит вперед, снятие всех останавливает. Просмотр других плейлистов сохраняет набор. Все треки в плеере или Воспроизводить весь плейлист в меню выходят без перезапуска трека. Стоп либо запуск трека через Enter/двойной клик тоже завершают этот режим. Новый плейлист не создается и не сохраняется.").into());
             lines.push(app.text("Add > Folders to playlists: check each folder with its checkbox, Space or Insert. Enter or double-click opens it. Marks remain when navigating. Ctrl+A checks folders in the current view; Ctrl+D clears all marks. Create adds one playlist per checked folder, named after it; existing names receive a numeric suffix. Subfolders are skipped by default. Ctrl+G or Subfolders as groups includes their tracks as groups within each playlist.", "Добавить > Папки в плейлисты: отметьте папки галочками, Space или Insert. Enter и двойной клик открывают папку. Отметки сохраняются при переходах. Ctrl+A отмечает папки в текущем каталоге; Ctrl+D снимает все отметки. Создать добавляет отдельный плейлист с названием каждой отмеченной папки; занятые названия получают номер. По умолчанию подпапки пропускаются. Ctrl+G или Подпапки в группы включает их музыку как группы внутри каждого плейлиста.").into());
+            lines.push(app.text(
+                "File tag editor: select a track on the sorting desk and use F8 or the tracks menu. Fields, Extra, Covers and Clear edit a draft read from the real file. Check individual entries or tag blocks to remove them; Remove all tags clears every block. Save file shows a confirmation with Write file and Cancel buttons. Changes update every playlist using the file and cannot be undone through Chaos history. Esc returns to the draft or asks to discard it.",
+                "Редактор тегов файла: выберите композицию на сортировочном столе и нажмите F8 либо откройте меню композиций. Вкладки Поля, Дополнительно, Обложки и Очистка изменяют черновик, прочитанный из файла. Галочки отмечают поля или блоки для удаления; Удалить все теги очищает все блоки. Сохранить файл открывает подтверждение с кнопками Записать файл и Отмена. Новые сведения появятся во всех плейлистах с этим файлом. Отмена Хаоса не отменяет запись тегов. Esc возвращает к черновику или предлагает отменить изменения.",
+            ).into());
             help::help_dialog(frame, app, offset, inner, lines, palette);
         }
 
@@ -496,8 +502,8 @@ pub(super) fn render_dialog(
                 format!("{}: {}", app.text("File", "Файл"), track.path.display()),
                 String::new(),
                 app.text(
-                    "Original imported tags (read-only):",
-                    "Исходные импортированные теги (только чтение):",
+                    "Saved file tags (read-only view):",
+                    "Сохраненные теги файла (просмотр):",
                 )
                 .into(),
             ];

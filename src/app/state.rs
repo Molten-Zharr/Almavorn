@@ -46,6 +46,7 @@ impl Sort {
 #[derive(Clone)]
 pub enum Target {
     CopyHelp(Option<usize>),
+    Tags(super::TagAction),
     CommandMenu(super::CommandMenu),
     Visualizer(crate::visualizer::VisualizerKind),
     StatisticsPage(super::StatisticsPage),

@@ -112,6 +112,7 @@ pub enum SettingsEdit {
     CreatePreset,
     RenamePreset(String),
     FontSize,
+    ArtworkPath,
     GlobalShortcut(crate::input::Action),
 }
 impl SettingsEdit {
@@ -141,6 +142,7 @@ impl SettingsEdit {
             Self::FontSize => {
                 language.text("Font size - 10-32 pixels", "Размер шрифта - 10-32 пикселя")
             }
+            Self::ArtworkPath => language.text("Shared image - full path", "Общая картинка - полный путь"),
             Self::GlobalShortcut(_) => {
                 language.text("Global shortcut · XKB name", "Глобальная клавиша · имя XKB")
             }
@@ -313,6 +315,9 @@ impl App {
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
+        if self.close_tags() {
+            return true;
+        }
         match self.view.dialog.take() {
             Some(Dialog::Text(super::TextDialog {
                 purpose:
@@ -544,6 +549,10 @@ impl App {
                 SettingsEdit::FontSize,
                 self.settings.preferences.appearance.font_size.to_string(),
             ),
+            SettingControl::ArtworkPath => self.settings_text(
+                SettingsEdit::ArtworkPath,
+                self.settings.preferences.artwork.path.as_ref().map_or_else(String::new, |path| path.display().to_string()),
+            ),
             SettingControl::Binding(index) => {
                 self.view.settings.binding_modifiers = [false; 3];
                 self.view.settings.binding_offset = 0;
@@ -592,6 +601,12 @@ impl App {
             SettingControl::ButtonShortcuts => {
                 self.settings.preferences.appearance.show_button_shortcuts =
                     !self.settings.preferences.appearance.show_button_shortcuts;
+            }
+            SettingControl::ArtworkVisible => {
+                self.settings.preferences.artwork.visible = !self.settings.preferences.artwork.visible;
+            }
+            SettingControl::ArtworkShared => {
+                self.settings.preferences.artwork.shared = !self.settings.preferences.artwork.shared;
             }
             SettingControl::PlaybackTimeline => {
                 return self.set_playback_timeline(cycle(

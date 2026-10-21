@@ -50,6 +50,9 @@ fn run() -> Result<()> {
         let ctx = root.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(16));
         app.tick();
+        if app.writing_tags() && ctx.input(|input| input.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
         let text_active = app.accepts_text();
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
@@ -214,7 +217,8 @@ fn run() -> Result<()> {
                             | Target::SettingsTimeline(_, _),
                         ) => egui::CursorIcon::PointingHand,
                         Some(Target::CopyHelp(_)) => egui::CursorIcon::PointingHand,
-                        Some(Target::SearchInput | Target::FilterInput) => egui::CursorIcon::Text,
+                        Some(Target::SearchInput | Target::FilterInput | Target::Tags(almavorn::app::TagAction::Input(_))) => egui::CursorIcon::Text,
+                        Some(Target::Tags(_)) => egui::CursorIcon::PointingHand,
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,
                         Some(Target::PanelResize(index)) => {
                             match app.view.workspace.splits[*index].axis {

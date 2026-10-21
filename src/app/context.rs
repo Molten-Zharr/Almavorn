@@ -72,6 +72,7 @@ pub struct UiState {
     pub keycaps: Vec<Keycap>,
     pub graphical_keycaps: bool,
     pub waveform_area: Rect,
+    pub artwork_area: Rect,
     pub progress_area: Rect,
     pub playlist_area: Rect,
     pub tracks_area: Rect,

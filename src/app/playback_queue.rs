@@ -59,6 +59,14 @@ impl PlaybackQueue {
         &self.entries
     }
 
+    pub fn update_metadata(&mut self, track: &crate::model::Track) {
+        for entry in Arc::make_mut(&mut self.entries) {
+            if entry.track.id == track.id {
+                entry.track = track.clone();
+            }
+        }
+    }
+
     pub fn current(&self) -> Option<&Entry> {
         self.entries.get(self.index)
     }

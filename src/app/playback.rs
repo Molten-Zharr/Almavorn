@@ -39,6 +39,12 @@ pub(super) struct WaveformJob {
 }
 
 impl App {
+    pub(super) fn update_playback_metadata(&mut self, track: &crate::model::Track) {
+        self.playback.queue.update_metadata(track);
+        if let Some(request) = self.playback.preparation.requested_mut() {
+            request.queue.update_metadata(track);
+        }
+    }
     pub fn playback_source_caption(&self) -> String {
         let source = self.library.playlists.iter().find(|p| Some(p.id) == self.playback.playing_playlist)
             .map(|p| (p.name.as_str(), p.mode, p.kind))

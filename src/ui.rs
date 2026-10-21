@@ -32,6 +32,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     app.view.keycaps.clear();
     app.view.dialog_scroll_max = 0;
     app.view.waveform_area = Rect::default();
+    app.view.artwork_area = Rect::default();
     app.view.progress_area = Rect::default();
     app.view.filter_field = Rect::default();
     app.view.filter_keyboard_area = Rect::default();

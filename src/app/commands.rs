@@ -302,6 +302,7 @@ impl App {
                     MoveUp,
                     MoveDown,
                     Metadata,
+                    EditTags,
                     Sort,
                     Search,
                     Filter,
@@ -360,6 +361,9 @@ impl App {
             }
         }
         for action in actions {
+            if *action == EditTags && !self.playlist().is_some_and(|playlist| playlist.kind == crate::model::PlaylistKind::SortingDesk) {
+                continue;
+            }
             if self.control_visible(panel, *action) {
                 let checked = match action {
                     ToggleEdit => None,

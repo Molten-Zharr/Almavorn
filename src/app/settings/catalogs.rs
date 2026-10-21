@@ -144,6 +144,24 @@ impl App {
                 self.settings.preferences.appearance.font_size = size;
             }
             SettingsEdit::GlobalShortcut(action) => self.set_global_shortcut(action, text)?,
+            SettingsEdit::ArtworkPath => {
+                let value = text.trim();
+                self.settings.preferences.artwork.path = if value.is_empty() {
+                    None
+                } else {
+                    let path = if let Some(relative) = value.strip_prefix("~/") {
+                        dirs::home_dir().context(AppError::InvalidArtwork)?.join(relative)
+                    } else {
+                        std::path::PathBuf::from(value)
+                    };
+                    let path = path.canonicalize().context(AppError::InvalidArtwork)?;
+                    ensure!(path.is_file(), AppError::InvalidArtwork);
+                    ensure!(path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("png") || extension.eq_ignore_ascii_case("jpg") || extension.eq_ignore_ascii_case("jpeg")), AppError::InvalidArtwork);
+                    ensure!(path.metadata()?.len() <= 32 * 1024 * 1024, AppError::ArtworkTooLarge);
+                    Some(path)
+                };
+                self.invalidate_artwork();
+            }
             SettingsEdit::ExportPalette { id, directory } => {
                 self.start_palette_export(&id, &directory, text)?;
                 self.show_settings();

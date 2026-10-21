@@ -1,4 +1,5 @@
 mod actions;
+mod artwork;
 mod background;
 mod browser;
 mod color_picker;
@@ -22,6 +23,7 @@ mod search;
 mod settings;
 mod state;
 mod statistics;
+mod tags;
 mod tuner;
 mod visualizer;
 mod workspace;
@@ -37,6 +39,7 @@ pub(crate) use settings::{SettingControl, SettingGroup};
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
 pub use statistics::{StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
+pub use tags::{TagAction, TagEdit, TagEditor, TagsTab};
 
 use crate::{audio::Audio, model::Settings, store::Store};
 use anyhow::{Context, Result};
@@ -51,8 +54,10 @@ pub struct App {
     pub playback: PlaybackState,
     pub statistics: StatisticsState,
     pub view: UiState,
+    artwork: artwork::ArtworkState,
     browser_state: BrowserState,
     persistence: SettingsPersistence,
+    tags: tags::TagsState,
     search_job: background::LatestJob<search::SearchRequest, Vec<search::SearchHit>>,
     command_program: std::path::PathBuf,
     #[cfg(unix)]
@@ -90,10 +95,12 @@ impl App {
             settings,
             library,
             view,
+            artwork: Default::default(),
             playback: Default::default(),
             statistics: Default::default(),
             browser_state: Default::default(),
             persistence: Default::default(),
+            tags: Default::default(),
             search_job: Default::default(),
             command_program: std::env::current_exe()
                 .context("Cannot locate Almavorn executable")?,
@@ -138,6 +145,7 @@ impl App {
     }
 
     fn tick_inner(&mut self) -> Result<()> {
+        self.tick_tags();
         self.tick_statistics()?;
         self.tick_database()?;
         self.tick_settings()?;
@@ -145,6 +153,7 @@ impl App {
         self.tick_browser()?;
         self.tick_playback()?;
         self.tick_seek()?;
+        self.tick_artwork();
         self.tick_waveform();
         self.poll_import()?;
         self.tick_library()?;

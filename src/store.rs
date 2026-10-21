@@ -20,6 +20,7 @@ mod playlists;
 pub(crate) use playlists::FolderPlaylistImport;
 mod queries;
 mod statistics;
+mod tags;
 use queries::{playlist_access, read_playlists, snapshot};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,6 +175,7 @@ impl Store {
         std::fs::create_dir_all(directory).context("Cannot create data directory")?;
         let path = directory.join("almavorn.sqlite");
         let connection = migration::open(directory, &path)?;
+        crate::tags::recover_file_write(&connection, &path)?;
         Ok(Self {
             connection: OnceCell::from(connection),
             writer: Arc::new(Mutex::new(())),
@@ -258,7 +260,7 @@ impl Store {
         Ok(snapshot)
     }
 
-    fn write<T>(&mut self, operation: impl Fn(&Connection) -> Result<T>) -> Result<T> {
+    fn write<T>(&mut self, operation: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
         let writer = self.writer.clone();
         let _guard = writer
             .lock()

@@ -13,7 +13,8 @@ use crate::{
 };
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Alignment, Rect},
+    style::Color,
     text::{Line, Span},
     widgets::{Paragraph, Sparkline},
 };
@@ -22,7 +23,25 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     if area.height < 2 || area.width < 8 {
         return;
     }
-    let geometry = player_metrics(app).arrange(area);
+    let metrics = player_metrics(app);
+    let cover_width = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
+        [8, 6, 4].into_iter().find(|&width| {
+            width / 2 <= area.height
+                && area.width >= width + 25
+                && metrics.content_height(area.width - width - 1) <= area.height
+        })
+    } else {
+        None
+    };
+    let area = if let Some(width) = cover_width {
+        let cover = Rect::new(area.x, area.y, width, width / 2);
+        app.view.artwork_area = cover;
+        artwork(frame, app, cover, palette);
+        Rect::new(area.x + width + 1, area.y, area.width - width - 1, area.height)
+    } else {
+        area
+    };
+    let geometry = metrics.arrange(area);
     let mut title = if app.preparing_playback() && !app.playback_active() {
         app.text("Preparing audio…", "Подготовка аудио…").to_owned()
     } else if let Some(track) = app
@@ -144,6 +163,46 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             target: Target::Seek(wave),
             enabled: duration > 0,
         });
+    }
+}
+
+fn artwork(frame: &mut Frame, app: &App, area: Rect, palette: Palette) {
+    let Some(image) = app.artwork_image() else {
+        frame.render_widget(
+            Paragraph::new("♪").alignment(Alignment::Center).style(palette.text().fg(palette.accent)),
+            Rect::new(area.x, area.y + area.height / 2, area.width, 1),
+        );
+        return;
+    };
+    let background = match palette.background {
+        Color::Rgb(r, g, b) => [r, g, b],
+        _ => [0; 3],
+    };
+    let scale = (f32::from(area.width) / image.width as f32)
+        .min(f32::from(area.height * 2) / image.height as f32);
+    let width = (image.width as f32 * scale).round().max(1.0) as u16;
+    let height = (image.height as f32 * scale).round().max(1.0) as u16;
+    let left = (area.width - width) / 2;
+    let top = (area.height * 2 - height) / 2;
+    let sample = |x: u16, y: u16| {
+        if x < left || y < top || x >= left + width || y >= top + height {
+            return Color::Rgb(background[0], background[1], background[2]);
+        }
+        let px = u32::from(x - left) * image.width / u32::from(width);
+        let py = u32::from(y - top) * image.height / u32::from(height);
+        let pixel = ((py * image.width + px) * 4) as usize;
+        let alpha = u32::from(image.rgba[pixel + 3]);
+        let rgb: [u8; 3] = std::array::from_fn(|channel| {
+            ((u32::from(image.rgba[pixel + channel]) * alpha + u32::from(background[channel]) * (255 - alpha)) / 255) as u8
+        });
+        Color::Rgb(rgb[0], rgb[1], rgb[2])
+    };
+    for y in 0..area.height {
+        for x in 0..area.width {
+            if let Some(cell) = frame.buffer_mut().cell_mut((area.x + x, area.y + y)) {
+                cell.set_symbol("▀").set_fg(sample(x, y * 2)).set_bg(sample(x, y * 2 + 1));
+            }
+        }
     }
 }
 
