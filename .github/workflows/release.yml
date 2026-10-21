@@ -77,11 +77,14 @@ jobs:
           expected = {f'almavorn-{version}-{variant}-linux-x86_64.{extension}'
                       for variant in ('guitui', 'tui')
                       for extension in ('tar.gz', 'AppImage', 'flatpak')}
-          assets = [directory / name for name in sorted(expected)]
-          if not all(path.is_file() for path in assets):
-              raise SystemExit('Release requires all six packages')
+          def artifact(name):
+              matches = list(directory.rglob(name))
+              if len(matches) != 1 or not matches[0].is_file():
+                  raise SystemExit(f'Release requires exactly one {name}')
+              return matches[0]
+          assets = [artifact(name) for name in sorted(expected)]
           checksums = directory / 'SHA256SUMS'
-          checksums.write_text(''.join((directory / f'SHA256SUMS-{variant}').read_text()
+          checksums.write_text(''.join(artifact(f'SHA256SUMS-{variant}').read_text()
                                       for variant in ('guitui', 'tui')))
           assets.append(checksums)
           subprocess.run([
