@@ -24,7 +24,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev flatpak zstd
+          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libgl1-mesa-dev libxcursor1 libxrandr2 libxi6 libxinerama1 flatpak zstd
           rustup toolchain install stable --profile minimal
           rustup default stable
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo

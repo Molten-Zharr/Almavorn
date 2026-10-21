@@ -12,10 +12,22 @@ def run(*args, cwd=None):
 def build_appimage(package, binary, stage, linuxdeploy, appimagetool):
     appdir = stage / "Almavorn.AppDir"
     shutil.copytree(package, appdir / "usr")
+    libraries = []
+    if binary == "almavorn":
+        # Winit loads these at runtime, so an ELF dependency scan cannot find them.
+        cache = subprocess.check_output(["ldconfig", "-p"], text=True).splitlines()
+        for name in ("libxkbcommon.so.0", "libxkbcommon-x11.so.0", "libwayland-client.so.0",
+                     "libwayland-cursor.so.0", "libwayland-egl.so.1", "libX11.so.6",
+                     "libXcursor.so.1", "libXrandr.so.2", "libXi.so.6", "libXinerama.so.1"):
+            path = next((line.split("=>", 1)[1].strip() for line in cache
+                         if line.strip().startswith(name + " ") and "x86-64" in line), None)
+            if path is None:
+                raise RuntimeError(f"Missing AppImage library: {name}")
+            libraries += ["--library", path]
     run(linuxdeploy, "--appimage-extract-and-run", "--appdir", appdir,
         "--executable", appdir / "usr/bin" / binary,
         "--desktop-file", appdir / "usr/share/applications" / f"{binary}.desktop",
-        "--icon-file", appdir / "usr/share/icons/hicolor/scalable/apps" / f"{binary}.svg")
+        "--icon-file", appdir / "usr/share/icons/hicolor/scalable/apps" / f"{binary}.svg", *libraries)
     artifact = stage / f"{package.name}.AppImage"
     run(appimagetool, "--appimage-extract-and-run", "--no-appstream", appdir, artifact)
     return artifact
