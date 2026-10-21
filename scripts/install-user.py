@@ -65,12 +65,15 @@ def install(source, info, prefix):
     links = {prefix / "bin" / name: destination / "bin" / name for name in info["binaries"]}
     desktop = prefix / "share/applications/almavorn.desktop"
     icon = prefix / "share/icons/hicolor/scalable/apps/almavorn.svg"
-    if os.path.lexists(destination):
-        raise FileExistsError(f"Версия уже установлена или путь занят: {destination}")
     for name, checksum in info["binaries"].items():
         if digest(source / "bin" / name) != checksum:
             raise ValueError(f"Поврежден файл {name}: контрольная сумма не совпадает")
     old = previous_installation(prefix, links, desktop, icon)
+    if os.path.lexists(destination):
+        if old == destination.resolve() and all(digest(links_path) == info["binaries"][links_path.name] for links_path in links):
+            print("Эта сборка Almavorn уже установлена.")
+            return
+        raise FileExistsError(f"Версия уже установлена или путь занят: {destination}")
     backup = old / f"launchers-before-{version}" if old else None
     if backup is not None and os.path.lexists(backup):
         raise FileExistsError(f"Резервные файлы уже существуют: {backup}")

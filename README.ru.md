@@ -2,19 +2,30 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-Стек: Rust, Ratatui, Tokio, Rodio, SQLite, Crossterm, egui, eframe, egui_ratatui.
+Музыкальный плеер для Linux: порядок в коллекции, свобода в подборках.
 
-[Глобальные клавиши](docs/GLOBAL_SHORTCUTS.md): команды для управления работающим плеером через оконную систему.
+- Храните любимые плейлисты с защитой от случайных изменений.
+- Собирайте новые подборки, сохраняя ваши исходные плейлисты.
+- Редактируйте названия, теги и обложки своих композиций.
+- Настраивайте звучание эквалайзером, темпом и высотой тона.
+- Выбирайте темы, горячие клавиши и расположение панелей.
+- Слушайте музыку в окне или прямо в терминале.
 
-Версии: TUI-only и GUITUI.
+## Установка
 
-Сборка и запуск:
+Ubuntu, Debian, Arch Linux и Artix, Linux x86_64. Закройте плеер и выполните:
 
 ```sh
-cargo run --release
-cargo run --release --no-default-features --features tui --bin almavorn-tui
+curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash
 ```
 
-Для сборки нужны компилятор C++, libclang со стандартными заголовками и файлы разработки ALSA.
+Команда подготовит зависимости, скачает исходники, соберет плеер и добавит
+Almavorn в меню приложений. При необходимости запросит пароль администратора.
+Для обновления повторите ту же команду.
 
-[Скачать](https://github.com/Molten-Zharr/Almavorn/releases) · [Установка и подготовка выпуска](docs/RELEASE.md) · [Лицензия MIT](LICENSE).
+После установки откройте Almavorn через меню приложений.
+Консольная версия запускается командой "almavorn-tui".
+
+[Готовый выпуск без сборки](https://github.com/Molten-Zharr/Almavorn/releases/latest) ·
+[Горячие клавиши](docs/GLOBAL_SHORTCUTS.md) ·
+[Для разработчиков](docs/RELEASE.md) · [MIT](LICENSE)

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Build and package both Linux interfaces with licenses and matching sources."""
+import argparse
 import hashlib
 import json
 from pathlib import Path
 import platform
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 
@@ -21,6 +23,9 @@ def sha256(path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--install", action="store_true", help="Build and install the current source revision for this user")
+    options = parser.parse_args()
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise SystemExit("Этот выпуск предназначен для Linux x86_64.")
     subprocess.run(["git", "diff", "--quiet", "HEAD", "--"], cwd=ROOT, check=True)
@@ -30,10 +35,15 @@ def main():
     version = app["version"]
     target = Path(metadata["target_directory"])
     dist = target / "dist" / version
-    if dist.exists():
+    if dist.exists() and not options.install:
         raise SystemExit(f"Каталог выпуска уже существует: {dist}")
     subprocess.run(["cargo", "build", "--locked", "--release", "--bins", "--all-features", "--jobs", "4"],
                    cwd=ROOT, check=True)
+    commit = output("git", "rev-parse", "HEAD")
+    if options.install:
+        fingerprint = hashlib.sha256("".join(sha256(target / "release" / name)
+                                              for name in ("almavorn", "almavorn-tui")).encode()).hexdigest()[:8]
+        version = f"{version}+local.{commit[:8]}.{fingerprint}"
     name = f"almavorn-{version}-linux-x86_64"
     with tempfile.TemporaryDirectory(prefix="almavorn-release-", dir=target) as temporary:
         stage = Path(temporary)
@@ -57,7 +67,6 @@ def main():
             shutil.copy2(ROOT / "packaging" / destination.name, destination)
         source = package / "share/source"
         source.mkdir(parents=True)
-        commit = output("git", "rev-parse", "HEAD")
         subprocess.run(["git", "archive", "--format=tar.gz", f"--prefix=almavorn-{version}/",
                         f"--output={source / f'almavorn-{version}-source.tar.gz'}", commit], cwd=ROOT, check=True)
         licenses = package / "share/licenses"
@@ -97,6 +106,9 @@ def main():
                 "rustc": output("rustc", "--version"), "libc": list(platform.libc_ver()),
                 "binaries": hashes}
         (package / "BUILD_INFO.json").write_text(json.dumps(info, indent=2) + "\n")
+        if options.install:
+            subprocess.run([sys.executable, str(package / "install.py")], check=True)
+            return
         filename = f"{name}.tar.gz"
         archive_path = stage / filename
         with tarfile.open(archive_path, "w:gz") as archive:
