@@ -4,15 +4,19 @@ on:
   push:
     tags: ["v*"]
     branches: ["main"]
-    paths: ["releases/*.md", ".github/workflows/release.yml"]
+    paths: ["releases/*.md", ".github/workflows/release.yml", "scripts/*", "packaging/*", "install.sh"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   linux:
-    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [guitui, tui]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -20,11 +24,43 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev
+          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev flatpak zstd
           rustup toolchain install stable --profile minimal
           rustup default stable
-      - name: Build release archive
-        run: python3 scripts/package-release.py
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+      - name: Download packaging tools
+        run: |
+          mkdir -p target/packaging-tools
+          curl -fL --retry 3 https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage -o target/packaging-tools/linuxdeploy.AppImage
+          curl -fL --retry 3 https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o target/packaging-tools/appimagetool.AppImage
+          echo 'c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  target/packaging-tools/linuxdeploy.AppImage' | sha256sum -c
+          echo '95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6  target/packaging-tools/appimagetool.AppImage' | sha256sum -c
+          chmod +x target/packaging-tools/*.AppImage
+      - name: Build tar.gz, AppImage and Flatpak
+        run: >-
+          python3 scripts/package-release.py --variant ${{ matrix.variant }} --format all
+          --linuxdeploy target/packaging-tools/linuxdeploy.AppImage
+          --appimagetool target/packaging-tools/appimagetool.AppImage
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-${{ matrix.variant }}
+          path: target/dist/*/${{ matrix.variant }}/*
+          if-no-files-found: error
+          compression-level: 0
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: linux-*
+          path: target/release-assets
+          merge-multiple: true
       - name: Upload and publish release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -37,7 +73,17 @@ jobs:
           tag = os.environ['GITHUB_REF_NAME']
           if tag != f'v{version}':
               raise SystemExit('Tag and Cargo.toml version differ')
-          assets = sorted(pathlib.Path('target/dist', version).iterdir())
+          directory = pathlib.Path('target/release-assets')
+          expected = {f'almavorn-{version}-{variant}-linux-x86_64.{extension}'
+                      for variant in ('guitui', 'tui')
+                      for extension in ('tar.gz', 'AppImage', 'flatpak')}
+          assets = [directory / name for name in sorted(expected)]
+          if not all(path.is_file() for path in assets):
+              raise SystemExit('Release requires all six packages')
+          checksums = directory / 'SHA256SUMS'
+          checksums.write_text(''.join((directory / f'SHA256SUMS-{variant}').read_text()
+                                      for variant in ('guitui', 'tui')))
+          assets.append(checksums)
           subprocess.run([
               'gh', 'release', 'create', tag, '--verify-tag', '--draft',
               '--title', f'Almavorn {version}', '--notes-file', f'releases/v{version}.md',

@@ -1,3 +1,4 @@
 /target
 /graphify-out/
 /.playwright-mcp-output/
+/scripts/__pycache__/

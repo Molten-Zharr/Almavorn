@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and package both Linux interfaces with licenses and matching sources."""
+"""Build one Linux interface with licenses and matching sources."""
 import argparse
 import hashlib
 import json
@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from release_formats import build_appimage, build_flatpak
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,35 +26,42 @@ def sha256(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--install", action="store_true", help="Build and install the current source revision for this user")
+    parser.add_argument("--variant", choices=("guitui", "tui"), default="guitui")
+    parser.add_argument("--format", choices=("tar.gz", "appimage", "flatpak", "all"), default="tar.gz")
+    parser.add_argument("--linuxdeploy", type=Path, help="Path to linuxdeploy AppImage")
+    parser.add_argument("--appimagetool", type=Path, help="Path to appimagetool AppImage")
     options = parser.parse_args()
+    if options.install and options.format != "tar.gz":
+        parser.error("--install cannot be combined with --format")
+    if options.format in ("appimage", "all") and not (options.linuxdeploy and options.appimagetool):
+        parser.error("AppImage needs --linuxdeploy and --appimagetool")
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise SystemExit("Этот выпуск предназначен для Linux x86_64.")
     subprocess.run(["git", "diff", "--quiet", "HEAD", "--"], cwd=ROOT, check=True)
-    metadata = json.loads(output("cargo", "metadata", "--locked", "--all-features",
+    feature_args = ["--no-default-features", "--features", options.variant]
+    binary = "almavorn-tui" if options.variant == "tui" else "almavorn"
+    metadata = json.loads(output("cargo", "metadata", "--locked", *feature_args,
                                  "--format-version", "1", "--filter-platform", "x86_64-unknown-linux-gnu"))
     app = next(p for p in metadata["packages"] if p["id"] == metadata["resolve"]["root"])
     version = app["version"]
     target = Path(metadata["target_directory"])
-    dist = target / "dist" / version
+    dist = target / "dist" / version / options.variant
     if dist.exists() and not options.install:
         raise SystemExit(f"Каталог выпуска уже существует: {dist}")
-    subprocess.run(["cargo", "build", "--locked", "--release", "--bins", "--all-features", "--jobs", "4"],
+    subprocess.run(["cargo", "build", "--locked", "--release", "--bin", binary, *feature_args, "--jobs", "4"],
                    cwd=ROOT, check=True)
     commit = output("git", "rev-parse", "HEAD")
     if options.install:
-        fingerprint = hashlib.sha256("".join(sha256(target / "release" / name)
-                                              for name in ("almavorn", "almavorn-tui")).encode()).hexdigest()[:8]
+        fingerprint = sha256(target / "release" / binary)[:8]
         version = f"{version}+local.{commit[:8]}.{fingerprint}"
-    name = f"almavorn-{version}-linux-x86_64"
+    name = f"almavorn-{version}-{options.variant}-linux-x86_64"
     with tempfile.TemporaryDirectory(prefix="almavorn-release-", dir=target) as temporary:
         stage = Path(temporary)
         package = stage / name
         (package / "bin").mkdir(parents=True)
-        hashes = {}
-        for binary in ("almavorn", "almavorn-tui"):
-            path = package / "bin" / binary
-            shutil.copy2(target / "release" / binary, path)
-            hashes[binary] = sha256(path)
+        path = package / "bin" / binary
+        shutil.copy2(target / "release" / binary, path)
+        hashes = {binary: sha256(path)}
         for path in ("LICENSE", "README.md", "README.ru.md"):
             shutil.copy2(ROOT / path, package / path)
         shutil.copy2(ROOT / "scripts/install-user.py", package / "install.py")
@@ -61,10 +69,11 @@ def main():
         (package / "docs").mkdir()
         for filename in ("RELEASE.md", "GLOBAL_SHORTCUTS.md"):
             shutil.copy2(ROOT / "docs" / filename, package / "docs" / filename)
-        for relative in ("applications/almavorn.desktop", "icons/hicolor/scalable/apps/almavorn.svg"):
+        for relative in (f"applications/{binary}.desktop", f"icons/hicolor/scalable/apps/{binary}.svg"):
             destination = package / "share" / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(ROOT / "packaging" / destination.name, destination)
+            original = ROOT / "packaging" / ("almavorn.svg" if destination.suffix == ".svg" else destination.name)
+            shutil.copy2(original, destination)
         source = package / "share/source"
         source.mkdir(parents=True)
         subprocess.run(["git", "archive", "--format=tar.gz", f"--prefix=almavorn-{version}/",
@@ -103,22 +112,29 @@ def main():
                 break
         (package / "THIRD_PARTY_NOTICES.md").write_text("\n".join(notices) + "\n")
         info = {"version": version, "commit": commit, "target": "x86_64-unknown-linux-gnu",
+                "variant": options.variant,
                 "rustc": output("rustc", "--version"), "libc": list(platform.libc_ver()),
                 "binaries": hashes}
         (package / "BUILD_INFO.json").write_text(json.dumps(info, indent=2) + "\n")
         if options.install:
             subprocess.run([sys.executable, str(package / "install.py")], check=True)
             return
-        filename = f"{name}.tar.gz"
-        archive_path = stage / filename
-        with tarfile.open(archive_path, "w:gz") as archive:
-            archive.add(package, arcname=name)
-        checksums = stage / "SHA256SUMS"
-        checksums.write_text(f"{sha256(archive_path)}  {filename}\n")
+        artifacts = []
+        if options.format in ("tar.gz", "all"):
+            archive_path = stage / f"{name}.tar.gz"
+            with tarfile.open(archive_path, "w:gz") as archive:
+                archive.add(package, arcname=name)
+            artifacts.append(archive_path)
+        if options.format in ("appimage", "all"):
+            artifacts.append(build_appimage(package, binary, stage, options.linuxdeploy.resolve(), options.appimagetool.resolve()))
+        if options.format in ("flatpak", "all"):
+            artifacts.append(build_flatpak(package, binary, stage))
+        checksums = stage / f"SHA256SUMS-{options.variant}"
+        checksums.write_text("".join(f"{sha256(path)}  {path.name}\n" for path in artifacts))
         dist.mkdir(parents=True)
-        shutil.move(archive_path, dist / filename)
-        shutil.move(checksums, dist / "SHA256SUMS")
-    print(f"Выпуск: {dist / filename}")
+        for path in (*artifacts, checksums):
+            shutil.move(path, dist / path.name)
+    print(f"Выпуск: {dist}")
 
 
 if __name__ == "__main__":

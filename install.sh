@@ -4,16 +4,22 @@ set -euo pipefail
 fail() { printf 'Almavorn: %s\n' "$*" >&2; exit 1; }
 repository='https://github.com/Molten-Zharr/Almavorn.git'
 source_dir="$HOME/.local/src/almavorn"
-case "${1:-}" in
+variant=guitui
+while (($#)); do
+case "$1" in
     --help|-h)
-        printf 'Установка и обновление Almavorn: bash install.sh [--source-dir ПАПКА]\n'
+        printf 'Установка Almavorn: bash install.sh [--variant guitui|tui] [--source-dir ПАПКА]\n'
         exit 0 ;;
     --source-dir)
-        [[ $# == 2 && -n $2 ]] || fail 'Укажите папку исходников после --source-dir.'
-        source_dir="$2" ;;
-    '') ;;
+        [[ $# -ge 2 && -n $2 ]] || fail 'Укажите папку исходников после --source-dir.'
+        source_dir="$2"; shift 2 ;;
+    --variant)
+        [[ $# -ge 2 ]] || fail 'Выберите guitui или tui после --variant.'
+        variant="$2"; shift 2 ;;
     *) fail 'Неизвестный аргумент. Используйте --help.' ;;
 esac
+done
+[[ $variant == guitui || $variant == tui ]] || fail 'Доступны интерфейсы guitui и tui.'
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || fail 'Поддерживается Linux x86_64.'
 [[ $EUID != 0 ]] || fail 'Запустите установку обычным пользователем, без sudo.'
 [[ $source_dir == /* ]] || source_dir="$PWD/$source_dir"
@@ -29,7 +35,10 @@ fi
 . /etc/os-release
 case " ${ID:-} ${ID_LIKE:-} " in
     *' debian '*|*' ubuntu '*)
-        packages=(git curl ca-certificates python3 build-essential pkg-config libclang-dev libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev)
+        packages=(git curl ca-certificates python3 build-essential pkg-config libclang-dev libasound2-dev)
+        if [[ $variant == guitui ]]; then
+            packages+=(libxkbcommon-dev libwayland-dev libgl1-mesa-dev)
+        fi
         missing=()
         for package in "${packages[@]}"; do
             [[ $(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true) == 'install ok installed' ]] || missing+=("$package")
@@ -41,7 +50,10 @@ case " ${ID:-} ${ID_LIKE:-} " in
             sudo apt-get install -y --no-install-recommends "${missing[@]}"
         fi ;;
     *' arch '*|*' artix '*)
-        packages=(git curl ca-certificates python base-devel clang pkgconf alsa-lib libxkbcommon wayland libglvnd)
+        packages=(git curl ca-certificates python base-devel clang pkgconf alsa-lib)
+        if [[ $variant == guitui ]]; then
+            packages+=(libxkbcommon wayland libglvnd)
+        fi
         missing=()
         for package in "${packages[@]}"; do
             pacman -Q "$package" >/dev/null 2>&1 || missing+=("$package")
@@ -76,7 +88,7 @@ if command -v cargo >/dev/null && command -v rustc >/dev/null; then
 fi
 if [[ $rust_ready == true ]]; then
     printf 'Собираю и устанавливаю плеер.\n'
-    python3 scripts/package-release.py --install
+    python3 scripts/package-release.py --install --variant "$variant"
 else
     rustup_command=$(command -v rustup || true)
     if [[ -z $rustup_command ]]; then
@@ -89,9 +101,13 @@ else
     fi
     "$rustup_command" toolchain install stable --profile minimal
     printf 'Собираю и устанавливаю плеер.\n'
-    "$rustup_command" run stable python3 scripts/package-release.py --install
+    "$rustup_command" run stable python3 scripts/package-release.py --install --variant "$variant"
 fi
 if command -v update-desktop-database >/dev/null; then
     update-desktop-database "$HOME/.local/share/applications" || true
 fi
-printf 'Готово. Откройте Almavorn в меню приложений.\n'
+if [[ $variant == tui ]]; then
+    printf 'Готово. Запуск: %s/.local/bin/almavorn-tui\n' "$HOME"
+else
+    printf 'Готово. Откройте Almavorn в меню приложений.\n'
+fi

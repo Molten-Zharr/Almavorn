@@ -5,11 +5,13 @@
 На Ubuntu, Debian, Arch Linux и Artix x86_64:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant guitui
 ```
 
 Команда установит недостающие зависимости, склонирует проект в
-~/.local/src/almavorn, соберет обе версии и добавит плеер в меню приложений.
+~/.local/src/almavorn, соберет GUITUI и добавит плеер в меню приложений.
+Для терминального интерфейса замените guitui на tui. Его сборка не включает
+графические зависимости. Оба варианта можно установить по отдельности.
 Для обновления закройте плеер и повторите команду. При необходимости системный
 установщик запросит пароль через sudo. Папка с измененными исходниками не
 перезаписывается; для отдельной копии можно передать --source-dir и полный путь.
@@ -17,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 Уже подготовленный репозиторий можно собрать и установить так:
 
 ```sh
-python3 scripts/package-release.py --install
+python3 scripts/package-release.py --install --variant guitui
 ```
 
 Локальная установка получает отдельное имя по коммиту и собранным программам.
@@ -25,7 +27,8 @@ python3 scripts/package-release.py --install
 
 ## Установка готового выпуска
 
-В архиве две версии: графическая `bin/almavorn` и консольная `bin/almavorn-tui`.
+В каждом выпуске шесть пакетов: GUITUI и TUI, каждый в tar.gz, AppImage и Flatpak.
+В архиве GUITUI находится bin/almavorn, в TUI — bin/almavorn-tui.
 Для запуска из распакованного архива установка не обязательна.
 
 Для установки в меню приложений выполните из папки архива:
@@ -35,11 +38,12 @@ python3 install.py
 ```
 
 Python 3 нужен только установщику. Он копирует выпуск в
-~/.local/opt/almavorn/ВЕРСИЯ, добавляет команды в ~/.local/bin и пункт
+~/.local/opt/almavorn/ВЕРСИЯ-ИНТЕРФЕЙС, добавляет команду в ~/.local/bin и пункт
 Almavorn в меню приложений; права администратора не нужны.
 Перед обновлением закройте плеер и запустите установщик из нового архива:
-он переключит обе команды и пункт меню на новую версию, сохранив прежнюю
-сборку и ее файлы запуска в launchers-before-ВЕРСИЯ внутри старой установки.
+он переключит выбранную команду и ее пункт меню на новую версию, сохранив прежнюю
+сборку и ее файлы запуска в launchers-before-ВЕРСИЯ-ИНТЕРФЕЙС внутри старой установки.
+Второй интерфейс обновляется отдельно. Старые общие установки также поддерживаются.
 Посторонние или измененные файлы не заменяются; повторная установка той же
 сборки сообщает, что она уже установлена. Если переключение не удалось, прежние файлы запуска
 восстанавливаются, а незавершенная новая установка остается для разбора.
@@ -60,7 +64,7 @@ Almavorn в меню приложений; права администратор
 
 ## Совместимость
 
-Выпуск предназначен для Linux x86_64 с glibc. Нужны ALSA, libstdc++ и
+Архив tar.gz предназначен для Linux x86_64 с glibc. Нужны ALSA, libstdc++ и
 драйвер OpenGL с Wayland или X11 для графической версии. SQLite, SoundTouch
 и шрифты уже включены. Минимальная версия системных библиотек зависит от
 среды сборки; компилятор, glibc и исходный коммит записаны в BUILD_INFO.json.
@@ -72,8 +76,28 @@ Almavorn в меню приложений; права администратор
 
 ```sh
 sha256sum -c SHA256SUMS
-tar -xzf almavorn-0.1.3-linux-x86_64.tar.gz
+tar -xzf almavorn-0.1.4-guitui-linux-x86_64.tar.gz
 ```
+
+AppImage включает библиотеки, собранные linuxdeploy, и запускается после
+выдачи права на исполнение. Для TUI запускайте AppImage из терминала.
+Если FUSE недоступен, передайте AppImage аргумент --appimage-extract-and-run.
+
+Flatpak использует org.freedesktop.Platform 25.08. При установке пакета
+система предложит загрузить среду из Flathub. Приложение не опубликовано
+в каталоге Flathub: обновления устанавливаются новым файлом из Releases.
+
+```sh
+flatpak install --user ./almavorn-0.1.4-guitui-linux-x86_64.flatpak
+flatpak run io.github.MoltenZharr.Almavorn
+```
+
+Для TUI имя файла содержит tui, идентификатор — io.github.MoltenZharr.Almavorn.TUI.
+Оба Flatpak имеют отдельные библиотеки и настройки в ~/.var/app/ИДЕНТИФИКАТОР/data/almavorn.
+Доступ к пользовательским файлам нужен для чтения музыки и записи тегов;
+PulseAudio — для звука, разрешенное имя MPRIS — для управления воспроизведением.
+Только GUITUI получает Wayland/X11 и графическое ускорение. Сетевой доступ
+самому плееру не выдается.
 
 ## Лицензии и повторная сборка
 
@@ -121,10 +145,11 @@ soundtouch-ffi = { path = "../soundtouch-ffi-0.4.1" }
 с готовыми изменениями. Отправьте коммит в main и соберите локальный архив:
 
 ```sh
-python3 scripts/package-release.py
+python3 scripts/package-release.py --variant guitui
+python3 scripts/package-release.py --variant tui
 ```
 
-Архив и SHA256SUMS появятся в target/dist/ВЕРСИЯ; существующий каталог выпуска
+Архив и SHA256SUMS-ИНТЕРФЕЙС появятся в target/dist/ВЕРСИЯ/ИНТЕРФЕЙС; существующий каталог
 не перезаписывается. Для локальной установки распакуйте архив и выполните
 python3 install.py внутри его папки.
 
@@ -136,13 +161,23 @@ git tag -a v0.1.4 -m "Almavorn 0.1.4"
 git push origin refs/tags/v0.1.4
 ```
 
-GitHub Actions соберет архив на Ubuntu 22.04, создаст черновик GitHub Release
-и загрузит в него архив и SHA256SUMS. После успешной загрузки выпуск
+GitHub Actions собирает каждый интерфейс с отдельными Cargo features на Ubuntu 22.04.
+Для упаковки всех форматов используется --format all с путями --linuxdeploy и
+--appimagetool. Нужны Flatpak, Freedesktop Platform и SDK 25.08; команды установки
+и закрепленные контрольные суммы инструментов находятся в release.yml.
+При изменении upstream-сборки appimagetool сначала проверьте ее и обновите сумму.
+[Упаковка AppImage](https://docs.appimage.org/packaging-guide/from-source/linuxdeploy-user-guide.html),
+[пакеты Flatpak](https://docs.flatpak.org/en/latest/single-file-bundles.html).
+
+После успешной сборки обеих версий Actions создаст черновик GitHub Release
+и загрузит шесть пакетов и SHA256SUMS. После успешной загрузки выпуск
 автоматически публикуется для скачивания. Если загрузка не завершилась,
 выпуск остается черновиком. Дождитесь успешного завершения Release в Actions
 и проверьте описание и файлы на странице
 [Releases](https://github.com/Molten-Zharr/Almavorn/releases).
 Раздел Packages для этих архивов не используется.
+Изменения упаковки в main сначала собираются в артефакты Actions; публикация
+происходит только для тега. Так можно проверить все форматы до выпуска.
 
 ## GitHub Packages
 

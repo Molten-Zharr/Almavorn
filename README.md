@@ -13,18 +13,44 @@ A music player for Linux: keep your collection organized and your mixes flexible
 
 ## Install
 
-Ubuntu, Debian, Arch Linux, and Artix on Linux x86_64. Close the player and run:
+Choose your interface for Linux x86_64:
+
+- GUITUI, a desktop window: [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) · [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.tar.gz).
+- TUI, your terminal: [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage) · [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.tar.gz).
+
+- Flatpak: open with your system's software installer.
+- AppImage: allow execution in file properties, then launch.
+- tar.gz: extract, then run "python3 install.py" inside.
+
+Run the TUI AppImage from a terminal. For TUI Flatpak, use:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash
+flatpak run io.github.MoltenZharr.Almavorn.TUI
 ```
 
-The command installs dependencies, downloads the source, builds the player,
-and adds Almavorn to your application menu. It may ask for your administrator
-password. Run the same command again to update.
+Flatpak needs an internet connection for its first installation.
+Its library and settings are separate from the other formats.
+
+## Build and install
+
+Ubuntu, Debian, Arch Linux, and Artix. For a desktop window:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant guitui
+```
+
+For the terminal only:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant tui
+```
+
+The command installs dependencies and your chosen interface. It may ask for
+your administrator password. To update, close Almavorn if it is running
+and repeat your installation command.
 
 Open Almavorn from your application menu after installation.
-Run "almavorn-tui" for the terminal interface.
+For TUI, run "~/.local/bin/almavorn-tui".
 
 [Ready-to-use download](https://github.com/Molten-Zharr/Almavorn/releases/latest) ·
 [Keyboard shortcuts](docs/GLOBAL_SHORTCUTS.md) ·

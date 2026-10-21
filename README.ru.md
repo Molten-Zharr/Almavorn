@@ -13,18 +13,44 @@
 
 ## Установка
 
-Ubuntu, Debian, Arch Linux и Artix, Linux x86_64. Закройте плеер и выполните:
+Выберите интерфейс для Linux x86_64:
+
+- GUITUI, отдельное окно: [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) · [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.tar.gz).
+- TUI, работа в терминале: [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage) · [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.tar.gz).
+
+- Flatpak: откройте файл через системный установщик приложений.
+- AppImage: разрешите запуск в свойствах файла, затем откройте.
+- tar.gz: распакуйте и выполните внутри "python3 install.py".
+
+TUI AppImage запускайте из терминала. Для TUI Flatpak:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash
+flatpak run io.github.MoltenZharr.Almavorn.TUI
 ```
 
-Команда подготовит зависимости, скачает исходники, соберет плеер и добавит
-Almavorn в меню приложений. При необходимости запросит пароль администратора.
-Для обновления повторите ту же команду.
+Для первой установки Flatpak нужен интернет.
+Его библиотека и настройки хранятся отдельно от других форматов.
+
+## Собрать и установить
+
+Ubuntu, Debian, Arch Linux и Artix. Для отдельного окна:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant guitui
+```
+
+Только для терминала:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant tui
+```
+
+Команда подготовит зависимости и установит выбранный интерфейс.
+При необходимости запросит пароль администратора. Для обновления закройте
+Almavorn, если он запущен, и повторите свою команду установки.
 
 После установки откройте Almavorn через меню приложений.
-Консольная версия запускается командой "almavorn-tui".
+Для TUI выполните "~/.local/bin/almavorn-tui".
 
 [Готовый выпуск без сборки](https://github.com/Molten-Zharr/Almavorn/releases/latest) ·
 [Горячие клавиши](docs/GLOBAL_SHORTCUTS.md) ·

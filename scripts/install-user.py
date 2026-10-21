@@ -39,18 +39,23 @@ def previous_installation(prefix, links, desktop, icon):
             raise ValueError("Команды Almavorn указывают на разные версии")
         old = version_dir
     info = json.loads((old / "BUILD_INFO.json").read_text(encoding="utf-8"))
-    if info["version"] != old.name:
+    old_id = info["version"] + ("-" + info["variant"] if "variant" in info else "")
+    if old_id != old.name:
         raise ValueError("Версия прежней установки не совпадает с BUILD_INFO.json")
     for link in links:
         if digest(link) != info["binaries"][link.name]:
             raise ValueError(f"Прежняя команда изменена: {link}. Обновление остановлено.")
     if desktop.is_symlink() or icon.is_symlink():
         raise ValueError("Пункт меню или значок является посторонней ссылкой")
-    expected = old / "bin/almavorn"
+    binary = next(iter(links)).name
+    # Older combined packages provided no separate terminal desktop entry.
+    if binary == "almavorn-tui" and "variant" not in info and not any(os.path.lexists(p) for p in (desktop, icon)):
+        return old
+    expected = old / "bin" / binary
     text = desktop.read_text(encoding="utf-8")
     if (f"Exec={desktop_argument(expected)} %F\n" not in text
             or f"TryExec={expected}\n" not in text
-            or digest(icon) != digest(old / "share/icons/hicolor/scalable/apps/almavorn.svg")):
+            or digest(icon) != digest(old / "share/icons/hicolor/scalable/apps" / f"{binary}.svg")):
         raise ValueError("Пункт меню или значок изменен вручную; обновление остановлено")
     return old
 
@@ -59,12 +64,17 @@ def install(source, info, prefix):
     version = info["version"]
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", version):
         raise ValueError("Некорректная версия в BUILD_INFO.json")
-    destination = prefix / "opt/almavorn" / version
-    if set(info["binaries"]) != {"almavorn", "almavorn-tui"}:
-        raise ValueError("В выпуске должны быть графическая и консольная версии")
+    variant = info.get("variant")
+    if variant not in ("tui", "guitui"):
+        raise ValueError("В выпуске не указан интерфейс: TUI или GUITUI")
+    binary = "almavorn-tui" if variant == "tui" else "almavorn"
+    installation_id = f"{version}-{variant}"
+    destination = prefix / "opt/almavorn" / installation_id
+    if set(info["binaries"]) != {binary}:
+        raise ValueError("Состав выпуска не соответствует выбранному интерфейсу")
     links = {prefix / "bin" / name: destination / "bin" / name for name in info["binaries"]}
-    desktop = prefix / "share/applications/almavorn.desktop"
-    icon = prefix / "share/icons/hicolor/scalable/apps/almavorn.svg"
+    desktop = prefix / "share/applications" / f"{binary}.desktop"
+    icon = prefix / "share/icons/hicolor/scalable/apps" / f"{binary}.svg"
     for name, checksum in info["binaries"].items():
         if digest(source / "bin" / name) != checksum:
             raise ValueError(f"Поврежден файл {name}: контрольная сумма не совпадает")
@@ -74,13 +84,13 @@ def install(source, info, prefix):
             print("Эта сборка Almavorn уже установлена.")
             return
         raise FileExistsError(f"Версия уже установлена или путь занят: {destination}")
-    backup = old / f"launchers-before-{version}" if old else None
+    backup = old / f"launchers-before-{installation_id}" if old else None
     if backup is not None and os.path.lexists(backup):
         raise FileExistsError(f"Резервные файлы уже существуют: {backup}")
-    text = (source / "share/applications/almavorn.desktop").read_text(encoding="utf-8")
-    executable = destination / "bin/almavorn"
-    text = text.replace("Exec=almavorn %F", f"Exec={desktop_argument(executable)} %F")
-    text = text.replace("TryExec=almavorn", f"TryExec={executable}")
+    text = (source / "share/applications" / f"{binary}.desktop").read_text(encoding="utf-8")
+    executable = destination / "bin" / binary
+    text = text.replace(f"Exec={binary} %F", f"Exec={desktop_argument(executable)} %F")
+    text = text.replace(f"TryExec={binary}", f"TryExec={executable}")
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
     moved = []
@@ -89,6 +99,8 @@ def install(source, info, prefix):
         if backup is not None:
             backup.mkdir()
             for path in (*links, desktop, icon):
+                if not os.path.lexists(path):
+                    continue
                 saved = backup / path.name
                 path.rename(saved)
                 moved.append((path, saved))
@@ -99,7 +111,7 @@ def install(source, info, prefix):
         icon.parent.mkdir(parents=True, exist_ok=True)
         with icon.open("xb") as handle:
             created.append(icon)
-            with (source / "share/icons/hicolor/scalable/apps/almavorn.svg").open("rb") as original:
+            with (source / "share/icons/hicolor/scalable/apps" / f"{binary}.svg").open("rb") as original:
                 shutil.copyfileobj(original, handle)
         desktop.parent.mkdir(parents=True, exist_ok=True)
         with desktop.open("x", encoding="utf-8") as handle:
@@ -121,8 +133,8 @@ def install(source, info, prefix):
     if old is not None:
         print(f"Прежняя версия сохранена: {old}")
         print(f"Прежние файлы запуска сохранены: {backup}")
-    print("Запуск: меню приложений -> Almavorn")
-    print(f"Консольная версия: {prefix / 'bin/almavorn-tui'}")
+    print(f"Запуск: {prefix / 'bin' / binary}")
+    print("Пункт меню: Almavorn TUI" if variant == "tui" else "Пункт меню: Almavorn")
 
 
 def main():

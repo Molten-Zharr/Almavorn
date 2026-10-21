@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Almavorn TUI
+Comment=Music player in your terminal
+Comment[ru]=Музыкальный плеер в терминале
+Exec=almavorn-tui %F
+TryExec=almavorn-tui
+Icon=almavorn-tui
+Terminal=true
+Categories=AudioVideo;Audio;Player;
+Keywords=Music;Player;Audio;
