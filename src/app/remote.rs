@@ -249,6 +249,7 @@ impl App {
         });
         self.view.settings.focus = SettingsFocus::Parameters;
         self.view.settings.page = SettingsPage::Shortcuts;
+        self.sync_settings_menu();
         Ok(())
     }
 

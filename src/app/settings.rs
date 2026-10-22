@@ -80,8 +80,9 @@ pub(crate) struct SettingsView {
     pub palette: usize,
     pub preset: usize,
     pub offset: usize,
+    pub menu_selected: usize,
+    pub themes_expanded: bool,
     pub menu_area: Rect,
-    pub subtab_area: Rect,
     pub parameters_area: Rect,
     pub binding_modifiers: [bool; 3],
     pub binding_offset: usize,
@@ -233,6 +234,7 @@ impl App {
         self.settings.preferences.bindings[index].key = key;
         self.save_settings()?;
         self.view.settings.page = SettingsPage::Shortcuts;
+        self.sync_settings_menu();
         self.view.settings.selected = self
             .settings_rows()
             .iter()
@@ -254,6 +256,20 @@ impl App {
     pub fn settings_focus(&self) -> SettingsFocus {
         self.view.settings.focus
     }
+    pub(super) fn sync_settings_menu(&mut self) {
+        let page = self.view.settings.page;
+        if page.section() == SettingsPage::Themes {
+            self.view.settings.themes_expanded = true;
+        }
+        self.view.settings.menu_selected = self
+            .settings_menu_targets()
+            .iter()
+            .position(|target| {
+                matches!(target,
+                    Target::SettingsPage(value) | Target::SettingsTab(value) if *value == page)
+            })
+            .unwrap_or(0);
+    }
     pub fn open_settings_page(&mut self, page: SettingsPage) {
         if !matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
             self.message(
@@ -265,6 +281,7 @@ impl App {
             );
         }
         self.view.settings.page = page;
+        self.sync_settings_menu();
         self.view.settings.selected = 0;
         self.view.settings.offset = 0;
         self.view.settings.focus = SettingsFocus::Menu;
@@ -281,6 +298,56 @@ impl App {
             self.view.settings.focus = SettingsFocus::Subtabs;
         }
     }
+    pub(crate) fn settings_menu_targets(&self) -> Vec<Target> {
+        let mut items = vec![
+            Target::SettingsPage(SettingsPage::General),
+            Target::SettingsPage(SettingsPage::Profiles),
+            Target::SettingsThemes,
+        ];
+        if self.view.settings.themes_expanded {
+            items.extend(SettingsPage::THEME_TABS.map(Target::SettingsTab));
+        }
+        items.push(Target::SettingsPage(SettingsPage::Shortcuts));
+        items
+    }
+    fn focus_settings_themes(&mut self) {
+        self.view.settings.menu_selected = self
+            .settings_menu_targets()
+            .iter()
+            .position(|target| matches!(target, Target::SettingsThemes))
+            .unwrap_or(0);
+        self.view.settings.focus = SettingsFocus::Menu;
+    }
+    pub(super) fn toggle_settings_themes(&mut self) {
+        let expanded = !self.view.settings.themes_expanded;
+        if expanded && self.view.settings.page.section() != SettingsPage::Themes {
+            self.open_settings_page(SettingsPage::Themes);
+        }
+        self.view.settings.themes_expanded = expanded;
+        self.focus_settings_themes();
+        self.show_settings();
+    }
+    fn select_settings_menu(&mut self, index: usize) {
+        let targets = self.settings_menu_targets();
+        let Some(target) = targets.get(index) else {
+            return;
+        };
+        match target {
+            Target::SettingsPage(page) | Target::SettingsTab(page) => {
+                if self.view.settings.page != *page {
+                    self.open_settings_page(*page);
+                }
+                self.view.settings.focus = if matches!(target, Target::SettingsTab(_)) {
+                    SettingsFocus::Subtabs
+                } else {
+                    SettingsFocus::Menu
+                };
+                self.view.settings.menu_selected = index;
+            }
+            Target::SettingsThemes => self.focus_settings_themes(),
+            _ => {}
+        }
+    }
     pub(super) fn hover_settings(&mut self) {
         if !matches!(self.view.dialog, Some(Dialog::Settings { .. }))
             || self.view.workspace.gesture.is_some()
@@ -294,24 +361,18 @@ impl App {
             .rev()
             .find(|hit| hit.enabled && hit.area.contains(self.view.pointer))
             .map(|hit| hit.target.clone());
-        match target {
-            Some(Target::SettingsPage(page))
-                if self.view.settings.menu_area.contains(self.view.pointer) =>
-            {
-                if self.view.settings.page.section() != page {
-                    self.open_settings_page(page);
+        if self.view.settings.menu_area.contains(self.view.pointer) {
+            let index = self.settings_menu_targets().iter().position(|item| {
+                match (item, target.as_ref()) {
+                    (Target::SettingsThemes, Some(Target::SettingsThemes)) => true,
+                    (Target::SettingsPage(a), Some(Target::SettingsPage(b)))
+                    | (Target::SettingsTab(a), Some(Target::SettingsTab(b))) => a == b,
+                    _ => false,
                 }
-                self.view.settings.focus = SettingsFocus::Menu;
+            });
+            if let Some(index) = index {
+                self.select_settings_menu(index);
             }
-            Some(Target::SettingsTab(page))
-                if self.view.settings.subtab_area.contains(self.view.pointer) =>
-            {
-                if self.view.settings.page != page {
-                    self.select_settings_tab(page);
-                }
-                self.view.settings.focus = SettingsFocus::Subtabs;
-            }
-            _ => {}
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
@@ -365,24 +426,12 @@ impl App {
     }
     pub(super) fn settings_scroll(&mut self, direction: i64) {
         if self.view.settings.focus != SettingsFocus::Parameters {
-            let subtabs = self.view.settings.focus == SettingsFocus::Subtabs;
-            let pages = if subtabs {
-                SettingsPage::THEME_TABS.as_slice()
-            } else {
-                SettingsPage::SECTIONS.as_slice()
-            };
-            let current = if subtabs {
-                self.view.settings.page
-            } else {
-                self.view.settings.page.section()
-            };
-            let index = pages.iter().position(|page| *page == current).unwrap_or(0);
-            let page = pages[bounded(index, direction, pages.len())];
-            if subtabs {
-                self.select_settings_tab(page);
-            } else {
-                self.open_settings_page(page);
-            }
+            let index = bounded(
+                self.view.settings.menu_selected,
+                direction,
+                self.settings_menu_targets().len(),
+            );
+            self.select_settings_menu(index);
         } else {
             self.view.settings.selected = bounded(
                 self.view.settings.selected,
@@ -396,20 +445,12 @@ impl App {
         let key = key.normalized();
         match key.key {
             Key::Tab => {
-                let focuses = if self.view.settings.page.section() == SettingsPage::Themes {
-                    &[
-                        SettingsFocus::Menu,
-                        SettingsFocus::Subtabs,
-                        SettingsFocus::Parameters,
-                    ][..]
+                self.view.settings.focus = if self.view.settings.focus == SettingsFocus::Parameters
+                {
+                    SettingsFocus::Menu
                 } else {
-                    &[SettingsFocus::Menu, SettingsFocus::Parameters][..]
+                    SettingsFocus::Parameters
                 };
-                self.view.settings.focus = cycle(
-                    self.view.settings.focus,
-                    focuses,
-                    if key.shift { -1 } else { 1 },
-                );
             }
             Key::Up => self.settings_scroll(-1),
             Key::Down => self.settings_scroll(1),
@@ -417,16 +458,32 @@ impl App {
             Key::End => self.settings_scroll(i64::MAX),
             Key::PageUp => self.settings_scroll(-5),
             Key::PageDown => self.settings_scroll(5),
-            Key::Right if self.view.settings.focus == SettingsFocus::Menu => {
-                self.view.settings.focus =
-                    if self.view.settings.page.section() == SettingsPage::Themes {
-                        SettingsFocus::Subtabs
+            Key::Right if self.view.settings.focus != SettingsFocus::Parameters => {
+                if matches!(
+                    self.settings_menu_targets()
+                        .get(self.view.settings.menu_selected),
+                    Some(Target::SettingsThemes)
+                ) {
+                    if self.view.settings.themes_expanded {
+                        self.select_settings_menu(self.view.settings.menu_selected + 1);
                     } else {
-                        SettingsFocus::Parameters
-                    };
+                        self.toggle_settings_themes();
+                    }
+                } else {
+                    self.view.settings.focus = SettingsFocus::Parameters;
+                }
             }
-            Key::Left | Key::Right if self.view.settings.focus == SettingsFocus::Subtabs => {
-                self.settings_scroll(if key.key == Key::Left { -1 } else { 1 });
+            Key::Left if self.view.settings.focus != SettingsFocus::Parameters => {
+                match self
+                    .settings_menu_targets()
+                    .get(self.view.settings.menu_selected)
+                {
+                    Some(Target::SettingsTab(_)) => self.focus_settings_themes(),
+                    Some(Target::SettingsThemes) if self.view.settings.themes_expanded => {
+                        self.toggle_settings_themes();
+                    }
+                    _ => {}
+                }
             }
             Key::Left | Key::Right if self.view.settings.focus == SettingsFocus::Parameters => {
                 let direction = if key.key == Key::Left { -1 } else { 1 };
@@ -434,13 +491,15 @@ impl App {
             }
             Key::Enter | Key::Char(' ') => {
                 if self.view.settings.focus != SettingsFocus::Parameters {
-                    self.view.settings.focus = if self.view.settings.focus == SettingsFocus::Menu
-                        && self.view.settings.page.section() == SettingsPage::Themes
-                    {
-                        SettingsFocus::Subtabs
+                    if matches!(
+                        self.settings_menu_targets()
+                            .get(self.view.settings.menu_selected),
+                        Some(Target::SettingsThemes)
+                    ) {
+                        self.toggle_settings_themes();
                     } else {
-                        SettingsFocus::Parameters
-                    };
+                        self.view.settings.focus = SettingsFocus::Parameters;
+                    }
                 } else {
                     self.setting(self.view.settings.selected)?;
                 }

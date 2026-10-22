@@ -1,5 +1,5 @@
 use super::{
-    buttons::{button_width, quiet_button, quiet_width},
+    buttons::{button_width, quiet_button},
     theme::Palette,
     widgets::{block, visible_offset},
 };
@@ -25,7 +25,6 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         inner.height -= 1;
     }
     app.view.settings.menu_area = Rect::default();
-    app.view.settings.subtab_area = Rect::default();
     app.view.settings.parameters_area = Rect::default();
     if area.width < 32 || area.height < 14 {
         frame.render_widget(
@@ -61,9 +60,12 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     let footer_height = inner.height.min(3);
     let body_height = inner.height.saturating_sub(footer_height);
     let min_menu_width = if inner.width < 45 { 10 } else { 12 };
-    let menu_width = (inner.width / 5)
-        .clamp(min_menu_width, 20)
-        .min(inner.width / 2);
+    let menu_width = if app.view.settings.themes_expanded {
+        (inner.width / 3).clamp(min_menu_width, 24)
+    } else {
+        (inner.width / 5).clamp(min_menu_width, 20)
+    }
+    .min(inner.width / 2);
     let menu = Rect::new(inner.x, inner.y, menu_width, body_height);
     let mut content = Rect::new(
         menu.right() + 2,
@@ -76,27 +78,20 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         Paragraph::new(app.text("Sections", "Разделы")).style(palette.text().fg(palette.muted)),
         Rect::new(menu.x, menu.y, menu.width, 1),
     );
-    let page_index = SettingsPage::SECTIONS
-        .iter()
-        .position(|page| *page == app.view.settings.page.section())
-        .unwrap_or(0);
+    let menu_targets = app.settings_menu_targets();
     let menu_offset = visible_offset(
         0,
-        page_index,
+        app.view.settings.menu_selected,
         menu.height.saturating_sub(2) as usize,
-        SettingsPage::SECTIONS.len(),
+        menu_targets.len(),
     );
-    for (index, page) in SettingsPage::SECTIONS
-        .into_iter()
-        .enumerate()
-        .skip(menu_offset)
-    {
+    for (index, target) in menu_targets.into_iter().enumerate().skip(menu_offset) {
         let y = menu.y + (index - menu_offset) as u16 + 2;
         if y >= menu.bottom() {
             break;
         }
         let row = Rect::new(menu.x, y, menu.width, 1);
-        let selected = app.view.settings.page.section() == page;
+        let selected = app.view.settings.menu_selected == index;
         let style = if selected {
             palette
                 .text()
@@ -107,18 +102,51 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         } else {
             palette.text()
         };
+        let (prefix, label) = match target {
+            Target::SettingsThemes => (
+                if app.view.settings.themes_expanded {
+                    "▾ "
+                } else {
+                    "▸ "
+                },
+                SettingsPage::Themes.name(app.settings.preferences.language),
+            ),
+            Target::SettingsTab(page) => (
+                if page == SettingsPage::Typography {
+                    "  └─ "
+                } else {
+                    "  ├─ "
+                },
+                if page == SettingsPage::Typography
+                    && menu.width
+                        < Span::raw(page.name(app.settings.preferences.language)).width() as u16 + 5
+                {
+                    app.text("Font", "Шрифт")
+                } else {
+                    page.tab_name(app.settings.preferences.language)
+                },
+            ),
+            Target::SettingsPage(page) => ("  ", page.name(app.settings.preferences.language)),
+            _ => continue,
+        };
         frame.render_widget(
-            Paragraph::new(format!(
-                "{}{}",
-                if menu.width < 12 { " " } else { "  " },
-                page.name(app.settings.preferences.language)
-            ))
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    prefix,
+                    if selected {
+                        style
+                    } else {
+                        style.fg(palette.separator)
+                    },
+                ),
+                Span::raw(label),
+            ]))
             .style(style),
             row,
         );
         app.view.hits.push(Hit {
             area: row,
-            target: Target::SettingsPage(page),
+            target,
             enabled: true,
         });
     }
@@ -127,26 +155,23 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             .style(palette.text().fg(palette.separator)),
         Rect::new(menu.right(), menu.y, 1, body_height),
     );
-    if app.view.settings.page.section() == SettingsPage::Themes {
-        let height = theme_tabs(frame, app, content, palette);
-        app.view.settings.subtab_area = Rect::new(content.x, content.y, content.width, height);
-        let reserved = (height + 1).min(content.height);
-        content.y += reserved;
-        content.height -= reserved;
+    let heading = if app.view.settings.page.section() == SettingsPage::Themes {
+        app.view
+            .settings
+            .page
+            .tab_name(app.settings.preferences.language)
     } else {
-        frame.render_widget(
-            Paragraph::new(
-                app.view
-                    .settings
-                    .page
-                    .name(app.settings.preferences.language),
-            )
-            .style(palette.text().fg(palette.sidebar_title)),
-            Rect::new(content.x, content.y, content.width, 1),
-        );
-        content.y += 2;
-        content.height = content.height.saturating_sub(2);
-    }
+        app.view
+            .settings
+            .page
+            .name(app.settings.preferences.language)
+    };
+    frame.render_widget(
+        Paragraph::new(heading).style(palette.text().fg(palette.sidebar_title)),
+        Rect::new(content.x, content.y, content.width, 1),
+    );
+    content.y += 2;
+    content.height = content.height.saturating_sub(2);
     app.view.settings.parameters_area = content;
     let rows = app.settings_rows();
     app.view.settings.selected = app.view.settings.selected.min(rows.len().saturating_sub(1));
@@ -503,55 +528,6 @@ fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
             enabled: true,
         });
         x = row.right();
-    }
-}
-
-fn theme_tabs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) -> u16 {
-    let mut x = area.x;
-    let mut y = area.y;
-    for page in SettingsPage::THEME_TABS {
-        let label = if page == SettingsPage::Typography
-            && area.width < quiet_width(page.tab_name(app.settings.preferences.language))
-        {
-            app.text("Font", "Шрифт")
-        } else {
-            page.tab_name(app.settings.preferences.language)
-        };
-        let width = quiet_width(label).min(area.width);
-        if x > area.x && x + width > area.right() {
-            x = area.x;
-            y += 1;
-        }
-        if width == 0 || y >= area.bottom() {
-            break;
-        }
-        let row = Rect::new(x, y, width, 1);
-        quiet_button(
-            frame,
-            app,
-            row,
-            label,
-            Target::SettingsTab(page),
-            true,
-            palette,
-        );
-        if page == app.view.settings.page {
-            frame.render_widget(
-                Paragraph::new(format!(" {label} ")).style(
-                    palette
-                        .text()
-                        .bg(palette.sidebar_selection)
-                        .fg(palette.background),
-                ),
-                row,
-            );
-        }
-        x = x.saturating_add(width + 1);
-    }
-    if area.width == 0 || area.height == 0 {
-        0
-    } else {
-        (y - area.y + 1).min(area.height)
     }
 }
 

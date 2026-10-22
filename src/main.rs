@@ -194,6 +194,7 @@ fn run() -> Result<()> {
                             | Target::SettingAdjust(_, _)
                             | Target::SettingHelp(_)
                             | Target::SettingsPage(_)
+                            | Target::SettingsThemes
                             | Target::SettingsTab(_)
                             | Target::CloseDialog
                             | Target::Submit

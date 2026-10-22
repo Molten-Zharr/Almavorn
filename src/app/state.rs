@@ -116,6 +116,7 @@ pub enum Target {
     DialogScroll(i16),
     Setting(usize),
     SettingsPage(SettingsPage),
+    SettingsThemes,
     SettingsTab(SettingsPage),
     SettingsVolume(usize, Rect),
     SettingsTimeline(usize, crate::preferences::PlaybackTimeline),

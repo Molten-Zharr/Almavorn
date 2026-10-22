@@ -175,8 +175,6 @@ impl App {
                     let position = Position::new(x, y);
                     self.view.settings.focus = if self.view.settings.menu_area.contains(position) {
                         super::SettingsFocus::Menu
-                    } else if self.view.settings.subtab_area.contains(position) {
-                        super::SettingsFocus::Subtabs
                     } else if self.view.settings.parameters_area.contains(position) {
                         super::SettingsFocus::Parameters
                     } else {
@@ -817,6 +815,7 @@ impl App {
             }
             Target::SettingAdjust(index, direction) => self.adjust_setting(index, direction)?,
             Target::SettingsPage(page) => self.open_settings_page(page),
+            Target::SettingsThemes => self.toggle_settings_themes(),
             Target::SettingsTab(page) => self.select_settings_tab(page),
             Target::SettingsVolume(index, area) => {
                 if area.width > 0 {
@@ -896,6 +895,9 @@ impl App {
                 self.view.pointer = Position::new(u16::MAX, u16::MAX);
                 self.view.settings.focus = super::SettingsFocus::Subtabs;
                 self.settings_scroll(-1);
+            }
+            Target::SettingsThemes if self.view.settings.themes_expanded => {
+                self.toggle_settings_themes();
             }
             Target::DialogScroll(delta) => self.scroll_dialog(-delta),
             Target::CloseDialog => {
