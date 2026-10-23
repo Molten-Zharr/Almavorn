@@ -11,7 +11,24 @@ use ratatui::backend::Backend;
 mod gui_color_picker;
 mod gui_fonts;
 mod gui_renderer;
+#[cfg(target_os = "linux")]
+mod gui_file_drop;
 use std::time::{Duration, Instant};
+
+struct PlayerUi<F>(Option<F>);
+
+impl<F: FnMut(&mut egui::Ui, &mut eframe::Frame)> eframe::App for PlayerUi<F> {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        if let Some(render) = &mut self.0 {
+            render(ui, frame);
+        }
+    }
+
+    fn on_exit(&mut self, _: Option<&eframe::glow::Context>) {
+        // Release the foreign Wayland receiver before eframe destroys its display.
+        self.0.take();
+    }
+}
 
 fn main() {
     if let Err(error) = run() {
@@ -46,9 +63,19 @@ fn run() -> Result<()> {
     let mut image_cache = gui_renderer::ImageCache::default();
     let mut playback_painter = gui_renderer::PlaybackPainter::default();
     let mut color_painter = gui_color_picker::ColorPickerPainter::default();
-    eframe::run_ui_native("Almavorn", options, move |root, _| {
+    #[cfg(target_os = "linux")]
+    let (mut wayland_drop, mut drop_initialized) = (None, false);
+    let render = move |root: &mut egui::Ui, _frame: &mut eframe::Frame| {
         let ctx = root.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(16));
+        #[cfg(target_os = "linux")]
+        if !drop_initialized {
+            drop_initialized = true;
+            match gui_file_drop::WaylandDrop::new(_frame) {
+                Ok(receiver) => wayland_drop = receiver,
+                Err(error) => drop_failure(&mut app, error),
+            }
+        }
         app.tick();
         if app.writing_tags() && ctx.input(|input| input.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -320,14 +347,37 @@ fn run() -> Result<()> {
                         app.handle(Input::CancelPointer);
                     }
                 }
-                if !dropped.is_empty()
-                    && let Err(error) = app.start_import(dropped)
-                {
-                    app.view.notice = format!(
-                        "{}: {error}",
-                        app.text("Import failed", "Ошибка добавления")
-                    );
-                    app.view.notice_error = true;
+                if !dropped.is_empty() {
+                    app.handle(Input::DroppedFiles {
+                        paths: dropped,
+                        playlist: app.dropped_import_target(),
+                    });
+                }
+                #[cfg(target_os = "linux")]
+                if let Some(receiver) = &mut wayland_drop {
+                    match receiver.poll(
+                        app.dropped_import_target(),
+                        app.settings.preferences.language,
+                    ) {
+                        Ok(batches) => {
+                            for batch in batches {
+                                match batch.paths {
+                                    Ok(paths) if !paths.is_empty() => {
+                                        app.handle(Input::DroppedFiles {
+                                            paths,
+                                            playlist: batch.playlist,
+                                        });
+                                    }
+                                    Ok(_) => {}
+                                    Err(error) => drop_failure(&mut app, error),
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            drop_failure(&mut app, error);
+                            wayland_drop = None;
+                        }
+                    }
                 }
                 playback_painter.paint(ui, image_rect, &app, dimensions);
                 let overlay = app.view.overlay_area;
@@ -360,8 +410,22 @@ fn run() -> Result<()> {
         if app.view.quit {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-    })
+    };
+    eframe::run_native(
+        "Almavorn",
+        options,
+        Box::new(move |_| Ok(Box::new(PlayerUi(Some(render))))),
+    )
     .map_err(|error| anyhow::anyhow!(error.to_string()))
+}
+
+#[cfg(target_os = "linux")]
+fn drop_failure(app: &mut App, error: impl std::fmt::Display) {
+    app.view.notice = format!(
+        "{}: {error}",
+        app.text("Cannot receive files", "Не удалось получить файлы")
+    );
+    app.view.notice_error = true;
 }
 
 fn pointer_cell(

@@ -88,6 +88,9 @@ impl App {
 
     fn handle_inner(&mut self, input: Input) -> Result<()> {
         match input {
+            Input::DroppedFiles { paths, playlist } => {
+                self.start_dropped_import(paths, playlist)?;
+            }
             Input::Move { x, y } => {
                 self.view.pointer = Position::new(x, y);
                 self.hover_settings();

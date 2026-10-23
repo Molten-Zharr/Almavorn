@@ -435,6 +435,10 @@ pub fn default_bindings() -> Vec<Binding> {
 pub enum Input {
     Key(KeyPress),
     Text(String),
+    DroppedFiles {
+        paths: Vec<std::path::PathBuf>,
+        playlist: Option<i64>,
+    },
     /// Actual pointer movement or leaving the view; do not emit on idle redraws.
     Move {
         x: u16,

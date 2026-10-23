@@ -98,6 +98,33 @@ impl App {
         self.start_import_skipping(paths, HashSet::new())
     }
 
+    pub fn dropped_import_target(&self) -> Option<i64> {
+        // Dropping files follows the mode, independently of the add-to-desk option.
+        match self.settings.mode {
+            Mode::Order => self
+                .library
+                .playlists
+                .iter()
+                .find(|playlist| playlist.kind == PlaylistKind::SortingDesk)
+                .map(|playlist| playlist.id),
+            Mode::Chaos => self
+                .playlist()
+                .filter(|playlist| {
+                    playlist.mode == Mode::Chaos || playlist.kind == PlaylistKind::SortingDesk
+                })
+                .map(|playlist| playlist.id),
+        }
+    }
+
+    pub(super) fn start_dropped_import(
+        &mut self,
+        paths: Vec<PathBuf>,
+        playlist: Option<i64>,
+    ) -> Result<()> {
+        let playlist = playlist.context(AppError::PlaylistSelectionRequired)?;
+        self.start_import_in_playlist(paths, HashSet::new(), playlist)
+    }
+
     pub(super) fn start_folder_playlist(
         &mut self,
         name: String,
@@ -160,12 +187,21 @@ impl App {
     fn start_import_skipping(
         &mut self,
         paths: Vec<PathBuf>,
-        mut known: HashSet<PathBuf>,
+        known: HashSet<PathBuf>,
     ) -> Result<()> {
         ensure!(self.library.import.is_none(), AppError::ImportBusy);
         let target = self
             .import_target()
             .context("Select an editable playlist or enable the sorting desk")?;
+        self.start_import_in_playlist(paths, known, target)
+    }
+
+    fn start_import_in_playlist(
+        &mut self,
+        paths: Vec<PathBuf>,
+        mut known: HashSet<PathBuf>,
+        target: i64,
+    ) -> Result<()> {
         known.extend(
             self.library
                 .playlists
