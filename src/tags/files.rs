@@ -136,6 +136,29 @@ mod linux {
         }
         Ok(())
     }
+
+    pub(super) fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
+        let source = path_string(source)?;
+        let destination = path_string(destination)?;
+        // RENAME_NOREPLACE also rejects dangling symlinks at the destination.
+        if unsafe { renameat2(-100, source.as_ptr(), -100, destination.as_ptr(), 1) } < 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        Ok(())
+    }
+}
+
+pub(super) fn rename_noreplace(source: &Path, destination: &Path) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        linux::rename_noreplace(source, destination)
+            .context("Не удалось переместить файл без замены существующего.")
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (source, destination);
+        bail!("Безопасное перемещение на этой платформе не поддерживается.")
+    }
 }
 
 pub(super) fn copy_attributes(source: &Path, destination: &Path) -> Result<()> {

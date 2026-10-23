@@ -39,6 +39,75 @@ pub(super) struct WaveformJob {
 }
 
 impl App {
+    pub(super) fn update_file_references(
+        &mut self,
+        old: &std::path::Path,
+        track: &crate::model::Track,
+    ) {
+        self.update_playback_metadata(track);
+        if let Some(request) = self.playback.preparation.requested().cloned()
+            && request.entry().track.id == track.id
+        {
+            // Decode again from the committed file; a running decoder may have
+            // captured the old pathname before it was removed.
+            if let Some(cancel) = self.playback.preparation_cancel.take() {
+                cancel.store(true, Ordering::Relaxed);
+            }
+            self.playback.preparation.request(request);
+        }
+        if let Some(request) = self.playback.seek.requested()
+            && request.path == old
+        {
+            let replacement = SeekRequest {
+                path: track.path.clone(),
+                position_ms: request.position_ms,
+                reverse: request.reverse,
+            };
+            if let Some(cancel) = self.playback.seek_cancel.take() {
+                cancel.store(true, Ordering::Relaxed);
+            }
+            self.playback.seek.request(replacement);
+        }
+        if let Some((path, _)) = &mut self.playback.reverse_cache
+            && path == old
+        {
+            *path = track.path.clone();
+        }
+        if let Some((path, _)) = &mut self.playback.pending_waveform
+            && path == old
+        {
+            *path = track.path.clone();
+        }
+        if self
+            .playback
+            .current
+            .as_ref()
+            .is_some_and(|current| current.id == track.id)
+        {
+            self.playback.current = Some(track.clone());
+            self.invalidate_artwork();
+            if self.playback.waveform_job.is_some() || self.playback.pending_waveform.is_some() {
+                self.cancel_waveform();
+                self.playback.pending_waveform =
+                    Some((track.path.clone(), self.playback.preparation.generation()));
+                self.start_waveform_job();
+            }
+        }
+        if old != track.path {
+            if let Some(tuner) = self.settings.track_tuners.remove(old) {
+                self.settings.track_tuners.insert(track.path.clone(), tuner);
+            }
+        }
+        for playlist in &mut self.library.playlists {
+            for entry in &mut playlist.entries {
+                if entry.track.id == track.id {
+                    entry.track = track.clone();
+                }
+            }
+        }
+        self.library.rows_cache.borrow_mut().take();
+    }
+
     pub(super) fn update_playback_metadata(&mut self, track: &crate::model::Track) {
         self.playback.queue.update_metadata(track);
         if let Some(request) = self.playback.preparation.requested_mut() {
@@ -46,16 +115,34 @@ impl App {
         }
     }
     pub fn playback_source_caption(&self) -> String {
-        let source = self.library.playlists.iter().find(|p| Some(p.id) == self.playback.playing_playlist)
+        let source = self
+            .library
+            .playlists
+            .iter()
+            .find(|p| Some(p.id) == self.playback.playing_playlist)
             .map(|p| (p.name.as_str(), p.mode, p.kind))
-            .or_else(|| self.playback.playing_source.as_ref().map(|(name, mode, kind)| (name.as_str(), *mode, *kind)));
-        let Some((name, mode, kind)) = source else { return self.text("Player", "Проигрыватель").into(); };
+            .or_else(|| {
+                self.playback
+                    .playing_source
+                    .as_ref()
+                    .map(|(name, mode, kind)| (name.as_str(), *mode, *kind))
+            });
+        let Some((name, mode, kind)) = source else {
+            return self.text("Player", "Проигрыватель").into();
+        };
         let source = if kind == crate::model::PlaylistKind::SortingDesk {
             self.text("Sorting desk", "Сортировочный стол").to_owned()
         } else {
             format!("{name} · {}", mode.name(self.settings.preferences.language))
         };
-        format!("{}: {source}", if self.current_paused() { self.text("Paused", "Пауза") } else { self.text("Playing", "Играет") })
+        format!(
+            "{}: {source}",
+            if self.current_paused() {
+                self.text("Paused", "Пауза")
+            } else {
+                self.text("Playing", "Играет")
+            }
+        )
     }
 
     pub(super) fn set_playback_timeline(&mut self, choice: PlaybackTimeline) -> Result<()> {
@@ -434,8 +521,14 @@ impl App {
         }
         self.begin_listening(track.id, track.duration_ms);
         self.playback.playing_entry = Some(entry.id);
-        if let Some(playlist) = self.library.playlists.iter().find(|p| p.id == request.playlist_id) {
-            self.playback.playing_source = Some((playlist.name.clone(), playlist.mode, playlist.kind));
+        if let Some(playlist) = self
+            .library
+            .playlists
+            .iter()
+            .find(|p| p.id == request.playlist_id)
+        {
+            self.playback.playing_source =
+                Some((playlist.name.clone(), playlist.mode, playlist.kind));
         }
         self.playback.playing_playlist = Some(request.playlist_id);
         self.playback.queue = request.queue;

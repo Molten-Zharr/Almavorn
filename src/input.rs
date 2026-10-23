@@ -259,7 +259,7 @@ impl Action {
             Self::NewPlaylist => language.text("Create an empty playlist in the current mode.", "Создать пустой плейлист в текущем режиме."),
             Self::CopyPlaylist => language.text("Create a copy with the same stored track positions and linked folders. Order requires editing.", "Создать копию с теми же сохраненными позициями композиций и связанными папками. В Порядке требуется редактирование."),
             Self::ComposePlaylists => language.text("Choose source playlists, select tracks and arrange them in a new mix. Source playlists are kept.", "Выбрать источники, отметить композиции и задать их порядок в новой подборке. Исходные плейлисты сохраняются."),
-            Self::Rename => language.text("Rename the playlist or the local track title.", "Переименовать плейлист либо название композиции в базе."),
+            Self::Rename => language.text("Rename a playlist or track title. On the sorting desk, edit the file name and tags.", "Переименовать плейлист или композицию. На сортировочном столе открыть имя файла и теги."),
             Self::Delete => language.text("Confirm removal of a playlist or track entry; keep source files.", "Подтвердить удаление плейлиста либо композиции из списка; сохранить исходные файлы."),
             Self::MoveUp => language.text("Move the selection one position earlier in stored order.", "Переместить выбранный элемент на одну позицию выше в сохранённом порядке."),
             Self::MoveDown => language.text("Move the selection one position later in stored order.", "Переместить выбранный элемент на одну позицию ниже в сохранённом порядке."),
@@ -272,7 +272,7 @@ impl Action {
             Self::Undo => language.text("Undo a library change in Chaos or the sorting desk.", "Отменить правку библиотеки в Хаосе либо на сортировочном столе."),
             Self::Redo => language.text("Repeat a library change that was undone.", "Повторить отменённую правку библиотеки."),
             Self::Metadata => language.text("Show saved metadata and file tags.", "Показать сохраненные сведения и теги файла."),
-            Self::EditTags => language.text("Edit and clear tags on the sorting desk, then write them to the audio file.", "Изменить или очистить теги на сортировочном столе и записать их в аудиофайл."),
+            Self::EditTags => language.text("Edit the file name and tags, then move the file from the sorting desk to a playlist folder.", "Изменить имя файла и теги, затем перенести файл со стола в папку плейлиста."),
             Self::Mark => language.text("Toggle the selected track's checkbox for copying or looping checked tracks.", "Изменить отметку выбранной композиции для копирования или повтора отмеченных."),
             Self::PlayMarked => language.text("Loop checked tracks in this playlist. Checkboxes update the set immediately; clearing all stops playback. No playlist is created.", "Проигрывать отмеченные композиции этого плейлиста по кругу. Галочки сразу меняют набор; снятие всех отметок останавливает воспроизведение. Новый плейлист не создается."),
             Self::PlayWholePlaylist => language.text("Leave the checked-track loop and continue the whole playing playlist without restarting the current track.", "Выйти из повтора отмеченных и продолжить весь воспроизводимый плейлист без перезапуска текущей композиции."),
@@ -326,7 +326,7 @@ impl Action {
             Self::Undo => language.text("Undo", "Отменить"),
             Self::Redo => language.text("Redo", "Повторить"),
             Self::Metadata => language.text("Track information", "Сведения о композиции"),
-            Self::EditTags => language.text("Edit file tags", "Редактор тегов файла"),
+            Self::EditTags => language.text("Tags and file name", "Теги и имя файла"),
             Self::Mark => language.text("Mark track", "Отметить композицию"),
             Self::PlayMarked => {
                 language.text("Play checked tracks only", "Прослушивать только отмеченные")

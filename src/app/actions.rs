@@ -66,9 +66,14 @@ impl App {
             .is_some_and(|playlist| self.playlist_editable(playlist));
         match action {
             Quit if self.writing_tags() => false,
-            EditTags => !self.busy() && !self.writing_tags()
-                && self.playlist().is_some_and(|playlist| playlist.kind == PlaylistKind::SortingDesk)
-                && self.entry().is_some(),
+            EditTags => {
+                !self.busy()
+                    && !self.writing_tags()
+                    && self
+                        .playlist()
+                        .is_some_and(|playlist| playlist.kind == PlaylistKind::SortingDesk)
+                    && self.entry().is_some()
+            }
             PlaylistFolders => self.playlist().is_some(),
             CopyPlaylist => !self.busy() && self.playlist().is_some(),
             ComposePlaylists => !self.busy() && !self.compose_choices().is_empty(),
@@ -83,6 +88,9 @@ impl App {
                             .is_some_and(|playlist| playlist.kind == PlaylistKind::Normal),
                         Focus::Tracks => self.entry().is_some_and(|entry| {
                             action == Delete
+                                || self
+                                    .playlist()
+                                    .is_some_and(|p| p.kind == PlaylistKind::SortingDesk)
                                 || !self.library.playlists.iter().any(|playlist| {
                                     playlist.mode == Mode::Order
                                         && playlist.kind == PlaylistKind::Normal
@@ -421,6 +429,14 @@ impl App {
                             TextPurpose::RenamePlaylist(playlist.id),
                             playlist.name.clone(),
                         );
+                    }
+                } else if self
+                    .playlist()
+                    .is_some_and(|p| p.kind == crate::model::PlaylistKind::SortingDesk)
+                {
+                    self.open_tag_editor()?;
+                    if let Some(Dialog::Tags(editor)) = &mut self.view.dialog {
+                        editor.tab = super::TagsTab::File;
                     }
                 } else if let (Some(playlist), Some(entry)) = (self.playlist(), self.entry()) {
                     self.text_dialog(

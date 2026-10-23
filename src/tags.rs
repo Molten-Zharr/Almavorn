@@ -18,6 +18,7 @@ use tempfile::NamedTempFile;
 mod extra;
 mod files;
 mod native;
+mod relocate;
 pub use extra::Extra;
 
 pub const TAG_TYPES: [TagType; 7] = [
@@ -274,10 +275,32 @@ impl Document {
 
     pub fn prepare(&self) -> Result<PreparedWrite> {
         ensure!(self.changed(), "Теги не изменены.");
+        self.prepare_at(&self.path)
+    }
+
+    pub(crate) fn verify_source(&self) -> Result<()> {
         ensure!(
             Stamp::read(&self.path)? == self.stamp,
             "Файл изменен другой программой. Откройте редактор заново."
         );
+        Ok(())
+    }
+
+    pub(crate) fn prepare_at(&self, destination: &Path) -> Result<PreparedWrite> {
+        let destination = destination
+            .parent()
+            .context("Выберите папку назначения.")?
+            .canonicalize()?
+            .join(destination.file_name().context("Укажите имя файла.")?);
+        let relocating = destination != self.path;
+        ensure!(self.changed() || relocating, "Нет изменений для записи.");
+        ensure!(
+            !relocating
+                || std::fs::symlink_metadata(&destination)
+                    .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),
+            "Файл с таким именем уже существует или недоступен. Выберите другое имя."
+        );
+        self.verify_source()?;
         let metadata = std::fs::metadata(&self.path)?;
         ensure!(
             !metadata.permissions().readonly(),
@@ -305,7 +328,7 @@ impl Document {
             Stamp::read(&self.path)? == self.stamp,
             "Файл изменен другой программой. Откройте редактор заново."
         );
-        let mut edited = temporary(&self.path)?;
+        let mut edited = temporary(&destination)?;
         backup.as_file_mut().rewind()?;
         std::io::copy(backup.as_file_mut(), edited.as_file_mut())?;
         let options = WriteOptions::new()
@@ -421,15 +444,14 @@ impl Document {
         let mut track = crate::media::read_track(edited.path())
             .context("Аудиофайл после записи не читается. Исходный файл сохранен.")?;
         add_extra_metadata(&mut track, &written_native)?;
-        track.path = self.path.clone();
+        track.path = destination.clone();
         // An empty title falls back to the real filename, never the temporary one.
         if written
             .primary_tag()
             .and_then(|tag| lofty::tag::Accessor::title(tag))
             .is_none()
         {
-            track.title = self
-                .path
+            track.title = destination
                 .file_stem()
                 .unwrap_or_default()
                 .to_string_lossy()
@@ -440,8 +462,11 @@ impl Document {
         backup.as_file().sync_all()?;
         edited.as_file().sync_all()?;
         files::sync_directory(&self.path)?;
+        files::sync_directory(&destination)?;
         Ok(PreparedWrite {
             path: self.path.clone(),
+            destination: relocating.then_some(destination),
+            operation: format!("{:032x}", fastrand::u128(..)),
             stamp: self.stamp.clone(),
             backup,
             edited,
@@ -494,37 +519,53 @@ fn temporary(path: &Path) -> Result<NamedTempFile> {
 
 pub struct PreparedWrite {
     path: PathBuf,
+    destination: Option<PathBuf>,
+    operation: String,
     stamp: Stamp,
     backup: NamedTempFile,
     edited: NamedTempFile,
     pub track: crate::model::ImportedTrack,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct Recovery {
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct Recovery {
     track: i64,
     path: PathBuf,
     backup: PathBuf,
     staging: PathBuf,
     before: Stamp,
     after: Stamp,
+    #[serde(default)]
+    destination: Option<PathBuf>,
+    #[serde(default)]
+    operation: Option<String>,
 }
 
 impl PreparedWrite {
-    pub(crate) fn record_recovery(&self, marker: &Path, track: i64) -> Result<()> {
-        use std::io::Write;
-        ensure!(
-            !marker.exists(),
-            "Предыдущая запись тегов требует восстановления. Перезапустите приложение."
-        );
-        let record = Recovery {
+    pub(crate) fn operation_id(&self) -> String {
+        self.operation.clone()
+    }
+
+    fn recovery(&self, track: i64) -> Result<Recovery> {
+        Ok(Recovery {
             track,
             path: self.path.clone(),
             backup: self.backup.path().into(),
             staging: self.edited.path().into(),
             before: self.stamp.clone(),
             after: Stamp::read(self.edited.path())?,
-        };
+            destination: self.destination.clone(),
+            operation: Some(self.operation_id()),
+        })
+    }
+
+    pub(crate) fn record_recovery(&self, marker: &Path, track: i64) -> Result<()> {
+        use std::io::Write;
+        ensure!(
+            !marker.exists(),
+            "Предыдущая запись тегов требует восстановления. Перезапустите приложение."
+        );
+        let record = self.recovery(track)?;
         let mut temporary =
             tempfile::NamedTempFile::new_in(marker.parent().context("Нет папки библиотеки.")?)?;
         temporary.write_all(&serde_json::to_vec(&record)?)?;
@@ -548,6 +589,21 @@ pub(crate) fn finish_recovery(marker: &Path) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn file_write_committed(
+    connection: &rusqlite::Connection,
+    operation: &str,
+) -> Result<bool> {
+    use rusqlite::OptionalExtension;
+    let saved: Option<String> = connection
+        .query_row(
+            "SELECT value FROM almavorn_metadata WHERE key='file_write_commit'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(saved.as_deref() == Some(operation))
+}
+
 pub(crate) fn recover_file_write(connection: &rusqlite::Connection, database: &Path) -> Result<()> {
     use rusqlite::OptionalExtension;
     let marker = recovery_path(database);
@@ -556,6 +612,11 @@ pub(crate) fn recover_file_write(connection: &rusqlite::Connection, database: &P
     }
     let recovery: Recovery = serde_json::from_reader(File::open(&marker)?)
         .context("Не удалось прочитать запись восстановления тегов.")?;
+    let committed = recovery
+        .operation
+        .as_deref()
+        .map(|operation| file_write_committed(connection, operation))
+        .transpose()?;
     let saved: Option<String> = connection
         .query_row(
             "SELECT path FROM tracks WHERE id=?1",
@@ -563,6 +624,15 @@ pub(crate) fn recover_file_write(connection: &rusqlite::Connection, database: &P
             |row| row.get(0),
         )
         .optional()?;
+    if let Some(destination) = &recovery.destination {
+        ensure!(
+            saved.as_deref() == recovery.path.to_str() || saved.as_deref() == destination.to_str(),
+            "Путь перемещаемого файла не совпадает с библиотекой. Исходная копия: {}",
+            recovery.backup.display()
+        );
+        relocate::finish(&recovery, saved.as_deref() == destination.to_str())?;
+        return finish_recovery(&marker);
+    }
     ensure!(
         saved.as_deref() == recovery.path.to_str(),
         "Путь восстановления тегов не совпадает с библиотекой. Копия файла: {}",
@@ -585,13 +655,38 @@ pub(crate) fn recover_file_write(connection: &rusqlite::Connection, database: &P
         .display()
     );
     if current == recovery.after {
-        let mut track = crate::media::read_track(&recovery.path)?;
-        let file = parse(&recovery.path)?;
-        add_extra_metadata(&mut track, &native::read(&recovery.path, file.file_type())?)?;
-        connection.execute(
-            "UPDATE tracks SET title=?1,artist=?2,album=?3,duration_ms=?4,tags=?5,revision=revision+1 WHERE id=?6",
-            rusqlite::params![track.title, track.artist, track.album, track.duration_ms.min(i64::MAX as u64) as i64, track.tags, recovery.track],
-        )?;
+        if committed == Some(false) {
+            ensure!(
+                recovery.staging.parent() == recovery.path.parent()
+                    && recovery
+                        .staging
+                        .file_name()
+                        .is_some_and(|n| n.to_string_lossy().starts_with(".almavorn-tags-"))
+                    && Stamp::read(&recovery.staging).ok().as_ref() == Some(&recovery.before),
+                "Исходная версия требует ручного восстановления: {}",
+                recovery.backup.display()
+            );
+            files::exchange(&recovery.staging, &recovery.path)?;
+            if Stamp::read(&recovery.staging).ok().as_ref() != Some(&recovery.after) {
+                // Preserve a concurrent replacement rather than deleting it as a staging file.
+                if Stamp::read(&recovery.path).ok().as_ref() == Some(&recovery.before) {
+                    files::exchange(&recovery.staging, &recovery.path)?;
+                }
+                bail!(
+                    "Файл изменен во время восстановления. Копия сохранена: {}",
+                    recovery.staging.display()
+                );
+            }
+            files::sync_directory(&recovery.path)?;
+        } else {
+            let mut track = crate::media::read_track(&recovery.path)?;
+            let file = parse(&recovery.path)?;
+            add_extra_metadata(&mut track, &native::read(&recovery.path, file.file_type())?)?;
+            connection.execute(
+                "UPDATE tracks SET title=?1,artist=?2,album=?3,duration_ms=?4,tags=?5,revision=revision+1 WHERE id=?6",
+                rusqlite::params![track.title, track.artist, track.album, track.duration_ms.min(i64::MAX as u64) as i64, track.tags, recovery.track],
+            )?;
+        }
     }
     // Only task-created sibling copies with expected contents may be removed.
     for temporary in [&recovery.backup, &recovery.staging] {
@@ -635,7 +730,27 @@ fn add_extra_metadata(
     Ok(())
 }
 
-pub struct Replacement {
+pub enum Replacement {
+    Tags(TagReplacement),
+    Moved(Recovery),
+}
+
+impl Replacement {
+    pub fn accept(self) -> Result<Option<PathBuf>> {
+        match self {
+            Self::Tags(replacement) => replacement.accept(),
+            Self::Moved(recovery) => relocate::finish(&recovery, true),
+        }
+    }
+    pub fn rollback(self) -> Result<()> {
+        match self {
+            Self::Tags(replacement) => replacement.rollback(),
+            Self::Moved(recovery) => relocate::finish(&recovery, false).map(|_| ()),
+        }
+    }
+}
+
+pub struct TagReplacement {
     path: PathBuf,
     backup: Option<NamedTempFile>,
     written: Stamp,
@@ -649,6 +764,17 @@ impl PreparedWrite {
             "Файл изменен другой программой. Изменения тегов не записаны."
         );
         let written = Stamp::read(self.edited.path())?;
+        if let Some(destination) = &self.destination {
+            let recovery = self.recovery(0)?;
+            files::rename_noreplace(self.edited.path(), destination)?;
+            // A durable marker owns the copies until the database result is known.
+            self.backup.keep().map_err(|error| error.error)?;
+            if let Err(error) = files::sync_directory(destination) {
+                relocate::finish(&recovery, false)?;
+                return Err(error);
+            }
+            return Ok(Replacement::Moved(recovery));
+        }
         files::exchange(self.edited.path(), &self.path)?;
         if Stamp::read(self.edited.path()).ok().as_ref() != Some(&self.stamp) {
             if Stamp::read(&self.path).ok().as_ref() == Some(&written) {
@@ -665,7 +791,7 @@ impl PreparedWrite {
             );
         }
         // The displaced original remains available until the database commits.
-        let replacement = Replacement {
+        let replacement = TagReplacement {
             path: self.path,
             backup: Some(self.edited),
             written,
@@ -675,11 +801,11 @@ impl PreparedWrite {
             replacement.rollback()?;
             return Err(error);
         }
-        Ok(replacement)
+        Ok(Replacement::Tags(replacement))
     }
 }
 
-impl Replacement {
+impl TagReplacement {
     pub fn accept(mut self) -> Result<Option<PathBuf>> {
         let Some(backup) = self.backup.take() else {
             return Ok(None);
@@ -729,7 +855,7 @@ impl Replacement {
     }
 }
 
-impl Drop for Replacement {
+impl Drop for TagReplacement {
     fn drop(&mut self) {
         if let Some(backup) = self.backup.take() {
             // On unwinding, keep a recoverable original rather than deleting it.

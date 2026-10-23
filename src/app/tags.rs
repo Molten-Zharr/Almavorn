@@ -13,15 +13,18 @@ use lofty::{
     picture::{Picture, PictureType},
     tag::{ItemKey, ItemValue, TagItem},
 };
+use std::path::{Path, PathBuf};
 
 #[derive(Default)]
 pub(super) struct TagsState {
     load: Option<Background<Document>>,
     pub saving: bool,
+    pub recovery_required: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TagsTab {
+    File,
     Fields,
     Extras,
     Covers,
@@ -30,6 +33,11 @@ pub enum TagsTab {
 
 #[derive(Clone, Copy)]
 pub enum TagAction {
+    FileInput(FileInput),
+    FormatName,
+    Move,
+    ChooseDestination,
+    MoveConfirm,
     Format(i64),
     Tab(TagsTab),
     Row(usize),
@@ -51,8 +59,30 @@ pub enum TagAction {
     Discard,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum FileInput {
+    Name,
+    Template,
+    Folder,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MovePicker {
+    Playlists,
+    Folders,
+}
+
+#[derive(Clone)]
+pub struct FileDestination {
+    pub id: i64,
+    pub name: String,
+    pub mode: crate::model::Mode,
+    pub folders: Vec<PathBuf>,
+}
+
 #[derive(Clone)]
 pub struct TagEdit {
+    pub file_input: Option<FileInput>,
     pub index: Option<usize>,
     pub cover: bool,
     pub extra: bool,
@@ -66,7 +96,13 @@ pub struct TagEdit {
 
 impl TagEdit {
     fn select(&mut self, input: usize) {
-        self.input = input.min(if self.extra { 1 } else { 2 });
+        self.input = input.min(if self.file_input.is_some() {
+            0
+        } else if self.extra {
+            1
+        } else {
+            2
+        });
         self.cursor = self.values[self.input].chars().count();
         self.selected_all = false;
     }
@@ -74,6 +110,13 @@ impl TagEdit {
 
 #[derive(Clone)]
 pub struct TagEditor {
+    pub file_stem: String,
+    pub name_template: String,
+    pub move_picker: Option<MovePicker>,
+    pub destinations: Vec<FileDestination>,
+    pub move_target: Option<usize>,
+    pub move_folder: String,
+    pub move_confirm: bool,
     pub desk: i64,
     pub track: Track,
     pub shared: usize,
@@ -90,6 +133,53 @@ pub struct TagEditor {
 }
 
 impl TagEditor {
+    pub fn changed(&self) -> bool {
+        self.document.as_ref().is_some_and(Document::changed)
+            || self
+                .track
+                .path
+                .file_stem()
+                .is_none_or(|stem| stem != self.file_stem.as_str())
+    }
+    pub fn new_filename(&self) -> Result<String> {
+        let stem = self.file_stem.trim();
+        ensure!(
+            !stem.is_empty()
+                && stem != "."
+                && stem != ".."
+                && !stem
+                    .chars()
+                    .any(|c| c.is_control() || c == '/' || c == '\\'),
+            "Введите имя файла без пути и расширения."
+        );
+        let mut name = stem.to_owned();
+        if let Some(extension) = self.track.path.extension() {
+            name.push('.');
+            name.push_str(&extension.to_string_lossy());
+        }
+        ensure!(name.len() <= 255, "Имя файла слишком длинное.");
+        Ok(name)
+    }
+    pub fn destination(&self) -> Option<&FileDestination> {
+        self.move_target
+            .and_then(|index| self.destinations.get(index))
+    }
+    pub fn target_path(&self) -> Result<PathBuf> {
+        let folder = if self.move_confirm {
+            ensure!(
+                !self.move_folder.trim().is_empty(),
+                "Выберите папку назначения."
+            );
+            Path::new(self.move_folder.trim())
+        } else {
+            self.track.path.parent().context("У файла нет папки.")?
+        };
+        ensure!(
+            folder.is_absolute() && folder.is_dir(),
+            "Выберите существующую папку по полному пути."
+        );
+        Ok(folder.canonicalize()?.join(self.new_filename()?))
+    }
     pub fn accepts_text(&self) -> bool {
         !self.key_picker && !self.confirm && !self.discard && self.edit.is_some()
     }
@@ -105,6 +195,12 @@ impl TagEditor {
             .into_owned()
     }
     pub fn length(&self) -> usize {
+        if let Some(picker) = self.move_picker {
+            return match picker {
+                MovePicker::Playlists => self.destinations.len(),
+                MovePicker::Folders => self.destination().map_or(0, |d| d.folders.len()),
+            };
+        }
         let Some(document) = &self.document else {
             return 0;
         };
@@ -113,6 +209,7 @@ impl TagEditor {
             return field_keys(block.kind).len();
         }
         match self.tab {
+            TagsTab::File => 0,
             TagsTab::Fields => block.fields.len(),
             TagsTab::Extras => block.extras.len(),
             TagsTab::Covers => block.covers.len(),
@@ -149,6 +246,18 @@ impl App {
             })
             .count();
         let editor = TagEditor {
+            file_stem: track
+                .path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+            name_template: "{artist} - {title}".into(),
+            move_picker: None,
+            destinations: Vec::new(),
+            move_target: None,
+            move_folder: String::new(),
+            move_confirm: false,
             desk: playlist.id,
             track: track.clone(),
             shared,
@@ -183,6 +292,30 @@ impl App {
         }
     }
 
+    pub(super) fn reload_tag_editor(&mut self, track: Track) {
+        if let Some(Dialog::Tags(editor)) = &mut self.view.dialog {
+            editor.track = track.clone();
+            editor.file_stem = track
+                .path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            editor.document = None;
+            editor.confirm = false;
+            editor.move_confirm = false;
+            editor.move_picker = None;
+            editor.tab = TagsTab::File;
+            editor.block = 0;
+            editor.selected = 0;
+            editor.offset = 0;
+            editor.error = None;
+            self.tags.load = Some(background(self.runtime(), move || {
+                Document::read(&track.path)
+            }));
+        }
+    }
+
     pub(super) fn close_tags(&mut self) -> bool {
         let Some(Dialog::Tags(editor)) = &mut self.view.dialog else {
             return false;
@@ -193,12 +326,17 @@ impl App {
         if editor.confirm || editor.discard {
             editor.confirm = false;
             editor.discard = false;
+            editor.move_confirm = false;
         } else if editor.key_picker {
             editor.key_picker = false;
             editor.selected = 0;
         } else if editor.edit.take().is_some() {
             // Input is a draft until Apply is pressed.
-        } else if editor.document.as_ref().is_some_and(Document::changed) {
+        } else if let Some(picker) = editor.move_picker {
+            editor.move_picker = (picker == MovePicker::Folders).then_some(MovePicker::Playlists);
+            editor.selected = 0;
+            editor.offset = 0;
+        } else if editor.changed() {
             editor.discard = true;
         } else {
             self.tags.load = None;
@@ -245,6 +383,13 @@ impl App {
             return;
         }
         editor.selected = super::bounded(editor.selected, direction, editor.length());
+        if editor.move_picker == Some(MovePicker::Folders)
+            && let Some(folder) = editor
+                .destination()
+                .and_then(|p| p.folders.get(editor.selected))
+        {
+            editor.move_folder = folder.display().to_string();
+        }
     }
 
     pub(super) fn tags_key(&mut self, key: KeyPress) -> Result<()> {
@@ -280,6 +425,18 @@ impl App {
             }
             return Ok(());
         }
+        if editor.move_picker.is_some() && editor.edit.is_none() {
+            match key.key {
+                Key::Enter => self.tag_action(TagAction::ChooseDestination)?,
+                Key::Up => self.tags_scroll(-1),
+                Key::Down => self.tags_scroll(1),
+                Key::PageUp => self.tags_scroll(-10),
+                Key::PageDown => self.tags_scroll(10),
+                Key::Char('f') => self.tag_action(TagAction::FileInput(FileInput::Folder))?,
+                _ => {}
+            }
+            return Ok(());
+        }
         if let Some(edit) = &mut editor.edit {
             if key.ctrl && key.key == Key::Char('a') {
                 edit.selected_all = true;
@@ -291,7 +448,13 @@ impl App {
             }
             match key.key {
                 Key::Tab => {
-                    let count = if edit.extra { 2 } else { 3 };
+                    let count = if edit.file_input.is_some() {
+                        1
+                    } else if edit.extra {
+                        2
+                    } else {
+                        3
+                    };
                     edit.select((edit.input + if key.shift { count - 1 } else { 1 }) % count);
                 }
                 Key::Enter => self.tag_action(TagAction::Apply)?,
@@ -337,9 +500,23 @@ impl App {
         }
         match key.key {
             Key::Char('s') if key.ctrl => self.tag_action(TagAction::Save)?,
+            Key::Insert if editor.tab == TagsTab::File => {
+                self.tag_action(TagAction::FileInput(FileInput::Name))?
+            }
             Key::Insert => self.tag_action(TagAction::Add)?,
+            Key::Enter if editor.tab == TagsTab::File => {
+                self.tag_action(TagAction::FileInput(FileInput::Name))?
+            }
             Key::Enter => self.tag_action(TagAction::Edit)?,
-            Key::Char(' ') | Key::Delete => {
+            Key::Char('m') => self.tag_action(TagAction::Move)?,
+            Key::Char('f') => self.tag_action(TagAction::Tab(TagsTab::File))?,
+            Key::Char('t') if editor.tab == TagsTab::File => {
+                self.tag_action(TagAction::FileInput(FileInput::Template))?
+            }
+            Key::Char('g') if editor.tab == TagsTab::File => {
+                self.tag_action(TagAction::FormatName)?
+            }
+            Key::Char(' ') | Key::Delete if editor.tab != TagsTab::File => {
                 let row = editor.selected;
                 let action = if editor.tab == TagsTab::Cleanup {
                     TagAction::ClearBlock(row)
@@ -356,10 +533,11 @@ impl App {
             Key::Right => self.tag_action(TagAction::Format(1))?,
             Key::Tab => {
                 let tab = match editor.tab {
+                    TagsTab::File => TagsTab::Fields,
                     TagsTab::Fields => TagsTab::Extras,
                     TagsTab::Extras => TagsTab::Covers,
                     TagsTab::Covers => TagsTab::Cleanup,
-                    TagsTab::Cleanup => TagsTab::Fields,
+                    TagsTab::Cleanup => TagsTab::File,
                 };
                 self.tag_action(TagAction::Tab(tab))?;
             }
@@ -397,6 +575,38 @@ impl App {
         if matches!(action, TagAction::Confirm) {
             return self.save_file_tags();
         }
+        if matches!(action, TagAction::Move) {
+            let destinations = self
+                .library
+                .playlists
+                .iter()
+                .filter(|p| p.kind == PlaylistKind::Normal)
+                .map(|p| {
+                    let mut folders = p.folders.clone();
+                    folders.sort();
+                    folders.dedup();
+                    FileDestination {
+                        id: p.id,
+                        name: p.name.clone(),
+                        mode: p.mode,
+                        folders,
+                    }
+                })
+                .collect::<Vec<_>>();
+            ensure!(
+                !destinations.is_empty(),
+                "Сначала создайте плейлист для переноса."
+            );
+            if let Some(Dialog::Tags(editor)) = &mut self.view.dialog {
+                editor.destinations = destinations;
+                editor.move_picker = Some(MovePicker::Playlists);
+                editor.move_confirm = false;
+                editor.selected = 0;
+                editor.offset = 0;
+                editor.error = None;
+            }
+            return Ok(());
+        }
         let Some(Dialog::Tags(editor)) = &mut self.view.dialog else {
             return Ok(());
         };
@@ -405,6 +615,67 @@ impl App {
             return Ok(());
         };
         match action {
+            TagAction::FileInput(input) => {
+                let value = match input {
+                    FileInput::Name => editor.file_stem.clone(),
+                    FileInput::Template => editor.name_template.clone(),
+                    FileInput::Folder => {
+                        ensure!(editor.move_target.is_some(), "Сначала выберите плейлист.");
+                        editor.move_folder.clone()
+                    }
+                };
+                editor.edit = Some(TagEdit {
+                    file_input: Some(input),
+                    index: None,
+                    cover: false,
+                    extra: false,
+                    key: ItemKey::TrackTitle,
+                    cursor: value.chars().count(),
+                    values: [value, String::new(), String::new()],
+                    input: 0,
+                    selected_all: true,
+                    value_kind: 0,
+                });
+            }
+            TagAction::FormatName => {
+                editor.file_stem =
+                    format_filename(&editor.name_template, &editor.track.path, document)?;
+            }
+            TagAction::ChooseDestination => match editor.move_picker {
+                Some(MovePicker::Playlists) => {
+                    ensure!(
+                        editor.selected < editor.destinations.len(),
+                        "Выберите плейлист."
+                    );
+                    editor.move_target = Some(editor.selected);
+                    editor.move_folder = editor
+                        .destination()
+                        .and_then(|p| p.folders.first())
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default();
+                    editor.move_picker = Some(MovePicker::Folders);
+                    editor.selected = 0;
+                    editor.offset = 0;
+                }
+                Some(MovePicker::Folders) => {
+                    if let Some(folder) = editor
+                        .destination()
+                        .and_then(|p| p.folders.get(editor.selected))
+                    {
+                        editor.move_folder = folder.display().to_string();
+                    }
+                    editor.move_confirm = true;
+                    editor.target_path()?;
+                    editor.confirm = true;
+                }
+                None => {}
+            },
+            TagAction::MoveConfirm => {
+                ensure!(editor.destination().is_some(), "Выберите плейлист.");
+                editor.move_confirm = true;
+                editor.target_path()?;
+                editor.confirm = true;
+            }
             TagAction::Format(direction) => {
                 editor.block = super::bounded(editor.block, direction, document.blocks.len());
                 editor.selected = 0;
@@ -415,7 +686,14 @@ impl App {
                 editor.selected = 0;
                 editor.offset = 0;
             }
-            TagAction::Row(index) => editor.selected = index,
+            TagAction::Row(index) => {
+                editor.selected = index;
+                if editor.move_picker == Some(MovePicker::Folders)
+                    && let Some(folder) = editor.destination().and_then(|p| p.folders.get(index))
+                {
+                    editor.move_folder = folder.display().to_string();
+                }
+            }
             TagAction::Remove(index) => {
                 let block = &mut document.blocks[editor.block];
                 if editor.tab == TagsTab::Fields {
@@ -426,7 +704,9 @@ impl App {
                     if let Some(field) = block.extras.get_mut(index) {
                         field.remove = !field.remove;
                     }
-                } else if let Some(cover) = block.covers.get_mut(index) {
+                } else if editor.tab == TagsTab::Covers
+                    && let Some(cover) = block.covers.get_mut(index)
+                {
                     cover.remove = !cover.remove;
                 }
             }
@@ -447,6 +727,7 @@ impl App {
                         "Этот тип тегов не поддерживает обложки."
                     );
                     editor.edit = Some(TagEdit {
+                        file_input: None,
                         index: None,
                         cover: true,
                         extra: false,
@@ -459,6 +740,7 @@ impl App {
                     });
                 } else if editor.tab == TagsTab::Extras {
                     editor.edit = Some(TagEdit {
+                        file_input: None,
                         index: None,
                         cover: false,
                         extra: true,
@@ -490,6 +772,7 @@ impl App {
                             ItemValue::Binary(_) => 2,
                         };
                         let mut edit = TagEdit {
+                            file_input: None,
                             index: Some(editor.selected),
                             cover: false,
                             extra: false,
@@ -512,6 +795,7 @@ impl App {
                 } else if editor.tab == TagsTab::Extras {
                     if let Some(field) = block.extras.get(editor.selected) {
                         let mut edit = TagEdit {
+                            file_input: None,
                             index: Some(editor.selected),
                             cover: false,
                             extra: true,
@@ -529,6 +813,7 @@ impl App {
                     && let Some(cover) = block.covers.get(editor.selected)
                 {
                     editor.edit = Some(TagEdit {
+                        file_input: None,
                         index: Some(editor.selected),
                         cover: true,
                         extra: false,
@@ -549,6 +834,7 @@ impl App {
                 let keys = field_keys(document.blocks[editor.block].kind);
                 if let Some(key) = keys.get(index) {
                     editor.edit = Some(TagEdit {
+                        file_input: None,
                         index: None,
                         cover: false,
                         extra: false,
@@ -581,6 +867,40 @@ impl App {
             }
             TagAction::Apply => {
                 let edit = editor.edit.as_ref().context("Выберите поле.")?;
+                if let Some(input) = edit.file_input {
+                    let value = edit.values[0].clone();
+                    match input {
+                        FileInput::Name => {
+                            let before =
+                                std::mem::replace(&mut editor.file_stem, value.trim().to_owned());
+                            if let Err(error) = editor.new_filename() {
+                                editor.file_stem = before;
+                                return Err(error);
+                            }
+                        }
+                        FileInput::Template => editor.name_template = value,
+                        FileInput::Folder => {
+                            let folder = Path::new(value.trim())
+                                .canonicalize()
+                                .context("Не удалось открыть папку назначения.")?;
+                            ensure!(folder.is_dir(), "Выберите папку назначения.");
+                            editor.move_folder = folder.display().to_string();
+                            if let Some(target) = editor.move_target {
+                                let folders = &mut editor.destinations[target].folders;
+                                let index = folders
+                                    .iter()
+                                    .position(|p| p == &folder)
+                                    .unwrap_or_else(|| {
+                                        folders.push(folder);
+                                        folders.len() - 1
+                                    });
+                                editor.selected = index;
+                            }
+                        }
+                    }
+                    editor.edit = None;
+                    return Ok(());
+                }
                 let block = &mut document.blocks[editor.block];
                 if edit.cover {
                     let mut picture = if edit.values[0].trim().is_empty() {
@@ -688,15 +1008,21 @@ impl App {
                 block.clear_covers = !block.clear_covers;
             }
             TagAction::Save => {
-                ensure!(document.changed(), "Нет изменений для записи.");
+                ensure!(editor.changed(), "Нет изменений для записи.");
+                editor.move_confirm = false;
+                editor.target_path()?;
                 editor.confirm = true;
             }
-            TagAction::Back | TagAction::Confirm | TagAction::Discard => {}
+            TagAction::Back | TagAction::Confirm | TagAction::Discard | TagAction::Move => {}
         }
         Ok(())
     }
 
     fn save_file_tags(&mut self) -> Result<()> {
+        ensure!(
+            !self.settings_saving(),
+            "Дождитесь сохранения настроек и повторите запись файла."
+        );
         let Some(Dialog::Tags(editor)) = &self.view.dialog else {
             return Ok(());
         };
@@ -708,13 +1034,73 @@ impl App {
             .context("Теги еще не прочитаны.")?
             .clone();
         let (desk, track) = (editor.desk, editor.track.id);
+        let destination = editor.target_path()?;
+        let playlist = if editor.move_confirm {
+            Some(editor.destination().context("Выберите плейлист.")?.id)
+        } else {
+            None
+        };
         let mut recovery = editor.clone();
         recovery.confirm = false;
         self.start_database(Some(Dialog::Tags(recovery)), move |store| {
-            let (track, preserved) = store.write_file_tags(desk, track, &document)?;
-            Ok(DatabaseOutcome::TagsWritten(track, preserved))
+            Ok(DatabaseOutcome::FileEdited(store.edit_audio_file(
+                desk,
+                track,
+                &document,
+                &destination,
+                playlist,
+                true,
+            )?))
         })?;
         self.tags.saving = true;
         Ok(())
     }
+}
+
+fn format_filename(template: &str, path: &Path, document: &Document) -> Result<String> {
+    let field = |key| {
+        document
+            .blocks
+            .iter()
+            .flat_map(|b| &b.fields)
+            .find_map(|f| {
+                (f.item.key() == key)
+                    .then(|| f.item.value().text())
+                    .flatten()
+            })
+            .unwrap_or("")
+    };
+    let mut result = String::new();
+    let mut rest = template;
+    while let Some(start) = rest.find('{') {
+        result.push_str(&rest[..start]);
+        let end = rest[start..]
+            .find('}')
+            .context("В шаблоне не закрыта фигурная скобка.")?
+            + start;
+        let value = match &rest[start + 1..end] {
+            "filename" => path.file_stem().and_then(|p| p.to_str()).unwrap_or(""),
+            "title" => field(ItemKey::TrackTitle),
+            "artist" => field(ItemKey::TrackArtist),
+            "album" => field(ItemKey::AlbumTitle),
+            "track" => field(ItemKey::TrackNumber),
+            key => anyhow::bail!("Неизвестное поле шаблона: {{{key}}}"),
+        };
+        ensure!(
+            !value.trim().is_empty(),
+            "В шаблоне используется пустое поле: {}",
+            &rest[start + 1..end]
+        );
+        result.extend(value.chars().map(|c| {
+            if c.is_control() || c == '/' || c == '\\' {
+                '_'
+            } else {
+                c
+            }
+        }));
+        rest = &rest[end + 1..];
+    }
+    result.push_str(rest);
+    ensure!(!result.trim().is_empty(), "Шаблон дал пустое имя файла.");
+    Ok(result.trim().into())
 }

@@ -19,6 +19,8 @@ impl App {
 
     fn start_settings(&mut self) -> Result<()> {
         if !self.persistence.failed
+            && !self.tags.saving
+            && !self.tags.recovery_required
             && self.persistence.job.is_none()
             && let Some(settings) = &self.persistence.pending
         {

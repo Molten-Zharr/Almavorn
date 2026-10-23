@@ -445,7 +445,14 @@ impl App {
                 self.tag_action(action)?;
                 if double && let super::TagAction::Row(index) = action {
                     let picker = matches!(&self.view.dialog, Some(Dialog::Tags(editor)) if editor.key_picker);
-                    self.tag_action(if picker { super::TagAction::ChooseKey(index) } else { super::TagAction::Edit })?;
+                    let move_picker = matches!(&self.view.dialog, Some(Dialog::Tags(editor)) if editor.move_picker.is_some());
+                    self.tag_action(if picker {
+                        super::TagAction::ChooseKey(index)
+                    } else if move_picker {
+                        super::TagAction::ChooseDestination
+                    } else {
+                        super::TagAction::Edit
+                    })?;
                 }
             }
             Target::CommandMenu(menu) => self.open_commands(menu),

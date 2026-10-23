@@ -22,6 +22,7 @@ mod queries;
 mod statistics;
 mod tags;
 use queries::{playlist_access, read_playlists, snapshot};
+pub(crate) use tags::FileEditOutcome;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedEntry {

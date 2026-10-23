@@ -1,6 +1,6 @@
 use super::metadata_tag_name;
 use crate::{
-    app::{App, Hit, TagAction, TagEdit, TagEditor, TagsTab, Target},
+    app::{App, FileInput, Hit, MovePicker, TagAction, TagEdit, TagEditor, TagsTab, Target},
     tags::{field_keys, type_name},
     ui::{
         theme::Palette,
@@ -41,7 +41,7 @@ pub(super) fn render(
         frame,
         app,
         area,
-        app.text("File tag editor", "Редактор тегов файла").into(),
+        app.text("Tags and file name", "Теги и имя файла").into(),
         42,
         palette,
     );
@@ -64,8 +64,8 @@ pub(super) fn render(
             frame,
             inner,
             app.text(
-                "Writing tags and updating the library…",
-                "Запись тегов и обновление библиотеки…",
+                "Saving the file and updating the library…",
+                "Сохранение файла и обновление библиотеки…",
             ),
             palette,
         );
@@ -102,12 +102,27 @@ pub(super) fn render(
         return;
     }
     if editor.confirm {
-        let explanation = format!("{}\n{}\n\n{}\n{}\n\n{}", clean(&editor.filename()), clean(&editor.track.path.display().to_string()),
-            app.text("Tags will be written to the audio file.", "Теги будут записаны в аудиофайл."),
+        let destination = editor
+            .target_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let operation = if editor.move_confirm {
+            format!("{}: {}\n{}", app.text("Move to playlist", "Перенести в плейлист"),
+                editor.destination().map(|p| p.name.as_str()).unwrap_or_default(),
+                app.text("The file will move to the chosen folder. The track will leave the desk and become the first item in the playlist.",
+                    "Файл будет перенесен в выбранную папку. Трек исчезнет со стола и станет первым в плейлисте."))
+        } else {
+            app.text(
+                "Save the file name and selected tag changes?",
+                "Сохранить имя файла и выбранные изменения тегов?",
+            )
+            .into()
+        };
+        let explanation = format!("{}\n{}\n\n{}\n{}\n\n{}", clean(&editor.track.path.display().to_string()),
+            clean(&format!("→ {destination}")), operation,
             app.text("All playlists using this file will show the new metadata. Chaos undo cannot undo file writes.",
-                "Новые сведения появятся во всех плейлистах с этим файлом. Отмена Хаоса не отменяет запись файлов."),
-            if editor.destructive() { app.text("Clear the selected tags and write the changes?", "Очистить отмеченные теги и записать изменения?") }
-            else { app.text("Save these changes?", "Сохранить изменения?") }
+                "Путь и сведения обновятся во всех плейлистах. Отмена Хаоса не отменяет изменения файлов."),
+            if editor.destructive() { app.text("The checked tags will be removed from the audio file.", "Отмеченные теги будут удалены из аудиофайла.") } else { "" }
         );
         text(
             frame,
@@ -132,7 +147,11 @@ pub(super) fn render(
             footer,
             vec![
                 action(
-                    app.text("Write file", "Записать файл"),
+                    if editor.move_confirm {
+                        app.text("Move file", "Перенести файл")
+                    } else {
+                        app.text("Save file", "Сохранить файл")
+                    },
                     TagAction::Confirm,
                     true,
                 ),
@@ -167,6 +186,10 @@ pub(super) fn render(
         render_edit(frame, app, edit, editor.error.as_deref(), inner, palette);
         return;
     }
+    if editor.move_picker.is_some() {
+        render_move(frame, app, editor, inner, palette);
+        return;
+    }
     let current = &document.blocks[editor.block];
     text(
         frame,
@@ -184,6 +207,11 @@ pub(super) fn render(
         app,
         Rect::new(inner.x, inner.y + 1, inner.width, 3),
         vec![
+            action(
+                app.text("File", "Файл"),
+                TagAction::Tab(TagsTab::File),
+                true,
+            ),
             action("◀", TagAction::Format(-1), editor.block > 0),
             (
                 format!(
@@ -224,6 +252,16 @@ pub(super) fn render(
     )
     .min(3);
     let y = inner.y + 1 + header_height;
+    if editor.tab == TagsTab::File {
+        render_file(
+            frame,
+            app,
+            editor,
+            Rect::new(inner.x, y, inner.width, bottom.saturating_sub(y)),
+            palette,
+        );
+        return;
+    }
     let hint = if editor.key_picker {
         app.text(
             "Choose a field. Enter or double-click: add.",
@@ -231,6 +269,7 @@ pub(super) fn render(
         )
     } else {
         match editor.tab {
+            TagsTab::File => "",
             TagsTab::Fields | TagsTab::Extras => app.text(
                 "Checkbox: clear field. Enter or double-click: edit.",
                 "Галочка: очистить поле. Enter или двойной клик: изменить.",
@@ -285,6 +324,7 @@ pub(super) fn render(
             )
         } else {
             match editor.tab {
+                TagsTab::File => (false, String::new()),
                 TagsTab::Fields => {
                     let field = &current.fields[index];
                     (
@@ -499,7 +539,12 @@ pub(super) fn render(
             action(
                 app.text("Save file", "Сохранить файл"),
                 TagAction::Save,
-                document.changed() && !editor.key_picker,
+                editor.changed() && !editor.key_picker,
+            ),
+            action(
+                app.text("Move… [M]", "Перенести… [M]"),
+                TagAction::Move,
+                !editor.key_picker,
             ),
             action(app.text("Close", "Закрыть"), TagAction::Back, true),
         ],
@@ -515,7 +560,14 @@ fn render_edit(
     inner: Rect,
     palette: Palette,
 ) {
-    let title = if edit.extra {
+    let title = if let Some(input) = edit.file_input {
+        match input {
+            FileInput::Name => app.text("File name without extension", "Имя файла без расширения"),
+            FileInput::Template => app.text("File name template", "Шаблон имени файла"),
+            FileInput::Folder => app.text("Destination folder", "Папка назначения"),
+        }
+        .into()
+    } else if edit.extra {
         app.text("Additional field", "Дополнительное поле").into()
     } else if edit.cover {
         app.text("Cover image", "Обложка").into()
@@ -536,16 +588,28 @@ fn render_edit(
         1 => "URL",
         _ => "HEX",
     };
-    let hint =
-        if edit.cover {
-            app.text("Image path: leave empty to keep it. Type: 3 front, 4 back, 0–20 ID3 types.",
-            "Путь к картинке: пустой сохраняет прежнюю. Тип: 3 лицевая, 4 оборот, 0–20 типы ID3.")
-        } else {
-            app.text(
-                "Tab: next input. Ctrl+A: select all. F10: newline. Enter: apply to draft.",
-                "Tab: следующее поле. Ctrl+A: выделить все. F10: новая строка. Enter: в черновик.",
-            )
-        };
+    let hint = if edit.file_input == Some(FileInput::Template) {
+        app.text("{filename} original name · {title} title · {artist} artist · {album} album · {track} number",
+                "{filename} прежнее имя · {title} название · {artist} исполнитель · {album} альбом · {track} номер")
+    } else if edit.file_input == Some(FileInput::Name) {
+        app.text("Enter the name only. The audio extension stays unchanged. Enter: apply, Ctrl+A: select all.",
+                "Введите только имя. Расширение аудиофайла сохранится. Enter: применить, Ctrl+A: выделить все.")
+    } else if edit.file_input == Some(FileInput::Folder) {
+        app.text(
+            "Enter the full path to an existing folder. Enter: apply, Ctrl+A: select all.",
+            "Введите полный путь к существующей папке. Enter: применить, Ctrl+A: выделить все.",
+        )
+    } else if edit.cover {
+        app.text(
+            "Image path: leave empty to keep it. Type: 3 front, 4 back, 0–20 ID3 types.",
+            "Путь к картинке: пустой сохраняет прежнюю. Тип: 3 лицевая, 4 оборот, 0–20 типы ID3.",
+        )
+    } else {
+        app.text(
+            "Tab: next input. Ctrl+A: select all. F10: newline. Enter: apply to draft.",
+            "Tab: следующее поле. Ctrl+A: выделить все. F10: новая строка. Enter: в черновик.",
+        )
+    };
     text(
         frame,
         Rect::new(inner.x, inner.y + 1, inner.width, 3),
@@ -571,11 +635,21 @@ fn render_edit(
             app.text("Language (rus, eng)", "Язык (rus, eng)"),
         ]
     };
-    let value_height = inner.height.saturating_sub(16).max(3);
+    let value_height = if edit.file_input.is_some() {
+        4
+    } else {
+        inner.height.saturating_sub(16).max(3)
+    };
     let mut y = inner.y + 4;
     for (index, title) in titles
         .iter()
-        .take(if edit.extra { 2 } else { 3 })
+        .take(if edit.file_input.is_some() {
+            1
+        } else if edit.extra {
+            2
+        } else {
+            3
+        })
         .enumerate()
     {
         let height = if index == 0 { value_height } else { 3 };
@@ -650,7 +724,7 @@ fn render_edit(
                 ..palette
             },
         );
-    } else if !edit.cover && !edit.extra && y < inner.bottom() - 3 {
+    } else if edit.file_input.is_none() && !edit.cover && !edit.extra && y < inner.bottom() - 3 {
         button(
             frame,
             app,
@@ -671,4 +745,241 @@ fn render_edit(
         ],
         palette,
     );
+}
+
+fn render_file(
+    frame: &mut Frame,
+    app: &mut App,
+    editor: &TagEditor,
+    inner: Rect,
+    palette: Palette,
+) {
+    let footer = Rect::new(inner.x, inner.bottom().saturating_sub(3), inner.width, 3);
+    let mut y = inner.y;
+    text(
+        frame,
+        Rect::new(inner.x, y, inner.width, 2),
+        format!(
+            "{}: {}",
+            app.text("File name", "Имя файла"),
+            clean(
+                &editor
+                    .new_filename()
+                    .unwrap_or_else(|_| editor.file_stem.clone())
+            )
+        ),
+        palette,
+    );
+    y += 2;
+    y += buttons(
+        frame,
+        app,
+        Rect::new(inner.x, y, inner.width, 2),
+        vec![action(
+            app.text("Edit name [Enter]", "Изменить имя [Enter]"),
+            TagAction::FileInput(FileInput::Name),
+            true,
+        )],
+        palette,
+    )
+    .min(2);
+    text(
+        frame,
+        Rect::new(inner.x, y, inner.width, 2),
+        format!(
+            "{}: {}",
+            app.text("Template", "Шаблон"),
+            clean(&editor.name_template)
+        ),
+        palette,
+    );
+    y += 2;
+    y += buttons(
+        frame,
+        app,
+        Rect::new(inner.x, y, inner.width, 3),
+        vec![
+            action(
+                app.text("Edit template [T]", "Изменить шаблон [T]"),
+                TagAction::FileInput(FileInput::Template),
+                true,
+            ),
+            action(
+                app.text("Use template [G]", "Применить шаблон [G]"),
+                TagAction::FormatName,
+                true,
+            ),
+        ],
+        palette,
+    )
+    .min(3);
+    let remaining = footer.y.saturating_sub(y + 3);
+    text(frame, Rect::new(inner.x, y, inner.width, remaining), app.text(
+        "{filename} uses the original file name. {title}, {artist}, {album}, {track} use the open tag fields, including those marked for removal.\n\nThe new name and tag changes are saved together. Move also takes the file off the sorting desk.",
+        "{filename} берет прежнее имя файла. {title}, {artist}, {album}, {track} берут открытые поля тегов, в том числе отмеченные для очистки.\n\nИмя и изменения тегов сохраняются вместе. Перенос также убирает трек со стола."), palette);
+    if let Some(error) = &editor.error {
+        text(
+            frame,
+            Rect::new(inner.x, footer.y.saturating_sub(3), inner.width, 3),
+            error.clone(),
+            Palette {
+                text: palette.error,
+                ..palette
+            },
+        );
+    }
+    buttons(
+        frame,
+        app,
+        footer,
+        vec![
+            action(
+                app.text("Save file", "Сохранить файл"),
+                TagAction::Save,
+                editor.changed(),
+            ),
+            action(
+                app.text("Move… [M]", "Перенести… [M]"),
+                TagAction::Move,
+                true,
+            ),
+            action(app.text("Close", "Закрыть"), TagAction::Back, true),
+        ],
+        palette,
+    );
+}
+
+fn render_move(
+    frame: &mut Frame,
+    app: &mut App,
+    editor: &mut TagEditor,
+    inner: Rect,
+    palette: Palette,
+) {
+    let folders = editor.move_picker == Some(MovePicker::Folders);
+    text(
+        frame,
+        Rect::new(inner.x, inner.y, inner.width, 2),
+        if folders {
+            format!(
+                "{}: {}",
+                app.text("Folder for playlist", "Папка плейлиста"),
+                editor
+                    .destination()
+                    .map(|p| p.name.as_str())
+                    .unwrap_or_default()
+            )
+        } else {
+            app.text(
+                "Choose a playlist for the file",
+                "Выберите плейлист для переноса файла",
+            )
+            .into()
+        },
+        palette,
+    );
+    let footer = Rect::new(inner.x, inner.bottom() - 3, inner.width, 3);
+    let list = Rect::new(
+        inner.x,
+        inner.y + 2,
+        inner.width,
+        inner.height.saturating_sub(12),
+    );
+    let length = editor.length();
+    editor.selected = editor.selected.min(length.saturating_sub(1));
+    editor.offset = visible_offset(editor.offset, editor.selected, list.height as usize, length);
+    if length == 0 {
+        text(
+            frame,
+            list,
+            app.text(
+                "No linked folders. Choose Enter folder.",
+                "Связанных папок нет. Нажмите Указать папку.",
+            ),
+            palette,
+        );
+    }
+    for (line, index) in (editor.offset..length)
+        .take(list.height as usize)
+        .enumerate()
+    {
+        let value = if folders {
+            editor.destination().unwrap().folders[index]
+                .display()
+                .to_string()
+        } else {
+            let destination = &editor.destinations[index];
+            format!(
+                "{} · {}",
+                destination.name,
+                destination.mode.name(app.settings.preferences.language)
+            )
+        };
+        let row = Rect::new(list.x, list.y + line as u16, list.width, 1);
+        frame.render_widget(
+            Paragraph::new(clean(&value)).style(if editor.selected == index {
+                palette
+                    .text()
+                    .bg(palette.selection)
+                    .fg(palette.selection_text)
+            } else {
+                palette.text()
+            }),
+            row,
+        );
+        app.view.hits.push(Hit {
+            area: row,
+            target: Target::Tags(TagAction::Row(index)),
+            enabled: true,
+        });
+    }
+    if folders {
+        text(
+            frame,
+            Rect::new(inner.x, list.bottom(), inner.width, 4),
+            format!(
+                "{}\n{}",
+                app.text("Destination", "Куда"),
+                clean(&editor.move_folder)
+            ),
+            palette,
+        );
+    }
+    if let Some(error) = &editor.error {
+        text(
+            frame,
+            Rect::new(inner.x, footer.y - 3, inner.width, 3),
+            error.clone(),
+            Palette {
+                text: palette.error,
+                ..palette
+            },
+        );
+    }
+    let mut controls = vec![action(
+        if folders {
+            app.text("Move file", "Перенести файл")
+        } else {
+            app.text("Choose [Enter]", "Выбрать [Enter]")
+        },
+        if folders {
+            TagAction::MoveConfirm
+        } else {
+            TagAction::ChooseDestination
+        },
+        if folders {
+            !editor.move_folder.is_empty()
+        } else {
+            length > 0
+        },
+    )];
+    if folders {
+        controls.push(action(
+            app.text("Enter folder [F]", "Указать папку [F]"),
+            TagAction::FileInput(FileInput::Folder),
+            true,
+        ));
+    }
+    controls.push(action(app.text("Back", "Назад"), TagAction::Back, true));
+    buttons(frame, app, footer, controls, palette);
 }

@@ -11,7 +11,7 @@ pub(super) enum DatabaseOutcome {
     Changed(Change),
     Created(Change),
     Renamed,
-    TagsWritten(crate::model::Track, Option<std::path::PathBuf>),
+    FileEdited(crate::store::FileEditOutcome),
     Restored { change: Change, redo: bool },
 }
 pub(super) struct DatabaseJob {
@@ -57,13 +57,44 @@ impl App {
         else {
             return Ok(());
         };
+        self.complete_database(result)
+    }
+
+    pub(super) fn shutdown_file_edit(&mut self) -> Result<()> {
+        ensure!(
+            !self.tags.recovery_required,
+            "Требуется восстановление записи файла. Перезапустите плеер."
+        );
+        if !self.tags.saving {
+            return Ok(());
+        }
+        let job = self
+            .library
+            .database
+            .as_mut()
+            .expect("file write has a database job");
+        let result = self
+            .runtime
+            .as_ref()
+            .expect("runtime is alive")
+            .block_on(&mut job.receiver)
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "Запись файла прервана. При запуске будет выполнено восстановление."
+                )
+            })?;
+        self.complete_database(result)
+    }
+
+    fn complete_database(&mut self, result: Result<DatabaseOutcome>) -> Result<()> {
         let job = self
             .library
             .database
             .take()
             .expect("database operation is present");
         let writing_tags = self.tags.saving;
-        let mut preserved_tags = None;
+        let mut file_warning = false;
+        let mut file_message = None;
         self.tags.saving = false;
         match result {
             Ok(DatabaseOutcome::Changed(change)) => self.remember(change)?,
@@ -87,14 +118,43 @@ impl App {
                 }
             }
             Ok(DatabaseOutcome::Renamed) => {}
-            Ok(DatabaseOutcome::TagsWritten(track, preserved)) => {
-                preserved_tags = preserved;
-                self.update_playback_metadata(&track);
-                if self.playback.current.as_ref().is_some_and(|current| current.id == track.id) {
-                    self.playback.current = Some(track);
-                    self.invalidate_artwork();
+            Ok(DatabaseOutcome::FileEdited(outcome)) => {
+                let track = outcome.track;
+                self.update_file_references(&outcome.old_path, &track);
+                if let Some(destination) = outcome.destination {
+                    if let Some(playlist) =
+                        self.library.playlists.iter().find(|p| p.id == destination)
+                    {
+                        self.settings.mode = playlist.mode;
+                        self.library.pending_selection = Some((destination, playlist.mode));
+                        self.library.sort = super::Sort::Position;
+                        self.library.sort_descending = false;
+                        self.library.query.clear();
+                        self.view.track_offset = 0;
+                    }
+                    self.view.dialog = None;
+                    file_message = Some(
+                        self.text(
+                            "File moved to the start of the playlist",
+                            "Файл перенесен в начало плейлиста",
+                        )
+                        .to_owned(),
+                    );
+                } else {
+                    self.reload_tag_editor(track.clone());
+                    file_message = Some(
+                        self.text("File and library updated", "Файл и библиотека обновлены")
+                            .to_owned(),
+                    );
                 }
-                self.view.dialog = None;
+                self.save_settings()?;
+                if let Some(warning) = outcome.warning {
+                    if let Some(Dialog::Tags(editor)) = &mut self.view.dialog {
+                        editor.error = Some(warning.clone());
+                    }
+                    file_message = Some(warning);
+                    file_warning = true;
+                }
             }
             Ok(DatabaseOutcome::Restored { change, redo }) => {
                 let history = self.library.histories.entry(change.scope).or_default();
@@ -105,6 +165,10 @@ impl App {
                 }
             }
             Err(error) => {
+                if writing_tags {
+                    self.tags.recovery_required =
+                        crate::tags::recovery_path(&self.store.path).exists();
+                }
                 if let Some((change, redo)) = job.undo {
                     let history = self.library.histories.entry(change.scope).or_default();
                     if redo {
@@ -116,19 +180,28 @@ impl App {
                 if let Some(dialog) = job.recovery {
                     self.view.dialog = Some(dialog);
                 }
+                if let Some(Dialog::Tags(editor)) = &mut self.view.dialog {
+                    editor.error = Some(crate::errors::message(
+                        &error,
+                        self.settings.preferences.language,
+                    ));
+                }
                 if self.library.import.is_none() {
                     self.validate_history();
                 }
                 return Err(error);
             }
         }
-        self.message(if writing_tags {
-            self.text("File tags saved", "Теги записаны в файл и библиотеку")
-        } else {
-            self.text("Library updated", "Библиотека обновлена")
-        }.into());
-        if let Some(path) = preserved_tags {
-            self.message(format!("{}: {}", self.text("File tags saved. A concurrently modified original was kept", "Теги записаны. Исходник, измененный другой программой, сохранен"), path.display()));
+        self.message(file_message.unwrap_or_else(|| {
+            if writing_tags {
+                self.text("File tags saved", "Теги записаны в файл и библиотеку")
+            } else {
+                self.text("Library updated", "Библиотека обновлена")
+            }
+            .into()
+        }));
+        if file_warning {
+            self.view.notice_error = true;
             self.view.notice_until = None;
         }
         if self.library.revision == self.store.revision() && self.library.import.is_none() {

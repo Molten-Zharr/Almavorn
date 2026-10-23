@@ -39,7 +39,7 @@ pub(crate) use settings::{SettingControl, SettingGroup};
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
 pub use statistics::{StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
-pub use tags::{TagAction, TagEdit, TagEditor, TagsTab};
+pub use tags::{FileInput, MovePicker, TagAction, TagEdit, TagEditor, TagsTab};
 
 use crate::{audio::Audio, model::Settings, store::Store};
 use anyhow::{Context, Result};
@@ -187,6 +187,15 @@ impl Drop for App {
         if let Some(job) = &self.library.import {
             job.cancel.store(true, Ordering::Relaxed);
         }
+        let file_edit_finished = match self.shutdown_file_edit() {
+            Ok(()) => true,
+            Err(error) => {
+                eprintln!(
+                    "Almavorn: file write was not completed; pending settings were not written / запись файла не завершена; отложенные настройки не записаны: {error:#}"
+                );
+                false
+            }
+        };
         let Some(runtime) = self.runtime.take() else {
             return;
         };
@@ -198,7 +207,7 @@ impl Drop for App {
                 "Almavorn: listening history was not saved / статистика не сохранена: {error:#}"
             );
         }
-        if let Err(error) = self.shutdown_settings(&runtime, deadline) {
+        if file_edit_finished && let Err(error) = self.shutdown_settings(&runtime, deadline) {
             eprintln!("Almavorn: settings were not saved / настройки не сохранены: {error:#}");
         }
         runtime.shutdown_timeout(deadline.saturating_duration_since(std::time::Instant::now()));
