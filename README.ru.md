@@ -2,56 +2,144 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-Музыкальный плеер для Linux: порядок в коллекции, свобода в подборках.
+Музыкальный плеер для локальных файлов на Linux, вдохновленный AIMP и Strawberry.
+Порядок в коллекции, свобода в подборках.
 
-- Храните любимые плейлисты с защитой от случайных изменений.
-- Собирайте новые подборки, сохраняя ваши исходные плейлисты.
-- Редактируйте названия, теги и обложки своих композиций.
+![Almavorn на русском: защищенный плейлист в режиме Порядка](docs/images/almavorn-order-ru.png)
+
+## Порядок, Хаос и сортировочный стол
+
+- **Порядок — моя коллекция.** Плейлисты защищены от случайных изменений. Для правок нажмите "Редактировать", после — "Готово". Сортировка на экране не меняет сохраненный порядок композиций.
+- **Хаос — свободные подборки.** Меняйте порядок композиций и собирайте новые плейлисты из существующих. Действия можно отменять и повторять до закрытия плеера.
+- **Сортировочный стол — разобрать музыку.** Общий плейлист для обоих режимов: добавьте файлы, поправьте названия, теги и обложки, затем скопируйте композиции в нужные плейлисты.
+
+Случайное воспроизведение включается отдельно и доступно в обоих режимах.
+
+Редактор тегов сохраняет изменения в сам аудиофайл. Они затрагивают этот файл во всех плейлистах.
+
+![Almavorn на русском: свободная подборка в режиме Хаоса, фон с искрами](docs/images/almavorn-chaos-ru.png)
+
+## Возможности
+
+- Находите музыку поиском, фильтрами и сортировкой плейлистов.
 - Настраивайте звучание эквалайзером, темпом и высотой тона.
-- Выбирайте темы, горячие клавиши и расположение панелей.
-- Слушайте музыку в окне или прямо в терминале.
+- Управляйте музыкой медиаклавишами, даже когда окно свернуто.
+- Выбирайте темы, шрифты и удобное расположение панелей.
+- Добавляйте обложки и анимацию на фон плеера.
+- Открывайте подсказки по клавишам прямо во время прослушивания.
+
+## Выберите сборку
+
+Готовый выпуск — **0.1.4**, для 64-разрядного Linux на Intel/AMD.
+
+- **GUITUI** — отдельное окно с управлением мышью и клавиатурой: [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.tar.gz) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) · [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak).
+- **TUI** — интерфейс в вашем терминале: [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.tar.gz) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage) · [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak).
+
+Выберите один интерфейс и один формат:
+
+- **tar.gz** — архив с установщиком и ярлыком в меню.
+- **AppImage** — один файл для запуска без установки.
+- **Flatpak** — установка пакета вместе с нужными компонентами.
+
+Если Almavorn уже установлен, используйте прежний формат. У Flatpak отдельные медиатеки и настройки для TUI и GUITUI; они также отделены от остальных способов установки.
 
 ## Установка
 
-Выберите интерфейс для Linux x86_64:
+### tar.gz — установить с ярлыком
 
-- GUITUI, отдельное окно: [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) · [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.tar.gz).
-- TUI, работа в терминале: [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage) · [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.tar.gz).
+Для установщика нужен Python 3.
 
-- Flatpak: откройте файл через системный установщик приложений.
-- AppImage: разрешите запуск в свойствах файла, затем откройте.
-- tar.gz: распакуйте и выполните внутри "python3 install.py".
+1. Скачайте архив выбранного интерфейса и распакуйте его.
+2. Откройте полученную папку, в которой лежит "install.py".
+3. Откройте терминал в этой папке и выполните:
 
-TUI AppImage запускайте из терминала. Для TUI Flatpak:
+   ```sh
+   python3 install.py
+   ```
+
+4. Запустите "Almavorn" или "Almavorn TUI" через меню приложений.
+
+TUI также можно открыть из терминала:
 
 ```sh
+~/.local/bin/almavorn-tui
+```
+
+### AppImage — запустить одним файлом
+
+1. Скачайте AppImage выбранного интерфейса.
+2. В свойствах файла разрешите выполнение как программы.
+3. Для GUITUI откройте файл двойным щелчком.
+
+Для TUI откройте терминал в папке с файлом и выполните:
+
+```sh
+./almavorn-0.1.4-tui-linux-x86_64.AppImage
+```
+
+Сохраните AppImage в удобной папке: в дальнейшем плеер запускается этим же файлом.
+
+### Flatpak — установить пакет
+
+1. Если Flatpak еще не настроен, следуйте [инструкции для своего дистрибутива](https://flathub.org/en/setup).
+2. Скачайте файл ".flatpak" выбранного интерфейса. Для первой установки нужен интернет.
+3. Откройте терминал в папке со скачанным файлом и выполните команды своего варианта.
+
+GUITUI:
+
+```sh
+flatpak install --user --or-update ./almavorn-0.1.4-guitui-linux-x86_64.flatpak
+flatpak run io.github.MoltenZharr.Almavorn
+```
+
+TUI:
+
+```sh
+flatpak install --user --or-update ./almavorn-0.1.4-tui-linux-x86_64.flatpak
 flatpak run io.github.MoltenZharr.Almavorn.TUI
 ```
 
-Для первой установки Flatpak нужен интернет.
-Его библиотека и настройки хранятся отдельно от других форматов.
+Подтвердите установку и загрузку предложенных компонентов. После установки появится ярлык в меню приложений.
 
-## Собрать и установить
+### Собрать и установить текущую версию
 
-Ubuntu, Debian, Arch Linux и Artix. Для отдельного окна:
+Автоматическая установка поддерживает Ubuntu, Debian, Arch Linux и Artix на Intel/AMD x86_64. Она скачает исходники и установит нужные компоненты вместе с плеером.
+
+1. Откройте терминал.
+2. Выполните одну команду для нужного интерфейса.
+
+GUITUI:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant guitui
 ```
 
-Только для терминала:
+TUI:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant tui
 ```
 
-Команда подготовит зависимости и установит выбранный интерфейс.
-При необходимости запросит пароль администратора. Для обновления закройте
-Almavorn, если он запущен, и повторите свою команду установки.
+3. Если потребуется, введите пароль администратора. Символы при вводе пароля в терминале не отображаются.
+4. Дождитесь сообщения "Готово" и откройте плеер через меню приложений.
 
-После установки откройте Almavorn через меню приложений.
-Для TUI выполните "~/.local/bin/almavorn-tui".
+Если команда "curl" не найдена, скачайте [установщик](https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh) через браузер. Откройте терминал в папке с ним и выполните "bash install.sh --variant guitui" или "bash install.sh --variant tui".
 
-[Готовый выпуск без сборки](https://github.com/Molten-Zharr/Almavorn/releases/latest) ·
-[Горячие клавиши](docs/GLOBAL_SHORTCUTS.md) ·
-[Для разработчиков](docs/RELEASE.md) · [MIT](LICENSE)
+## Первый запуск
+
+1. Нажмите "Добавить на стол" и выберите файлы или папку.
+2. Выберите композицию и нажмите Space для воспроизведения.
+3. Откройте настройки клавишей F2, а полную справку — F1.
+
+Сортировочный стол поможет разобрать музыку перед добавлением в постоянные плейлисты.
+
+## Обновление
+
+Закройте работающий плеер и обновите **тот же интерфейс тем же способом**:
+
+- **tar.gz:** распакуйте новый архив и запустите его "install.py".
+- **AppImage:** скачайте новый файл, разрешите запуск и открывайте его.
+- **Flatpak:** скачайте новый пакет из [выпусков](https://github.com/Molten-Zharr/Almavorn/releases) и повторите команду установки с его именем.
+- **Сборка из исходников:** повторите свою команду установки.
+
+[Все выпуски](https://github.com/Molten-Zharr/Almavorn/releases) · [Горячие клавиши](docs/GLOBAL_SHORTCUTS.md) · [Лицензия MIT](LICENSE)
