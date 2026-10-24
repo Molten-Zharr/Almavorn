@@ -323,6 +323,7 @@ impl App {
                 self.view.pointer = point;
                 self.color_target(super::Target::ColorSlider(index, area));
             }
+            Some(Gesture::ColorHex(area)) => self.drag_color_hex(*area, point),
             None => {}
         }
         Ok(())

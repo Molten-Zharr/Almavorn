@@ -11,7 +11,7 @@ use crate::{
 use ratatui::{
     Frame,
     layout::Rect,
-    style::Color,
+    style::{Color, Modifier},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
@@ -217,28 +217,44 @@ pub(super) fn render(
     );
     let valid = parse_color(&dialog.text).is_ok();
     let hex = Rect::new(inner.x, preview_y + preview_height, inner.width, hex_height);
-    let mut field = Paragraph::new(format!(
-        "{}{}",
-        dialog.text,
-        if color.selected.is_none() { "│" } else { "" }
-    ))
-    .style(
-        palette
-            .text()
-            .fg(if valid { palette.text } else { palette.error })
-            .bg(if color.selected.is_none() && dialog.selected_all {
-                palette.selection
-            } else {
-                palette.panel
-            }),
-    );
+    let style = palette
+        .text()
+        .fg(if valid { palette.text } else { palette.error })
+        .bg(palette.panel);
+    let mut border = Block::default().style(style);
     if hex.height >= 3 {
-        field = field.block(Block::default().borders(Borders::ALL).title(" HEX "));
+        border = border.borders(Borders::ALL).title(" HEX ");
     }
-    frame.render_widget(field, hex);
+    let input = border.inner(hex);
+    frame.render_widget(border, hex);
+    let selection = dialog.color_hex_selection();
+    let spans = dialog
+        .text
+        .chars()
+        .chain(std::iter::once(' '))
+        .enumerate()
+        .map(|(index, c)| {
+            let mut cell = style;
+            if color.selected.is_none() {
+                if selection.contains(&index) {
+                    cell = cell.bg(palette.selection).fg(palette.accent);
+                }
+                if index == color.hex_cursor {
+                    cell = cell.add_modifier(Modifier::REVERSED);
+                }
+            }
+            Span::styled(c.to_string(), cell)
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(
+        Paragraph::new(Line::from(spans))
+            .style(style)
+            .scroll((0, dialog.color_hex_scroll(input.width) as u16)),
+        input,
+    );
     app.view.hits.push(Hit {
         area: hex,
-        target: Target::ColorHex,
+        target: Target::ColorHex(input),
         enabled: true,
     });
     if keypad_height > 0 {

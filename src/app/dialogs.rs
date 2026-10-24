@@ -42,6 +42,9 @@ impl TextDialog {
     pub(super) fn sync_color_text(&mut self) {
         if let Some(color) = &mut self.color_picker {
             color.selected = None;
+            let length = self.text.chars().count();
+            color.hex_cursor = color.hex_cursor.min(length);
+            color.hex_anchor = color.hex_anchor.min(length);
             if let Ok(rgb) = crate::preferences::parse_color(&self.text) {
                 color.set_rgb(rgb);
             }

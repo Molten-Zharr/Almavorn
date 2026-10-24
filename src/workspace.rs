@@ -578,6 +578,7 @@ pub enum Gesture {
     TunerSlider(usize, Rect),
     ColorWheel(Rect),
     ColorSlider(usize, Rect),
+    ColorHex(Rect),
 }
 
 pub struct Workspace {

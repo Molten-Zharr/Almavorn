@@ -198,7 +198,7 @@ fn run() -> Result<()> {
                         ) => egui::CursorIcon::ResizeHorizontal,
                         Some(Target::ColorWheel(_)) => egui::CursorIcon::Crosshair,
                         Some(Target::ListScroll(_)) => egui::CursorIcon::ResizeVertical,
-                        Some(Target::ColorHex) => egui::CursorIcon::Text,
+                        Some(Target::ColorHex(_)) => egui::CursorIcon::Text,
                         Some(Target::ColorSelect(_) | Target::ColorReset) => {
                             egui::CursorIcon::PointingHand
                         }
@@ -289,7 +289,12 @@ fn run() -> Result<()> {
                     }
                     match event {
                         egui::Event::Copy => {
-                            app.copy_help(None);
+                            if !app.copy_color_hex(false) {
+                                app.copy_help(None);
+                            }
+                        }
+                        egui::Event::Cut => {
+                            app.copy_color_hex(true);
                         }
                         egui::Event::Key {
                             key,

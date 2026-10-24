@@ -158,7 +158,7 @@ pub enum Target {
     ColorWheel(Rect),
     ColorSlider(usize, Rect),
     ColorSelect(usize),
-    ColorHex,
+    ColorHex(Rect),
     ColorReset,
 }
 

@@ -53,6 +53,8 @@ pub struct ColorPicker {
     pub original: [u8; 3],
     /// None selects the HEX field; 0..6 selects H, S, V, R, G, B.
     pub selected: Option<usize>,
+    pub hex_cursor: usize,
+    pub hex_anchor: usize,
 }
 
 impl ColorPicker {
@@ -63,6 +65,8 @@ impl ColorPicker {
             hsv: Hsv::from_rgb(rgb),
             original: rgb,
             selected: None,
+            hex_cursor: 7,
+            hex_anchor: 0,
         }
     }
 

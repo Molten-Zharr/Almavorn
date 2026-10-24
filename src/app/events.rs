@@ -273,6 +273,9 @@ impl App {
                     return self.tick_search();
                 }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
+                    if dialog.insert_color_hex(&text) {
+                        return Ok(());
+                    }
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
@@ -748,6 +751,9 @@ impl App {
                     return Ok(());
                 }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
+                    if dialog.insert_color_hex(&c.to_string()) {
+                        return Ok(());
+                    }
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
@@ -759,6 +765,13 @@ impl App {
                 }
             }
             Target::Backspace => {
+                if matches!(&self.view.dialog, Some(Dialog::Text(dialog)) if dialog.color_picker.is_some()) {
+                    if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
+                        dialog.color_picker.as_mut().unwrap().selected = None;
+                    }
+                    self.color_picker_key(KeyPress::plain(Key::Backspace));
+                    return Ok(());
+                }
                 if let Some(Dialog::Search(search)) = &mut self.view.dialog {
                     search.focus = super::SearchFocus::Input;
                     self.search_key(KeyPress::plain(Key::Backspace))?;
@@ -954,10 +967,10 @@ impl App {
             | Target::TunerReverse
             | Target::TunerReset
             | Target::TunerPin) => self.tuner_target(target)?,
+            Target::ColorHex(area) => self.click_color_hex(area, double),
             target @ (Target::ColorWheel(_)
             | Target::ColorSlider(_, _)
             | Target::ColorSelect(_)
-            | Target::ColorHex
             | Target::ColorReset) => self.color_target(target),
         }
         Ok(())
