@@ -611,8 +611,8 @@ fn musix_body(value: &Value) -> Result<&Value> {
     Ok(&value["message"]["body"])
 }
 
-fn slug(value: &str, separator: &str) -> String {
-    let value: String = value
+fn latin_lowercase(value: &str) -> String {
+    value
         .chars()
         .flat_map(char::to_lowercase)
         .map(|c| match c {
@@ -625,11 +625,32 @@ fn slug(value: &str, separator: &str) -> String {
             'ç' => 'c',
             _ => c,
         })
-        .collect();
-    normalized(&value)
+        .collect()
+}
+
+fn slug(value: &str, separator: &str) -> String {
+    normalized(&latin_lowercase(value))
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(separator)
+}
+
+fn elyrics_slug(value: &str) -> String {
+    latin_lowercase(value)
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || "_,&-()".contains(c) {
+                c
+            } else if c.is_whitespace() {
+                ' '
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-")
 }
 
 fn pages(
@@ -661,8 +682,10 @@ fn pages(
             ),
             Provider::Songlyrics => format!("https://www.songlyrics.com/{a}/{t}-lyrics/"),
             Provider::Elyrics => format!(
-                "https://www.elyrics.net/read/{}/{a}-lyrics/{t}-lyrics.html",
-                a.chars().next().unwrap()
+                "https://www.elyrics.net/read/{}/{}-lyrics/{}-lyrics.html",
+                a.chars().next().unwrap(),
+                elyrics_slug(artist),
+                elyrics_slug(title)
             ),
             Provider::Letras => format!("https://www.letras.mus.br/{a}/{t}/"),
             _ => unreachable!(),
