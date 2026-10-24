@@ -70,6 +70,9 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant tui
 ```
 
+
+---
+
 *- Псcc, хей, а что мне выбрать из этого?*
 
 *- Смотри:*
@@ -80,7 +83,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 **Flatpak** — установка пакета вместе с нужными компонентами.
 **tar.gz** — архив с установщиком и ярлыком в меню.
 
-Для обновления скачайте тот же тип файла, что и раньше: AppImage, Flatpak или tar.gz. Если устанавливали плеер командой выше, повторите ее.
+**Как обновиться:** закройте плеер. Если устанавливали его командой выше — повторите ее; если скачивали файл — скачайте новую версию того же формата.
 
 ## Установка
 
@@ -94,7 +97,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 - **AppImage:** разрешите запуск в свойствах файла. GUITUI откройте двойным щелчком; файл TUI перетащите в терминал и нажмите Enter.
 - **Flatpak:** откройте пакет в менеджере приложений и нажмите "Установить". Если Flatpak еще нет, [настройте его](https://flathub.org/en/setup).
 
-После установки плеер появится в меню: "Almavorn" или "Almavorn TUI". [Подробности установки](docs/RELEASE.md#установка-готового-выпуска).
+После установки плеер появится в меню: "Almavorn" или "Almavorn TUI".
 
 ## Первый запуск
 
@@ -103,14 +106,5 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 3. Откройте настройки клавишей F2, а полную справку — F1.
 
 Сортировочный стол поможет разобрать музыку перед добавлением в постоянные плейлисты.
-
-## Обновление
-
-Закройте работающий плеер и обновите **тот же интерфейс тем же способом**:
-
-- **tar.gz:** распакуйте новый архив и запустите его "install.py".
-- **AppImage:** скачайте новый файл, разрешите запуск и открывайте его.
-- **Flatpak:** скачайте новый пакет из [выпусков](https://github.com/Molten-Zharr/Almavorn/releases) и повторите команду установки с его именем.
-- **Сборка из исходников:** повторите свою команду установки.
 
 [Все выпуски](https://github.com/Molten-Zharr/Almavorn/releases) · [Горячие клавиши](docs/GLOBAL_SHORTCUTS.md) · [Лицензия MIT](LICENSE)
