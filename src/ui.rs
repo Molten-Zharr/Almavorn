@@ -115,6 +115,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 action.description(app.settings.preferences.language).into()
             }
         )),
+        Target::PlayingTrack=>Some(app.text("Double-click: mark and find this song in its playlist","Двойной щелчок: отметить композицию и перейти к ней в плейлисте").into()),
+        Target::Mark(_)=>Some(app.text("Hold the mouse button and move to mark or unmark tracks","Зажмите кнопку мыши и ведите по композициям, чтобы поставить или снять отметки").into()),
+        Target::MarkGroup(_)=>Some(app.text("Mark or unmark all visible tracks in this group","Поставить или снять отметки всех видимых композиций группы").into()),
         Target::Artwork => Some(app.text(
             "Open artwork in the default application",
             "Открыть обложку в приложении по умолчанию",

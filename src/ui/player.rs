@@ -102,6 +102,11 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         })),
         Rect::new(area.x, area.y, title_width, 1),
     );
+    app.view.hits.push(Hit {
+        area: Rect::new(area.x, area.y, title_width, 1),
+        target: Target::PlayingTrack,
+        enabled: app.playback.current.is_some() && !app.busy(),
+    });
     for (rect, action, label) in geometry.controls {
         quiet_button(
             frame,
@@ -166,7 +171,9 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
 fn artwork(frame: &mut Frame, app: &App, area: Rect, palette: Palette) {
     let Some(image) = app.artwork_image() else {
         frame.render_widget(
-            Paragraph::new("♪").alignment(Alignment::Center).style(palette.text().fg(palette.accent)),
+            Paragraph::new("♪")
+                .alignment(Alignment::Center)
+                .style(palette.text().fg(palette.accent)),
             Rect::new(area.x, area.y + area.height / 2, area.width, 1),
         );
         return;
@@ -190,14 +197,18 @@ fn artwork(frame: &mut Frame, app: &App, area: Rect, palette: Palette) {
         let pixel = ((py * image.width + px) * 4) as usize;
         let alpha = u32::from(image.rgba[pixel + 3]);
         let rgb: [u8; 3] = std::array::from_fn(|channel| {
-            ((u32::from(image.rgba[pixel + channel]) * alpha + u32::from(background[channel]) * (255 - alpha)) / 255) as u8
+            ((u32::from(image.rgba[pixel + channel]) * alpha
+                + u32::from(background[channel]) * (255 - alpha))
+                / 255) as u8
         });
         Color::Rgb(rgb[0], rgb[1], rgb[2])
     };
     for y in 0..area.height {
         for x in 0..area.width {
             if let Some(cell) = frame.buffer_mut().cell_mut((area.x + x, area.y + y)) {
-                cell.set_symbol("▀").set_fg(sample(x, y * 2)).set_bg(sample(x, y * 2 + 1));
+                cell.set_symbol("▀")
+                    .set_fg(sample(x, y * 2))
+                    .set_bg(sample(x, y * 2 + 1));
             }
         }
     }

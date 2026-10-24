@@ -139,6 +139,7 @@ impl App {
                 }
             }
             Input::Click { x, y, double } => {
+                self.view.mark_drag=None;
                 self.view.pointer = Position::new(x, y);
                 if self.view.dialog.is_none() {
                     self.view.toolbar_selected = None;
@@ -180,9 +181,9 @@ impl App {
             }
             Input::Drag { x, y } => {
                 self.view.pointer = Position::new(x, y);
-                self.drag_workspace(self.view.pointer)?;
+                if !self.drag_track_marks(self.view.pointer)?{self.drag_workspace(self.view.pointer)?;}
             }
-            Input::Release { x, y } => self.release_workspace(Position::new(x, y))?,
+            Input::Release { x, y } => {self.drag_track_marks(Position::new(x,y))?;self.view.mark_drag=None;self.release_workspace(Position::new(x, y))?;},
             Input::CancelPointer => {
                 self.cancel_workspace_drag();
             }
@@ -259,6 +260,7 @@ impl App {
                 }
             }
             Input::Text(text) => {
+                self.view.mark_drag=None;
                 if matches!(self.view.dialog,Some(Dialog::Form(_))) { self.form_text(&text); return Ok(()); }
                 if matches!(self.view.dialog, Some(Dialog::Tags(_))) {
                     self.tags_text(&text);
@@ -327,6 +329,7 @@ impl App {
                 }
             }
             Input::Key(key) => {
+                self.view.mark_drag=None;
                 if self.view.dialog.is_none()
                     && self.view.toolbar_selected.is_none()
                     && matches!(
@@ -591,8 +594,9 @@ impl App {
                 self.view.track_scroll_selected = None;
                 self.library.selected_entry = Some(id);
                 self.view.focus = Focus::Tracks;
-                self.toggle_mark(id)?;
+                self.start_mark_drag(id)?;
             }
+            Target::MarkGroup(folder)=>{if !double{self.mark_folder_group(&folder)?;}},
             Target::SortColumn(sort) => {
                 self.view.track_scroll_selected = None;
                 self.library.sort_descending =
@@ -652,6 +656,7 @@ impl App {
                     self.view.filter_keyboard = !self.view.filter_keyboard;
                 }
             }
+            Target::PlayingTrack=>{if double{self.reveal_playing_track()?;}},
             Target::Artwork => {
                 if !double {
                     self.open_artwork();

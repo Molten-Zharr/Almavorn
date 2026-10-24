@@ -255,6 +255,101 @@ impl App {
         self.view.track_scroll_selected = None;
     }
 
+    pub(super) fn reveal_playlist_entry(
+        &mut self,
+        playlist: i64,
+        entry: i64,
+        mode: Mode,
+    ) -> Result<()> {
+        anyhow::ensure!(!self.busy(), crate::errors::AppError::LibraryBusy);
+        if self.settings.mode != mode {
+            self.set_mode(mode)?;
+        }
+        let workspace = &mut self.settings.preferences.workspace;
+        let hidden = workspace.hidden.contains(&crate::workspace::Panel::Tracks)
+            || workspace
+                .collapsed
+                .contains(&crate::workspace::Panel::Tracks);
+        workspace
+            .hidden
+            .retain(|p| *p != crate::workspace::Panel::Tracks);
+        workspace
+            .collapsed
+            .retain(|p| *p != crate::workspace::Panel::Tracks);
+        if hidden {
+            self.save_settings()?;
+        }
+        self.library.query.clear();
+        self.view.filter_editing = false;
+        self.view.filter_keyboard = false;
+        self.select_playlist(playlist);
+        self.library.selected_entry = Some(entry);
+        self.view.track_scroll_selected = None;
+        self.view.playlist_scroll_selected = None;
+        self.focus_panel(crate::workspace::Panel::Tracks);
+        self.refresh()
+    }
+
+    pub(super) fn reveal_playing_track(&mut self) -> Result<()> {
+        let Some(track) = &self.playback.current else {
+            return Ok(());
+        };
+        let destination = self
+            .library
+            .playlists
+            .iter()
+            .filter_map(|playlist| {
+                playlist
+                    .entries
+                    .iter()
+                    .find(|entry| {
+                        Some(entry.id) == self.playback.playing_entry && entry.track.id == track.id
+                    })
+                    .or_else(|| {
+                        playlist
+                            .entries
+                            .iter()
+                            .find(|entry| entry.track.id == track.id)
+                    })
+                    .map(|entry| (playlist, entry.id))
+            })
+            .min_by_key(|(playlist, entry)| {
+                (
+                    Some(playlist.id) != self.playback.playing_playlist,
+                    Some(*entry) != self.playback.playing_entry,
+                    Some(playlist.id) != self.library.selected_playlist,
+                    playlist.mode != self.settings.mode,
+                    playlist.kind == PlaylistKind::SortingDesk,
+                )
+            })
+            .map(|(playlist, entry)| {
+                (
+                    playlist.id,
+                    entry,
+                    if playlist.kind == PlaylistKind::SortingDesk {
+                        self.settings.mode
+                    } else {
+                        playlist.mode
+                    },
+                )
+            });
+        let Some((playlist, entry, mode)) = destination else {
+            self.message(
+                self.text(
+                    "This track is not in a local playlist.",
+                    "Этой композиции нет в локальном плейлисте.",
+                )
+                .into(),
+            );
+            return Ok(());
+        };
+        self.reveal_playlist_entry(playlist, entry, mode)?;
+        if self.library.marked.insert(entry) {
+            self.sync_marked_playback()?;
+        }
+        Ok(())
+    }
+
     pub fn set_mode(&mut self, mode: Mode) -> Result<()> {
         if self.busy() {
             return Ok(());

@@ -17,7 +17,11 @@ use ratatui::{
 use std::path::Path;
 
 enum TrackTableRow<'a> {
-    Group { folder: &'a Path, count: usize },
+    Group {
+        folder: &'a Path,
+        count: usize,
+        marked: usize,
+    },
     Track(&'a Entry),
 }
 
@@ -271,6 +275,10 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             display.push(TrackTableRow::Group {
                 folder,
                 count: end - index,
+                marked: entries[index..end]
+                    .iter()
+                    .filter(|e| app.library.marked.contains(&e.id))
+                    .count(),
             });
         }
         display.extend(
@@ -308,12 +316,17 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
         .take(capacity)
         .enumerate()
         .filter_map(|(row, item)| {
-            if let TrackTableRow::Group { folder, count } = item {
+            if let TrackTableRow::Group {
+                folder,
+                count,
+                marked,
+            } = item
+            {
                 let name = app
                     .playlist()
                     .map(|playlist| playlist.folder_group_name(folder))
                     .unwrap_or_default();
-                Some((row, clean(&name), *count))
+                Some((row, clean(&name), *count, *marked, folder.to_path_buf()))
             } else {
                 None
             }
@@ -479,7 +492,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             ),
         );
     }
-    for (row, name, count) in groups {
+    for (row, name, count, marked, folder) in groups {
         let rect = Rect::new(inner.x, inner.y + 1 + row as u16, inner.width, 1);
         let counter = format!(" · {count}");
         let count_width = (Span::raw(&counter).width() as u16).min(rect.width);
@@ -489,10 +502,17 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             .add_modifier(Modifier::BOLD);
         frame.render_widget(
             Paragraph::new(format!(
-                "── {}",
+                "{} {}",
+                if marked == count {
+                    "[x]"
+                } else if marked > 0 {
+                    "[~]"
+                } else {
+                    "[ ]"
+                },
                 ellipsize_name(
                     &name,
-                    usize::from(rect.width.saturating_sub(count_width + 3))
+                    usize::from(rect.width.saturating_sub(count_width + 4))
                 )
             ))
             .style(style),
@@ -504,6 +524,11 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
                 .alignment(Alignment::Right),
             Rect::new(rect.right() - count_width, rect.y, count_width, 1),
         );
+        app.view.hits.push(Hit {
+            area: rect,
+            target: Target::MarkGroup(folder),
+            enabled: true,
+        });
     }
     for (row, id) in ids.into_iter().enumerate() {
         let Some(id) = id else {

@@ -397,8 +397,9 @@ impl App {
     }
 
     pub(crate) fn cancel_workspace_drag(&mut self) -> bool {
+        let marking=self.view.mark_drag.take().is_some();
         let Some(gesture) = self.view.workspace.gesture.take() else {
-            return false;
+            return marking;
         };
         match gesture {
             Gesture::Resize { before, .. } => {

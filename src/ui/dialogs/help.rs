@@ -156,6 +156,7 @@ pub(super) fn help_dialog(
         entries.push((Some(KeyPress::plain(key)), app.text(en, ru).into()));
     }
     for (ctrl, alt, shift, key, en, ru) in [
+        (true,false,false,Key::Char('s'),"In file pickers, change sorting. Ctrl+Shift+S reverses the order.","В файловом окне сменить сортировку. Ctrl+Shift+S меняет направление."),
         (
             true,
             false,
@@ -265,6 +266,13 @@ pub(super) fn help_dialog(
     }
     let guide_heading = entries.len();
     entries.push((None, app.text("Guide", "Руководство").into()));
+    for (en,ru) in [
+        ("In file pickers, typing filters names. Esc clears the filter; press Esc again to close.","В файловых окнах ввод имени фильтрует список. Esc очищает фильтр, повторный Esc закрывает окно."),
+        ("Hold a track checkbox and move across rows to mark or unmark them. The list scrolls at its edge.","Зажмите чекбокс и ведите по строкам, чтобы поставить или снять отметки. У края список прокручивается."),
+        ("Click a group heading to mark its visible tracks. Click it again to clear them.","Нажмите заголовок группы, чтобы отметить ее видимые композиции. Повторное нажатие снимает отметки."),
+        ("Double-click the song title in the player to mark it and jump to its playlist.","Дважды нажмите название композиции в проигрывателе, чтобы отметить ее и перейти к ней в плейлисте."),
+    ]{entries.push((None,app.text(en,ru).into()));}
+
     entries.extend(
         guide
             .into_iter()

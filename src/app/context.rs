@@ -63,6 +63,7 @@ pub struct PlaybackState {
 
 #[derive(Default)]
 pub struct UiState {
+    pub(super) mark_drag: Option<super::selection::MarkDrag>,
     pub(crate) settings: super::settings::SettingsView,
     pub focus: Focus,
     pub workspace: crate::workspace::Workspace,

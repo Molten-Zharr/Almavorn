@@ -199,7 +199,7 @@ impl App {
             }
             return Ok(());
         }
-        if key.ctrl&&!key.alt&&key.key==Key::Char('s'){return self.target(if key.shift{Target::BrowserSortDirection}else{Target::BrowserSort},false);}
+        if key.ctrl&&!key.alt&&matches!(key.key,Key::Char('s'|'S')){return self.target(if key.shift{Target::BrowserSortDirection}else{Target::BrowserSort},false);}
         if key.alt && !key.ctrl && key.key == Key::Up {
             return self.target(Target::BrowserParent, false);
         }

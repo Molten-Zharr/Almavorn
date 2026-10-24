@@ -46,6 +46,7 @@ impl Sort {
 #[derive(Clone)]
 pub enum Target {
     Artwork,
+    PlayingTrack,
     Form(super::FormAction),
     Lyrics(super::LyricsAction),
     Downloads(super::DownloadAction),
@@ -77,6 +78,7 @@ pub enum Target {
     Playlist(i64),
     Track(i64),
     Mark(i64),
+    MarkGroup(std::path::PathBuf),
     SortColumn(Sort),
     FilterInput,
     ClearFilter,

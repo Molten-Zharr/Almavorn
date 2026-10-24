@@ -7,7 +7,6 @@ use crate::{
     input::{Action, Input, Key, KeyPress},
     model::{Language, PlaylistKind},
     statistics::{ListeningRecord, ListeningStatistics, ListeningTracker, StatisticsRow},
-    workspace::Panel,
 };
 use anyhow::{Context, Result};
 use ratatui::layout::Position;
@@ -251,25 +250,7 @@ impl App {
             );
             return Ok(());
         };
-        if self.settings.mode != mode {
-            self.set_mode(mode)?;
-        }
-        let workspace = &mut self.settings.preferences.workspace;
-        let hidden = workspace.hidden.contains(&Panel::Tracks)
-            || workspace.collapsed.contains(&Panel::Tracks);
-        workspace.hidden.retain(|panel| *panel != Panel::Tracks);
-        workspace.collapsed.retain(|panel| *panel != Panel::Tracks);
-        if hidden {
-            self.save_settings()?;
-        }
-        self.library.query.clear();
-        self.view.filter_editing = false;
-        self.view.filter_keyboard = false;
-        self.select_playlist(playlist);
-        self.library.selected_entry = Some(entry);
-        self.view.playlist_scroll_selected = None;
-        self.focus_panel(Panel::Tracks);
-        self.refresh()?;
+        self.reveal_playlist_entry(playlist,entry,mode)?;
         self.close_dialog();
         Ok(())
     }
