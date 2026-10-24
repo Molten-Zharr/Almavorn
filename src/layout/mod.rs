@@ -57,6 +57,8 @@ pub(crate) fn player_metrics(app: &App) -> PlayerMetrics {
     ]
     .into_iter()
     .filter(|(action, _)| app.control_visible(Panel::Player, *action))
+    .filter(|(action, _)| app.settings.preferences.appearance.show_player_special_buttons
+        || !matches!(action, Action::Equalizer | Action::PlaybackTuner | Action::CycleVisualizer))
     .map(|(action, label)| PlayerControl {
         action,
         label,

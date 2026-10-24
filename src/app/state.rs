@@ -45,6 +45,8 @@ impl Sort {
 
 #[derive(Clone)]
 pub enum Target {
+    TogglePlayerSpecialButtons,
+    ToggleExpandedToolbar,
     CopyHelp(Option<usize>),
     Tags(super::TagAction),
     CommandMenu(super::CommandMenu),

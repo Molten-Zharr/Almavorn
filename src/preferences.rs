@@ -79,6 +79,8 @@ pub struct Appearance {
     pub corners: Corners,
     pub playback_timeline: PlaybackTimeline,
     pub show_button_shortcuts: bool,
+    pub show_player_special_buttons: bool,
+    pub expanded_toolbar: bool,
     pub visualizer: crate::visualizer::VisualizerKind,
     pub animation_brightness: u8,
 }
@@ -93,6 +95,8 @@ impl Default for Appearance {
             corners: Corners::Square,
             playback_timeline: PlaybackTimeline::default(),
             show_button_shortcuts: true,
+            show_player_special_buttons: false,
+            expanded_toolbar: false,
             visualizer: crate::visualizer::VisualizerKind::default(),
             animation_brightness: 35,
         }

@@ -119,6 +119,21 @@ impl App {
     }
 
     pub fn toolbar_items(&self) -> Vec<CommandItem> {
+        if !self.settings.preferences.appearance.expanded_toolbar && !self.view.layout_editing {
+            let mut items = Vec::new();
+            for (menu, label) in [
+                (CommandMenu::Add, format!("{} ↓", self.import_caption())),
+                (CommandMenu::Playlist, self.text("Playlist ↓", "Плейлист ↓").into()),
+                (CommandMenu::Tracks, self.text("Tracks ↓", "Композиции ↓").into()),
+                (CommandMenu::Application, format!("{} ↓", self.settings.mode.caption(self.settings.preferences.language))),
+            ] {
+                if !self.command_items(menu).is_empty() {
+                    items.push(CommandItem { label, target: Target::CommandMenu(menu), enabled: true });
+                }
+            }
+            items.push(CommandItem { label: self.text("More…", "Больше…").into(), target: Target::ToggleExpandedToolbar, enabled: true });
+            return items;
+        }
         let mut entries = Vec::new();
         if !self.command_items(CommandMenu::Add).is_empty() {
             entries.push((
@@ -227,6 +242,7 @@ impl App {
             Target::CommandMenu(CommandMenu::Application),
             true,
         ));
+        entries.push(("−".into(), Target::ToggleExpandedToolbar, true));
         entries
             .into_iter()
             .map(|(label, target, enabled)| CommandItem {
@@ -308,7 +324,7 @@ impl App {
                     Filter,
                 ],
             ),
-            CommandMenu::Application => (Panel::Application, &[Statistics, Settings, Help, Quit]),
+            CommandMenu::Application => (Panel::Application, &[Statistics, Settings, Panels, Help, Quit]),
             CommandMenu::Player => (
                 Panel::Player,
                 &[
@@ -407,10 +423,23 @@ impl App {
         }
         if menu == CommandMenu::Application {
             items.push(CommandItem {
+                label: format!("[{}] {}", if self.settings.preferences.appearance.expanded_toolbar { 'x' } else { ' ' }, self.text("Show all toolbar buttons", "Показывать все верхние кнопки")),
+                target: Target::ToggleExpandedToolbar, enabled: true,
+            });
+            items.push(CommandItem {
                 label: self.text("Blocks and buttons…", "Блоки и кнопки…").into(),
                 target: Target::ManagePanels,
                 enabled: true,
             });
+        }
+        if menu == CommandMenu::Player {
+            items.push(CommandItem {
+                label: format!("[{}] {}", if self.settings.preferences.appearance.show_player_special_buttons { 'x' } else { ' ' }, self.text("Show special buttons", "Показывать спецкнопки")),
+                target: Target::TogglePlayerSpecialButtons, enabled: true,
+            });
+        }
+        if menu == CommandMenu::Playlist && let Some(playlist) = self.playlists().iter().find(|p| self.playlist_unlocked(p.id) && Some(p.id) != self.library.selected_playlist) {
+            items.push(CommandItem { label: format!("{}: {}", self.text("Done", "Готово"), playlist.name), target: Target::FinishEdit, enabled: !self.busy() });
         }
         items
     }

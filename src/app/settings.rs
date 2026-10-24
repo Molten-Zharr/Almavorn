@@ -661,6 +661,14 @@ impl App {
                 self.settings.preferences.appearance.show_button_shortcuts =
                     !self.settings.preferences.appearance.show_button_shortcuts;
             }
+            SettingControl::PlayerSpecialButtons => {
+                self.settings.preferences.appearance.show_player_special_buttons = !self.settings.preferences.appearance.show_player_special_buttons;
+                self.cancel_workspace_drag();
+            }
+            SettingControl::ExpandedToolbar => {
+                self.settings.preferences.appearance.expanded_toolbar = !self.settings.preferences.appearance.expanded_toolbar;
+                self.view.toolbar_selected = None;
+            }
             SettingControl::ArtworkVisible => {
                 self.settings.preferences.artwork.visible = !self.settings.preferences.artwork.visible;
             }

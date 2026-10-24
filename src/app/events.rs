@@ -484,6 +484,16 @@ impl App {
                     })?;
                 }
             }
+            Target::TogglePlayerSpecialButtons => {
+                self.settings.preferences.appearance.show_player_special_buttons = !self.settings.preferences.appearance.show_player_special_buttons;
+                self.cancel_workspace_drag();
+                self.save_settings()?;
+            }
+            Target::ToggleExpandedToolbar => {
+                self.settings.preferences.appearance.expanded_toolbar = !self.settings.preferences.appearance.expanded_toolbar;
+                self.view.toolbar_selected = None;
+                self.save_settings()?;
+            }
             Target::CommandMenu(menu) => self.open_commands(menu),
             Target::Visualizer(kind) => self.set_visualizer(kind)?,
             Target::StatisticsRow(row) => {
