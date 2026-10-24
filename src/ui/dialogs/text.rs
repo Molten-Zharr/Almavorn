@@ -27,9 +27,9 @@ pub(super) fn text_dialog(
         TextPurpose::ComposeSelection { .. } => {
             app.text("Save mix · name", "Сохранить подборку · название")
         }
-        TextPurpose::Create | TextPurpose::CreateFromFolder { .. } => {
-            app.text("Create playlist", "Создать плейлист")
-        }
+        TextPurpose::Create
+        | TextPurpose::CreateFromFolder { .. }
+        | TextPurpose::CreateWithFolder { .. } => app.text("Create playlist", "Создать плейлист"),
         TextPurpose::ComposePlaylist(ids) => {
             if ids.len() == 1 {
                 app.text("Copy playlist", "Копия плейлиста")
@@ -63,7 +63,9 @@ pub(super) fn text_dialog(
     );
     let creating = matches!(
         dialog.purpose,
-        TextPurpose::Create | TextPurpose::CreateFromFolder { .. }
+        TextPurpose::Create
+            | TextPurpose::CreateFromFolder { .. }
+            | TextPurpose::CreateWithFolder { .. }
     );
     let title = if exporting && area.width < 50 {
         app.text("Export · file name", "Экспорт · имя файла")
@@ -73,11 +75,7 @@ pub(super) fn text_dialog(
     let inner = if exporting {
         file_modal(frame, app, area, title.into(), 27, palette)
     } else {
-        let height = if creating && area.width.saturating_sub(6) < 60 {
-            29
-        } else {
-            27
-        };
+        let height = if creating { 35 } else { 27 };
         modal(frame, app, area, title.into(), height, palette)
     };
     let hint = if let TextPurpose::Settings(SettingsEdit::ExportPalette { directory, .. }) =
@@ -99,6 +97,25 @@ pub(super) fn text_dialog(
             "{}: {name}",
             app.text("Enter exact name or path", "Введите точное имя или путь")
         )
+    } else if let TextPurpose::CreateWithFolder { parent } = &dialog.purpose {
+        match crate::store::new_playlist_folder_path(parent, &dialog.text) {
+            Ok(path) => format!(
+                "{}:\n{}\n{}",
+                app.text("New folder", "Будет создана папка"),
+                path.display(),
+                app.text(
+                    "Enter: create · Ctrl+F: location",
+                    "Enter: создать · Ctrl+F: расположение"
+                )
+            ),
+            Err(error) => crate::errors::message(&error, app.settings.preferences.language),
+        }
+    } else if matches!(dialog.purpose, TextPurpose::Create) {
+        app.text(
+            "An empty playlist. Enable the checkbox below to create its folder.",
+            "Пустой плейлист. Для создания папки включите галочку ниже.",
+        )
+        .into()
     } else if let TextPurpose::CreateFromFolder {
         folder,
         group_subfolders,
@@ -133,6 +150,8 @@ pub(super) fn text_dialog(
         + 1)
     .min(if exporting {
         inner.height.saturating_sub(8)
+    } else if creating {
+        inner.height.saturating_sub(11).min(8)
     } else {
         10
     });
@@ -142,22 +161,7 @@ pub(super) fn text_dialog(
             .wrap(Wrap { trim: false }),
         Rect::new(inner.x, inner.y, inner.width, hint_height),
     );
-    let mut field = Rect::new(inner.x, inner.y + hint_height, inner.width, 3);
-    let folder_choice = if creating {
-        if inner.width >= 60 {
-            field.width = inner.width.saturating_sub(2) / 2;
-            Some(Rect::new(
-                field.right() + 2,
-                field.y,
-                inner.right().saturating_sub(field.right() + 2),
-                3,
-            ))
-        } else {
-            Some(Rect::new(inner.x, field.bottom() + 1, inner.width, 3))
-        }
-    } else {
-        None
-    };
+    let field = Rect::new(inner.x, inner.y + hint_height, inner.width, 3);
     let field_border = if creating {
         Block::default()
             .borders(Borders::ALL)
@@ -189,17 +193,59 @@ pub(super) fn text_dialog(
         field,
     );
     let mut keyboard_top = field.bottom() + 1;
-    if let Some(folder_choice) = folder_choice {
-        button(
-            frame,
-            app,
-            folder_choice,
-            app.text("From music folder", "Из папки с музыкой"),
+    if creating {
+        let with_folder = matches!(dialog.purpose, TextPurpose::CreateWithFolder { .. });
+        let mut controls = vec![(
+            format!(
+                "[{}] {}",
+                if with_folder { 'x' } else { ' ' },
+                app.text(
+                    "Create playlist folder (Ctrl+D)",
+                    "Создать папку для плейлиста (Ctrl+D)"
+                )
+            ),
+            Target::CreatePlaylistFolder,
+            !app.busy(),
+        )];
+        if with_folder {
+            controls.push((
+                app.text("Location… (Ctrl+F)", "Расположение… (Ctrl+F)")
+                    .into(),
+                Target::PlaylistFolderLocation,
+                !app.busy(),
+            ));
+        }
+        controls.push((
+            app.text("From music folder", "Из папки с музыкой").into(),
             Target::PlaylistAutoName,
             !app.busy(),
+        ));
+        if let TextPurpose::CreateFromFolder {
+            group_subfolders, ..
+        } = dialog.purpose
+        {
+            controls.push((
+                format!(
+                    "[{}] {}",
+                    if group_subfolders { 'x' } else { ' ' },
+                    app.text("Group subfolders", "Подпапки в группы")
+                ),
+                Target::CreateFolderGroups,
+                !app.busy(),
+            ));
+        }
+        let available = inner
+            .bottom()
+            .saturating_sub(3)
+            .saturating_sub(keyboard_top);
+        let used = buttons(
+            frame,
+            app,
+            Rect::new(inner.x, keyboard_top, inner.width, available.min(4)),
+            controls,
             palette,
         );
-        keyboard_top = folder_choice.bottom() + 1;
+        keyboard_top += used + 1;
     }
     if matches!(
         dialog.purpose,
@@ -230,27 +276,6 @@ pub(super) fn text_dialog(
         );
         keyboard_top += used + 1;
     }
-    if let TextPurpose::CreateFromFolder {
-        group_subfolders, ..
-    } = &dialog.purpose
-    {
-        let used = buttons(
-            frame,
-            app,
-            Rect::new(inner.x, keyboard_top, inner.width, 2),
-            vec![(
-                format!(
-                    "[{}] {}",
-                    if *group_subfolders { 'x' } else { ' ' },
-                    app.text("Group subfolders", "Подпапки в группы")
-                ),
-                Target::CreateFolderGroups,
-                !app.busy(),
-            )],
-            palette,
-        );
-        keyboard_top += used + 1;
-    }
     keyboard(
         frame,
         app,
@@ -268,6 +293,9 @@ pub(super) fn text_dialog(
         palette,
     );
     let can_submit = match &dialog.purpose {
+        TextPurpose::CreateWithFolder { parent } => {
+            crate::store::new_playlist_folder_path(parent, &dialog.text).is_ok()
+        }
         TextPurpose::RemovePlaylistFolder(_, name) => &dialog.text == name,
         _ => true,
     };
@@ -277,7 +305,9 @@ pub(super) fn text_dialog(
         Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2),
         vec![
             (
-                if matches!(dialog.purpose, TextPurpose::ComposeSelection { .. }) {
+                if creating {
+                    app.text("Create playlist", "Создать плейлист")
+                } else if matches!(dialog.purpose, TextPurpose::ComposeSelection { .. }) {
                     app.text("Save mix", "Сохранить подборку")
                 } else {
                     app.text("Confirm", "Подтвердить")

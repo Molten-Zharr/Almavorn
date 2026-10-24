@@ -9,6 +9,9 @@ use anyhow::{Context, Result};
 #[derive(Clone)]
 pub enum TextPurpose {
     Create,
+    CreateWithFolder {
+        parent: std::path::PathBuf,
+    },
     CreateFromFolder {
         folder: std::path::PathBuf,
         group_subfolders: bool,
@@ -439,6 +442,14 @@ impl App {
                             store.create_playlist(&text, mode)?,
                         ))
                     }),
+                    TextPurpose::CreateWithFolder { parent } => {
+                        let parent = parent.clone();
+                        self.start_database(recovery, move |store| {
+                            Ok(DatabaseOutcome::Created(
+                                store.create_playlist_with_folder(&text, mode, &parent)?,
+                            ))
+                        })
+                    }
                     TextPurpose::CreateFromFolder {
                         folder,
                         group_subfolders,

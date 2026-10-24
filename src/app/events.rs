@@ -926,6 +926,8 @@ impl App {
             Target::BrowserCurrentFolder => self.browser_add_current_folder()?,
             Target::PaletteExportFolder => self.choose_palette_export_folder(),
             Target::PlaylistAutoName => self.choose_playlist_name_folder()?,
+            Target::CreatePlaylistFolder => self.toggle_playlist_folder()?,
+            Target::PlaylistFolderLocation => self.choose_playlist_folder_location()?,
             Target::CreateFolderGroups => {
                 ensure!(!self.busy(), AppError::LibraryBusy);
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog

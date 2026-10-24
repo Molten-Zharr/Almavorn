@@ -12,6 +12,17 @@ impl App {
             && let Some(Dialog::Text(dialog)) = &self.view.dialog
         {
             match (key.key, &dialog.purpose) {
+                (
+                    Key::Char('d'),
+                    TextPurpose::Create
+                    | TextPurpose::CreateWithFolder { .. }
+                    | TextPurpose::CreateFromFolder { .. },
+                ) => {
+                    return self.target(Target::CreatePlaylistFolder, false);
+                }
+                (Key::Char('f'), TextPurpose::CreateWithFolder { .. }) => {
+                    return self.choose_playlist_folder_location();
+                }
                 (Key::Char('g'), TextPurpose::CreateFromFolder { .. }) => {
                     return self.target(Target::CreateFolderGroups, false);
                 }

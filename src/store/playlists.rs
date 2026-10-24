@@ -21,7 +21,58 @@ pub(crate) struct FolderPlaylistImport {
     pub folders: Vec<PathBuf>,
 }
 
+pub(crate) fn new_playlist_folder_path(parent: &Path, name: &str) -> Result<PathBuf> {
+    let name = playlist_name(name)?;
+    ensure!(
+        parent.is_absolute(),
+        "Выберите расположение папки по полному пути."
+    );
+    let folder_name = name.replace(['/', '\\'], "_");
+    ensure!(
+        !matches!(folder_name.as_str(), "." | ".."),
+        "Укажите название папки, отличное от точки или двух точек."
+    );
+    ensure!(folder_name.len() <= 255, "Название папки слишком длинное.");
+    Ok(parent.join(folder_name))
+}
+
 impl Store {
+    pub fn create_playlist_with_folder(
+        &mut self,
+        name: &str,
+        mode: Mode,
+        parent: &Path,
+    ) -> Result<Change> {
+        let name = playlist_name(name)?;
+        let parent = parent.canonicalize().context(AppError::FolderNotReady)?;
+        ensure!(parent.is_dir(), AppError::FolderNotReady);
+        let folder = new_playlist_folder_path(&parent, name)?;
+        let created = std::cell::Cell::new(false);
+        let result = self.mutate(None, mode, true, |connection| {
+            unique_playlist_name(connection, mode.key(), name, None)?;
+            lock_ordering(connection, mode.key())?;
+            std::fs::create_dir(&folder).with_context(|| format!(
+                "Не удалось создать папку {}. Выберите свободное имя и доступное расположение.", folder.display()
+            ))?;
+            created.set(true);
+            connection.execute("INSERT INTO playlists(name,name_fold,mode,kind,position,group_folders) VALUES (?1,?2,?3,'normal',(SELECT COALESCE(MAX(position),-1)+1 FROM playlists WHERE mode=?3),0)", params![name, name.to_lowercase(), mode.key()])?;
+            insert_playlist_tracks(connection, connection.last_insert_rowid(), &[], std::slice::from_ref(&folder))?;
+            Ok(())
+        });
+        if let Err(error) = result {
+            // Only the new, empty directory may be removed after a failed commit.
+            // Existing directories are never adopted or overwritten by this operation.
+            if created.get() && std::fs::remove_dir(&folder).is_err() {
+                return Err(error.context(format!(
+                    "Плейлист не создан. Папка сохранена: {}",
+                    folder.display()
+                )));
+            }
+            return Err(error);
+        }
+        result
+    }
+
     pub(crate) fn create_folder_playlists(
         &mut self,
         playlists: &[FolderPlaylistImport],

@@ -2,7 +2,7 @@ use super::super::{
     theme::Palette,
     widgets::{buttons, buttons_height, clean, file_modal, modal, visible_offset},
 };
-use crate::app::{App, Browser, Hit, PaletteFilePicker, Target};
+use crate::app::{App, Browser, Hit, PaletteFilePicker, PlaylistFolderPicker, Target};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -24,6 +24,9 @@ pub(super) fn browser_dialog(
             "Export palette · choose folder",
             "Экспорт палитры · выбрать папку",
         ),
+        None if matches!(browser.playlist_name, Some(PlaylistFolderPicker::Parent(_))) => {
+            app.text("Where to create the playlist folder", "Где создать папку плейлиста")
+        }
         None if browser.playlist_name.is_some() => {
             app.text("Playlist from folder", "Плейлист из папки")
         }

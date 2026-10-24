@@ -420,7 +420,7 @@ impl App {
                 if browser.palette_file.is_some() {
                     self.show_settings();
                 } else {
-                    self.view.dialog = browser.playlist_name.map(Dialog::Text);
+                    self.view.dialog = browser.playlist_name.map(|picker| Dialog::Text(picker.into_dialog()));
                 }
                 true
             }

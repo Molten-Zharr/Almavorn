@@ -24,6 +24,20 @@ pub enum PaletteFilePicker {
 }
 
 #[derive(Clone)]
+pub enum PlaylistFolderPicker {
+    Source(TextDialog),
+    Parent(TextDialog),
+}
+
+impl PlaylistFolderPicker {
+    pub fn into_dialog(self) -> TextDialog {
+        match self {
+            Self::Source(dialog) | Self::Parent(dialog) => dialog,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct BrowserEntry {
     pub path: PathBuf,
     pub directory: bool,
@@ -51,7 +65,7 @@ pub struct Browser {
     pub folder: bool,
     /// Some(group_subfolders) selects one playlist per checked directory.
     pub folder_playlists: Option<bool>,
-    pub playlist_name: Option<TextDialog>,
+    pub playlist_name: Option<PlaylistFolderPicker>,
     pub palette_file: Option<PaletteFilePicker>,
     offsets: HashMap<PathBuf, usize>,
 }
@@ -344,7 +358,7 @@ impl App {
         };
         if !matches!(
             dialog.purpose,
-            TextPurpose::Create | TextPurpose::CreateFromFolder { .. }
+            TextPurpose::Create | TextPurpose::CreateFromFolder { .. } | TextPurpose::CreateWithFolder { .. }
         ) {
             return Ok(());
         }
@@ -358,7 +372,34 @@ impl App {
         };
         self.show_browser(directory, true);
         if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
-            browser.playlist_name = Some(dialog);
+            browser.playlist_name = Some(PlaylistFolderPicker::Source(dialog));
+        }
+        Ok(())
+    }
+
+    pub(super) fn toggle_playlist_folder(&mut self) -> Result<()> {
+        let parent = dirs::audio_dir().filter(|path| path.is_dir())
+            .or_else(dirs::home_dir).context("Выберите расположение папки.")?;
+        if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
+            dialog.purpose = match &dialog.purpose {
+                TextPurpose::CreateWithFolder { .. } => TextPurpose::Create,
+                TextPurpose::Create | TextPurpose::CreateFromFolder { .. } => {
+                    TextPurpose::CreateWithFolder { parent }
+                }
+                _ => return Ok(()),
+            };
+        }
+        Ok(())
+    }
+
+    pub(super) fn choose_playlist_folder_location(&mut self) -> Result<()> {
+        ensure!(!self.busy(), AppError::LibraryBusy);
+        let Some(Dialog::Text(dialog)) = &self.view.dialog else { return Ok(()); };
+        let TextPurpose::CreateWithFolder { parent } = &dialog.purpose else { return Ok(()); };
+        let (parent, dialog) = (parent.clone(), dialog.clone());
+        self.show_browser(parent, true);
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            browser.playlist_name = Some(PlaylistFolderPicker::Parent(dialog));
         }
         Ok(())
     }
@@ -594,8 +635,17 @@ impl App {
             return Ok(());
         }
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
-            && let Some(dialog) = &browser.playlist_name
+            && let Some(picker) = &browser.playlist_name
         {
+            let mut dialog = picker.clone().into_dialog();
+            if matches!(picker, PlaylistFolderPicker::Parent(_)) {
+                let parent = folder.canonicalize().context(AppError::FolderNotReady)?;
+                ensure!(parent.is_dir(), AppError::FolderNotReady);
+                dialog.purpose = TextPurpose::CreateWithFolder { parent };
+                self.cancel_browser();
+                self.view.dialog = Some(Dialog::Text(dialog));
+                return Ok(());
+            }
             let name = folder
                 .file_name()
                 .and_then(|name| name.to_str())
@@ -613,7 +663,6 @@ impl App {
             } else {
                 name.trim().to_owned()
             };
-            let mut dialog = dialog.clone();
             dialog.text = self.fresh_playlist_name(&name);
             let group_subfolders = matches!(
                 dialog.purpose,

@@ -34,7 +34,7 @@ mod tuner;
 mod visualizer;
 mod workspace;
 
-pub use browser::{Browser, BrowserEntry, PaletteFilePicker};
+pub use browser::{Browser, BrowserEntry, PaletteFilePicker, PlaylistFolderPicker};
 pub use commands::{CommandItem, CommandMenu};
 use context::{BrowserState, SettingsPersistence};
 pub use context::{LibraryState, PlaybackState, UiState};

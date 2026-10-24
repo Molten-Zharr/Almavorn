@@ -113,6 +113,8 @@ pub enum Target {
     BrowserCurrentFolder,
     PaletteExportFolder,
     PlaylistAutoName,
+    CreatePlaylistFolder,
+    PlaylistFolderLocation,
     CreateFolderGroups,
     TransferRow(usize),
     FolderRow(usize),
