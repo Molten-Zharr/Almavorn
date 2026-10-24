@@ -200,8 +200,13 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     app.view.workspace.splits.clear();
     app.view.playlist_area = Rect::default();
     app.view.tracks_area = Rect::default();
-    let geometry =
-        workspace_metrics(app).arrange(app.settings.preferences.workspace.root.as_ref(), area);
+    let metrics = workspace_metrics(app);
+    let root = app.settings.preferences.workspace.root.as_ref();
+    let geometry = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
+        metrics.arrange_with_artwork(root, area)
+    } else {
+        metrics.arrange(root, area)
+    };
     let compact = geometry.compact;
     app.view.workspace.areas = geometry.areas;
     app.view.workspace.splits = geometry.splits;

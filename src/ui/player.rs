@@ -24,29 +24,16 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         return;
     }
     let metrics = player_metrics(app);
-    let waveform_area = metrics.arrange(area).waveform;
-    let header_height = waveform_area.map_or(area.height, |wave| wave.y - area.y);
-    let content_height = metrics.content_height(area.width).min(area.height);
-    let cover_width = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
-        [8, 6, 4].into_iter().find(|&width| {
-            width / 2 <= header_height
-                && area.width >= width + 25
-                && metrics.content_height(area.width - width - 1) <= content_height
-        })
+    let geometry = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
+        metrics.arrange_with_artwork(area)
     } else {
-        None
+        metrics.arrange(area)
     };
-    let area = if let Some(width) = cover_width {
-        let cover = Rect::new(area.x, area.y, width, width / 2);
+    if let Some(cover) = geometry.artwork {
         app.view.artwork_area = cover;
         artwork(frame, app, cover, palette);
-        Rect::new(area.x + width + 1, area.y, area.width - width - 1, area.height)
-    } else {
-        area
-    };
-    let mut geometry = metrics.arrange(area);
-    // Artwork only shares the header; keep the waveform and its seek area fixed.
-    geometry.waveform = waveform_area;
+    }
+    let area = geometry.header;
     let mut title = if app.preparing_playback() && !app.playback_active() {
         app.text("Preparing audio…", "Подготовка аудио…").to_owned()
     } else if let Some(track) = app

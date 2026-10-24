@@ -90,7 +90,7 @@ fn decode(bytes: &[u8]) -> Result<ArtworkImage> {
         .unwrap_or(image::metadata::Orientation::NoTransforms);
     let mut decoded = image::DynamicImage::from_decoder(decoder).map_err(image_error)?;
     decoded.apply_orientation(orientation);
-    let thumbnail = decoded.thumbnail(128, 128).into_rgba8();
+    let thumbnail = decoded.thumbnail(512, 512).into_rgba8();
     Ok(ArtworkImage {
         width: thumbnail.width(),
         height: thumbnail.height(),

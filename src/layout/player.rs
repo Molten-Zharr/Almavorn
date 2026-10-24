@@ -15,6 +15,8 @@ pub(crate) struct PlayerMetrics {
 }
 
 pub(crate) struct PlayerGeometry {
+    pub header: Rect,
+    pub artwork: Option<Rect>,
     pub controls: Vec<(Rect, Action, &'static str)>,
     pub volume: Rect,
     pub progress: Rect,
@@ -29,6 +31,49 @@ impl PlayerMetrics {
 
     pub fn content_height(&self, width: u16) -> u16 {
         self.base_height(width) + if self.waveform { 4 } else { 0 }
+    }
+
+    fn artwork_width(&self, width: u16) -> Option<u16> {
+        let width = width.saturating_sub(30).min(16) / 2 * 2;
+        (width >= 8).then_some(width)
+    }
+
+    pub fn content_height_with_artwork(&self, width: u16) -> u16 {
+        let Some(cover_width) = self.artwork_width(width) else {
+            return self.content_height(width);
+        };
+        self.base_height(width - cover_width - 1)
+            .max(cover_width / 2)
+            + if self.waveform { 4 } else { 0 }
+    }
+
+    pub fn arrange_with_artwork(&self, area: Rect) -> PlayerGeometry {
+        let Some(width) = self.artwork_width(area.width) else {
+            return self.arrange(area);
+        };
+        if area.height < self.content_height_with_artwork(area.width) {
+            return self.arrange(area);
+        }
+        let text_width = area.width - width - 1;
+        let text_height = self.base_height(text_width);
+        let header_height = text_height.max(width / 2);
+        let header = Rect::new(
+            area.x + width + 1,
+            area.y + (header_height - text_height) / 2,
+            text_width,
+            text_height,
+        );
+        let mut geometry = self.arrange(header);
+        geometry.artwork = Some(Rect::new(
+            area.x,
+            area.y + (header_height - width / 2) / 2,
+            width,
+            width / 2,
+        ));
+        geometry.waveform = self.waveform.then(|| {
+            Rect::new(area.x, area.y + header_height, area.width, 4)
+        });
+        geometry
     }
 
     fn controls_width(&self) -> u16 {
@@ -132,6 +177,8 @@ impl PlayerMetrics {
         let waveform = (self.waveform && wave_y + 4 <= area.bottom())
             .then(|| Rect::new(area.x, wave_y, area.width, 4));
         PlayerGeometry {
+            header: area,
+            artwork: None,
             controls,
             volume,
             progress,

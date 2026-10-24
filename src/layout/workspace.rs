@@ -63,12 +63,25 @@ pub(crate) struct WorkspaceGeometry {
 
 impl WorkspaceMetrics {
     pub fn arrange(&self, root: Option<&Dock>, area: Rect) -> WorkspaceGeometry {
+        self.arrange_inner(root, area, false)
+    }
+
+    pub fn arrange_with_artwork(&self, root: Option<&Dock>, area: Rect) -> WorkspaceGeometry {
+        let geometry = self.arrange_inner(root, area, true);
+        if geometry.fits {
+            geometry
+        } else {
+            self.arrange(root, area)
+        }
+    }
+
+    fn arrange_inner(&self, root: Option<&Dock>, area: Rect, artwork: bool) -> WorkspaceGeometry {
         let root = root
             .cloned()
             .and_then(Dock::content_only)
-            .unwrap_or_else(|| self.automatic(area));
-        let compact = self.minimum(&root, area.width, false) > area.height;
-        let fits = self.minimum(&root, area.width, compact) <= area.height;
+            .unwrap_or_else(|| self.automatic(area, artwork));
+        let compact = self.minimum(&root, area.width, false, artwork) > area.height;
+        let fits = self.minimum(&root, area.width, compact, artwork) <= area.height;
         let mut geometry = WorkspaceGeometry {
             root,
             compact,
@@ -78,16 +91,16 @@ impl WorkspaceMetrics {
         };
         if fits {
             let root = geometry.root.clone();
-            self.arrange_node(&root, area, compact, &mut geometry, &mut Vec::new());
+            self.arrange_node(&root, area, compact, artwork, &mut geometry, &mut Vec::new());
         }
         geometry
     }
 
     pub fn fits(&self, root: &Dock, area: Rect) -> bool {
-        self.minimum(root, area.width, true) <= area.height
+        self.minimum(root, area.width, true, false) <= area.height
     }
 
-    fn automatic(&self, area: Rect) -> Dock {
+    fn automatic(&self, area: Rect, artwork: bool) -> Dock {
         let list_horizontal = area.width >= 55
             && matches!(self.playlist_placement, Placement::Left | Placement::Right);
         let list_first = matches!(self.playlist_placement, Placement::Left | Placement::Top);
@@ -117,7 +130,12 @@ impl WorkspaceMetrics {
         let player_ratio = if side_player {
             250
         } else {
-            (u32::from(self.player.preferred_height(area.width)) * 1000
+            let height = if artwork {
+                self.player.content_height_with_artwork(area.width.saturating_sub(2)) + 2
+            } else {
+                self.player.preferred_height(area.width)
+            };
+            (u32::from(height) * 1000
                 / u32::from(area.height.max(1))) as u16
         };
         let player = Dock::Panel(Panel::Player);
@@ -185,7 +203,7 @@ impl WorkspaceMetrics {
         }
     }
 
-    fn minimum(&self, node: &Dock, width: u16, compact: bool) -> u16 {
+    fn minimum(&self, node: &Dock, width: u16, compact: bool, artwork: bool) -> u16 {
         match node {
             Dock::Panel(panel) => {
                 if self.hidden.contains(panel) {
@@ -195,8 +213,12 @@ impl WorkspaceMetrics {
                     return if compact { 1 } else { 2 };
                 }
                 if *panel == Panel::Player {
-                    return self.player.content_height(width.saturating_sub(2))
-                        + if compact { 1 } else { 2 };
+                    let content = if artwork {
+                        self.player.content_height_with_artwork(width.saturating_sub(2))
+                    } else {
+                        self.player.content_height(width.saturating_sub(2))
+                    };
+                    return content + if compact { 1 } else { 2 };
                 }
                 match panel {
                     Panel::Playlists => {
@@ -230,20 +252,21 @@ impl WorkspaceMetrics {
                 second,
             } => {
                 if self.min_width(first) == 0 {
-                    return self.minimum(second, width, compact);
+                    return self.minimum(second, width, compact, artwork);
                 }
                 if self.min_width(second) == 0 {
-                    return self.minimum(first, width, compact);
+                    return self.minimum(first, width, compact, artwork);
                 }
                 if self.axis(*desired, first, second, width) == Axis::Vertical {
-                    self.minimum(first, width, compact)
-                        .saturating_add(self.minimum(second, width, compact))
+                    self.minimum(first, width, compact, artwork)
+                        .saturating_add(self.minimum(second, width, compact, artwork))
                 } else {
                     let cut = self.width_cut(width, *ratio, first, second);
-                    self.minimum(first, cut, compact).max(self.minimum(
+                    self.minimum(first, cut, compact, artwork).max(self.minimum(
                         second,
                         width.saturating_sub(cut),
                         compact,
+                        artwork,
                     ))
                 }
             }
@@ -264,6 +287,7 @@ impl WorkspaceMetrics {
         node: &Dock,
         area: Rect,
         compact: bool,
+        artwork: bool,
         geometry: &mut WorkspaceGeometry,
         path: &mut Vec<bool>,
     ) {
@@ -281,13 +305,13 @@ impl WorkspaceMetrics {
             } => {
                 if self.min_width(first) == 0 {
                     path.push(true);
-                    self.arrange_node(second, area, compact, geometry, path);
+                    self.arrange_node(second, area, compact, artwork, geometry, path);
                     path.pop();
                     return;
                 }
                 if self.min_width(second) == 0 {
                     path.push(false);
-                    self.arrange_node(first, area, compact, geometry, path);
+                    self.arrange_node(first, area, compact, artwork, geometry, path);
                     path.pop();
                     return;
                 }
@@ -297,8 +321,8 @@ impl WorkspaceMetrics {
                 } else {
                     (
                         area.height,
-                        self.minimum(first, area.width, compact),
-                        self.minimum(second, area.width, compact),
+                        self.minimum(first, area.width, compact, artwork),
+                        self.minimum(second, area.width, compact, artwork),
                     )
                 };
                 let first_collapsed = self.all_collapsed(first);
@@ -343,10 +367,10 @@ impl WorkspaceMetrics {
                     )
                 };
                 path.push(false);
-                self.arrange_node(first, a, compact, geometry, path);
+                self.arrange_node(first, a, compact, artwork, geometry, path);
                 path.pop();
                 path.push(true);
-                self.arrange_node(second, b, compact, geometry, path);
+                self.arrange_node(second, b, compact, artwork, geometry, path);
                 path.pop();
             }
         }
