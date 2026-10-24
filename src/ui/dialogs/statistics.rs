@@ -1,6 +1,6 @@
 use super::super::{
     theme::Palette,
-    widgets::{buttons, clean, modal, visible_offset},
+    widgets::{block, buttons, clean, modal_rect, visible_offset},
 };
 use crate::{
     app::{App, Hit, StatisticsPage, Target},
@@ -11,19 +11,21 @@ use ratatui::{
     layout::{Constraint, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Cell, Paragraph, Row, Table, Wrap},
+    widgets::{Cell, Clear, Paragraph, Row, Table, Wrap},
 };
 
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    let inner = modal(
-        frame,
-        app,
-        area,
+    let rect = modal_rect(area, area.height);
+    app.view.overlay_area = rect;
+    frame.render_widget(Clear, rect);
+    let outer = block(
         app.text("Listening statistics", "Статистика прослушивания")
             .into(),
-        area.height,
         palette,
+        app.statistics.view.focused,
     );
+    let inner = outer.inner(rect);
+    frame.render_widget(outer, rect);
     if inner.width < 8 || inner.height < 3 {
         return;
     }
@@ -216,7 +218,40 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             },
             app.statistics.view.rows.len()
         );
-        let hint = if compact {
+        let available = inner.right().saturating_sub(x);
+        let track_page = matches!(
+            app.statistics.view.page,
+            StatisticsPage::Tracks | StatisticsPage::Recent
+        );
+        let hint = if !app.statistics.view.focused {
+            if available >= 32 {
+                app.text(
+                    "Player keys · click here to focus",
+                    "Клавиши: плеер · клик: фокус",
+                )
+                .into()
+            } else if available >= 12 {
+                app.text("Click: focus", "Клик: фокус").into()
+            } else {
+                count
+            }
+        } else if track_page {
+            let hint = format!(
+                "{}   {count}",
+                app.text(
+                    "Enter: track · ←→ tabs · ↑↓ rows · S sort · R refresh",
+                    "Enter: к треку · ←→ вкладки · ↑↓ строки · S сорт. · R обновить",
+                )
+            );
+            let short = format!("{} · {count}", app.text("Enter: track", "Enter: трек"));
+            if Span::raw(&hint).width() <= usize::from(available) {
+                hint
+            } else if Span::raw(&short).width() <= usize::from(available) {
+                short
+            } else {
+                count
+            }
+        } else if compact {
             count
         } else {
             format!(

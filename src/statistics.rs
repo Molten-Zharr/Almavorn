@@ -88,6 +88,7 @@ pub struct StatisticsSummary {
 
 #[derive(Clone, Debug, Default)]
 pub struct StatisticsRow {
+    pub track_id: Option<i64>,
     pub title: String,
     pub artist: String,
     pub album: String,

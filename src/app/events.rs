@@ -13,7 +13,10 @@ impl App {
             || matches!(self.view.dialog, Some(Dialog::Text(_)))
             || matches!(self.view.dialog, Some(Dialog::Search(_)))
             || matches!(self.view.dialog, Some(Dialog::Browser(_)))
-            || (self.view.dialog.is_none() && self.view.filter_editing)
+            || ((self.view.dialog.is_none()
+                || matches!(self.view.dialog, Some(Dialog::Statistics))
+                    && !self.statistics.view.focused)
+                && self.view.filter_editing)
     }
 
     pub fn hovered(&self, area: Rect) -> bool {
@@ -30,6 +33,18 @@ impl App {
             .iter()
             .enumerate()
             .filter(|(_, hit)| hit.enabled && hit.area.contains(point))
+            .filter(|(_, hit)| {
+                !matches!(self.view.dialog, Some(Dialog::Statistics))
+                    || !self.view.overlay_area.contains(point)
+                    || matches!(
+                        hit.target,
+                        Target::StatisticsPage(_)
+                            | Target::StatisticsSort
+                            | Target::StatisticsRow(_)
+                            | Target::StatisticsRefresh
+                            | Target::CloseDialog
+                    )
+            })
             .max_by_key(|(index, hit)| {
                 (
                     matches!(
@@ -43,7 +58,16 @@ impl App {
     }
 
     pub fn handle(&mut self, input: Input) {
-        if let Err(error) = self.handle_inner(input) {
+        let statistics = if self.statistics_background_input(&input) {
+            self.view.dialog.take()
+        } else {
+            None
+        };
+        let result = self.handle_inner(input);
+        if self.view.dialog.is_none() {
+            self.view.dialog = statistics;
+        }
+        if let Err(error) = result {
             self.failure(error);
         }
     }
@@ -55,7 +79,12 @@ impl App {
             return;
         }
         let gesture = match target {
-            Target::PlaybackVolume(area) if area.width > 0 && self.view.dialog.is_none() => {
+            Target::PlaybackVolume(area)
+                if area.width > 0
+                    && (self.view.dialog.is_none()
+                        || matches!(self.view.dialog, Some(Dialog::Statistics))) =>
+            {
+                self.statistics.view.focused = false;
                 if self.view.workspace.gesture.is_none() {
                     self.view.toolbar_selected = None;
                     self.view.filter_editing = false;
@@ -457,9 +486,14 @@ impl App {
             }
             Target::CommandMenu(menu) => self.open_commands(menu),
             Target::Visualizer(kind) => self.set_visualizer(kind)?,
+            Target::StatisticsRow(row) => {
+                self.statistics_target(Target::StatisticsRow(row));
+                if double {
+                    self.open_statistics_track()?;
+                }
+            }
             target @ (Target::StatisticsPage(_)
             | Target::StatisticsSort
-            | Target::StatisticsRow(_)
             | Target::StatisticsRefresh) => self.statistics_target(target),
             Target::CommandRow(index) => self.activate_command(index)?,
             Target::ManagePanels => {

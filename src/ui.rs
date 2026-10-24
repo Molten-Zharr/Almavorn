@@ -189,12 +189,18 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         palette,
     );
     visualizer::render(frame, app, palette);
-    if app.view.dialog.is_none() && app.view.filter_keyboard {
+    if app.view.filter_keyboard
+        && (app.view.dialog.is_none()
+            || matches!(app.view.dialog, Some(crate::app::Dialog::Statistics))
+                && !app.statistics.view.focused)
+    {
         library::filter_keyboard(frame, app, palette);
     }
     if let Some(mut dialog) = app.view.dialog.take() {
-        app.view.hits.clear();
-        app.view.keycaps.clear();
+        if !matches!(dialog, crate::app::Dialog::Statistics) {
+            app.view.hits.clear();
+            app.view.keycaps.clear();
+        }
         if let crate::app::Dialog::Commands {
             menu,
             selected,

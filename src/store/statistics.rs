@@ -48,12 +48,13 @@ impl Store {
             .prepare(
                 "SELECT t.title,t.artist,t.album,SUM(s.qualified),
             COUNT(*),SUM(s.listened_ms),MAX(s.updated_at_ms),
-            strftime('%d.%m.%Y %H:%M',MAX(s.updated_at_ms)/1000.0,'unixepoch','localtime')
+            strftime('%d.%m.%Y %H:%M',MAX(s.updated_at_ms)/1000.0,'unixepoch','localtime'),t.id
             FROM listening_sessions s JOIN tracks t ON t.id=s.track_id
             GROUP BY t.id",
             )?
             .query_map([], |row| {
                 Ok(StatisticsRow {
+                    track_id: Some(row.get(8)?),
                     title: row.get(0)?,
                     artist: row.get(1)?,
                     album: row.get(2)?,
@@ -106,12 +107,13 @@ impl Store {
             .prepare(
                 "SELECT t.title,t.artist,t.album,s.qualified,
             s.listened_ms,s.updated_at_ms,
-            strftime('%d.%m.%Y %H:%M',s.started_at_ms/1000.0,'unixepoch','localtime')
+            strftime('%d.%m.%Y %H:%M',s.started_at_ms/1000.0,'unixepoch','localtime'),t.id
             FROM listening_sessions s JOIN tracks t ON t.id=s.track_id
             ORDER BY s.started_at_ms DESC,s.session_id DESC LIMIT 100",
             )?
             .query_map([], |row| {
                 Ok(StatisticsRow {
+                    track_id: Some(row.get(7)?),
                     title: row.get(0)?,
                     artist: row.get(1)?,
                     album: row.get(2)?,

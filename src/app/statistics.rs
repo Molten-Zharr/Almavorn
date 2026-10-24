@@ -4,11 +4,13 @@ use super::{
     bounded,
 };
 use crate::{
-    input::{Action, Key, KeyPress},
-    model::Language,
+    input::{Action, Input, Key, KeyPress},
+    model::{Language, PlaylistKind},
     statistics::{ListeningRecord, ListeningStatistics, ListeningTracker, StatisticsRow},
+    workspace::Panel,
 };
 use anyhow::{Context, Result};
+use ratatui::layout::Position;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -63,9 +65,14 @@ pub struct StatisticsView {
     pub capacity: usize,
     pub loading: bool,
     pub error: Option<String>,
+    pub focused: bool,
 }
 impl StatisticsView {
     fn rebuild(&mut self) {
+        let selected = self
+            .rows
+            .get(self.selected)
+            .and_then(|row| row.track_id.map(|id| (id, row.date.clone())));
         self.rows = match self.page {
             StatisticsPage::Tracks => &self.snapshot.tracks,
             StatisticsPage::Artists => &self.snapshot.artists,
@@ -89,7 +96,15 @@ impl StatisticsView {
                 StatisticsSort::Name => (0, 0, row.title.to_lowercase()),
             });
         }
-        self.selected = self.selected.min(self.rows.len().saturating_sub(1));
+        self.selected = selected
+            .and_then(|(id, date)| {
+                self.rows.iter().position(|row| {
+                    row.track_id == Some(id)
+                        && (self.page != StatisticsPage::Recent || row.date == date)
+                })
+            })
+            .unwrap_or(self.selected)
+            .min(self.rows.len().saturating_sub(1));
     }
 }
 struct WriteJob {
@@ -147,11 +162,113 @@ impl App {
         }
     }
     pub(super) fn open_statistics(&mut self) {
+        self.cancel_workspace_drag();
         self.checkpoint_listening();
         self.statistics.read_requested = true;
         self.statistics.view.loading = true;
         self.statistics.retry_at = None;
+        self.statistics.view.focused = true;
         self.view.dialog = Some(Dialog::Statistics);
+    }
+
+    pub(super) fn statistics_background_input(&mut self, input: &Input) -> bool {
+        if !matches!(self.view.dialog, Some(Dialog::Statistics)) {
+            return false;
+        }
+        match input {
+            Input::Click { x, y, .. } | Input::SecondaryClick { x, y } => {
+                self.statistics.view.focused =
+                    self.view.overlay_area.contains(Position::new(*x, *y));
+                if self.statistics.view.focused {
+                    self.cancel_workspace_drag();
+                }
+                !self.statistics.view.focused
+            }
+            Input::Scroll { x, y, .. } => {
+                self.statistics.view.focused =
+                    self.view.overlay_area.contains(Position::new(*x, *y));
+                !self.statistics.view.focused
+            }
+            Input::Key(_)
+            | Input::Text(_)
+            | Input::Drag { .. }
+            | Input::Release { .. }
+            | Input::CancelPointer => !self.statistics.view.focused,
+            _ => false,
+        }
+    }
+
+    pub(super) fn open_statistics_track(&mut self) -> Result<()> {
+        let Some(track_id) = self
+            .statistics
+            .view
+            .rows
+            .get(self.statistics.view.selected)
+            .and_then(|row| row.track_id)
+        else {
+            return Ok(());
+        };
+        anyhow::ensure!(!self.busy(), crate::errors::AppError::LibraryBusy);
+        let destination = self
+            .library
+            .playlists
+            .iter()
+            .filter_map(|playlist| {
+                playlist
+                    .entries
+                    .iter()
+                    .find(|entry| entry.track.id == track_id)
+                    .map(|entry| (playlist, entry.id))
+            })
+            .min_by_key(|(playlist, _)| {
+                (
+                    Some(playlist.id) != self.library.selected_playlist,
+                    playlist.mode != self.settings.mode,
+                    playlist.kind == PlaylistKind::SortingDesk,
+                )
+            })
+            .map(|(playlist, entry)| {
+                (
+                    playlist.id,
+                    entry,
+                    if playlist.kind == PlaylistKind::SortingDesk {
+                        self.settings.mode
+                    } else {
+                        playlist.mode
+                    },
+                )
+            });
+        let Some((playlist, entry, mode)) = destination else {
+            self.message(
+                self.text(
+                    "This track is no longer in any playlist.",
+                    "Этот трек больше не входит ни в один плейлист.",
+                )
+                .into(),
+            );
+            return Ok(());
+        };
+        if self.settings.mode != mode {
+            self.set_mode(mode)?;
+        }
+        let workspace = &mut self.settings.preferences.workspace;
+        let hidden = workspace.hidden.contains(&Panel::Tracks)
+            || workspace.collapsed.contains(&Panel::Tracks);
+        workspace.hidden.retain(|panel| *panel != Panel::Tracks);
+        workspace.collapsed.retain(|panel| *panel != Panel::Tracks);
+        if hidden {
+            self.save_settings()?;
+        }
+        self.library.query.clear();
+        self.view.filter_editing = false;
+        self.view.filter_keyboard = false;
+        self.select_playlist(playlist);
+        self.library.selected_entry = Some(entry);
+        self.view.playlist_scroll_selected = None;
+        self.focus_panel(Panel::Tracks);
+        self.refresh()?;
+        self.close_dialog();
+        Ok(())
     }
     pub(super) fn tick_statistics(&mut self) -> Result<()> {
         let open = matches!(self.view.dialog, Some(Dialog::Statistics));
@@ -253,6 +370,7 @@ impl App {
         match target {
             Target::StatisticsPage(page) => {
                 self.statistics.view.page = page;
+                self.statistics.view.rows.clear();
                 self.statistics.view.selected = 0;
                 self.statistics.view.offset = 0;
                 self.statistics.view.rebuild();
@@ -286,6 +404,7 @@ impl App {
             Key::Escape => {
                 self.close_dialog();
             }
+            Key::Enter if key == KeyPress::plain(Key::Enter) => self.open_statistics_track()?,
             Key::Left | Key::Right | Key::Tab => {
                 let index = StatisticsPage::ALL
                     .iter()
