@@ -148,7 +148,7 @@ impl App {
                 if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
                     view.selected = 0;
                     view.offset = 0;
-                    if self.lyrics.results.len() == 1
+                    if self.lyrics.results.len() == 1 && self.lyrics.results[0].score >= 900
                         || self.lyrics.results.first().is_some_and(|first| {
                             first.score >= 980
                                 && self.lyrics.results.get(1).is_none_or(|second| {
@@ -246,7 +246,7 @@ impl App {
         match action {
             LyricsAction::Search => {
                 let title = self.text("Find lyrics", "Найти текст песни");
-                let description=self.text("Enter the artist and title. The search also checks reversed names and the file name.", "Укажите исполнителя и название. Поиск также проверит обратный порядок и имя файла.");
+                let description=self.text("Enter the artist and title. If no close match is found, the player also searches by title words.", "Укажите исполнителя и название. Если точного совпадения нет, плеер ищет также по словам названия.");
                 let fields = vec![
                     FormField::new(self.text("Artist", "Исполнитель"), query.artist),
                     FormField::new(self.text("Title", "Название"), query.title),

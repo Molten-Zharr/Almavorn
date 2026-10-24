@@ -1,5 +1,6 @@
 use crate::{
     app::{App, Hit, LyricsAction, LyricsView, Target},
+    model::duration_text,
     ui::{
         theme::Palette,
         widgets::{buttons, buttons_height, clean, file_modal, visible_offset},
@@ -182,8 +183,8 @@ pub(super) fn render(
     } else if app.lyrics.results.is_empty() {
         frame.render_widget(
             Paragraph::new(app.text(
-                "No lyrics found. Try changing the artist or title.",
-                "Текст не найден. Попробуйте уточнить исполнителя или название.",
+                "No lyrics found in the connected services. Try changing the artist or title.",
+                "Текст не найден в подключенных сервисах. Уточните исполнителя или название.",
             ))
             .style(palette.text())
             .wrap(Wrap { trim: false }),
@@ -209,11 +210,16 @@ pub(super) fn render(
             .enumerate()
         {
             let lyric = &app.lyrics.results[index];
+            let duration = lyric
+                .duration
+                .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+                .map(|seconds| format!(" · {}", duration_text((seconds * 1000.0) as u64)))
+                .unwrap_or_default();
             let area = Rect::new(body.x, body.y + row as u16, body.width, 1);
             frame.render_widget(
                 Paragraph::new(clean(&format!(
-                    "{} — {} · {}",
-                    lyric.artist, lyric.title, lyric.provider
+                    "{} — {}{} · {}",
+                    lyric.artist, lyric.title, duration, lyric.provider
                 )))
                 .style(if index == view.selected {
                     palette

@@ -100,7 +100,15 @@ fn normalized(value: &str) -> String {
     value
         .chars()
         .flat_map(char::to_lowercase)
-        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .map(|c| {
+            if c == 'ё' {
+                'е'
+            } else if c.is_alphanumeric() {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -198,6 +206,9 @@ fn similarity(left: &str, right: &str) -> f64 {
     if left == right {
         return 1.0;
     }
+    if left.replace(' ', "") == right.replace(' ', "") {
+        return 1.0;
+    }
     let left = left.split_whitespace().collect::<HashSet<_>>();
     let right = right.split_whitespace().collect::<HashSet<_>>();
     2.0 * left.intersection(&right).count() as f64 / (left.len() + right.len()) as f64
@@ -232,6 +243,83 @@ fn rank(lyric: &Lyric, query: &Query, candidates: &[(String, String)]) -> u16 {
     ((names + duration).clamp(0.0, 1.0) * 1000.0) as u16
 }
 
+fn search_lrc(
+    client: &reqwest::blocking::Client,
+    artist: &str,
+    title: &str,
+) -> Result<Vec<LrcRecord>> {
+    let mut request = client
+        .get("https://lrclib.net/api/search")
+        .query(&[("track_name", title)]);
+    if !artist.is_empty() {
+        request = request.query(&[("artist_name", artist)]);
+    }
+    request
+        .send()
+        .map_err(|_| anyhow::anyhow!("Не удалось связаться с LRCLIB."))
+        .and_then(network::json)
+}
+
+fn add_lrc_records(
+    records: Vec<LrcRecord>,
+    query: &Query,
+    guesses: &[(String, String)],
+    ids: &mut HashSet<u64>,
+    matches: &mut Vec<Lyric>,
+    minimum_score: u16,
+) {
+    for record in records.into_iter().take(40) {
+        if !ids.insert(record.id) {
+            continue;
+        }
+        let mut lyric = Lyric {
+            title: record.track_name,
+            artist: record.artist_name,
+            album: record.album_name,
+            provider: "LRCLIB".into(),
+            source: format!("https://lrclib.net/api/get/{}", record.id),
+            plain: record.plain_lyrics.unwrap_or_default(),
+            synced: record.synced_lyrics.unwrap_or_default(),
+            instrumental: record.instrumental,
+            duration: record.duration,
+            score: 0,
+        };
+        if lyric.content().is_empty() && !lyric.instrumental {
+            continue;
+        }
+        lyric.score = rank(&lyric, query, guesses);
+        if lyric.score >= minimum_score {
+            matches.push(lyric);
+        }
+    }
+}
+
+fn fallback_titles(guesses: &[(String, String)]) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut seen = HashSet::new();
+    for (_, title) in guesses {
+        let title = normalized(title);
+        if !title.chars().any(char::is_alphabetic) {
+            continue;
+        }
+        let keywords = title
+            .split_whitespace()
+            .filter(|word| word.chars().count() >= 3)
+            .collect::<Vec<_>>()
+            .join(" ");
+        for candidate in [title, keywords] {
+            if !candidate.is_empty() && seen.insert(candidate.clone()) {
+                result.push(candidate);
+            }
+        }
+        if result.len() >= 4 {
+            break;
+        }
+    }
+    result.truncate(4);
+    result
+}
+
 pub fn search(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
     let client = network::client()?;
     let guesses = candidates(query);
@@ -244,52 +332,44 @@ pub fn search(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
         warnings: Vec::new(),
     };
     let mut ids = HashSet::new();
+    let mut lrc_available = true;
     for (artist, title) in &guesses {
         if cancel.load(Ordering::Relaxed) {
             break;
         }
-        let mut request = client
-            .get("https://lrclib.net/api/search")
-            .query(&[("track_name", title)]);
-        if !artist.is_empty() {
-            request = request.query(&[("artist_name", artist)]);
-        }
-        let records: Result<Vec<LrcRecord>> = request
-            .send()
-            .map_err(|_| anyhow::anyhow!("Не удалось связаться с LRCLIB."))
-            .and_then(network::json);
-        match records {
+        match search_lrc(&client, artist, title) {
             Ok(records) => {
-                for record in records.into_iter().take(40) {
-                    if !ids.insert(record.id) {
-                        continue;
-                    }
-                    let mut lyric = Lyric {
-                        title: record.track_name,
-                        artist: record.artist_name,
-                        album: record.album_name,
-                        provider: "LRCLIB".into(),
-                        source: format!("https://lrclib.net/api/get/{}", record.id),
-                        plain: record.plain_lyrics.unwrap_or_default(),
-                        synced: record.synced_lyrics.unwrap_or_default(),
-                        instrumental: record.instrumental,
-                        duration: record.duration,
-                        score: 0,
-                    };
-                    if lyric.content().is_empty() && !lyric.instrumental {
-                        continue;
-                    }
-                    lyric.score = rank(&lyric, query, &guesses);
-                    result.matches.push(lyric);
-                }
+                add_lrc_records(records, query, &guesses, &mut ids, &mut result.matches, 0);
             }
             Err(error) => {
                 result.warnings.push(error.to_string());
+                lrc_available = false;
                 break;
             }
         }
         if result.matches.iter().any(|m| m.score >= 980) {
             break;
+        }
+    }
+    // File names often omit punctuation in artist names or add short words to
+    // titles. Broaden retrieval, but still rank against the original metadata.
+    if lrc_available && !result.matches.iter().any(|lyric| lyric.score >= 900) {
+        for title in fallback_titles(&guesses) {
+            if cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            match search_lrc(&client, "", &title) {
+                Ok(records) => {
+                    add_lrc_records(records, query, &guesses, &mut ids, &mut result.matches, 600);
+                }
+                Err(error) => {
+                    result.warnings.push(error.to_string());
+                    break;
+                }
+            }
+            if result.matches.iter().any(|lyric| lyric.score >= 900) {
+                break;
+            }
         }
     }
     // A second provider is useful when no close match was found. Do not probe
