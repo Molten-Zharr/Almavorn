@@ -1,0 +1,39 @@
+# Online music
+
+Open "Music services", "Downloads" or "Mods" in the application menu. Default shortcuts: Ctrl+O, Ctrl+J and Ctrl+M.
+
+Press F9 for song lyrics. Almavorn searches tags and filenames, including reversed artist/title ordering. Choose a recording, refine the query, save or edit its lyrics, export TXT/LRC, or remove the saved copy. Timed lyrics can follow playback.
+
+## Downloads
+
+Open "Downloads" and select "Install / update components". Find a song or add a link, then choose its folder and file name. Downloaded music appears on the sorting desk.
+
+Cancel, retry or edit pending downloads. The queue and history survive restarts; retry starts a fresh download. Removing a history entry keeps its audio file.
+
+For Cobalt, enter an API address and optional key supplied by the server owner, then switch the download source to Cobalt.
+
+## Yandex Music
+
+Install service support, add Yandex Music and choose "Sign in". Open the sign-in page and enter the displayed code. Search for music, open liked songs or a playlist, then select "Play".
+
+Availability depends on the account, subscription and region. This connection uses an unofficial Yandex Music API.
+
+## YouTube Music
+
+Install service support and add YouTube Music. Open "YouTube audio components" to install the download components used for playback. Public music search works without signing in.
+
+For your library, choose "Sign in" and paste headers from your YouTube Music browser session or the contents of browser.json. Follow the [browser authentication guide](https://ytmusicapi.readthedocs.io/en/stable/setup/browser.html). The saved session is also used when opening audio. Some recordings have additional access requirements imposed by YouTube.
+
+## Spotify
+
+Spotify plays on a Spotify Connect device. Premium and a Client ID from [Spotify for Developers](https://developer.spotify.com/dashboard) are required.
+
+1. Register http://127.0.0.1:43827/callback as the app's redirect URI.
+2. Add Spotify in Almavorn and enter its Client ID.
+3. Choose "Sign in", open the sign-in page and authorize access.
+4. Open Spotify on the desired device and select it under "Spotify devices".
+5. Search or browse your music, then select "Play".
+
+A personal Spotify developer app must allow the accounts that use it. See [Spotify quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
+
+Use the player's usual pause, skip, seek and volume controls. Its heading identifies the current source. Connections can be renamed, disabled, removed or signed out. Credentials are stored in the system secret store; unlock it through your desktop environment if sign-in cannot be saved.

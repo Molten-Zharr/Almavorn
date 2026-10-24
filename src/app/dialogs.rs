@@ -54,6 +54,8 @@ pub enum Dialog {
     Form(Box<super::Form>),
     Lyrics(super::LyricsView),
     Downloads(super::DownloadsView),
+    Services(super::ServicesView),
+    Mods(super::ModsView),
     Tags(Box<super::TagEditor>),
     Statistics,
     PlaybackTuner {
@@ -144,6 +146,8 @@ impl Dialog {
             Self::Form(_) => None,
             Self::Lyrics(_) => Some(Action::Lyrics),
             Self::Downloads(_) => Some(Action::Downloads),
+            Self::Services(_) => Some(Action::Services),
+            Self::Mods(_) => Some(Action::Mods),
             Self::Tags(_) => None,
             Self::Statistics => Some(Action::Statistics),
             Self::PlaybackTuner { .. } => Some(Action::PlaybackTuner),
@@ -256,6 +260,8 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if matches!(self.view.dialog,Some(Dialog::Mods(_))) { self.mods_scroll(i64::from(direction));return; }
+        if matches!(self.view.dialog,Some(Dialog::Services(_))) { self.services_scroll(i64::from(direction));return; }
         if matches!(self.view.dialog,Some(Dialog::Downloads(_))) { self.downloads_scroll(i64::from(direction));return; }
         if matches!(self.view.dialog,Some(Dialog::Lyrics(_))) { self.lyrics_scroll(i64::from(direction));return; }
         if matches!(self.view.dialog, Some(Dialog::Tags(_))) {

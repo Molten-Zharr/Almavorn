@@ -128,6 +128,8 @@ impl KeyPress {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
+    Mods,
+    Services,
     Downloads,
     Lyrics,
     Quit,
@@ -234,6 +236,8 @@ impl Action {
 
     pub fn description(self, language: Language) -> &'static str {
         match self {
+            Self::Mods => language.text("Install, create and customize player mods.", "Установить, создать и настроить моды плеера."),
+            Self::Services => language.text("Connect music accounts, search and listen online.", "Подключить аккаунты, найти музыку и слушать онлайн."),
             Self::Downloads => language.text("Find music, download a link and manage the download queue.", "Найти музыку, скачать по ссылке и управлять очередью загрузки."),
             Self::Lyrics => language.text("Find, view and save lyrics for the current or selected song.", "Найти, посмотреть и сохранить текст текущей или выбранной песни."),
             Self::Quit => language.text("Close the application and finish saving settings.", "Закрыть приложение и завершить сохранение настроек."),
@@ -288,6 +292,8 @@ impl Action {
     }
     pub fn name(self, language: Language) -> &'static str {
         match self {
+            Self::Mods => language.text("Mods", "Моды"),
+            Self::Services => language.text("Music services", "Музыкальные сервисы"),
             Self::Downloads => language.text("Downloads", "Загрузки"),
             Self::Lyrics => language.text("Song lyrics", "Текст песни"),
             Self::Quit => language.text("Quit", "Выход"),
@@ -401,6 +407,9 @@ pub fn default_bindings() -> Vec<Binding> {
         })
         .collect();
     for (action, key, ctrl, alt) in [
+        (Downloads, Key::Char('j'), true, false),
+        (Services, Key::Char('o'), true, false),
+        (Mods, Key::Char('m'), true, false),
         (MoveUp, Key::Up, false, true),
         (MoveDown, Key::Down, false, true),
         (PlaylistUp, Key::Up, true, false),

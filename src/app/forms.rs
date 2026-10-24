@@ -8,6 +8,16 @@ use anyhow::Result;
 
 #[derive(Clone)]
 pub enum FormPurpose {
+    ModNew,
+    ModInstall,
+    ModCode(crate::mods::Mod),
+    ModSettings(crate::mods::Mod),
+    ModManifest(crate::mods::Mod),
+    ModExport(crate::mods::Mod),
+    ServiceConnection(crate::services::Connection),
+    ServiceHeaders(crate::services::Connection),
+    ModFields(crate::mods::Mod, Vec<String>),
+    ServiceSearch,
     DownloadSearch,
     DownloadNew(Option<String>),
     DownloadSettings,
@@ -22,6 +32,7 @@ pub struct FormField {
     pub value: String,
     pub secret: bool,
     pub multiline: bool,
+    pub checkbox: bool,
 }
 impl FormField {
     pub fn new(label: impl Into<String>, value: impl Into<String>) -> Self {
@@ -30,6 +41,7 @@ impl FormField {
             value: value.into(),
             secret: false,
             multiline: false,
+            checkbox: false,
         }
     }
 }
@@ -52,6 +64,7 @@ pub struct Form {
 #[derive(Clone, Copy)]
 pub enum FormAction {
     Field(usize),
+    ToggleField(usize),
     Save,
     Back,
     Discard,
@@ -111,6 +124,9 @@ impl App {
             return;
         }
         let field = &mut form.fields[form.selected];
+        if field.checkbox {
+            return;
+        }
         if field.value.len().saturating_add(text.len()) > 256 * 1024 {
             form.error = Some(
                 self.settings
@@ -166,12 +182,53 @@ impl App {
         let field_count = form.fields.len();
         let field = &mut form.fields[form.selected];
         match key.key {
+            Key::Enter if field.checkbox => {
+                field.value = (field.value != "true").to_string();
+            }
             Key::Enter if field.multiline && !key.ctrl => self.form_text("\n"),
             Key::Enter if !key.ctrl && form.selected + 1 < field_count => {
                 let index = form.selected + 1;
                 self.form_action(FormAction::Field(index))?;
             }
             Key::Enter => self.form_action(FormAction::Save)?,
+            Key::Up | Key::Down | Key::PageUp | Key::PageDown if field.multiline => {
+                let characters = field.value.chars().collect::<Vec<_>>();
+                let position = form.cursor.min(characters.len());
+                let start = characters[..position]
+                    .iter()
+                    .rposition(|c| *c == '\n')
+                    .map_or(0, |i| i + 1);
+                let column = position - start;
+                let mut target = start;
+                let steps = if matches!(key.key, Key::PageUp | Key::PageDown) {
+                    10
+                } else {
+                    1
+                };
+                for _ in 0..steps {
+                    if matches!(key.key, Key::Up | Key::PageUp) {
+                        if target == 0 {
+                            break;
+                        }
+                        target = characters[..target - 1]
+                            .iter()
+                            .rposition(|c| *c == '\n')
+                            .map_or(0, |i| i + 1);
+                    } else {
+                        if let Some(length) = characters[target..].iter().position(|c| *c == '\n') {
+                            target += length + 1;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                let length = characters[target..]
+                    .iter()
+                    .position(|c| *c == '\n')
+                    .unwrap_or(characters.len() - target);
+                form.cursor = target + column.min(length);
+                form.selected_all = false;
+            }
             Key::Left => {
                 form.cursor = form.cursor.saturating_sub(1);
                 form.selected_all = false;
@@ -188,7 +245,7 @@ impl App {
                 form.cursor = field.value.chars().count();
                 form.selected_all = false;
             }
-            Key::Backspace | Key::Delete => {
+            Key::Backspace | Key::Delete if !field.checkbox => {
                 if form.selected_all {
                     field.value.clear();
                     form.cursor = 0;
@@ -221,6 +278,12 @@ impl App {
             return Ok(());
         };
         match action {
+            FormAction::ToggleField(index)
+                if index < form.fields.len() && form.fields[index].checkbox =>
+            {
+                form.selected = index;
+                form.fields[index].value = (form.fields[index].value != "true").to_string();
+            }
             FormAction::Field(index) if index < form.fields.len() => {
                 form.selected = index;
                 form.cursor = form.fields[index].value.chars().count();
@@ -245,6 +308,73 @@ impl App {
 
     fn apply_form(&mut self, form: &Form) -> Result<()> {
         match &form.purpose {
+            FormPurpose::ModFields(previous, keys) => {
+                let mut value = previous.clone();
+                for (key, field) in keys.iter().zip(&form.fields) {
+                    let original = &previous.settings[key];
+                    value.settings[key] = if original.is_string() {
+                        serde_json::Value::String(field.value.clone())
+                    } else {
+                        let parsed: serde_json::Value = serde_json::from_str(&field.value)?;
+                        anyhow::ensure!(
+                            (original.is_boolean() && parsed.is_boolean())
+                                || (original.is_number() && parsed.is_number()),
+                            "Проверьте значение поля {}",
+                            field.label
+                        );
+                        parsed
+                    };
+                }
+                value.validate()?;
+                self.save_mod(value);
+            }
+            FormPurpose::ModNew => {
+                let value = crate::mods::Mod::new(form.fields[0].value.trim().into());
+                value.validate()?;
+                self.save_mod(value);
+            }
+            FormPurpose::ModInstall => self.import_mod(form.fields[0].value.trim().into()),
+            FormPurpose::ModCode(previous) => {
+                let mut value = previous.clone();
+                value.script = form.fields[0].value.clone();
+                value.validate()?;
+                self.save_mod(value);
+            }
+            FormPurpose::ModSettings(previous) => {
+                let mut value = previous.clone();
+                value.settings = serde_json::from_str(&form.fields[0].value)?;
+                value.validate()?;
+                self.save_mod(value);
+            }
+            FormPurpose::ModManifest(previous) => {
+                let mut value = previous.clone();
+                value.manifest = serde_json::from_str(&form.fields[0].value)?;
+                anyhow::ensure!(
+                    value.manifest.id == previous.manifest.id,
+                    "Идентификатор установленного мода менять нельзя. Создайте копию через архив."
+                );
+                value.validate()?;
+                self.save_mod(value);
+            }
+            FormPurpose::ModExport(value) => {
+                self.export_mod(value.clone(), form.fields[0].value.trim().into())
+            }
+            FormPurpose::ServiceConnection(previous) => {
+                let mut connection = previous.clone();
+                connection.name = form.fields[0].value.trim().into();
+                connection.client_id = form
+                    .fields
+                    .get(1)
+                    .map(|f| f.value.trim().to_owned())
+                    .unwrap_or_default();
+                self.service_save(connection);
+            }
+            FormPurpose::ServiceHeaders(connection) => {
+                self.service_headers(connection.clone(), form.fields[0].value.clone())
+            }
+            FormPurpose::ServiceSearch => {
+                self.service_search(Some(form.fields[0].value.trim().into()), 0)?
+            }
             FormPurpose::DownloadSearch => {
                 self.search_downloads(form.fields[0].value.trim().into())
             }

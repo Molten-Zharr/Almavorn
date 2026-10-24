@@ -45,9 +45,12 @@ impl Sort {
 
 #[derive(Clone)]
 pub enum Target {
+    Artwork,
     Form(super::FormAction),
     Lyrics(super::LyricsAction),
     Downloads(super::DownloadAction),
+    Services(super::ServiceAction),
+    Mods(super::ModAction),
     TogglePlayerSpecialButtons,
     ToggleExpandedToolbar,
     CopyHelp(Option<usize>),

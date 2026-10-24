@@ -13,6 +13,8 @@ impl App {
             Some(Dialog::Form(_)) => self.form_key(key),
             Some(Dialog::Lyrics(_)) => self.lyrics_key(key),
             Some(Dialog::Downloads(_)) => self.downloads_key(key),
+            Some(Dialog::Services(_)) => self.services_key(key),
+            Some(Dialog::Mods(_)) => self.mods_key(key),
             Some(Dialog::CopyableHelp { .. })
                 if key.ctrl && key.key == Key::Char('c') || key.key == Key::Enter =>
             {

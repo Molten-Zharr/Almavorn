@@ -473,6 +473,14 @@ impl App {
                 self.copy_help(line);
             }
             Target::Form(action) => self.form_action(action)?,
+            Target::Mods(action) => {
+                self.mod_action(action)?;
+                if double && matches!(action,super::ModAction::Row(_)) { self.mod_action(super::ModAction::Open)?; }
+            }
+            Target::Services(action) => {
+                self.service_action(action)?;
+                if double && matches!(action,super::ServiceAction::Row(_)) { self.service_action(super::ServiceAction::Open)?; }
+            }
             Target::Downloads(action) => {
                 self.download_action(action)?;
                 if double && matches!(action,super::DownloadAction::Row(_)) { self.download_action(super::DownloadAction::Open)?; }
@@ -642,6 +650,11 @@ impl App {
                         self.edit_filter()?;
                     }
                     self.view.filter_keyboard = !self.view.filter_keyboard;
+                }
+            }
+            Target::Artwork => {
+                if !double {
+                    self.open_artwork();
                 }
             }
             Target::PlaybackVolume(area) => {

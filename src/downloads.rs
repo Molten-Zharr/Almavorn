@@ -117,6 +117,22 @@ pub fn config(data: &Path) -> Result<Config> {
         Ok(Config::default())
     }
 }
+fn cobalt_key(url: &reqwest::Url) -> String {
+    use sha2::Digest;
+    format!(
+        "cobalt-{:x}",
+        sha2::Sha256::digest(url.origin().ascii_serialization().as_bytes())
+    )
+}
+fn cobalt_endpoint(value: &str) -> Result<reqwest::Url> {
+    let url = network::public_url(value)?;
+    ensure!(
+        url.scheme() == "https"
+            || matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "::1")),
+        "Для Cobalt нужен HTTPS."
+    );
+    Ok(url)
+}
 pub fn save_config(data: &Path, config: &Config, key: Option<&str>) -> Result<()> {
     ensure!(
         config.directory.is_absolute(),
@@ -130,16 +146,13 @@ pub fn save_config(data: &Path, config: &Config, key: Option<&str>) -> Result<()
             "Для Cobalt нужен HTTPS."
         );
     }
-    let previous = self::config(data)?;
-    if key.is_none() && !previous.cobalt_url.is_empty() && previous.cobalt_url != config.cobalt_url
-    {
-        secrets::remove(data, "cobalt")?;
-    }
     if let Some(key) = key {
+        let endpoint = cobalt_endpoint(&config.cobalt_url)?;
+        let account = cobalt_key(&endpoint);
         if key.is_empty() {
-            secrets::remove(data, "cobalt")?;
+            secrets::remove(data, &account)?;
         } else {
-            secrets::set(data, "cobalt", key)?;
+            secrets::set(data, &account, key)?;
         }
     }
     network::save_json(&data.join("downloads.json"), config)
@@ -165,12 +178,37 @@ pub fn list(data: &Path) -> Result<Vec<Download>> {
         return Ok(vec![]);
     }
     let mut result = Vec::new();
-    for entry in std::fs::read_dir(directory)?.take(1000) {
+    for entry in std::fs::read_dir(directory)? {
         let path = entry?.path();
         if path.extension().is_none_or(|e| e != "json") {
             continue;
         }
-        let mut row: Download = network::load_json(&path)?;
+        let mut row: Download = match network::load_json(&path) {
+            Ok(row) => row,
+            Err(_) => {
+                let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if !valid_id(id) {
+                    continue;
+                }
+                Download {
+                    id: id.into(),
+                    url: String::new(),
+                    name: "Поврежденная запись загрузки".into(),
+                    folder: Config::default().directory,
+                    engine: Engine::YtDlp,
+                    status: Status::Failed,
+                    path: None,
+                    error: Some(
+                        "Запись очереди повреждена. Измените ссылку и папку или удалите запись."
+                            .into(),
+                    ),
+                    imported: false,
+                    created: 0,
+                    expected_digest: None,
+                    expected_size: None,
+                }
+            }
+        };
         ensure!(valid_id(&row.id), "Повреждена запись загрузки.");
         if matches!(row.status, Status::Running | Status::Publishing) {
             if row.status == Status::Publishing && row.published() {
@@ -187,16 +225,8 @@ pub fn list(data: &Path) -> Result<Vec<Download>> {
     Ok(result)
 }
 
-pub(crate) fn tool(data: &Path, name: &str) -> PathBuf {
-    let local = data.join("tools").join(name);
-    if local.is_file() {
-        local
-    } else {
-        PathBuf::from(name)
-    }
-}
-fn command(data: &Path) -> Command {
-    let mut command = Command::new(tool(data, "yt-dlp"));
+pub(crate) fn command(_data: &Path) -> Result<Command> {
+    let mut command = Command::new(crate::components::tool("yt-dlp")?);
     command.args([
         "--ignore-config",
         "--no-plugin-dirs",
@@ -209,13 +239,13 @@ fn command(data: &Path) -> Command {
         "--fragment-retries",
         "2",
     ]);
-    let deno = tool(data, "deno");
+    let deno = crate::components::tool("deno")?;
     if deno.is_file() {
         command
             .arg("--js-runtimes")
             .arg(format!("deno:{}", deno.display()));
     }
-    command
+    Ok(command)
 }
 fn failed(stderr: &[u8]) -> anyhow::Error {
     let message = String::from_utf8_lossy(stderr).to_lowercase();
@@ -240,7 +270,7 @@ fn failed(stderr: &[u8]) -> anyhow::Error {
 pub fn search(data: &Path, query: &str, cancel: &AtomicBool) -> Result<Vec<SearchHit>> {
     let query = query.trim();
     ensure!(!query.is_empty(), "Введите название или исполнителя.");
-    let mut command = command(data);
+    let mut command = command(data)?;
     command
         .args([
             "--flat-playlist",
@@ -364,9 +394,10 @@ fn cobalt(
         !config.cobalt_url.is_empty(),
         "Укажите адрес Cobalt в настройках загрузок."
     );
-    let endpoint = network::public_url(&config.cobalt_url)?;
+    let endpoint = cobalt_endpoint(&config.cobalt_url)?;
+    let account = cobalt_key(&endpoint);
     let mut request=network::client()?.post(endpoint).header("Accept","application/json").json(&serde_json::json!({"url":url,"downloadMode":"audio","audioFormat":"mp3","localProcessing":"disabled"}));
-    if let Some(key) = secrets::get(data, "cobalt")? {
+    if let Some(key) = secrets::get(data, &account)? {
         request = request.header("Authorization", format!("Api-Key {key}"));
     }
     let value: serde_json::Value =
@@ -408,7 +439,7 @@ pub fn download(
         let file = match job.engine {
             Engine::Cobalt => cobalt(data, config, &job.url, cancel, progress, staging.path())?,
             Engine::YtDlp => {
-                let mut command = command(data);
+                let mut command = command(data)?;
                 command.args(["--no-progress","--no-simulate","--max-filesize","1G","--format","bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio[ext=flac]/bestaudio[ext=wav]/bestaudio[acodec=vorbis]/bestaudio","--print","after_move:%(filepath)j","--output"])
                     .arg(staging.path().join("%(title).100B [%(id)s].%(ext)s")).arg("--").arg(&job.url);
                 let output = process::run(
@@ -484,30 +515,55 @@ pub fn download(
     job
 }
 
-pub fn install_tools(data: &Path, cancel: &AtomicBool, progress: &AtomicU64) -> Result<()> {
+pub fn install_tools(_data: &Path, cancel: &AtomicBool, progress: &AtomicU64) -> Result<()> {
     let architecture = std::env::consts::ARCH;
     let (yt, deno) = match architecture {
         "x86_64" => ("yt-dlp_linux", "deno-x86_64-unknown-linux-gnu.zip"),
         "aarch64" => ("yt-dlp_linux_aarch64", "deno-aarch64-unknown-linux-gnu.zip"),
         _ => bail!("Для этой архитектуры установите yt-dlp и Deno через менеджер пакетов."),
     };
-    let tools = data.join("tools");
+    let tools = crate::components::directory()?;
     std::fs::create_dir_all(&tools)?;
+    crate::components::validate(&tools)?;
     let temporary = tempfile::Builder::new()
         .prefix(".install-")
         .tempdir_in(&tools)?;
-    receive(
-        &format!("https://github.com/yt-dlp/yt-dlp/releases/latest/download/{yt}"),
-        &temporary.path().join("yt-dlp"),
-        cancel,
-        progress,
-    )?;
-    receive(
-        &format!("https://github.com/denoland/deno/releases/latest/download/{deno}"),
-        &temporary.path().join("deno.zip"),
-        cancel,
-        progress,
-    )?;
+    for (repository, asset, filename) in [
+        ("yt-dlp/yt-dlp", yt, "yt-dlp"),
+        ("denoland/deno", deno, "deno.zip"),
+    ] {
+        let release: serde_json::Value = network::json(
+            network::client()?
+                .get(format!(
+                    "https://api.github.com/repos/{repository}/releases/latest"
+                ))
+                .send()
+                .context("Не удалось получить список компонентов.")?,
+        )?;
+        let asset = release["assets"]
+            .as_array()
+            .and_then(|items| items.iter().find(|a| a["name"].as_str() == Some(asset)))
+            .context("Компонент для этой системы не найден.")?;
+        let url = asset["browser_download_url"]
+            .as_str()
+            .context("Не найдена ссылка компонента.")?;
+        ensure!(
+            url.starts_with(&format!(
+                "https://github.com/{repository}/releases/download/"
+            )),
+            "Получена неверная ссылка компонента."
+        );
+        let digest = asset["digest"]
+            .as_str()
+            .and_then(|s| s.strip_prefix("sha256:"))
+            .context("Не удалось проверить происхождение компонента. Повторите позже.")?;
+        let destination = temporary.path().join(filename);
+        receive(url, &destination, cancel, progress)?;
+        ensure!(
+            network::file_digest(&destination)? == digest,
+            "Файл компонента поврежден. Повторите установку."
+        );
+    }
     let mut zip = zip::ZipArchive::new(File::open(temporary.path().join("deno.zip"))?)?;
     let mut entry = zip.by_name("deno")?;
     ensure!(

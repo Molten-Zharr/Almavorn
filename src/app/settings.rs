@@ -376,6 +376,8 @@ impl App {
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
+        if self.mods_close() { return true; }
+        if self.services_close() { return true; }
         if self.downloads_close() { return true; }
         if self.form_close() || self.lyrics_close() { return true; }
         if self.close_tags() {
@@ -673,6 +675,14 @@ impl App {
             }
             SettingControl::ArtworkVisible => {
                 self.settings.preferences.artwork.visible = !self.settings.preferences.artwork.visible;
+            }
+            SettingControl::ArtworkSize => {
+                self.settings.preferences.artwork.size = cycle(
+                    self.settings.preferences.artwork.size,
+                    &crate::artwork::ArtworkSize::ALL,
+                    direction,
+                );
+                self.cancel_workspace_drag();
             }
             SettingControl::ArtworkShared => {
                 self.settings.preferences.artwork.shared = !self.settings.preferences.artwork.shared;

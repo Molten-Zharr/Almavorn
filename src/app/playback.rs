@@ -115,6 +115,7 @@ impl App {
         }
     }
     pub fn playback_source_caption(&self) -> String {
+        if let Some(caption)=self.service_caption(){return caption;}
         let source = self
             .library
             .playlists
@@ -166,6 +167,7 @@ impl App {
         }
         self.settings.preferences.volume = volume;
         self.sync_volume();
+        self.service_volume(volume)?;
         self.save_settings()
     }
 
@@ -182,12 +184,14 @@ impl App {
         if self.playback.current.is_none() {
             return 0;
         }
+        if let Some(position)=self.service_position(){return position;}
         self.playback.audio.as_ref().map_or(0, |audio| {
             audio.position().as_millis().min(u64::MAX as u128) as u64
         })
     }
 
     pub fn paused(&self) -> bool {
+        if let Some(paused)=self.service_paused(){return paused;}
         if let Some(paused) = self.playback.seek_paused {
             return paused;
         }
@@ -200,10 +204,12 @@ impl App {
         )
     }
     pub fn playback_active(&self) -> bool {
+        if self.services_playing(){return true;}
         self.playback.current.is_some()
             && self.playback.audio.as_ref().is_some_and(Audio::has_track)
     }
     pub fn current_paused(&self) -> bool {
+        if let Some(paused)=self.service_paused(){return paused;}
         self.playback
             .seek_paused
             .unwrap_or_else(|| self.playback.audio.as_ref().is_none_or(Audio::paused))
@@ -212,7 +218,7 @@ impl App {
         self.playback.preparation.requested()
     }
     pub fn preparing_playback(&self) -> bool {
-        self.requested_playback().is_some()
+        self.requested_playback().is_some() || self.service_preparing()
     }
     fn marked_queue(&self) -> Option<(i64, &[Entry])> {
         if let Some(request) = self.requested_playback() {
@@ -380,6 +386,7 @@ impl App {
         Ok(())
     }
     pub(super) fn can_step_playback(&self, direction: i64) -> bool {
+        if self.services_playing(){return true;}
         let queue = self
             .requested_playback()
             .map_or(&self.playback.queue, |request| &request.queue);
@@ -418,6 +425,7 @@ impl App {
     }
 
     fn request_playback(&mut self, mut request: PlaybackRequest) -> Result<()> {
+        self.service_detach_native();
         ensure!(
             request.queue.current().is_some(),
             AppError::TrackSelectionRequired
@@ -431,6 +439,8 @@ impl App {
         Ok(())
     }
     fn start_playback_job(&mut self) {
+        let remote=self.service_remote_source();
+        let data=self.data_directory();
         let runtime = self.runtime.as_ref().expect("runtime is alive");
         let cached = self.playback.reverse_cache.clone();
         self.playback.preparation.start(|request| {
@@ -442,6 +452,7 @@ impl App {
             let cancel = Arc::new(AtomicBool::new(false));
             self.playback.preparation_cancel = Some(cancel.clone());
             background(runtime, move || {
+                if let Some((connection,device))=remote{crate::services::remote(&data,&connection,device.as_deref(),"pause",None,0,&cancel)?;}
                 Audio::prepare_tuned(&path, None, reverse, cache, &cancel)
             })
         });
@@ -484,6 +495,7 @@ impl App {
                 return Err(error);
             }
         };
+        self.service_local_started();
         let path = request.entry().track.path.clone();
         if let Some(cache) = &source.cache {
             self.playback.reverse_cache = Some((path.clone(), cache.clone()));
@@ -544,6 +556,7 @@ impl App {
         Ok(())
     }
     pub(super) fn toggle_playback(&mut self) -> Result<()> {
+        if self.service_toggle()?{return Ok(());}
         if let Some(paused) = &mut self.playback.seek_paused {
             *paused = !*paused;
             return Ok(());
@@ -564,6 +577,8 @@ impl App {
         Ok(())
     }
     pub(super) fn stop_playback(&mut self) {
+        if self.services_remote_active(){self.cancel_audio_preparation();self.playback.preparation.cancel();if let Err(error)=self.service_remote("pause",None,0,false){self.failure(error);}else{self.message(self.text("Stopping Spotify…","Остановка Spotify…").into());}return;}
+        self.service_stop();
         self.finish_listening();
         self.playback.visualizer.reset();
         self.cancel_seek();
@@ -587,6 +602,7 @@ impl App {
     }
 
     pub(super) fn next(&mut self, direction: i64, explicit: bool) -> Result<()> {
+        if self.service_next(direction,explicit)?{return Ok(());}
         let Some(mut request) = self.playback_request() else {
             return Ok(());
         };
@@ -640,6 +656,7 @@ impl App {
     }
 
     pub(super) fn commit_seek(&mut self) {
+        if let Some(position)=self.playback.seek_preview && self.service_seek(position){return;}
         if let (Some(position_ms), Some(track)) =
             (self.playback.seek_preview, &self.playback.current)
         {
@@ -798,6 +815,7 @@ impl App {
     }
 
     pub(super) fn tick_waveform(&mut self) {
+        if self.services_playing(){return;}
         if self.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Progress {
             self.cancel_waveform();
         } else if self.playback.waveform.is_none()

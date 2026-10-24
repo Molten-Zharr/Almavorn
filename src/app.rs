@@ -26,6 +26,8 @@ mod search;
 mod settings;
 mod state;
 mod statistics;
+mod services;
+mod mods;
 mod tags;
 mod tuner;
 mod visualizer;
@@ -44,6 +46,8 @@ pub use search::{SearchDialog, SearchFocus};
 pub(crate) use settings::{SettingControl, SettingGroup};
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
+pub use mods::{ModsState,ModsView,ModAction};
+pub use services::{ServicesState,ServicesView,ServiceAction,ServicePage};
 pub use statistics::{StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
 pub use tags::{FileInput, MovePicker, TagAction, TagEdit, TagEditor, TagsTab};
 
@@ -61,6 +65,8 @@ pub struct App {
     pub statistics: StatisticsState,
     pub lyrics: LyricsState,
     pub downloads: DownloadsState,
+    pub services: ServicesState,
+    pub mods: ModsState,
     pub view: UiState,
     artwork: artwork::ArtworkState,
     browser_state: BrowserState,
@@ -108,6 +114,8 @@ impl App {
             statistics: Default::default(),
             lyrics: Default::default(),
             downloads: Default::default(),
+            services: Default::default(),
+            mods: Default::default(),
             browser_state: Default::default(),
             persistence: Default::default(),
             tags: Default::default(),
@@ -120,6 +128,7 @@ impl App {
             mpris: None,
         };
         app.initialize_downloads();
+        app.initialize_mods();
         Ok(app)
     }
 
@@ -159,6 +168,8 @@ impl App {
     fn tick_inner(&mut self) -> Result<()> {
         self.tick_lyrics();
         self.tick_downloads()?;
+        self.tick_services()?;
+        self.tick_mods()?;
         self.tick_tags();
         self.tick_statistics()?;
         self.tick_database()?;
@@ -196,6 +207,8 @@ impl Drop for App {
         }
         self.finish_listening();
         self.downloads.cancel_all();
+        self.services.cancel_all();
+        self.mods.cancel_all();
         self.cancel_audio_preparation();
         self.cancel_seek();
         self.cancel_waveform();

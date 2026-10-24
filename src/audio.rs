@@ -1,6 +1,8 @@
 mod analysis;
 mod listening;
 mod reverse;
+mod stream;
+pub use stream::StreamStatus;
 use crate::equalizer::{EqualizerControl, EqualizerSettings, EqualizerSource};
 use crate::errors::AppError;
 use crate::tuner::{TunerControl, TunerSettings, TunerSource};
@@ -97,6 +99,10 @@ impl Audio {
             analysis_generation: 0,
             listening_clock: Arc::new(AtomicU64::new(0)),
         })
+    }
+
+    pub fn prepare_stream(media: crate::services::Media, position: Duration, cancel: Arc<AtomicBool>) -> Result<(PreparedAudio,StreamStatus)> {
+        stream::prepare(media,position,cancel)
     }
 
     pub fn prepare(path: &Path) -> Result<PreparedAudio> {

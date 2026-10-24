@@ -2,19 +2,40 @@ use super::{
     App,
     background::{LatestJob, background},
 };
-use crate::artwork::{ArtworkImage, ArtworkRequest};
-use std::sync::Arc;
+use crate::{
+    artwork::{ArtworkImage, ArtworkRequest},
+    errors::AppError,
+};
+use std::{
+    path::PathBuf,
+    process::{Child, Command, Stdio},
+    sync::Arc,
+};
 
 #[derive(Default)]
 pub(super) struct ArtworkState {
     image: Option<Arc<ArtworkImage>>,
     source: Option<ArtworkRequest>,
     job: LatestJob<ArtworkRequest, Option<ArtworkImage>>,
+    opening: LatestJob<ArtworkRequest, PathBuf>,
+    viewers: Vec<Child>,
 }
 
 impl App {
     pub fn artwork_image(&self) -> Option<&Arc<ArtworkImage>> {
         self.artwork.image.as_ref()
+    }
+
+    pub(crate) fn opening_artwork(&self) -> bool {
+        self.artwork.opening.requested().is_some()
+    }
+
+    pub(super) fn open_artwork(&mut self) {
+        if self.artwork.image.is_some()
+            && let Some(source) = self.artwork.source.clone()
+        {
+            self.artwork.opening.request(source);
+        }
     }
 
     pub(super) fn invalidate_artwork(&mut self) {
@@ -24,6 +45,7 @@ impl App {
     }
 
     pub(super) fn tick_artwork(&mut self) {
+        self.tick_artwork_opening();
         let settings = &self.settings.preferences.artwork;
         let source = self
             .playback
@@ -73,5 +95,46 @@ impl App {
             let request = request.clone();
             background(runtime, move || crate::artwork::read(&request))
         });
+    }
+
+    fn tick_artwork_opening(&mut self) {
+        let directory = self.store.path.parent().expect("library directory");
+        let runtime = self.runtime.as_ref().expect("runtime is alive");
+        self.artwork.opening.start(|request| {
+            let request = request.clone();
+            let cache = directory.join("artwork-cache");
+            background(runtime, move || crate::artwork::original_path(&request, &cache))
+        });
+        if let Some(completed) = self.artwork.opening.poll()
+            && completed.current
+        {
+            match completed.result {
+                Ok(path) => {
+                    match Command::new("xdg-open")
+                        .arg(path)
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                    {
+                        Ok(child) => self.artwork.viewers.push(child),
+                        Err(error) => self.failure(anyhow::Error::new(error).context(AppError::ArtworkOpenFailed)),
+                    }
+                }
+                Err(error) => self.failure(error),
+            }
+        }
+        let mut failed = false;
+        self.artwork.viewers.retain_mut(|child| match child.try_wait() {
+            Ok(None) => true,
+            Ok(Some(status)) if status.success() => false,
+            _ => {
+                failed = true;
+                false
+            }
+        });
+        if failed {
+            self.failure(AppError::ArtworkOpenFailed.into());
+        }
     }
 }

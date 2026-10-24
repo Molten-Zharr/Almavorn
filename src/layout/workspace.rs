@@ -63,19 +63,20 @@ pub(crate) struct WorkspaceGeometry {
 
 impl WorkspaceMetrics {
     pub fn arrange(&self, root: Option<&Dock>, area: Rect) -> WorkspaceGeometry {
-        self.arrange_inner(root, area, false)
+        self.arrange_inner(root, area, None)
     }
 
-    pub fn arrange_with_artwork(&self, root: Option<&Dock>, area: Rect) -> WorkspaceGeometry {
-        let geometry = self.arrange_inner(root, area, true);
-        if geometry.fits {
-            geometry
-        } else {
-            self.arrange(root, area)
+    pub fn arrange_with_artwork(&self, root: Option<&Dock>, area: Rect, maximum: u16) -> WorkspaceGeometry {
+        for width in (4..=maximum).rev().step_by(2) {
+            let geometry = self.arrange_inner(root, area, Some(width));
+            if geometry.fits {
+                return geometry;
+            }
         }
+        self.arrange(root, area)
     }
 
-    fn arrange_inner(&self, root: Option<&Dock>, area: Rect, artwork: bool) -> WorkspaceGeometry {
+    fn arrange_inner(&self, root: Option<&Dock>, area: Rect, artwork: Option<u16>) -> WorkspaceGeometry {
         let root = root
             .cloned()
             .and_then(Dock::content_only)
@@ -97,10 +98,10 @@ impl WorkspaceMetrics {
     }
 
     pub fn fits(&self, root: &Dock, area: Rect) -> bool {
-        self.minimum(root, area.width, true, false) <= area.height
+        self.minimum(root, area.width, true, None) <= area.height
     }
 
-    fn automatic(&self, area: Rect, artwork: bool) -> Dock {
+    fn automatic(&self, area: Rect, artwork: Option<u16>) -> Dock {
         let list_horizontal = area.width >= 55
             && matches!(self.playlist_placement, Placement::Left | Placement::Right);
         let list_first = matches!(self.playlist_placement, Placement::Left | Placement::Top);
@@ -130,8 +131,8 @@ impl WorkspaceMetrics {
         let player_ratio = if side_player {
             250
         } else {
-            let height = if artwork {
-                self.player.content_height_with_artwork(area.width.saturating_sub(2)) + 2
+            let height = if let Some(width) = artwork {
+                self.player.content_height_with_artwork(area.width.saturating_sub(2), width) + 2
             } else {
                 self.player.preferred_height(area.width)
             };
@@ -203,7 +204,7 @@ impl WorkspaceMetrics {
         }
     }
 
-    fn minimum(&self, node: &Dock, width: u16, compact: bool, artwork: bool) -> u16 {
+    fn minimum(&self, node: &Dock, width: u16, compact: bool, artwork: Option<u16>) -> u16 {
         match node {
             Dock::Panel(panel) => {
                 if self.hidden.contains(panel) {
@@ -213,8 +214,8 @@ impl WorkspaceMetrics {
                     return if compact { 1 } else { 2 };
                 }
                 if *panel == Panel::Player {
-                    let content = if artwork {
-                        self.player.content_height_with_artwork(width.saturating_sub(2))
+                    let content = if let Some(cover_width) = artwork {
+                        self.player.content_height_with_artwork(width.saturating_sub(2), cover_width)
                     } else {
                         self.player.content_height(width.saturating_sub(2))
                     };
@@ -287,7 +288,7 @@ impl WorkspaceMetrics {
         node: &Dock,
         area: Rect,
         compact: bool,
-        artwork: bool,
+        artwork: Option<u16>,
         geometry: &mut WorkspaceGeometry,
         path: &mut Vec<bool>,
     ) {

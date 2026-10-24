@@ -76,36 +76,46 @@ pub(crate) fn run(
     );
     let started = Instant::now();
     let mut interrupted = None;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) => {}
-            Err(error) => {
-                interrupted = Some(error.to_string());
-                break None;
+    let mut status = None;
+    loop {
+        if status.is_none() {
+            match child.try_wait() {
+                Ok(Some(value)) => status = Some(value),
+                Ok(None) => {}
+                Err(error) => {
+                    interrupted = Some(error.to_string());
+                    break;
+                }
             }
+        }
+        if status.is_some()
+            && stdout.is_finished()
+            && stderr.is_finished()
+            && input.as_ref().is_none_or(|writer| writer.is_finished())
+        {
+            break;
         }
         if cancel.load(Ordering::Relaxed) {
             interrupted = Some("Операция отменена.".into());
-            break None;
+            break;
         }
         if overflow.load(Ordering::Relaxed) {
             interrupted = Some("Компонент вернул слишком большой ответ.".into());
-            break None;
+            break;
         }
         if started.elapsed() > timeout {
             interrupted = Some("Компонент не завершил запрос вовремя. Повторите действие.".into());
-            break None;
+            break;
         }
         std::thread::sleep(Duration::from_millis(50));
-    };
-    if status.is_none() {
+    }
+    if interrupted.is_some() {
         #[cfg(unix)]
         {
             unsafe extern "C" {
                 fn kill(pid: i32, signal: i32) -> i32;
             }
-            // The child is still unreaped and owns the process group created above.
+            // Kill the owned group, including descendants still holding output pipes.
             unsafe {
                 kill(-(child.id() as i32), 9);
             }
@@ -113,6 +123,20 @@ pub(crate) fn run(
         let _ = child.kill();
         let _ = child.wait();
     }
+    let drain_deadline = Instant::now() + Duration::from_secs(1);
+    while (!stdout.is_finished()
+        || !stderr.is_finished()
+        || input.as_ref().is_some_and(|writer| !writer.is_finished()))
+        && Instant::now() < drain_deadline
+    {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    ensure!(
+        stdout.is_finished()
+            && stderr.is_finished()
+            && input.as_ref().is_none_or(|writer| writer.is_finished()),
+        "Компонент не закрыл соединение. Запрос отменен."
+    );
     if let Some(input) = input {
         let _ = input.join();
     }

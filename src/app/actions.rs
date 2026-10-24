@@ -65,6 +65,8 @@ impl App {
             .playlist()
             .is_some_and(|playlist| self.playlist_editable(playlist));
         match action {
+            PlaybackTuner if self.services_playing()=>false,
+            Equalizer if self.services_remote_active()=>false,
             Lyrics => self.playback.current.is_some() || self.entry().is_some(),
             Quit if self.writing_tags() => false,
             EditTags => {
@@ -285,6 +287,8 @@ impl App {
             PlayWholePlaylist => self.play_whole_playlist()?,
             Lyrics => self.open_lyrics()?,
             Downloads => self.open_downloads(),
+            Services => self.open_services(),
+            Mods => self.open_mods(),
             Equalizer => self.open_equalizer(),
             PlaybackTuner => self.open_tuner(),
             CycleVisualizer => self.cycle_visualizer(1)?,

@@ -35,7 +35,7 @@ fi
 . /etc/os-release
 case " ${ID:-} ${ID_LIKE:-} " in
     *' debian '*|*' ubuntu '*)
-        packages=(git curl ca-certificates python3 build-essential pkg-config libclang-dev libasound2-dev)
+        packages=(git curl ca-certificates python3 python3-venv build-essential pkg-config libclang-dev libasound2-dev)
         if [[ $variant == guitui ]]; then
             packages+=(libxkbcommon-dev libwayland-dev libgl1-mesa-dev)
         fi

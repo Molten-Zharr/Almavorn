@@ -25,3 +25,9 @@ pub mod tuner;
 pub mod ui;
 pub mod visualizer;
 pub mod workspace;
+
+pub mod services;
+
+mod components;
+
+pub mod mods;

@@ -125,7 +125,7 @@ impl App {
                 (CommandMenu::Add, format!("{} ↓", self.import_caption())),
                 (CommandMenu::Playlist, self.text("Playlist ↓", "Плейлист ↓").into()),
                 (CommandMenu::Tracks, self.text("Tracks ↓", "Композиции ↓").into()),
-                (CommandMenu::Application, format!("{} ↓", self.settings.mode.caption(self.settings.preferences.language))),
+                (CommandMenu::Application, format!("Almavorn · {} ↓", self.settings.mode.name(self.settings.preferences.language))),
             ] {
                 if !self.command_items(menu).is_empty() {
                     items.push(CommandItem { label, target: Target::CommandMenu(menu), enabled: true });
@@ -325,7 +325,7 @@ impl App {
                     Filter,
                 ],
             ),
-            CommandMenu::Application => (Panel::Application, &[Downloads, Statistics, Settings, Panels, Help, Quit]),
+            CommandMenu::Application => (Panel::Application, &[Services, Downloads, Mods, Statistics, Settings, Panels, Help, Quit]),
             CommandMenu::Player => (
                 Panel::Player,
                 &[

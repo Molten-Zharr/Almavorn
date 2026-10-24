@@ -115,6 +115,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 action.description(app.settings.preferences.language).into()
             }
         )),
+        Target::Artwork => Some(app.text(
+            "Open artwork in the default application",
+            "Открыть обложку в приложении по умолчанию",
+        ).to_owned()),
         Target::CommandMenu(menu) => Some(menu.title(app.settings.preferences.language).to_owned()),
         _ => None,
     });

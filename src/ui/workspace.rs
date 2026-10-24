@@ -203,7 +203,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     let metrics = workspace_metrics(app);
     let root = app.settings.preferences.workspace.root.as_ref();
     let geometry = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
-        metrics.arrange_with_artwork(root, area)
+        metrics.arrange_with_artwork(root, area, app.settings.preferences.artwork.size.columns())
     } else {
         metrics.arrange(root, area)
     };

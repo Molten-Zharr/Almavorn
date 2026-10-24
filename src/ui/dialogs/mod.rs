@@ -5,6 +5,8 @@ mod equalizer;
 mod forms;
 mod lyrics;
 mod downloads;
+mod services;
+mod mods;
 mod help;
 mod panels;
 mod playlists;
@@ -70,6 +72,8 @@ pub(super) fn render_dialog(
         Dialog::Form(form)=>forms::render(frame,app,form,area,palette),
         Dialog::Lyrics(view)=>lyrics::render(frame,app,view,area,palette),
         Dialog::Downloads(view)=>downloads::render(frame,app,view,area,palette),
+        Dialog::Services(view)=>services::render(frame,app,view,area,palette),
+        Dialog::Mods(view)=>mods::render(frame,app,view,area,palette),
         Dialog::Tags(editor) => tags::render(frame, app, editor, area, palette),
         Dialog::Statistics => statistics::render(frame, app, area, palette),
         Dialog::PlaybackTuner { selected } => tuner::render(frame, app, selected, area, palette),

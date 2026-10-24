@@ -290,7 +290,10 @@ impl App {
                 .downloads
                 .rows
                 .iter()
-                .position(|r| r.status == Status::Queued)
+                .enumerate()
+                .filter(|(_, r)| r.status == Status::Queued)
+                .min_by_key(|(_, r)| r.created)
+                .map(|(index, _)| index)
             {
                 let mut row = self.downloads.rows[index].clone();
                 row.status = Status::Running;

@@ -33,13 +33,13 @@ impl PlayerMetrics {
         self.base_height(width) + if self.waveform { 4 } else { 0 }
     }
 
-    fn artwork_width(&self, width: u16) -> Option<u16> {
-        let width = width.saturating_sub(30).min(16) / 2 * 2;
-        (width >= 8).then_some(width)
+    fn artwork_width(&self, width: u16, maximum: u16) -> Option<u16> {
+        let width = width.saturating_sub(30).min(maximum) / 2 * 2;
+        (width >= 4).then_some(width)
     }
 
-    pub fn content_height_with_artwork(&self, width: u16) -> u16 {
-        let Some(cover_width) = self.artwork_width(width) else {
+    pub fn content_height_with_artwork(&self, width: u16, maximum: u16) -> u16 {
+        let Some(cover_width) = self.artwork_width(width, maximum) else {
             return self.content_height(width);
         };
         self.base_height(width - cover_width - 1)
@@ -47,13 +47,15 @@ impl PlayerMetrics {
             + if self.waveform { 4 } else { 0 }
     }
 
-    pub fn arrange_with_artwork(&self, area: Rect) -> PlayerGeometry {
-        let Some(width) = self.artwork_width(area.width) else {
+    pub fn arrange_with_artwork(&self, area: Rect, maximum: u16) -> PlayerGeometry {
+        let Some(limit) = self.artwork_width(area.width, maximum) else {
             return self.arrange(area);
         };
-        if area.height < self.content_height_with_artwork(area.width) {
+        let Some(width) = (4..=limit).rev().step_by(2).find(|&width| {
+            area.height >= self.content_height_with_artwork(area.width, width)
+        }) else {
             return self.arrange(area);
-        }
+        };
         let text_width = area.width - width - 1;
         let text_height = self.base_height(text_width);
         let header_height = text_height.max(width / 2);

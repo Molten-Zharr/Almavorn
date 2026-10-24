@@ -60,6 +60,8 @@ impl<R, T> Default for LatestJob<R, T> {
 }
 
 impl<R, T> LatestJob<R, T> {
+    pub fn is_running(&self)->bool{self.running.is_some()}
+
     pub fn generation(&self) -> u64 {
         self.generation
     }

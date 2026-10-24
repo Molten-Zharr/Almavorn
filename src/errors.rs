@@ -26,6 +26,8 @@ pub enum AppError {
     InvalidFontSize,
     InvalidArtwork,
     ArtworkTooLarge,
+    ArtworkExportFailed,
+    ArtworkOpenFailed,
     InvalidCatalogName,
     CatalogNameConflict,
     PlaylistNameConflict,
@@ -154,6 +156,14 @@ impl AppError {
             Self::ArtworkTooLarge => language.text(
                 "Image too large. Choose a file up to 32 MB and 8192 pixels per side.",
                 "Картинка слишком большая. Выберите файл до 32 МБ и до 8192 пикселей по каждой стороне.",
+            ),
+            Self::ArtworkExportFailed => language.text(
+                "Cannot save the artwork. Check free space and access to the player data folder.",
+                "Не удалось сохранить обложку. Проверьте свободное место и доступ к папке данных плеера.",
+            ),
+            Self::ArtworkOpenFailed => language.text(
+                "Cannot open the artwork. Set a default application for PNG and JPEG images.",
+                "Не удалось открыть обложку. Выберите приложение по умолчанию для изображений PNG и JPEG.",
             ),
             Self::InvalidCatalogName => language.text(
                 "Name must contain 1-80 printable characters",

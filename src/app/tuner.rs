@@ -44,6 +44,7 @@ impl App {
 
     #[cfg(target_os = "linux")]
     pub(super) fn set_mpris_rate(&mut self, rate: f64) -> Result<()> {
+        anyhow::ensure!(!self.services_playing(), "Скорость онлайн-воспроизведения задает сервис.");
         let tuner = self.editable_tuner();
         let magnitude = rate.abs().clamp(0.25, 4.0);
         tuner.reverse = rate < 0.0;
@@ -169,6 +170,7 @@ impl App {
     }
 
     pub(super) fn tuner_target(&mut self, target: Target) -> Result<()> {
+        anyhow::ensure!(!self.services_playing(), "Настройки эффектов доступны при воспроизведении локального файла.");
         match target {
             Target::TunerReverse => {
                 let tuner = self.editable_tuner();

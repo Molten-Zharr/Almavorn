@@ -25,13 +25,18 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     }
     let metrics = player_metrics(app);
     let geometry = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
-        metrics.arrange_with_artwork(area)
+        metrics.arrange_with_artwork(area, app.settings.preferences.artwork.size.columns())
     } else {
         metrics.arrange(area)
     };
     if let Some(cover) = geometry.artwork {
         app.view.artwork_area = cover;
         artwork(frame, app, cover, palette);
+        app.view.hits.push(Hit {
+            area: cover,
+            target: Target::Artwork,
+            enabled: app.artwork_image().is_some() && !app.opening_artwork(),
+        });
     }
     let area = geometry.header;
     let mut title = if app.preparing_playback() && !app.playback_active() {

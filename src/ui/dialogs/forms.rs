@@ -87,7 +87,13 @@ pub(super) fn render(
         let border = block(field.label.clone(), palette, index == form.selected);
         let content = border.inner(area);
         frame.render_widget(border, area);
-        let displayed = if field.secret {
+        let displayed = if field.checkbox {
+            format!(
+                "{} {}",
+                if field.value == "true" { "[x]" } else { "[ ]" },
+                app.text("Enter: toggle", "Enter: переключить")
+            )
+        } else if field.secret {
             "•".repeat(field.value.chars().count())
         } else {
             field.value.clone()
@@ -131,7 +137,11 @@ pub(super) fn render(
         }
         app.view.hits.push(Hit {
             area,
-            target: Target::Form(FormAction::Field(index)),
+            target: Target::Form(if field.checkbox {
+                FormAction::ToggleField(index)
+            } else {
+                FormAction::Field(index)
+            }),
             enabled: true,
         });
         y += area.height;
