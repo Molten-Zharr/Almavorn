@@ -10,6 +10,7 @@ use soft_ratatui::{EmbeddedTTF, RasterBackend, RgbPixmap, SoftBackend, rusttype:
 /// Keep font backgrounds and glyphs inside the terminal cells they occupy.
 pub struct CellFont {
     inner: EmbeddedTTF,
+    fallbacks: Vec<EmbeddedTTF>,
     cell: RgbPixmap,
     blink_cells: FxHashSet<(u16, u16)>,
 }
@@ -76,7 +77,11 @@ impl RasterBackend for CellFont {
         // EmbeddedTTF's background can exceed a cell by a few pixels. Render
         // locally and copy only the occupied cells, including wide characters.
         if !draw_braille(cell, width, char_height, &mut self.cell) {
-            self.inner.draw_cell(
+            let primary=if cell.modifier.contains(Modifier::BOLD){self.inner.font_bold.as_ref().unwrap_or(&self.inner.font_regular)}else{&self.inner.font_regular};
+            let visible=|c:char|!c.is_control()&&!matches!(c,'\u{200d}'|'\u{fe00}'..='\u{fe0f}'|'\u{e0100}'..='\u{e01ef}');
+            let missing=cell.symbol().chars().filter(|c|visible(*c)).any(|c|primary.glyph(c).id().0==0);
+            let fallback=missing.then(||self.fallbacks.iter_mut().find(|font|cell.symbol().chars().filter(|c|visible(*c)).all(|c|font.font_regular.glyph(c).id().0!=0))).flatten();
+            fallback.unwrap_or(&mut self.inner).draw_cell(
                 0,
                 0,
                 cell,
@@ -105,6 +110,14 @@ impl RasterBackend for CellFont {
     }
 }
 
+fn unicode_fonts()->&'static [Font<'static>;2]{
+    static FONTS:std::sync::OnceLock<[Font<'static>;2]>=std::sync::OnceLock::new();
+    FONTS.get_or_init(||[
+        Font::try_from_bytes(include_bytes!("../assets/fonts/unifont-15.0.06.ttf")).expect("Bundled Unicode font is valid"),
+        Font::try_from_bytes(include_bytes!("../assets/fonts/unifont_upper-15.0.06.ttf")).expect("Bundled supplementary Unicode font is valid"),
+    ])
+}
+
 pub fn backend(face: FontFace, size: u16, columns: u16, rows: u16) -> SoftBackend<CellFont> {
     let bytes: &'static [u8] = match face {
         FontFace::FiraCodeBold => include_bytes!("../assets/fonts/FiraCode-Bold.ttf"),
@@ -129,6 +142,7 @@ pub fn backend(face: FontFace, size: u16, columns: u16, rows: u16) -> SoftBacken
     SoftBackend {
         raster_backend: CellFont {
             inner: backend.raster_backend,
+            fallbacks: unicode_fonts().iter().map(|font|EmbeddedTTF{font_regular:font.clone(),font_bold:None,font_italic:None,font_size:u32::from(size)}).collect(),
             cell: RgbPixmap::new(backend.char_width, backend.char_height),
             blink_cells: FxHashSet::default(),
         },
