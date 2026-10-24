@@ -7,6 +7,8 @@ pub mod errors;
 pub mod input;
 mod layout;
 pub mod media;
+pub mod lyrics;
+pub(crate) mod network;
 pub mod model;
 #[cfg(target_os = "linux")]
 mod mpris;

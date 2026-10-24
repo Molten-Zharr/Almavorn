@@ -376,6 +376,7 @@ impl App {
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
+        if self.form_close() || self.lyrics_close() { return true; }
         if self.close_tags() {
             return true;
         }

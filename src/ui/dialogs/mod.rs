@@ -2,6 +2,8 @@ mod bindings;
 mod browser;
 mod color_picker;
 mod equalizer;
+mod forms;
+mod lyrics;
 mod help;
 mod panels;
 mod playlists;
@@ -64,6 +66,8 @@ pub(super) fn render_dialog(
         return;
     }
     match dialog {
+        Dialog::Form(form)=>forms::render(frame,app,form,area,palette),
+        Dialog::Lyrics(view)=>lyrics::render(frame,app,view,area,palette),
         Dialog::Tags(editor) => tags::render(frame, app, editor, area, palette),
         Dialog::Statistics => statistics::render(frame, app, area, palette),
         Dialog::PlaybackTuner { selected } => tuner::render(frame, app, selected, area, palette),

@@ -65,6 +65,7 @@ impl App {
             .playlist()
             .is_some_and(|playlist| self.playlist_editable(playlist));
         match action {
+            Lyrics => self.playback.current.is_some() || self.entry().is_some(),
             Quit if self.writing_tags() => false,
             EditTags => {
                 !self.busy()
@@ -282,6 +283,7 @@ impl App {
             TogglePlay => self.toggle_playback()?,
             PlayMarked => self.play_marked()?,
             PlayWholePlaylist => self.play_whole_playlist()?,
+            Lyrics => self.open_lyrics()?,
             Equalizer => self.open_equalizer(),
             PlaybackTuner => self.open_tuner(),
             CycleVisualizer => self.cycle_visualizer(1)?,

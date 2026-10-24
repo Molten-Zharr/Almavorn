@@ -9,7 +9,8 @@ use ratatui::layout::{Position, Rect};
 
 impl App {
     pub fn accepts_text(&self) -> bool {
-        matches!(&self.view.dialog, Some(Dialog::Tags(editor)) if editor.accepts_text() && !self.writing_tags())
+        matches!(&self.view.dialog,Some(Dialog::Form(form)) if !form.discard)
+            || matches!(&self.view.dialog, Some(Dialog::Tags(editor)) if editor.accepts_text() && !self.writing_tags())
             || matches!(self.view.dialog, Some(Dialog::Text(_)))
             || matches!(self.view.dialog, Some(Dialog::Search(_)))
             || matches!(self.view.dialog, Some(Dialog::Browser(_)))
@@ -258,6 +259,7 @@ impl App {
                 }
             }
             Input::Text(text) => {
+                if matches!(self.view.dialog,Some(Dialog::Form(_))) { self.form_text(&text); return Ok(()); }
                 if matches!(self.view.dialog, Some(Dialog::Tags(_))) {
                     self.tags_text(&text);
                     return Ok(());
@@ -469,6 +471,11 @@ impl App {
         match target {
             Target::CopyHelp(line) => {
                 self.copy_help(line);
+            }
+            Target::Form(action) => self.form_action(action)?,
+            Target::Lyrics(action) => {
+                self.lyrics_action(action)?;
+                if double && matches!(action,super::LyricsAction::Row(_)) { self.lyrics_action(super::LyricsAction::Open)?; }
             }
             Target::Tags(action) => {
                 self.tag_action(action)?;

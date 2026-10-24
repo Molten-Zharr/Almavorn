@@ -128,6 +128,7 @@ impl KeyPress {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
+    Lyrics,
     Quit,
     Help,
     Settings,
@@ -201,6 +202,7 @@ impl Action {
     pub fn shortcut_group(self) -> ShortcutGroup {
         match self {
             Self::TogglePlay
+            | Self::Lyrics
             | Self::Stop
             | Self::Next
             | Self::Previous
@@ -231,6 +233,7 @@ impl Action {
 
     pub fn description(self, language: Language) -> &'static str {
         match self {
+            Self::Lyrics => language.text("Find, view and save lyrics for the current or selected song.", "Найти, посмотреть и сохранить текст текущей или выбранной песни."),
             Self::Quit => language.text("Close the application and finish saving settings.", "Закрыть приложение и завершить сохранение настроек."),
             Self::Help => language.text("Open the guide and shortcut list.", "Открыть руководство и список сочетаний."),
             Self::Settings => language.text("Open the settings pages.", "Открыть страницы настроек."),
@@ -283,6 +286,7 @@ impl Action {
     }
     pub fn name(self, language: Language) -> &'static str {
         match self {
+            Self::Lyrics => language.text("Song lyrics", "Текст песни"),
             Self::Quit => language.text("Quit", "Выход"),
             Self::Help => language.text("Help", "Помощь"),
             Self::Settings => language.text("Settings", "Настройки"),
@@ -383,6 +387,7 @@ pub fn default_bindings() -> Vec<Binding> {
         (Sort, Key::Char('o')),
         (Metadata, Key::Char('i')),
         (EditTags, Key::F(8)),
+        (Lyrics, Key::F(9)),
         (Mark, Key::Insert),
     ];
     let mut bindings: Vec<_> = normal

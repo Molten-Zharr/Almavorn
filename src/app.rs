@@ -9,9 +9,11 @@ mod database;
 mod dialogs;
 mod equalizer;
 mod events;
+mod forms;
 mod history;
 mod import;
 mod library;
+mod lyrics;
 #[cfg(target_os = "linux")]
 mod mpris;
 mod options;
@@ -33,6 +35,8 @@ pub use commands::{CommandItem, CommandMenu};
 use context::{BrowserState, SettingsPersistence};
 pub use context::{LibraryState, PlaybackState, UiState};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
+pub use forms::{Form,FormAction,FormField,FormPurpose};
+pub use lyrics::{LyricsState,LyricsView,LyricsAction};
 pub use options::Options;
 pub use search::{SearchDialog, SearchFocus};
 pub(crate) use settings::{SettingControl, SettingGroup};
@@ -53,6 +57,7 @@ pub struct App {
     pub library: LibraryState,
     pub playback: PlaybackState,
     pub statistics: StatisticsState,
+    pub lyrics: LyricsState,
     pub view: UiState,
     artwork: artwork::ArtworkState,
     browser_state: BrowserState,
@@ -98,6 +103,7 @@ impl App {
             artwork: Default::default(),
             playback: Default::default(),
             statistics: Default::default(),
+            lyrics: Default::default(),
             browser_state: Default::default(),
             persistence: Default::default(),
             tags: Default::default(),
@@ -145,6 +151,7 @@ impl App {
     }
 
     fn tick_inner(&mut self) -> Result<()> {
+        self.tick_lyrics();
         self.tick_tags();
         self.tick_statistics()?;
         self.tick_database()?;

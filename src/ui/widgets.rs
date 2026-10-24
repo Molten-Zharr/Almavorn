@@ -32,6 +32,20 @@ pub(super) fn block(title: String, palette: Palette, active: bool) -> Block<'sta
 
 pub(super) use super::buttons::{button, button_width};
 
+pub(super) fn buttons_height(app: &App, width: u16, entries: &[(String, Target, bool)]) -> u16 {
+    let mut x = 0u16;
+    let mut rows = 1u16;
+    for (label, target, _) in entries {
+        let size = button_width(app, label, target).min(width);
+        if x > 0 && x.saturating_add(size) > width {
+            x = 0;
+            rows = rows.saturating_add(1);
+        }
+        x = x.saturating_add(size).saturating_add(1);
+    }
+    rows
+}
+
 pub(super) fn buttons(
     frame: &mut Frame,
     app: &mut App,

@@ -10,6 +10,8 @@ impl App {
     /// Every dialog owns its remaining keys, including keys it ignores.
     pub(in crate::app) fn dialog_key(&mut self, key: KeyPress) -> Result<()> {
         match self.view.dialog.as_ref() {
+            Some(Dialog::Form(_)) => self.form_key(key),
+            Some(Dialog::Lyrics(_)) => self.lyrics_key(key),
             Some(Dialog::CopyableHelp { .. })
                 if key.ctrl && key.key == Key::Char('c') || key.key == Key::Enter =>
             {

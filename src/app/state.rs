@@ -45,6 +45,8 @@ impl Sort {
 
 #[derive(Clone)]
 pub enum Target {
+    Form(super::FormAction),
+    Lyrics(super::LyricsAction),
     TogglePlayerSpecialButtons,
     ToggleExpandedToolbar,
     CopyHelp(Option<usize>),

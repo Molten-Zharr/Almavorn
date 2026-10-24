@@ -51,6 +51,8 @@ impl TextDialog {
 
 #[derive(Clone)]
 pub enum Dialog {
+    Form(Box<super::Form>),
+    Lyrics(super::LyricsView),
     Tags(Box<super::TagEditor>),
     Statistics,
     PlaybackTuner {
@@ -138,6 +140,8 @@ impl Dialog {
     pub(super) fn opening_action(&self) -> Option<crate::input::Action> {
         use crate::input::Action;
         match self {
+            Self::Form(_) => None,
+            Self::Lyrics(_) => Some(Action::Lyrics),
             Self::Tags(_) => None,
             Self::Statistics => Some(Action::Statistics),
             Self::PlaybackTuner { .. } => Some(Action::PlaybackTuner),
@@ -250,6 +254,7 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if matches!(self.view.dialog,Some(Dialog::Lyrics(_))) { self.lyrics_scroll(i64::from(direction));return; }
         if matches!(self.view.dialog, Some(Dialog::Tags(_))) {
             self.tags_scroll(i64::from(direction));
             return;
