@@ -187,24 +187,76 @@ impl App {
             Input::CancelPointer => {
                 self.cancel_workspace_drag();
             }
-            Input::Scroll { x, y, delta } => {
+            Input::Scroll {
+                x, y, delta, ctrl, shift,
+            } => {
                 let delta = delta.signum();
                 if delta == 0 {
                     return Ok(());
                 }
-                if self.color_picker_scroll(Position::new(x, y), delta) {
+                let position = Position::new(x, y);
+                if self.color_picker_scroll(position, delta) {
                     return Ok(());
                 }
                 if matches!(self.view.dialog, Some(Dialog::Equalizer { .. })) {
-                    return self.scroll_equalizer(Position::new(x, y), delta);
+                    let step = self.wheel_step(position, ctrl, shift, 1);
+                    return self.scroll_equalizer(position, delta * step);
                 }
                 if matches!(self.view.dialog, Some(Dialog::PlaybackTuner { .. })) {
-                    return self.scroll_tuner(Position::new(x, y), delta);
+                    return self.scroll_tuner(position, delta);
                 }
                 if matches!(self.view.dialog, Some(Dialog::Statistics)) {
-                    self.move_statistics(i64::from(-delta) * 3);
+                    let step = self.wheel_step(position, ctrl, shift, 3);
+                    let distance = i64::from(delta) * i64::from(step);
+                    if ctrl && shift {
+                        self.statistics.view.offset = self.statistics.view.offset
+                            .saturating_add_signed(distance as isize);
+                    }
+                    self.move_statistics(distance);
                     return Ok(());
                 }
+                if self.view.dialog.is_none()
+                    && matches!(self.target_at(position), Some(Target::PlaybackVolume(_)))
+                {
+                    self.adjust_volume(-delta)?;
+                    return Ok(());
+                }
+                if ctrl && self.view.dialog.is_none() {
+                    use crate::workspace::Panel;
+                    let panel = if self.view.playlist_area.contains(position) {
+                        Some(Panel::Playlists)
+                    } else if self.view.tracks_area.contains(position) {
+                        Some(Panel::Tracks)
+                    } else {
+                        None
+                    };
+                    let scroll = self.view.hits.iter().find_map(|hit| match hit.target {
+                        Target::ListScroll(scroll)
+                            if Some(scroll.panel) == panel || hit.area.contains(position) => Some(scroll),
+                        _ => None,
+                    });
+                    if let Some(scroll) = scroll {
+                        let step = if shift { scroll.visible.max(1) } else { 5 };
+                        self.scroll_list(scroll, i64::from(delta) * step as i64);
+                        if matches!(
+                            self.view.workspace.gesture,
+                            Some(crate::workspace::Gesture::Playlist { .. })
+                        ) {
+                            self.drag_workspace(position)?;
+                        }
+                        return Ok(());
+                    }
+                }
+                if matches!(self.view.dialog, Some(Dialog::CaptureBinding { .. })) {
+                    let step = self.wheel_step(position, ctrl, shift, 8);
+                    self.view.settings.binding_offset = super::bounded(
+                        self.view.settings.binding_offset,
+                        i64::from(delta) * i64::from(step),
+                        Key::shortcut_choices().count(),
+                    );
+                    return Ok(());
+                }
+                let delta = delta * self.wheel_step(position, ctrl, shift, 1);
                 if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
                     let position = Position::new(x, y);
                     self.view.settings.focus = if self.view.settings.menu_area.contains(position) {
@@ -224,12 +276,10 @@ impl App {
                             super::SearchFocus::Results
                         };
                     }
+                    if ctrl && shift {
+                        self.shift_dialog_page(delta);
+                    }
                     self.scroll_dialog(delta);
-                } else if matches!(
-                    self.target_at(Position::new(x, y)),
-                    Some(Target::PlaybackVolume(_))
-                ) {
-                    self.adjust_volume(-delta)?;
                 } else if let Some(Target::ListScroll(scroll)) =
                     self.target_at(Position::new(x, y)).cloned()
                 {
@@ -1006,5 +1056,104 @@ impl App {
 
     fn last_pointer_x(&self, area: Rect) -> u16 {
         self.view.pointer.x.saturating_sub(area.x).min(area.width)
+    }
+
+    fn wheel_step(&self, position: Position, ctrl: bool, shift: bool, normal: i16) -> i16 {
+        if ctrl && shift {
+            self.wheel_page_size(position).clamp(1, i16::MAX as usize) as i16
+        } else if ctrl {
+            normal * 5
+        } else {
+            normal
+        }
+    }
+
+    fn shift_dialog_page(&mut self, delta: i16) {
+        let offset = match &mut self.view.dialog {
+            Some(Dialog::Browser(view)) => Some(&mut view.offset),
+            Some(Dialog::Search(view)) => Some(if view.focus == super::SearchFocus::Playlists {
+                &mut view.playlist_offset
+            } else {
+                &mut view.offset
+            }),
+            Some(Dialog::Settings { .. })
+                if self.view.settings.focus == super::SettingsFocus::Parameters => {
+                Some(&mut self.view.settings.offset)
+            }
+            Some(Dialog::Tags(view)) => Some(&mut view.offset),
+            Some(Dialog::Downloads(view)) => Some(&mut view.offset),
+            Some(Dialog::Services(view)) => Some(&mut view.offset),
+            Some(Dialog::Lyrics(view)) if !view.content => Some(&mut view.offset),
+            Some(Dialog::Mods(view)) if !view.opened && view.install.is_none() => {
+                Some(&mut view.offset)
+            }
+            _ => None,
+        };
+        if let Some(offset) = offset {
+            *offset = offset.saturating_add_signed(isize::from(delta));
+        }
+    }
+
+    fn wheel_page_size(&self, position: Position) -> usize {
+        let count = |predicate: fn(&Target) -> bool| {
+            self.view.hits.iter()
+                .filter(|hit| predicate(&hit.target))
+                .count()
+        };
+        match &self.view.dialog {
+            None => {
+                if let Some(Target::ListScroll(scroll)) = self.target_at(position) {
+                    scroll.visible
+                } else if self.view.playlist_area.contains(position) {
+                    usize::from(self.view.playlist_area.height)
+                } else if self.view.tracks_area.contains(position) {
+                    count(|target| matches!(target, Target::Track(_)))
+                } else {
+                    1
+                }
+            }
+            Some(Dialog::Statistics) => self.statistics.view.capacity,
+            Some(Dialog::Search(search)) => {
+                if search.playlists_area.contains(position) {
+                    count(|target| matches!(target, Target::SearchPlaylist(_)))
+                } else {
+                    count(|target| matches!(target, Target::SearchResult(_)))
+                }
+            }
+            Some(Dialog::Settings { .. }) => {
+                if self.view.settings.menu_area.contains(position) {
+                    count(|target| matches!(
+                        target,
+                        Target::SettingsPage(_) | Target::SettingsTab(_) | Target::SettingsThemes
+                    ))
+                } else {
+                    self.view.hits.iter()
+                        .filter_map(|hit| match hit.target {
+                            Target::Setting(index) | Target::SettingSelect(index) => Some(index),
+                            _ => None,
+                        })
+                        .collect::<std::collections::HashSet<_>>()
+                        .len()
+                }
+            }
+            Some(Dialog::CaptureBinding { .. }) => {
+                count(|target| matches!(target, Target::BindingKey(_)))
+            }
+            Some(_) => self.view.dialog_page_size.max(count(|target| matches!(
+                target,
+                Target::BrowserRow(_)
+                    | Target::FolderRow(_)
+                    | Target::TransferRow(_)
+                    | Target::ComposeRow(_)
+                    | Target::PanelRow(_)
+                    | Target::CommandRow(_)
+                    | Target::EqualizerPreset(_)
+                    | Target::Tags(super::TagAction::Row(_))
+                    | Target::Lyrics(super::LyricsAction::Row(_))
+                    | Target::Downloads(super::DownloadAction::Row(_))
+                    | Target::Services(super::ServiceAction::Row(_))
+                    | Target::Mods(super::ModAction::Row(_))
+            ))),
+        }
     }
 }

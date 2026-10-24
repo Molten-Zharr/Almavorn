@@ -31,6 +31,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     app.view.hits.clear();
     app.view.keycaps.clear();
     app.view.dialog_scroll_max = 0;
+    app.view.dialog_page_size = 0;
     app.view.waveform_area = Rect::default();
     app.view.artwork_area = Rect::default();
     app.view.progress_area = Rect::default();

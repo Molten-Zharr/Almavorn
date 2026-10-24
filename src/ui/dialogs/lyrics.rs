@@ -154,6 +154,7 @@ pub(super) fn render(
             .collect::<Vec<_>>();
         let paragraph = Paragraph::new(rendered.clone()).wrap(Wrap { trim: false });
         let count = paragraph.line_count(body.width.max(1));
+        app.view.dialog_page_size = usize::from(body.height);
         app.view.dialog_scroll_max = count.saturating_sub(body.height as usize);
         if view.follow
             && let Some(active) = active

@@ -239,6 +239,7 @@ pub(super) fn render(
         let paragraph = Paragraph::new(clean(&text))
             .style(palette.text())
             .wrap(Wrap { trim: false });
+        app.view.dialog_page_size = usize::from(body.height);
         app.view.dialog_scroll_max = paragraph
             .line_count(body.width.max(1))
             .saturating_sub(body.height as usize);
@@ -269,6 +270,7 @@ pub(super) fn render(
         let paragraph = Paragraph::new(clean(&text))
             .style(palette.text())
             .wrap(Wrap { trim: false });
+        app.view.dialog_page_size = usize::from(body.height);
         app.view.dialog_scroll_max = paragraph
             .line_count(body.width.max(1))
             .saturating_sub(body.height as usize);

@@ -483,5 +483,7 @@ pub enum Input {
         x: u16,
         y: u16,
         delta: i16,
+        ctrl: bool,
+        shift: bool,
     },
 }

@@ -239,7 +239,7 @@ impl App {
                 }) = &mut self.view.dialog
                 {
                     *preset_selected =
-                        super::bounded(*preset_selected, i64::from(delta.signum()), PRESETS.len());
+                        super::bounded(*preset_selected, i64::from(delta), PRESETS.len());
                 }
             }
         }

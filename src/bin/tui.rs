@@ -194,8 +194,13 @@ fn run() -> Result<()> {
                     MouseEventKind::Down(event::MouseButton::Right) => {
                         app.handle(Input::SecondaryClick { x, y })
                     }
-                    MouseEventKind::ScrollUp => app.handle(Input::Scroll { x, y, delta: -1 }),
-                    MouseEventKind::ScrollDown => app.handle(Input::Scroll { x, y, delta: 1 }),
+                    MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => app.handle(Input::Scroll {
+                        x,
+                        y,
+                        delta: if mouse.kind == MouseEventKind::ScrollUp { -1 } else { 1 },
+                        ctrl: mouse.modifiers.contains(KeyModifiers::CONTROL),
+                        shift: mouse.modifiers.contains(KeyModifiers::SHIFT),
+                    }),
                     _ => {}
                 }
             }

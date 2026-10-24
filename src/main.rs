@@ -331,7 +331,7 @@ fn run() -> Result<()> {
                         egui::Event::Text(text) | egui::Event::Paste(text) if text_active => {
                             app.handle(Input::Text(text))
                         }
-                        egui::Event::MouseWheel { delta, .. } => {
+                        egui::Event::MouseWheel { delta, modifiers, .. } => {
                             if let Some((x, y)) = pointer.and_then(to_cell)
                                 && delta.y != 0.0
                             {
@@ -339,6 +339,8 @@ fn run() -> Result<()> {
                                     x,
                                     y,
                                     delta: if delta.y > 0.0 { -1 } else { 1 },
+                                    ctrl: modifiers.ctrl,
+                                    shift: modifiers.shift,
                                 });
                             }
                         }

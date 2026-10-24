@@ -29,6 +29,7 @@ pub(super) fn scroll_text(
     let paragraph = Paragraph::new(text)
         .style(palette.text())
         .wrap(Wrap { trim: false });
+    app.view.dialog_page_size = usize::from(body.height);
     app.view.dialog_scroll_max = paragraph
         .line_count(body.width)
         .saturating_sub(usize::from(body.height))
@@ -55,6 +56,7 @@ pub(super) fn copyable_text(
         (line, height)
     }).collect();
     let total: usize = lines.iter().map(|(_, height)| height).sum();
+    app.view.dialog_page_size = usize::from(body.height);
     app.view.dialog_scroll_max = total.saturating_sub(body.height as usize);
     *offset = (*offset).min(app.view.dialog_scroll_max);
     let mut start = 0usize;
@@ -267,6 +269,7 @@ pub(super) fn help_dialog(
     let guide_heading = entries.len();
     entries.push((None, app.text("Guide", "Руководство").into()));
     for (en,ru) in [
+        ("Ctrl+wheel scrolls five times faster. Ctrl+Shift+wheel scrolls by a visible page.","Ctrl+колесо прокручивает в пять раз быстрее. Ctrl+Shift+колесо листает видимыми страницами."),
         ("In file pickers, typing filters names. Esc clears the filter; press Esc again to close.","В файловых окнах ввод имени фильтрует список. Esc очищает фильтр, повторный Esc закрывает окно."),
         ("Hold a track checkbox and move across rows to mark or unmark them. The list scrolls at its edge.","Зажмите чекбокс и ведите по строкам, чтобы поставить или снять отметки. У края список прокручивается."),
         ("Click a group heading to mark its visible tracks. Click it again to clear them.","Нажмите заголовок группы, чтобы отметить ее видимые композиции. Повторное нажатие снимает отметки."),
@@ -308,6 +311,7 @@ pub(super) fn help_dialog(
         .map(|(.., height)| usize::from(*height) + 1)
         .sum::<usize>()
         .saturating_sub(1);
+    app.view.dialog_page_size = usize::from(body.height);
     app.view.dialog_scroll_max = total_height.saturating_sub(usize::from(body.height));
     *offset = (*offset).min(app.view.dialog_scroll_max);
     let mut cursor = 0;
