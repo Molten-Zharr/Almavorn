@@ -4,6 +4,10 @@ Open "Music services", "Downloads" or "Mods" in the application menu. Default sh
 
 Press F9 for song lyrics. Almavorn searches tags and filenames, including reversed artist/title ordering. Choose a recording, refine the query, save or edit its lyrics, export TXT/LRC, or remove the saved copy. Timed lyrics can follow playback.
 
+Search uses nine sources: Genius, LRCLIB, Musixmatch, Yandex Music, lyrics.ovh, AZLyrics, SongLyrics, eLyrics and Letras. Genius takes priority among confident song matches.
+
+Open "Sources" to see which sites found lyrics or could not complete the search. You can add, replace or remove Genius and Musixmatch keys there. Genius uses public search without a key; Musixmatch requires an API key. Yandex Music uses the account connected under "Music services". Lyrics availability depends on the source, region and account access.
+
 ## Downloads
 
 Open "Downloads" and select "Install / update components". Find a song or add a link, then choose its folder and file name. Downloaded music appears on the sorting desk.

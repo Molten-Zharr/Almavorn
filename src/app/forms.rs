@@ -24,6 +24,7 @@ pub enum FormPurpose {
     LyricsQuery(Track),
     LyricsEdit(i64, Lyric),
     LyricsExport(Lyric),
+    LyricsKey(crate::lyrics::Provider),
 }
 
 #[derive(Clone)]
@@ -404,6 +405,9 @@ impl App {
                     },
                     true,
                 );
+            }
+            FormPurpose::LyricsKey(provider) => {
+                self.lyrics_set_key(*provider, Some(form.fields[0].value.clone()))?;
             }
             FormPurpose::LyricsEdit(track, lyric) => {
                 let mut lyric = lyric.clone();

@@ -60,6 +60,37 @@ def yandex(request):
         start = request.get("page", 0) * 50
         ids = [t.track_id for t in (playlist.tracks or [])[start:start+50]]
         value = {"tracks": [track(t) for t in client.tracks(ids)] if ids else []}
+    elif operation == "lyrics":
+        import requests
+        from urllib.parse import urlsplit
+        from yandex_music.exceptions import NotFoundError
+        value = {"plain": "", "synced": ""}
+        for format_, field in (("LRC", "synced"), ("TEXT", "plain")):
+            try:
+                info = client.tracks_lyrics(request["track_id"], format_=format_)
+            except NotFoundError:
+                continue
+            if not info or not info.download_url:
+                continue
+            url = urlsplit(info.download_url)
+            host = url.hostname or ""
+            if url.scheme != "https" or url.username or url.password or not any(
+                host == domain or host.endswith("." + domain)
+                for domain in ("yandex.net", "yandex.ru", "yandex.com")
+            ):
+                raise ValueError("lyrics_url")
+            with requests.get(info.download_url, timeout=15, stream=True, allow_redirects=False) as response:
+                response.raise_for_status()
+                if response.status_code != 200:
+                    raise ValueError("lyrics_response")
+                chunks = bytearray()
+                for chunk in response.iter_content(8192):
+                    chunks.extend(chunk)
+                    if len(chunks) > 256 * 1024:
+                        raise ValueError("lyrics_size")
+                value[field] = chunks.decode("utf-8-sig").strip()
+            if value[field]:
+                break
     elif operation == "resolve":
         info = client.tracks_file_info(track_id=request["track_id"], quality="hq", codecs=["mp3"], transport="raw")
         info = info.download_info

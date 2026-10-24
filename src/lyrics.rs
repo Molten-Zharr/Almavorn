@@ -1,5 +1,7 @@
 use crate::{model::Track, network};
+mod providers;
 use anyhow::{Context, Result, ensure};
+pub use providers::{Provider, ProviderReport, search, set_key};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -320,7 +322,7 @@ fn fallback_titles(guesses: &[(String, String)]) -> Vec<String> {
     result
 }
 
-pub fn search(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
+fn search_lrclib(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
     let client = network::client()?;
     let guesses = candidates(query);
     ensure!(
@@ -372,9 +374,21 @@ pub fn search(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
             }
         }
     }
-    // A second provider is useful when no close match was found. Do not probe
-    // every guessed permutation after a known song has already been resolved.
-    if !result.matches.iter().any(|m| m.score >= 900) {
+    result
+        .matches
+        .sort_by_key(|lyric| std::cmp::Reverse(lyric.score));
+    result.matches.truncate(40);
+    Ok(result)
+}
+
+fn search_ovh(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
+    let client = network::client()?;
+    let guesses = candidates(query);
+    let mut result = SearchResult {
+        matches: vec![],
+        warnings: vec![],
+    };
+    {
         for (artist, title) in guesses.iter().filter(|(a, _)| !a.is_empty()).take(3) {
             if cancel.load(Ordering::Relaxed) {
                 break;

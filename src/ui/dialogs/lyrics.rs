@@ -1,5 +1,6 @@
 use crate::{
     app::{App, Hit, LyricsAction, LyricsView, Target},
+    lyrics::Provider,
     model::duration_text,
     ui::{
         theme::Palette,
@@ -43,12 +44,21 @@ pub(super) fn render(
         inner.width,
         footer_height,
     );
-    if view.confirm_remove {
+    if view.confirm_remove || view.confirm_key.is_some() {
         frame.render_widget(
-            Paragraph::new(app.text(
-                "Remove the lyrics saved in Almavorn?",
-                "Удалить текст, сохраненный в Almavorn?",
-            ))
+            Paragraph::new(if let Some(provider) = view.confirm_key {
+                format!(
+                    "{}: {}",
+                    provider.name(),
+                    app.text("Remove the saved key?", "Удалить сохраненный ключ?")
+                )
+            } else {
+                app.text(
+                    "Remove the lyrics saved in Almavorn?",
+                    "Удалить текст, сохраненный в Almavorn?",
+                )
+                .into()
+            })
             .style(palette.text())
             .wrap(Wrap { trim: false }),
             inner,
@@ -65,7 +75,11 @@ pub(super) fn render(
                 ),
                 action(
                     app.text("Remove [D]", "Удалить [D]"),
-                    LyricsAction::ConfirmRemove,
+                    if view.confirm_key.is_some() {
+                        LyricsAction::ConfirmKey
+                    } else {
+                        LyricsAction::ConfirmRemove
+                    },
                     true,
                 ),
             ],
@@ -93,10 +107,68 @@ pub(super) fn render(
             .saturating_sub(3 + footer_height + error_height),
     );
     let loading = app.lyrics_loading();
-    if loading {
+    if view.sources {
         frame.render_widget(
-            Paragraph::new(app.text("Looking for lyrics…", "Поиск текста песни…"))
-                .style(palette.text()),
+            Paragraph::new(app.text(
+                "Genius is preferred when the song matches.",
+                "Genius первый при уверенном совпадении песни.",
+            ))
+            .style(palette.text().fg(palette.muted)),
+            Rect::new(inner.x, inner.y + 1, inner.width, 1),
+        );
+        let mut lines = Vec::new();
+        for provider in Provider::ALL {
+            let report = app.lyrics.reports.iter().find(|r| r.provider == provider);
+            let status = if let Some(report) = report {
+                if report.count > 0 {
+                    format!("{}: {}", app.text("Found", "Найдено"), report.count)
+                } else if report.error.is_none() {
+                    app.text("No lyrics found", "Текст не найден").into()
+                } else {
+                    String::new()
+                }
+            } else if loading {
+                app.text("Searching…", "Поиск…").into()
+            } else {
+                app.text(
+                    "Not searched. Press Search again.",
+                    "Еще не искали. Нажмите Искать снова.",
+                )
+                .into()
+            };
+            lines.push(Line::styled(
+                provider.name(),
+                palette.text().fg(palette.accent),
+            ));
+            if !status.is_empty() {
+                lines.push(Line::styled(status, palette.text()));
+            }
+            if let Some(error) = report.and_then(|r| r.error.as_deref()) {
+                lines.push(Line::styled(clean(error), palette.text().fg(palette.error)));
+            }
+            lines.push(Line::raw(""));
+        }
+        if app.lyrics_key_busy() {
+            lines.push(Line::raw(app.text("Saving key…", "Сохранение ключа…")));
+        }
+        let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+        app.view.dialog_page_size = body.height as usize;
+        app.view.dialog_scroll_max = paragraph
+            .line_count(body.width.max(1))
+            .saturating_sub(body.height as usize);
+        view.offset = view.offset.min(app.view.dialog_scroll_max);
+        frame.render_widget(
+            paragraph.scroll((view.offset.min(u16::MAX as usize) as u16, 0)),
+            body,
+        );
+    } else if loading {
+        frame.render_widget(
+            Paragraph::new(format!(
+                "{} {}/9",
+                app.text("Sources checked:", "Проверено источников:"),
+                app.lyrics.reports.len()
+            ))
+            .style(palette.text()),
             body,
         );
     } else if view.content
@@ -250,8 +322,59 @@ pub(super) fn render(
 }
 
 fn controls(app: &App, view: &LyricsView, loading: bool) -> Vec<(String, Target, bool)> {
+    if view.sources {
+        let ready = !app.lyrics_key_busy();
+        return vec![
+            action(
+                app.text("Genius: enter key", "Genius: ввести ключ"),
+                LyricsAction::Key(Provider::Genius),
+                ready,
+            ),
+            action(
+                app.text("Get Genius key", "Получить ключ Genius"),
+                LyricsAction::KeyPage(Provider::Genius),
+                true,
+            ),
+            action(
+                app.text("Remove Genius key", "Удалить ключ Genius"),
+                LyricsAction::RemoveKey(Provider::Genius),
+                ready,
+            ),
+            action(
+                app.text("Musixmatch: enter key", "Musixmatch: ввести ключ"),
+                LyricsAction::Key(Provider::Musixmatch),
+                ready,
+            ),
+            action(
+                app.text("Get Musixmatch key", "Получить ключ Musixmatch"),
+                LyricsAction::KeyPage(Provider::Musixmatch),
+                true,
+            ),
+            action(
+                app.text("Remove Musixmatch key", "Удалить ключ Musixmatch"),
+                LyricsAction::RemoveKey(Provider::Musixmatch),
+                ready,
+            ),
+            action(
+                app.text("Connect Yandex Music", "Подключить Яндекс Музыку"),
+                LyricsAction::Services,
+                true,
+            ),
+            action(
+                app.text("Search again [R]", "Искать снова [R]"),
+                LyricsAction::Refresh,
+                !loading && ready,
+            ),
+            action(app.text("Back", "Назад"), LyricsAction::Back, true),
+        ];
+    }
     let selected = !loading && view.selected < app.lyrics.results.len();
     vec![
+        action(
+            app.text("Sources [I]", "Источники [I]"),
+            LyricsAction::Sources,
+            true,
+        ),
         action(
             app.text("Search [F]", "Уточнить [F]"),
             LyricsAction::Search,

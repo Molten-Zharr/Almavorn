@@ -175,7 +175,7 @@ fn bridge(
         command,
         Some(serde_json::to_vec(&request)?),
         cancel,
-        Duration::from_secs(120),
+        Duration::from_secs(if request["operation"] == "lyrics" { 35 } else { 120 }),
         8 * 1024 * 1024,
     )?;
     ensure!(
@@ -233,6 +233,20 @@ pub fn device_code(
         cancel,
     )?)
     .context("Не удалось начать вход.")
+}
+pub(crate) fn lyrics(
+    data: &Path,
+    connection: &Connection,
+    track: &str,
+    cancel: &AtomicBool,
+) -> Result<Value> {
+    ensure!(connection.provider == Provider::Yandex, "Этот сервис не подключен к поиску текстов.");
+    ensure!(
+        !track.is_empty() && track.len() <= 100
+            && track.chars().all(|c| c.is_ascii_digit() || c == ':'),
+        "Неизвестная запись Яндекс Музыки."
+    );
+    bridge(data, connection, json!({"operation":"lyrics", "track_id":track.split(':').next().unwrap_or(track)}), cancel)
 }
 pub fn device_poll(
     data: &Path,

@@ -1,15 +1,16 @@
 use super::{
     App, Dialog, FormField, FormPurpose,
-    background::{LatestJob, background},
+    background::{Background, LatestJob, background, poll},
 };
 use crate::{
     input::{Key, KeyPress},
-    lyrics::{self, Lyric, Query, SearchResult},
+    lyrics::{self, Lyric, Provider, ProviderReport, Query, SearchResult},
 };
 use anyhow::{Context, Result};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
+    mpsc,
 };
 
 #[derive(Clone)]
@@ -17,6 +18,7 @@ struct Request {
     query: Query,
     force: bool,
     cancel: Arc<AtomicBool>,
+    progress: mpsc::Sender<ProviderReport>,
 }
 #[derive(Default)]
 pub struct LyricsState {
@@ -24,6 +26,9 @@ pub struct LyricsState {
     pub results: Vec<Lyric>,
     pub error: Option<String>,
     pub saved: bool,
+    pub reports: Vec<ProviderReport>,
+    progress: Option<mpsc::Receiver<ProviderReport>>,
+    key_job: Option<Background<()>>,
     job: LatestJob<Request, SearchResult>,
     cancel: Option<Arc<AtomicBool>>,
 }
@@ -34,6 +39,8 @@ pub struct LyricsView {
     pub content: bool,
     pub follow: bool,
     pub confirm_remove: bool,
+    pub sources: bool,
+    pub confirm_key: Option<Provider>,
 }
 impl LyricsView {
     pub fn content() -> Self {
@@ -57,6 +64,12 @@ pub enum LyricsAction {
     ConfirmRemove,
     Follow,
     Back,
+    Sources,
+    Key(Provider),
+    KeyPage(Provider),
+    RemoveKey(Provider),
+    ConfirmKey,
+    Services,
 }
 
 impl App {
@@ -85,6 +98,9 @@ impl App {
         let cancel = Arc::new(AtomicBool::new(false));
         self.lyrics.query = Some(query.clone());
         self.lyrics.results.clear();
+        self.lyrics.reports.clear();
+        let (progress, receiver) = mpsc::channel();
+        self.lyrics.progress = Some(receiver);
         self.lyrics.error = None;
         self.lyrics.saved = lyrics::cache_path(&self.data_directory(), query.track.id).exists();
         self.lyrics.cancel = Some(cancel.clone());
@@ -92,6 +108,7 @@ impl App {
             query,
             force,
             cancel,
+            progress,
         });
         self.view.dialog = Some(Dialog::Lyrics(LyricsView::default()));
         self.start_lyrics_job();
@@ -122,7 +139,7 @@ impl App {
                         });
                     }
                 }
-                lyrics::search(&request.query, &request.cancel)
+                lyrics::search(&data, &request.query, &request.cancel, &request.progress)
             })
         });
     }
@@ -130,6 +147,30 @@ impl App {
         self.lyrics.job.requested().is_some()
     }
     pub(super) fn tick_lyrics(&mut self) {
+        if let Some(receiver) = &self.lyrics.progress {
+            for report in receiver.try_iter() {
+                self.lyrics
+                    .reports
+                    .retain(|r| r.provider != report.provider);
+                self.lyrics.reports.push(report);
+            }
+        }
+        if let Some(result) = self.lyrics.key_job.as_mut().and_then(poll) {
+            self.lyrics.key_job = None;
+            match result {
+                Ok(()) => {
+                    if matches!(self.view.dialog, Some(Dialog::Lyrics(_)))
+                        && let Some(query) = self.lyrics.query.clone()
+                    {
+                        self.start_lyrics(query, true);
+                        if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
+                            view.sources = true;
+                        }
+                    }
+                }
+                Err(error) => self.lyrics.error = Some(error.to_string()),
+            }
+        }
         let Some(completed) = self.lyrics.job.poll() else {
             return;
         };
@@ -140,8 +181,13 @@ impl App {
         match completed.result {
             Ok(result) => {
                 self.lyrics.results = result.matches;
-                self.lyrics.error =
-                    (!result.warnings.is_empty()).then(|| result.warnings.join("\n"));
+                self.lyrics.error = (!result.warnings.is_empty()).then(|| {
+                    self.text(
+                        "Some sources could not complete the search. See Sources for details.",
+                        "Часть источников не завершила поиск. Подробности: Источники.",
+                    )
+                    .into()
+                });
                 self.lyrics.saved =
                     lyrics::cache_path(&self.data_directory(), completed.request.query.track.id)
                         .exists();
@@ -172,6 +218,14 @@ impl App {
             view.confirm_remove = false;
             return true;
         }
+        if view.confirm_key.take().is_some() {
+            return true;
+        }
+        if view.sources {
+            view.sources = false;
+            view.offset = 0;
+            return true;
+        }
         if view.content && self.lyrics.results.len() > 1 {
             view.content = false;
             view.offset = 0;
@@ -186,7 +240,7 @@ impl App {
     }
     pub(super) fn lyrics_scroll(&mut self, direction: i64) {
         if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
-            if view.content {
+            if view.content || view.sources {
                 view.follow = false;
                 view.offset =
                     super::bounded(view.offset, direction, self.view.dialog_scroll_max + 1);
@@ -203,6 +257,38 @@ impl App {
             return match key.key {
                 Key::Char('d') => self.lyrics_action(LyricsAction::ConfirmRemove),
                 Key::Enter => self.lyrics_action(LyricsAction::Back),
+                _ => Ok(()),
+            };
+        }
+        if view.confirm_key.is_some() {
+            return match key.key {
+                Key::Char('d') => self.lyrics_action(LyricsAction::ConfirmKey),
+                Key::Enter => self.lyrics_action(LyricsAction::Back),
+                _ => Ok(()),
+            };
+        }
+        if key.key == Key::Char('i') {
+            return self.lyrics_action(LyricsAction::Sources);
+        }
+        if view.sources {
+            return match key.key {
+                Key::Char('r') => self.lyrics_action(LyricsAction::Refresh),
+                Key::Up => {
+                    self.lyrics_scroll(-1);
+                    Ok(())
+                }
+                Key::Down => {
+                    self.lyrics_scroll(1);
+                    Ok(())
+                }
+                Key::PageUp => {
+                    self.lyrics_scroll(-(self.view.dialog_page_size as i64));
+                    Ok(())
+                }
+                Key::PageDown => {
+                    self.lyrics_scroll(self.view.dialog_page_size as i64);
+                    Ok(())
+                }
                 _ => Ok(()),
             };
         }
@@ -244,6 +330,45 @@ impl App {
         let query = self.lyrics.query.clone().context("Выберите композицию.")?;
         let selected = view.selected;
         match action {
+            LyricsAction::Sources => {
+                view.sources = !view.sources;
+                view.offset = 0;
+            }
+            LyricsAction::Key(provider) => {
+                anyhow::ensure!(self.lyrics.key_job.is_none(), "Дождитесь сохранения ключа.");
+                let mut field = FormField::new(self.text("New key", "Новый ключ"), "");
+                field.secret = true;
+                self.open_form(
+                    provider.name(),
+                    if provider == Provider::Genius {
+                        self.text("Optional Client Access Token from genius.com/api-clients. Without it the player uses public search.", "Необязательный Client Access Token с genius.com/api-clients. Без него работает публичный поиск.")
+                    } else {
+                        self.text("Enter your Musixmatch API key. Text availability depends on your API access.", "Введите ключ API Musixmatch. Доступ к текстам зависит от вашего тарифа.")
+                    },
+                    vec![field], FormPurpose::LyricsKey(provider),
+                );
+            }
+            LyricsAction::KeyPage(provider) => {
+                let mut child = std::process::Command::new("xdg-open")
+                    .arg(provider.key_url())
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                    .context("Не удалось открыть браузер.")?;
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+            }
+            LyricsAction::RemoveKey(provider) => {
+                view.confirm_key = Some(provider);
+            }
+            LyricsAction::ConfirmKey => {
+                if let Some(provider) = view.confirm_key {
+                    self.lyrics_set_key(provider, None)?;
+                }
+            }
+            LyricsAction::Services => self.open_services(),
             LyricsAction::Search => {
                 let title = self.text("Find lyrics", "Найти текст песни");
                 let description=self.text("Enter the artist and title. If no close match is found, the player also searches by title words.", "Укажите исполнителя и название. Если точного совпадения нет, плеер ищет также по словам названия.");
@@ -258,7 +383,13 @@ impl App {
                     FormPurpose::LyricsQuery(query.track),
                 );
             }
-            LyricsAction::Refresh => self.start_lyrics(query, true),
+            LyricsAction::Refresh => {
+                let sources = view.sources;
+                self.start_lyrics(query, true);
+                if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
+                    view.sources = sources;
+                }
+            }
             LyricsAction::Open => {
                 if selected < self.lyrics.results.len() {
                     view.content = true;
@@ -332,6 +463,31 @@ impl App {
             }
             _ => {}
         }
+        Ok(())
+    }
+    pub fn lyrics_key_busy(&self) -> bool {
+        self.lyrics.key_job.is_some()
+    }
+    pub(super) fn lyrics_set_key(&mut self, provider: Provider, key: Option<String>) -> Result<()> {
+        anyhow::ensure!(self.lyrics.key_job.is_none(), "Дождитесь сохранения ключа.");
+        if let Some(key) = &key {
+            anyhow::ensure!(!key.trim().is_empty(), "Введите ключ.");
+        }
+        let data = self.data_directory();
+        self.lyrics.error = None;
+        if let Some(cancel) = self.lyrics.cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.lyrics.job.cancel();
+        self.lyrics.progress = None;
+        self.lyrics.key_job = Some(background(
+            self.runtime.as_ref().expect("runtime is alive"),
+            move || lyrics::set_key(&data, provider, key.as_deref().map(str::trim)),
+        ));
+        self.view.dialog = Some(Dialog::Lyrics(LyricsView {
+            sources: true,
+            ..LyricsView::default()
+        }));
         Ok(())
     }
 }
