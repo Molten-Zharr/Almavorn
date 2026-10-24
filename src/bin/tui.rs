@@ -35,8 +35,7 @@ impl Drop for TerminalSession {
 fn copy_to_terminal(text: &str) -> std::io::Result<()> {
     // OSC 52 works without desktop clipboard utilities, including over SSH.
     // The terminal decides whether clipboard writes are permitted.
-    const BASE64: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut sequence = Vec::with_capacity(8 + text.len().div_ceil(3) * 4);
     sequence.extend_from_slice(b"\x1b]52;c;");
     for chunk in text.as_bytes().chunks(3) {
@@ -99,16 +98,52 @@ fn run() -> Result<()> {
     }));
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
     let mut previous_click: Option<(Position, Instant)> = None;
+    let mut pending_event = None;
     while !app.view.quit {
         app.tick();
         if let Some(text) = app.view.clipboard_text.take() {
-            app.clipboard_result(copy_to_terminal(&text).map_err(|error| error.to_string()), true);
+            app.clipboard_result(
+                copy_to_terminal(&text).map_err(|error| error.to_string()),
+                true,
+            );
         }
         terminal.draw(|frame| ui::render(&mut app, frame))?;
-        if !event::poll(Duration::from_millis(50))? {
+        let mut input = if let Some(input) = pending_event.take() {
+            input
+        } else {
+            if !event::poll(Duration::from_millis(50))? {
+                continue;
+            }
+            event::read()?
+        };
+        let mut hover = None;
+        let started = Instant::now();
+        // A motion burst needs one redraw, not one full frame per queued position.
+        // Stop at every other event so clicks keep the geometry of the last frame.
+        for _ in 0..128 {
+            let Event::Mouse(mouse) = &input else {
+                break;
+            };
+            if mouse.kind != MouseEventKind::Moved
+                || started.elapsed() >= Duration::from_millis(8)
+                || !event::poll(Duration::ZERO)?
+            {
+                break;
+            }
+            hover = Some(Position::new(mouse.column, mouse.row));
+            input = event::read()?;
+        }
+        if !matches!(input, Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved)
+            && let Some(point) = hover
+        {
+            app.handle(Input::Move {
+                x: point.x,
+                y: point.y,
+            });
+            pending_event = Some(input);
             continue;
         }
-        match event::read()? {
+        match input {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                     if app.copy_help(None) {

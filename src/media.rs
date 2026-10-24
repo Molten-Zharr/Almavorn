@@ -2,6 +2,7 @@ use crate::errors::AppError;
 use crate::model::ImportedTrack;
 use anyhow::{Context, Result};
 use lofty::{
+    config::ParseOptions,
     file::{AudioFile, TaggedFileExt},
     probe::Probe,
     tag::Accessor,
@@ -49,7 +50,12 @@ pub fn read_track(path: &Path) -> Result<ImportedTrack> {
         tags: "{}".into(),
     };
     // Чтение тегов не открывает музыкальные файлы на запись.
-    if let Ok(file) = Probe::open(&path).and_then(|probe| probe.read()) {
+    // Artwork is loaded on demand by the player and tag editor, not during import.
+    if let Ok(file) = Probe::open(&path).and_then(|probe| {
+        probe
+            .options(ParseOptions::new().read_cover_art(false))
+            .read()
+    }) {
         let duration = file
             .properties()
             .duration()
