@@ -10,7 +10,7 @@ Keep your collection organized and build new mixes freely.
 ## Order, Chaos, and the sorting desk
 
 - **Order — my collection.** Playlists are protected from accidental changes. Choose "Edit" to make changes, then "Done" to lock the playlist again. Sorting the view preserves the saved track order.
-- **Chaos — free mixes.** Rearrange tracks and build new playlists from existing ones. Undo and redo remain available until you close the player.
+- **Chaos — free mixes.** Rearrange tracks and build new playlists from existing ones. History keeps the last 100 actions until you close the player, so you can undo and redo them. A new action after undo clears the redo history.
 - **Sorting desk — organize new music.** A shared playlist available in both modes. Add files, correct titles, tags, and artwork, then copy tracks into the playlists you want.
 
 Shuffle is a separate playback option available in both modes.
