@@ -335,6 +335,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             widths.push(Constraint::Length(16));
             header.push(Cell::from(app.text("Date", "Дата")));
         }
+        if !recent{widths.push(Constraint::Length(if compact{4}else{6}));header.push(Cell::from(app.text("Starts","Вкл")));}
         widths.extend([
             Constraint::Length(if compact { 3 } else { 7 }),
             Constraint::Length(if compact { 8 } else { 10 }),
@@ -368,6 +369,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
                 if show_date {
                     cells.push(Cell::from(row.date.clone()));
                 }
+                if !recent{cells.push(Cell::from(row.starts.to_string()));}
                 cells.push(Cell::from(if recent {
                     if row.plays > 0 {
                         "✓".into()

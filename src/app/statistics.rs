@@ -42,6 +42,7 @@ pub enum StatisticsSort {
     #[default]
     Time,
     Plays,
+    Starts,
     Name,
 }
 impl StatisticsSort {
@@ -49,6 +50,7 @@ impl StatisticsSort {
         match self {
             Self::Time => language.text("Time", "Время"),
             Self::Plays => language.text("Plays", "Прослушивания"),
+            Self::Starts => language.text("Starts", "Включения"),
             Self::Name => language.text("Name", "Название"),
         }
     }
@@ -93,6 +95,7 @@ impl StatisticsView {
                     u64::MAX - row.listened_ms,
                     row.title.to_lowercase(),
                 ),
+                StatisticsSort::Starts => (u64::MAX-row.starts,u64::MAX-row.listened_ms,row.title.to_lowercase()),
                 StatisticsSort::Name => (0, 0, row.title.to_lowercase()),
             });
         }
@@ -378,7 +381,8 @@ impl App {
             Target::StatisticsSort => {
                 self.statistics.view.sort = match self.statistics.view.sort {
                     StatisticsSort::Time => StatisticsSort::Plays,
-                    StatisticsSort::Plays => StatisticsSort::Name,
+                    StatisticsSort::Plays => StatisticsSort::Starts,
+                    StatisticsSort::Starts => StatisticsSort::Name,
                     StatisticsSort::Name => StatisticsSort::Time,
                 };
                 self.statistics.view.rebuild();
