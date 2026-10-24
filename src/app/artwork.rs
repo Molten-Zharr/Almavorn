@@ -30,12 +30,13 @@ impl App {
             .current
             .as_ref()
             .filter(|_| settings.visible)
-            .and_then(|track| {
-                if settings.shared {
-                    settings.path.clone().map(ArtworkRequest::Shared)
-                } else {
-                    Some(ArtworkRequest::Embedded(track.path.clone()))
+            .map(|track| {
+                if settings.shared
+                    && let Some(path) = &settings.path
+                {
+                    return ArtworkRequest::Shared(path.clone());
                 }
+                ArtworkRequest::Embedded(track.path.clone())
             });
         if source != self.artwork.source {
             self.artwork.source = source.clone();
