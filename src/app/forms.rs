@@ -8,6 +8,9 @@ use anyhow::Result;
 
 #[derive(Clone)]
 pub enum FormPurpose {
+    DownloadSearch,
+    DownloadNew(Option<String>),
+    DownloadSettings,
     LyricsQuery(Track),
     LyricsEdit(i64, Lyric),
     LyricsExport(Lyric),
@@ -242,6 +245,26 @@ impl App {
 
     fn apply_form(&mut self, form: &Form) -> Result<()> {
         match &form.purpose {
+            FormPurpose::DownloadSearch => {
+                self.search_downloads(form.fields[0].value.trim().into())
+            }
+            FormPurpose::DownloadNew(previous) => {
+                let job = crate::downloads::Download::new(
+                    form.fields[0].value.trim().into(),
+                    form.fields[2].value.trim().into(),
+                    std::path::PathBuf::from(form.fields[1].value.trim()),
+                    self.downloads.config.engine,
+                )?;
+                self.queue_download(job, previous.as_deref())?;
+            }
+            FormPurpose::DownloadSettings => {
+                let mut config = self.downloads.config.clone();
+                config.directory = form.fields[0].value.trim().into();
+                config.cobalt_url = form.fields[1].value.trim().into();
+                let key = (!form.fields[2].value.trim().is_empty())
+                    .then(|| form.fields[2].value.trim().to_owned());
+                self.configure_downloads(config, key);
+            }
             FormPurpose::LyricsQuery(track) => {
                 self.start_lyrics(
                     crate::lyrics::Query {

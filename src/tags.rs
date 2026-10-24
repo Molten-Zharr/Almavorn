@@ -19,6 +19,10 @@ mod extra;
 mod files;
 mod native;
 mod relocate;
+pub(crate) fn move_noreplace(source:&Path,destination:&Path)->Result<()>{
+    files::rename_noreplace(source,destination)?;
+    files::sync_directory(destination)
+}
 pub use extra::Extra;
 
 pub const TAG_TYPES: [TagType; 7] = [

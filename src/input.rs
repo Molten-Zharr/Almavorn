@@ -128,6 +128,7 @@ impl KeyPress {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
+    Downloads,
     Lyrics,
     Quit,
     Help,
@@ -233,6 +234,7 @@ impl Action {
 
     pub fn description(self, language: Language) -> &'static str {
         match self {
+            Self::Downloads => language.text("Find music, download a link and manage the download queue.", "Найти музыку, скачать по ссылке и управлять очередью загрузки."),
             Self::Lyrics => language.text("Find, view and save lyrics for the current or selected song.", "Найти, посмотреть и сохранить текст текущей или выбранной песни."),
             Self::Quit => language.text("Close the application and finish saving settings.", "Закрыть приложение и завершить сохранение настроек."),
             Self::Help => language.text("Open the guide and shortcut list.", "Открыть руководство и список сочетаний."),
@@ -286,6 +288,7 @@ impl Action {
     }
     pub fn name(self, language: Language) -> &'static str {
         match self {
+            Self::Downloads => language.text("Downloads", "Загрузки"),
             Self::Lyrics => language.text("Song lyrics", "Текст песни"),
             Self::Quit => language.text("Quit", "Выход"),
             Self::Help => language.text("Help", "Помощь"),

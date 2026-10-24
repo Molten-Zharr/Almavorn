@@ -80,3 +80,18 @@ pub(crate) fn load_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
     );
     serde_json::from_reader(file).context("Не удалось прочитать сохраненный файл.")
 }
+
+pub(crate) fn file_digest(path: &Path) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut file = std::fs::File::open(path)?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let size = file.read(&mut buffer)?;
+        if size == 0 {
+            break;
+        }
+        hash.update(&buffer[..size]);
+    }
+    Ok(format!("{:x}", hash.finalize()))
+}

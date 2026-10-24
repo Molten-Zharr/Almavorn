@@ -47,6 +47,7 @@ impl Sort {
 pub enum Target {
     Form(super::FormAction),
     Lyrics(super::LyricsAction),
+    Downloads(super::DownloadAction),
     TogglePlayerSpecialButtons,
     ToggleExpandedToolbar,
     CopyHelp(Option<usize>),

@@ -284,6 +284,7 @@ impl App {
             PlayMarked => self.play_marked()?,
             PlayWholePlaylist => self.play_whole_playlist()?,
             Lyrics => self.open_lyrics()?,
+            Downloads => self.open_downloads(),
             Equalizer => self.open_equalizer(),
             PlaybackTuner => self.open_tuner(),
             CycleVisualizer => self.cycle_visualizer(1)?,

@@ -325,7 +325,7 @@ impl App {
                     Filter,
                 ],
             ),
-            CommandMenu::Application => (Panel::Application, &[Statistics, Settings, Panels, Help, Quit]),
+            CommandMenu::Application => (Panel::Application, &[Downloads, Statistics, Settings, Panels, Help, Quit]),
             CommandMenu::Player => (
                 Panel::Player,
                 &[

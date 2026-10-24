@@ -473,6 +473,10 @@ impl App {
                 self.copy_help(line);
             }
             Target::Form(action) => self.form_action(action)?,
+            Target::Downloads(action) => {
+                self.download_action(action)?;
+                if double && matches!(action,super::DownloadAction::Row(_)) { self.download_action(super::DownloadAction::Open)?; }
+            }
             Target::Lyrics(action) => {
                 self.lyrics_action(action)?;
                 if double && matches!(action,super::LyricsAction::Row(_)) { self.lyrics_action(super::LyricsAction::Open)?; }

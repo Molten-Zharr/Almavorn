@@ -7,6 +7,7 @@ mod commands;
 mod context;
 mod database;
 mod dialogs;
+mod downloads;
 mod equalizer;
 mod events;
 mod forms;
@@ -36,6 +37,7 @@ use context::{BrowserState, SettingsPersistence};
 pub use context::{LibraryState, PlaybackState, UiState};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
 pub use forms::{Form,FormAction,FormField,FormPurpose};
+pub use downloads::{DownloadsState,DownloadsView,DownloadAction};
 pub use lyrics::{LyricsState,LyricsView,LyricsAction};
 pub use options::Options;
 pub use search::{SearchDialog, SearchFocus};
@@ -58,6 +60,7 @@ pub struct App {
     pub playback: PlaybackState,
     pub statistics: StatisticsState,
     pub lyrics: LyricsState,
+    pub downloads: DownloadsState,
     pub view: UiState,
     artwork: artwork::ArtworkState,
     browser_state: BrowserState,
@@ -94,7 +97,7 @@ impl App {
         }
         let library = LibraryState::new(store.playlists()?, settings.mode, store.revision());
         let view = UiState::default();
-        Ok(Self {
+        let mut app = Self {
             store,
             runtime: Some(runtime),
             settings,
@@ -104,6 +107,7 @@ impl App {
             playback: Default::default(),
             statistics: Default::default(),
             lyrics: Default::default(),
+            downloads: Default::default(),
             browser_state: Default::default(),
             persistence: Default::default(),
             tags: Default::default(),
@@ -114,7 +118,9 @@ impl App {
             remote: None,
             #[cfg(target_os = "linux")]
             mpris: None,
-        })
+        };
+        app.initialize_downloads();
+        Ok(app)
     }
 
     pub fn text(&self, english: &'static str, russian: &'static str) -> &'static str {
@@ -152,6 +158,7 @@ impl App {
 
     fn tick_inner(&mut self) -> Result<()> {
         self.tick_lyrics();
+        self.tick_downloads()?;
         self.tick_tags();
         self.tick_statistics()?;
         self.tick_database()?;
@@ -188,6 +195,7 @@ impl Drop for App {
             audio.set_paused(true);
         }
         self.finish_listening();
+        self.downloads.cancel_all();
         self.cancel_audio_preparation();
         self.cancel_seek();
         self.cancel_waveform();
