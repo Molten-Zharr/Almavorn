@@ -28,8 +28,19 @@ pub struct BrowserEntry {
     pub path: PathBuf,
     pub directory: bool,
 }
+#[derive(Clone,Copy,Default,PartialEq,Eq)]
+pub enum BrowserSort{#[default]Name,Modified,Size,Type}
+impl BrowserSort{
+    pub fn name(self,language:crate::model::Language)->&'static str{match self{Self::Name=>language.text("Name","Имя"),Self::Modified=>language.text("Modified","Изменение"),Self::Size=>language.text("File size","Размер файла"),Self::Type=>language.text("File type","Тип файла")}}
+    fn next(self)->Self{match self{Self::Name=>Self::Modified,Self::Modified=>Self::Size,Self::Size=>Self::Type,Self::Type=>Self::Name}}
+}
+
 #[derive(Clone)]
 pub struct Browser {
+    all_entries: Vec<BrowserEntry>,
+    details: HashMap<PathBuf,(Option<std::time::SystemTime>,u64)>,
+    pub sort: BrowserSort,
+    pub descending: bool,
     pub directory: PathBuf,
     pub entries: Vec<BrowserEntry>,
     pub selected: usize,
@@ -49,6 +60,7 @@ impl Browser {
     fn unloaded(directory: PathBuf, folder: bool) -> Self {
         Self {
             directory,
+            all_entries:Vec::new(),details:HashMap::new(),sort:BrowserSort::Name,descending:false,
             entries: Vec::new(),
             selected: 0,
             offset: 0,
@@ -69,6 +81,7 @@ impl Browser {
     }
     fn refresh(&mut self, palette: bool) -> Result<()> {
         self.entries.clear();
+        self.details.clear();
         for entry in std::fs::read_dir(&self.directory)
             .with_context(|| format!("Cannot read folder {}", self.directory.display()))?
             .collect::<std::io::Result<Vec<_>>>()?
@@ -83,18 +96,15 @@ impl Browser {
                 media::is_audio(&entry.path())
             };
             if directory || (!self.folder && selectable) {
+                if let Ok(metadata)=std::fs::metadata(entry.path()){self.details.insert(entry.path(),(metadata.modified().ok(),metadata.len()));}
                 self.entries.push(BrowserEntry {
                     path: entry.path(),
                     directory,
                 });
             }
         }
-        self.entries.sort_by_key(|entry| {
-            (
-                !entry.directory,
-                entry.path.file_name().unwrap_or_default().to_os_string(),
-            )
-        });
+        self.all_entries=self.entries.clone();
+        self.rebuild_entries();
         self.selected = 0;
         self.offset = 0;
         self.selection_explicit = false;
@@ -121,45 +131,27 @@ impl Browser {
             }
     }
 
-    pub fn search_failed(&self) -> bool {
-        !self.search.is_empty()
-            && !self.entries.get(self.selected).is_some_and(|entry| {
-                entry
-                    .path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_lowercase()
-                    .contains(&self.search.to_lowercase())
-            })
+    pub fn search_failed(&self)->bool{!self.search.is_empty()&&self.entries.is_empty()}
+    fn select_search_match(&mut self){self.rebuild_entries();self.selection_explicit=!self.search.is_empty()&&!self.entries.is_empty();}
+    fn rebuild_entries(&mut self){
+        let selected=self.entries.get(self.selected).map(|entry|entry.path.clone());
+        let details=&self.details;let sort=self.sort;let descending=self.descending;
+        self.all_entries.sort_by(|a,b|{
+            let name=||a.path.file_name().unwrap_or_default().to_string_lossy().to_lowercase().cmp(&b.path.file_name().unwrap_or_default().to_string_lossy().to_lowercase());
+            let order=match sort{
+                BrowserSort::Name=>name(),
+                BrowserSort::Modified=>details.get(&a.path).and_then(|d|d.0).cmp(&details.get(&b.path).and_then(|d|d.0)),
+                BrowserSort::Size if !a.directory&&!b.directory=>details.get(&a.path).map(|d|d.1).cmp(&details.get(&b.path).map(|d|d.1)),
+                BrowserSort::Type if !a.directory&&!b.directory=>a.path.extension().unwrap_or_default().to_string_lossy().to_lowercase().cmp(&b.path.extension().unwrap_or_default().to_string_lossy().to_lowercase()),
+                _=>name(),
+            };
+            (!a.directory).cmp(&(!b.directory)).then_with(||if descending{order.reverse()}else{order}).then_with(name).then_with(||a.path.cmp(&b.path))
+        });
+        let query=self.search.to_lowercase();self.entries=self.all_entries.iter().filter(|entry|entry.path.file_name().unwrap_or_default().to_string_lossy().to_lowercase().contains(&query)).cloned().collect();
+        self.selected=selected.and_then(|path|self.entries.iter().position(|entry|entry.path==path)).unwrap_or(0);self.offset=0;
     }
-
-    fn select_search_match(&mut self) {
-        if self.search.is_empty() {
-            return;
-        }
-        let query = self.search.to_lowercase();
-        let mut first = None;
-        for (index, entry) in self.entries.iter().enumerate() {
-            let name = entry
-                .path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_lowercase();
-            if name.starts_with(&query) {
-                first = Some(index);
-                break;
-            }
-            if first.is_none() && name.contains(&query) {
-                first = Some(index);
-            }
-        }
-        if let Some(index) = first {
-            self.selected = index;
-            self.selection_explicit = true;
-        }
-    }
+    pub(super) fn clear_filter(&mut self){self.search.clear();self.rebuild_entries();}
+    pub(super) fn change_sort(&mut self,reverse:bool){if reverse{self.descending=!self.descending;}else{self.sort=self.sort.next();self.descending=matches!(self.sort,BrowserSort::Modified|BrowserSort::Size);}self.rebuild_entries();}
 
     pub(super) fn toggle_mark(&mut self, index: usize) {
         if let Some(entry) = self.entries.get(index)
@@ -201,12 +193,13 @@ impl App {
             if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
                 && !browser.search.is_empty()
             {
-                browser.search.clear();
+                browser.clear_filter();
             } else {
                 self.close_dialog();
             }
             return Ok(());
         }
+        if key.ctrl&&!key.alt&&key.key==Key::Char('s'){return self.target(if key.shift{Target::BrowserSortDirection}else{Target::BrowserSort},false);}
         if key.alt && !key.ctrl && key.key == Key::Up {
             return self.target(Target::BrowserParent, false);
         }
@@ -398,6 +391,7 @@ impl App {
             }
             browser.directory = directory.clone();
             browser.entries.clear();
+            browser.all_entries.clear();browser.details.clear();
             browser.selected = 0;
             browser.offset = 0;
             browser.selection_explicit = false;
@@ -467,11 +461,13 @@ impl App {
             let loaded = completed.result?;
             browser.directory = loaded.directory;
             browser.entries = loaded.entries;
+            browser.all_entries=loaded.all_entries;browser.details=loaded.details;
             browser.selected = loaded.selected;
             browser.offset = loaded.offset;
             // Restoring navigation focus does not confirm a choice of that child folder.
             browser.selection_explicit = false;
             browser.select_search_match();
+            if browser.search.is_empty(){browser.offset=loaded.offset;}
             self.browser_state.ready = true;
             if !self.view.notice_error {
                 self.message(self.text("Folder loaded", "Папка прочитана").into());

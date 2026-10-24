@@ -813,7 +813,6 @@ impl App {
             }
             Target::BrowserRow(index) => {
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
-                    browser.search.clear();
                     browser.selected = index;
                     browser.selection_explicit = browser.entries.get(index).is_some();
                     if browser.folder_playlists.is_none() {
@@ -826,12 +825,13 @@ impl App {
             }
             Target::BrowserMark(index) => {
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
-                    browser.search.clear();
                     browser.selected = index;
                     browser.selection_explicit = browser.entries.get(index).is_some();
                     browser.toggle_mark(index);
                 }
             }
+            Target::BrowserSort|Target::BrowserSortDirection=>{if let Some(Dialog::Browser(browser))=&mut self.view.dialog{browser.change_sort(matches!(target,Target::BrowserSortDirection));}},
+            Target::BrowserClearFilter=>{if let Some(Dialog::Browser(browser))=&mut self.view.dialog{browser.clear_filter();}},
             Target::BrowserParent => {
                 self.browser_parent();
             }

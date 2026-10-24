@@ -1,6 +1,6 @@
 use super::super::{
     theme::Palette,
-    widgets::{buttons, clean, file_modal, modal, visible_offset},
+    widgets::{buttons, buttons_height, clean, file_modal, modal, visible_offset},
 };
 use crate::app::{App, Browser, Hit, PaletteFilePicker, Target};
 use ratatui::{
@@ -129,6 +129,9 @@ pub(super) fn browser_dialog(
             },
         ));
     }
+    controls.push((format!("{}: {}",app.text("Sort","Сортировка"),browser.sort.name(app.settings.preferences.language)),Target::BrowserSort,true));
+    controls.push((if browser.descending{"↓"}else{"↑"}.into(),Target::BrowserSortDirection,true));
+    let controls_height=buttons_height(app,inner.width,&controls).min(inner.height.saturating_sub(path_height+4));
     let used = buttons(
         frame,
         app,
@@ -136,11 +139,7 @@ pub(super) fn browser_dialog(
             inner.x,
             inner.y + path_height,
             inner.width,
-            if browser.folder_playlists.is_some() {
-                4
-            } else {
-                3
-            },
+            controls_height,
         ),
         controls,
         palette,
@@ -157,7 +156,7 @@ pub(super) fn browser_dialog(
     if search_y < inner.bottom().saturating_sub(footer_height) {
         let (caption, color) = if browser.search.is_empty() {
             (
-                app.text("Type a name to search", "Наберите имя для поиска")
+                app.text("Filter: type a name · Ctrl+S: sort", "Фильтр: введите имя · Ctrl+S: сортировка")
                     .into(),
                 palette.muted,
             )
@@ -172,15 +171,16 @@ pub(super) fn browser_dialog(
             )
         } else {
             (
-                format!("{}: {}", app.text("Search", "Поиск"), browser.search),
+                format!("{}: {}", app.text("Filter", "Фильтр"), browser.search),
                 palette.accent,
             )
         };
         frame.render_widget(
             Paragraph::new(caption).style(palette.text().fg(color)),
-            Rect::new(inner.x, search_y, inner.width, 1),
+            Rect::new(inner.x, search_y, inner.width.saturating_sub(4), 1),
         );
     }
+    if search_y<inner.bottom().saturating_sub(footer_height){super::super::buttons::quiet_button(frame,app,Rect::new(inner.right().saturating_sub(3),search_y,3.min(inner.width),1),"x",Target::BrowserClearFilter,!browser.search.is_empty(),palette);}
     let list_top = search_y.saturating_add(1);
     let list = Rect::new(
         inner.x,
@@ -199,10 +199,9 @@ pub(super) fn browser_dialog(
     }
     if app.browser_ready()
         && browser.entries.is_empty()
-        && (browser.palette_file.is_some() || browser.folder_playlists.is_some())
     {
         frame.render_widget(
-            Paragraph::new(if browser.folder_playlists.is_some() {
+            Paragraph::new(if !browser.search.is_empty(){app.text("No matching names. Clear or change the filter.","Совпадений нет. Очистите или измените фильтр.")}else if browser.folder_playlists.is_some() {
                 app.text(
                     "No folders here. Go to the parent folder.",
                     "Здесь нет папок. Перейдите выше.",
@@ -214,8 +213,8 @@ pub(super) fn browser_dialog(
                 )
             } else {
                 app.text(
-                    "No JSON files in this folder.",
-                    "В этой папке нет JSON-файлов.",
+                    "No suitable files in this folder.",
+                    "В этой папке нет подходящих файлов.",
                 )
             })
             .style(palette.text().fg(palette.muted))
