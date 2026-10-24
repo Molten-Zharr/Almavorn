@@ -32,7 +32,7 @@ impl VisualizerKind {
             Self::Wave => language.text("Wave", "Аудиоволна"),
             Self::Rings => language.text("Pulse rings", "Пульсирующие кольца"),
             Self::Particles => language.text("Particles", "Частицы"),
-            Self::Bombardment => language.text("Carpet bombing", "Ковровая бомбардировка"),
+            Self::Bombardment => language.text("Red Alert 3 carpet bombing", "Ковровая Red Alert 3"),
         }
     }
     pub fn next(self, direction: i64) -> Self {
