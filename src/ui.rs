@@ -28,6 +28,7 @@ use ratatui::{
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     let palette = Palette::new(app);
+    let command_hint = menus::hint(app);
     app.view.hits.clear();
     app.view.keycaps.clear();
     app.view.dialog_scroll_max = 0;
@@ -128,6 +129,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     });
     let message = if app.view.notice_error || app.busy() || app.importing() {
         notice
+    } else if let Some(hint) = command_hint {
+        hint
     } else if app.view.layout_editing {
         app.text(
             "Drag a title or border · Ctrl+B / Esc: done",
@@ -146,7 +149,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let help_target = Target::Action(Action::Help);
     let help = app.text("Help", "Справка");
     let help_width = buttons::button_width(app, help, &help_target).min(parts[2].width);
-    let navigation = if area.width >= 80 {
+    let navigation = if area.width >= 80 && !matches!(app.view.dialog, Some(crate::app::Dialog::Commands { .. })) {
         app.text("Tab: panels / menu", "Tab: панели / меню")
     } else {
         ""

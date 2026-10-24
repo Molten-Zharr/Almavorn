@@ -4,8 +4,10 @@ use super::{
     widgets::{block, visible_offset},
 };
 use crate::{
-    app::{App, CommandMenu, Hit, Target},
+    app::{App, CommandMenu, Dialog, Hit, Target},
     input::Action,
+    model::Mode,
+    visualizer::VisualizerKind,
 };
 use ratatui::{
     Frame,
@@ -13,6 +15,93 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Clear, Paragraph},
 };
+
+pub(super) fn hint(app: &App) -> Option<String> {
+    let Some(Dialog::Commands { menu, selected, .. }) = &app.view.dialog else {
+        return None;
+    };
+    // Read the previous frame's menu regions before the main view rebuilds them.
+    // Disabled rows still explain their action when the pointer is over them.
+    let hovered = app.view.hits.iter().rev().find_map(|hit| match hit.target {
+        Target::CommandRow(index) if app.hovered(hit.area) => Some(index),
+        _ => None,
+    });
+    let items = app.command_items(*menu);
+    let item = hovered
+        .and_then(|index| items.get(index))
+        .or_else(|| items.get(*selected))?;
+    let description = match item.target {
+        Target::Action(Action::Undo | Action::Redo) => {
+            return Some(app.history_caption(matches!(item.target, Target::Action(Action::Undo))));
+        }
+        Target::Action(Action::ToggleDesk) => app.text(
+            "Send newly added music to the sorting desk.",
+            "Направлять добавляемую музыку на сортировочный стол.",
+        ),
+        Target::Action(action) => action.description(app.settings.preferences.language),
+        Target::Mode(Mode::Order) => app.text(
+            "Open saved playlists protected from accidental changes.",
+            "Открыть сохраненные плейлисты с защитой от случайных изменений.",
+        ),
+        Target::Mode(Mode::Chaos) => app.text(
+            "Open mixes you can freely combine and edit.",
+            "Открыть подборки для свободного смешивания и редактирования.",
+        ),
+        Target::ToggleExpandedToolbar => app.text(
+            "Show or hide extra toolbar buttons.",
+            "Показать или скрыть дополнительные верхние кнопки.",
+        ),
+        Target::TogglePlayerSpecialButtons => app.text(
+            "Show or hide the EQ, FX and VIS buttons.",
+            "Показать или скрыть кнопки EQ, FX и VIS.",
+        ),
+        Target::ManagePanels => app.text(
+            "Choose which player panels and buttons are visible.",
+            "Выбрать видимые панели и кнопки плеера.",
+        ),
+        Target::FinishEdit => app.text(
+            "Finish editing and protect the playlist again.",
+            "Завершить редактирование и снова защитить плейлист.",
+        ),
+        Target::CommandMenu(CommandMenu::Visualizer) => app.text(
+            "Choose a background animation or turn it off.",
+            "Выбрать анимацию фона или отключить ее.",
+        ),
+        Target::Visualizer(kind) => match kind {
+            VisualizerKind::Off => app.text(
+                "Turn off background animation.",
+                "Отключить фоновую анимацию.",
+            ),
+            VisualizerKind::Spectrum => app.text(
+                "Show the music spectrum in the background.",
+                "Показать частотный спектр музыки на фоне.",
+            ),
+            VisualizerKind::Wave => app.text(
+                "Show the audio waveform in the background.",
+                "Показать звуковую волну на фоне.",
+            ),
+            VisualizerKind::Rings => app.text(
+                "Show rings pulsing to the music.",
+                "Показать пульсирующие кольца в такт музыке.",
+            ),
+            VisualizerKind::Particles => app.text(
+                "Show sparks reacting to the music.",
+                "Показать искры, реагирующие на музыку.",
+            ),
+            VisualizerKind::Bombardment => app.text(
+                "Show falling bombs and explosions with the music.",
+                "Показать падающие бомбы и взрывы под музыку.",
+            ),
+        },
+        _ => return None,
+    };
+    Some(
+        description
+            .split_once(". ")
+            .map_or(description, |(first, _)| first)
+            .to_owned(),
+    )
+}
 
 pub(super) fn render(
     frame: &mut Frame,
@@ -23,7 +112,10 @@ pub(super) fn render(
     palette: Palette,
 ) {
     let items = app.command_items(menu);
-    let area = frame.area();
+    let area = Rect {
+        height: frame.area().height.saturating_sub(1),
+        ..frame.area()
+    };
     let width = items
         .iter()
         .map(|item| {
@@ -53,7 +145,7 @@ pub(super) fn render(
     let inner = block.inner(outer);
     app.view.overlay_area = outer;
     app.view.hits.push(Hit {
-        area,
+        area: frame.area(),
         target: Target::CloseDialog,
         enabled: true,
     });

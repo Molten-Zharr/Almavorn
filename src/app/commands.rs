@@ -37,6 +37,7 @@ pub struct CommandItem {
 
 impl App {
     pub(super) fn commands_key(&mut self, key: KeyPress) -> Result<()> {
+        self.view.pointer = ratatui::layout::Position::new(u16::MAX, u16::MAX);
         if self.view.toolbar_selected.is_some() && !key.ctrl && !key.alt {
             if key.key == Key::Tab {
                 self.close_dialog();
@@ -485,6 +486,7 @@ impl App {
             selected,
             anchor,
         });
+        self.view.hits.clear();
     }
 
     pub(crate) fn focus_toolbar(&mut self, last: bool) {

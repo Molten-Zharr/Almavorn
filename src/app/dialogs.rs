@@ -284,6 +284,7 @@ impl App {
             if let Some(Dialog::Commands { selected, .. }) = &mut self.view.dialog {
                 *selected = next;
             }
+            self.view.pointer = ratatui::layout::Position::new(u16::MAX, u16::MAX);
             return;
         }
         let transfer_length = self.transfer_destinations().len();
