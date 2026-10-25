@@ -575,7 +575,7 @@ fn run_request(data: &std::path::Path, request: &Request) -> Result<SearchResult
         return Ok(SearchResult::default());
     }
     let mut warnings = vec![];
-    if !request.force {
+    if !request.force || !request.preferences.enabled {
         match lyrics::cached(data, request.query.track.id) {
             Ok(Some(mut lyric)) => {
                 lyric.score = 1000;
