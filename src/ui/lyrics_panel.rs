@@ -19,7 +19,8 @@ pub(super) fn render_tracks(frame: &mut Frame, app: &mut App, area: Rect, palett
         library::tracks_table(frame, app, area, palette);
         return;
     }
-    let parts = if area.width >= 85 {
+    let side_by_side = area.width >= 85;
+    let parts = if side_by_side {
         Layout::horizontal([
             Constraint::Min(40),
             Constraint::Length((area.width / 3).clamp(30, 65)),
@@ -32,7 +33,12 @@ pub(super) fn render_tracks(frame: &mut Frame, app: &mut App, area: Rect, palett
         ])
         .split(area)
     };
-    library::tracks_table(frame, app, parts[0], palette);
+    let mut tracks = parts[0];
+    if side_by_side {
+        // Leave the track scrollbar its own column before the lyrics border.
+        tracks.width = tracks.width.saturating_sub(1);
+    }
+    library::tracks_table(frame, app, tracks, palette);
     render(frame, app, parts[1], palette);
 }
 

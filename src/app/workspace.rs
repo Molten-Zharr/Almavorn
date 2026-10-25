@@ -366,6 +366,9 @@ impl App {
                         store.move_playlist_to(id, target, unlocked)?,
                     ))
                 })?;
+                // Keep the drop location in view while the database reloads.
+                // The old row position would otherwise scroll into view first.
+                self.view.playlist_scroll_selected = self.library.selected_playlist;
             }
             Some(Gesture::Move { panel, origin }) if point != origin => {
                 if let Some((target, edge)) = self.view.workspace.drop.take()

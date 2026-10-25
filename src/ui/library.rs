@@ -581,8 +581,14 @@ fn list_scrollbar(
     else {
         return;
     };
-    // Paint over the existing right border; reserve no column in the list.
-    let rail = Rect::new(outer.right().saturating_sub(1), rows.y, 1, rows.height);
+    // Follow the list edge, including when lyrics share the Tracks panel.
+    // A full-width list uses its panel border; a split list uses its own gutter.
+    let rail = Rect::new(
+        rows.right().min(outer.right().saturating_sub(1)),
+        rows.y,
+        1,
+        rows.height,
+    );
     let scroll = ListScroll {
         panel,
         area: rail,

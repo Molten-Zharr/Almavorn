@@ -1,7 +1,7 @@
 use super::{App, Dialog, Target};
 use crate::{
     input::{Action, Key, KeyPress},
-    model::Mode,
+    model::{Mode, PlaylistKind},
     workspace::{Control, Panel},
 };
 use anyhow::Result;
@@ -176,11 +176,15 @@ impl App {
                 ),
             );
         }
-        if self.allowed(Action::ToggleEdit) {
+        // Saving a reorder disables the button but must not change its caption,
+        // shortcut or width: those determine the height of the whole toolbar.
+        if self.playlist().is_some_and(|playlist| {
+            playlist.mode == Mode::Order && playlist.kind == PlaylistKind::Normal
+        }) {
             entries.push((
                 self.edit_caption(),
                 Target::Action(Action::ToggleEdit),
-                true,
+                self.allowed(Action::ToggleEdit),
             ));
         } else if let Some(playlist) = self
             .playlists()
