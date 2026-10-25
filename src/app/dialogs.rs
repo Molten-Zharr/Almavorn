@@ -149,6 +149,7 @@ impl Dialog {
     pub(super) fn opening_action(&self) -> Option<crate::input::Action> {
         use crate::input::Action;
         match self {
+            Self::Commands { menu, .. } => menu.opening_action(),
             Self::Form(_) => None,
             Self::Lyrics(_) => Some(Action::Lyrics),
             Self::Downloads(_) => Some(Action::Downloads),
@@ -181,8 +182,7 @@ impl Dialog {
             | Self::ConfirmSettings { .. } => Some(Action::Delete),
             Self::Text(_)
             | Self::CaptureBinding { .. }
-            | Self::ConfirmResetBindings { .. }
-            | Self::Commands { .. } => None,
+            | Self::ConfirmResetBindings { .. } => None,
             Self::Search(_) => None,
         }
     }

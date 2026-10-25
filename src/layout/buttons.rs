@@ -35,6 +35,21 @@ pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
             .iter()
             .find(|binding| binding.action == *action)
             .map(|binding| binding.key.label()),
+        Target::CommandMenu(menu) => menu.opening_action().and_then(|action| {
+            app.settings
+                .preferences
+                .bindings
+                .iter()
+                .find(|binding| binding.action == action)
+                .map(|binding| binding.key.label())
+        }),
+        Target::ToggleExpandedToolbar => app
+            .settings
+            .preferences
+            .bindings
+            .iter()
+            .find(|binding| binding.action == Action::ToggleToolbar)
+            .map(|binding| binding.key.label()),
         Target::Mode(mode) if *mode != app.settings.mode => app
             .settings
             .preferences
@@ -86,7 +101,11 @@ pub(crate) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
     } else {
         Span::raw(label).width()
     };
-    let shortcut = displayed_shortcut(app, target);
+    let shortcut = if label == "..." {
+        None
+    } else {
+        displayed_shortcut(app, target)
+    };
     (label_width
         + shortcut.as_ref().map_or(0, |key| {
             Span::raw(key).width() + if label.is_empty() { 0 } else { 3 }

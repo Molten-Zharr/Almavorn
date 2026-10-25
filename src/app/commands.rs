@@ -17,6 +17,15 @@ pub enum CommandMenu {
 }
 
 impl CommandMenu {
+    pub(crate) fn opening_action(self) -> Option<Action> {
+        match self {
+            Self::Add => Some(Action::OpenAddMenu),
+            Self::Playlist => Some(Action::OpenPlaylistMenu),
+            Self::Tracks => Some(Action::OpenTracksMenu),
+            Self::Application => Some(Action::OpenApplicationMenu),
+            Self::Player | Self::Visualizer => None,
+        }
+    }
     pub fn title(self, language: crate::model::Language) -> &'static str {
         match self {
             Self::Add => language.text("Add music", "Добавить музыку"),

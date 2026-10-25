@@ -246,7 +246,9 @@ fn quiet(
         style = style.bg(palette.sidebar_selection).fg(palette.background);
     }
     let mut content = Vec::new();
-    if let Some(shortcut) = displayed_shortcut(app, &target) {
+    if label != "..."
+        && let Some(shortcut) = displayed_shortcut(app, &target)
+    {
         content.push(Span::styled(
             format!("[{shortcut}]"),
             style.fg(if !enabled {

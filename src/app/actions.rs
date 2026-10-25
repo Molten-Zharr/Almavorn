@@ -278,6 +278,22 @@ impl App {
         }
         use Action::*;
         match action {
+            OpenAddMenu | OpenPlaylistMenu | OpenTracksMenu | OpenApplicationMenu => {
+                let menu = match action {
+                    OpenAddMenu => super::CommandMenu::Add,
+                    OpenPlaylistMenu => super::CommandMenu::Playlist,
+                    OpenTracksMenu => super::CommandMenu::Tracks,
+                    _ => super::CommandMenu::Application,
+                };
+                self.view.toolbar_selected = self.toolbar_items().iter().position(|item| matches!(item.target, super::Target::CommandMenu(value) if value == menu));
+                self.view.pointer = ratatui::layout::Position::new(u16::MAX, u16::MAX);
+                self.open_commands(menu);
+            }
+            ToggleToolbar => {
+                self.settings.preferences.appearance.expanded_toolbar = !self.settings.preferences.appearance.expanded_toolbar;
+                self.view.toolbar_selected = None;
+                self.save_settings()?;
+            }
             Quit => self.view.quit = true,
             Help => self.view.dialog = Some(Dialog::Help { offset: 0 }),
             Settings => self.open_settings_page(super::SettingsPage::General),

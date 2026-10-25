@@ -128,6 +128,11 @@ impl KeyPress {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
+    OpenAddMenu,
+    OpenPlaylistMenu,
+    OpenTracksMenu,
+    OpenApplicationMenu,
+    ToggleToolbar,
     Mods,
     Services,
     Downloads,
@@ -219,6 +224,11 @@ impl Action {
             | Self::SeekForward
             | Self::SeekBackward => ShortcutGroup::Player,
             Self::Quit
+            | Self::OpenAddMenu
+            | Self::OpenPlaylistMenu
+            | Self::OpenTracksMenu
+            | Self::OpenApplicationMenu
+            | Self::ToggleToolbar
             | Self::Help
             | Self::Settings
             | Self::Statistics
@@ -236,6 +246,11 @@ impl Action {
 
     pub fn description(self, language: Language) -> &'static str {
         match self {
+            Self::OpenAddMenu => language.text("Open the menu for adding music.", "Открыть меню добавления музыки."),
+            Self::OpenPlaylistMenu => language.text("Open playlist commands.", "Открыть команды плейлиста."),
+            Self::OpenTracksMenu => language.text("Open track commands.", "Открыть команды композиций."),
+            Self::OpenApplicationMenu => language.text("Open the application menu.", "Открыть меню приложения."),
+            Self::ToggleToolbar => language.text("Expand or collapse the top toolbar.", "Развернуть или свернуть верхнюю панель."),
             Self::Mods => language.text("Install, create and customize player mods.", "Установить, создать и настроить моды плеера."),
             Self::Services => language.text("Connect music accounts, search and listen online.", "Подключить аккаунты, найти музыку и слушать онлайн."),
             Self::Downloads => language.text("Find music, download a link and manage the download queue.", "Найти музыку, скачать по ссылке и управлять очередью загрузки."),
@@ -292,6 +307,11 @@ impl Action {
     }
     pub fn name(self, language: Language) -> &'static str {
         match self {
+            Self::OpenAddMenu => language.text("Add music menu", "Меню добавления музыки"),
+            Self::OpenPlaylistMenu => language.text("Playlist menu", "Меню плейлиста"),
+            Self::OpenTracksMenu => language.text("Tracks menu", "Меню композиций"),
+            Self::OpenApplicationMenu => language.text("Application menu", "Меню приложения"),
+            Self::ToggleToolbar => language.text("Expand / collapse toolbar", "Развернуть / свернуть верхнюю панель"),
             Self::Mods => language.text("Mods", "Моды"),
             Self::Services => language.text("Music services", "Музыкальные сервисы"),
             Self::Downloads => language.text("Downloads", "Загрузки"),
@@ -407,6 +427,11 @@ pub fn default_bindings() -> Vec<Binding> {
         })
         .collect();
     for (action, key, ctrl, alt) in [
+        (OpenAddMenu, Key::Char('1'), false, true),
+        (OpenPlaylistMenu, Key::Char('2'), false, true),
+        (OpenTracksMenu, Key::Char('3'), false, true),
+        (OpenApplicationMenu, Key::Char('4'), false, true),
+        (ToggleToolbar, Key::Char('5'), false, true),
         (Downloads, Key::Char('j'), true, false),
         (Services, Key::Char('o'), true, false),
         (Mods, Key::Char('m'), true, false),

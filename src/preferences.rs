@@ -464,6 +464,11 @@ impl ProfilePreferences {
             if matches!(
                 binding.action,
                 crate::input::Action::Filter
+                    | crate::input::Action::OpenAddMenu
+                    | crate::input::Action::OpenPlaylistMenu
+                    | crate::input::Action::OpenTracksMenu
+                    | crate::input::Action::OpenApplicationMenu
+                    | crate::input::Action::ToggleToolbar
                     | crate::input::Action::EditTags
                     | crate::input::Action::AddFolderPlaylists
                     | crate::input::Action::PlaylistFolders
