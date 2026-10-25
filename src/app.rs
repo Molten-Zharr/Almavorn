@@ -25,6 +25,7 @@ mod remote;
 mod search;
 mod scan_folders;
 mod selection;
+mod session;
 mod settings;
 mod state;
 mod statistics;
@@ -74,6 +75,7 @@ pub struct App {
     artwork: artwork::ArtworkState,
     browser_state: BrowserState,
     persistence: SettingsPersistence,
+    session: session::SessionPersistence,
     tags: tags::TagsState,
     search_job: background::LatestJob<search::SearchRequest, Vec<search::SearchHit>>,
     command_program: std::path::PathBuf,
@@ -121,6 +123,7 @@ impl App {
             mods: Default::default(),
             browser_state: Default::default(),
             persistence: Default::default(),
+            session: Default::default(),
             tags: Default::default(),
             search_job: Default::default(),
             command_program: std::env::current_exe()
@@ -132,6 +135,9 @@ impl App {
         };
         app.initialize_downloads();
         app.initialize_mods();
+        if let Err(error) = app.restore_session() {
+            app.failure(error);
+        }
         Ok(app)
     }
 
@@ -162,6 +168,10 @@ impl App {
         #[cfg(target_os = "linux")]
         self.tick_mpris_commands();
         if let Err(error) = self.tick_inner() {
+            self.failure(error);
+        }
+        // Save even when another background operation failed during this tick.
+        if let Err(error) = self.tick_session() {
             self.failure(error);
         }
         #[cfg(target_os = "linux")]
@@ -204,8 +214,11 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        // Capture the user's play/pause state before shutdown pauses the device.
+        let session = self.session_snapshot();
         #[cfg(target_os = "linux")]
         self.mpris.take();
+        self.cancel_seek();
         if let Some(audio) = &self.playback.audio {
             audio.set_paused(true);
         }
@@ -214,7 +227,6 @@ impl Drop for App {
         self.services.cancel_all();
         self.mods.cancel_all();
         self.cancel_audio_preparation();
-        self.cancel_seek();
         self.cancel_waveform();
         if let Some(job) = &self.library.import {
             job.cancel.store(true, Ordering::Relaxed);
@@ -234,6 +246,11 @@ impl Drop for App {
         // Only shutdown waits for persistence. Share a deadline with the worker
         // shutdown because started blocking calls cannot be aborted.
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        if let Err(error) =
+            session.and_then(|snapshot| self.shutdown_session(&runtime, deadline, snapshot))
+        {
+            eprintln!("Almavorn: playback session was not saved / сеанс прослушивания не сохранен: {error:#}");
+        }
         if let Err(error) = self.shutdown_statistics(&runtime, deadline) {
             eprintln!(
                 "Almavorn: listening history was not saved / статистика не сохранена: {error:#}"

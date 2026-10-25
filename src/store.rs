@@ -248,6 +248,25 @@ impl Store {
         })
     }
 
+    pub(crate) fn session(&self) -> Result<Option<String>> {
+        self.connection()?
+            .query_row("SELECT value FROM settings WHERE key='session'", [], |row| {
+                row.get(0)
+            })
+            .optional()
+            .context("Cannot read playback session")
+    }
+
+    pub(crate) fn save_session(&mut self, json: &str) -> Result<()> {
+        self.write(|connection| {
+            connection.execute(
+                "INSERT INTO settings(key,value) VALUES ('session',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                [json],
+            )?;
+            Ok(())
+        })
+    }
+
     pub fn playlists(&self) -> Result<Vec<Playlist>> {
         let transaction = self.connection()?.unchecked_transaction()?;
         let playlists = read_playlists(&transaction)?;

@@ -5,14 +5,14 @@ use crate::{
 };
 use ratatui::layout::Rect;
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Focus {
     Playlists,
     #[default]
     Tracks,
 }
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Sort {
     #[default]
     Position,

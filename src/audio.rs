@@ -190,7 +190,8 @@ impl Audio {
 
     pub fn play_prepared(&mut self, source: PreparedAudio, paused: bool) {
         self.listening_clock = Arc::new(AtomicU64::new(0));
-        self.play_prepared_at(source, paused, Duration::ZERO);
+        let position = source.position;
+        self.play_prepared_at(source, paused, position);
     }
 
     pub fn prepare_at(path: &Path, position: Duration) -> Result<PreparedAudio> {

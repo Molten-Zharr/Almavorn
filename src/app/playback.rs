@@ -13,12 +13,15 @@ use std::sync::{
 };
 use std::{collections::HashSet, path::PathBuf, time::Duration};
 
+mod session;
+
 #[derive(Clone)]
 pub(super) struct PlaybackRequest {
     queue: PlaybackQueue,
     playlist_id: i64,
     paused: bool,
     reverse: bool,
+    position_ms: Option<u64>,
 }
 
 impl PlaybackRequest {
@@ -253,6 +256,7 @@ impl App {
                 playlist_id: self.playback.playing_playlist?,
                 paused: self.paused(),
                 reverse: false,
+                position_ms: None,
             })
         })
     }
@@ -277,6 +281,7 @@ impl App {
             playlist_id,
             paused: false,
             reverse: false,
+            position_ms: None,
         })
     }
     pub(super) fn toggle_mark(&mut self, id: i64) -> Result<()> {
@@ -375,6 +380,7 @@ impl App {
                 *pending = request;
             }
         } else {
+            request.position_ms = None;
             self.request_playback(request)?;
         }
         if current_index.is_none()
@@ -421,6 +427,7 @@ impl App {
             playlist_id,
             paused: false,
             reverse: false,
+            position_ms: None,
         })
     }
 
@@ -445,6 +452,9 @@ impl App {
         let cached = self.playback.reverse_cache.clone();
         self.playback.preparation.start(|request| {
             let reverse = request.reverse;
+            let position = request.position_ms
+                .filter(|position| *position > 0 || reverse)
+                .map(Duration::from_millis);
             let path = request.entry().track.path.clone();
             let cache = cached
                 .filter(|(cached_path, _)| *cached_path == path)
@@ -453,7 +463,7 @@ impl App {
             self.playback.preparation_cancel = Some(cancel.clone());
             background(runtime, move || {
                 if let Some((connection,device))=remote{crate::services::remote(&data,&connection,device.as_deref(),"pause",None,0,&cancel)?;}
-                Audio::prepare_tuned(&path, None, reverse, cache, &cancel)
+                Audio::prepare_tuned(&path, position, reverse, cache, &cancel)
             })
         });
     }
@@ -618,6 +628,7 @@ impl App {
         ) {
             request.queue = queue;
             request.paused = false;
+            request.position_ms = None;
             self.request_playback(request)
         } else {
             if !explicit {
