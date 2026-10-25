@@ -1,8 +1,9 @@
 use super::{
     buttons::{button_width, quiet_button},
     theme::Palette,
-    widgets::{block, visible_offset},
+    widgets::{block, buttons, visible_offset},
 };
+mod online;
 use crate::app::{App, Hit, SettingControl, SettingGroup, SettingsFocus, SettingsPage, Target};
 use ratatui::{
     Frame,
@@ -13,6 +14,7 @@ use ratatui::{
 };
 
 pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette) {
+    app.sync_online_settings();
     let area = frame.area();
     frame.render_widget(Clear, area);
     let outer =
@@ -57,105 +59,145 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         );
         return;
     }
-    let footer_height = inner.height.min(3);
-    let body_height = inner.height.saturating_sub(footer_height);
-    let min_menu_width = if inner.width < 45 { 10 } else { 12 };
-    let menu_width = if app.view.settings.themes_expanded {
-        (inner.width / 3).clamp(min_menu_width, 24)
+    let footer_height = inner.height.min(if app.settings_page().is_online() {
+        1
     } else {
-        (inner.width / 5).clamp(min_menu_width, 20)
-    }
-    .min(inner.width / 2);
-    let menu = Rect::new(inner.x, inner.y, menu_width, body_height);
-    let mut content = Rect::new(
-        menu.right() + 2,
-        inner.y,
-        inner.width.saturating_sub(menu_width + 3),
-        body_height,
-    );
-    app.view.settings.menu_area = menu;
-    frame.render_widget(
-        Paragraph::new(app.text("Sections", "Разделы")).style(palette.text().fg(palette.muted)),
-        Rect::new(menu.x, menu.y, menu.width, 1),
-    );
-    let menu_targets = app.settings_menu_targets();
-    let menu_offset = visible_offset(
-        0,
-        app.view.settings.menu_selected,
-        menu.height.saturating_sub(2) as usize,
-        menu_targets.len(),
-    );
-    for (index, target) in menu_targets.into_iter().enumerate().skip(menu_offset) {
-        let y = menu.y + (index - menu_offset) as u16 + 2;
-        if y >= menu.bottom() {
-            break;
-        }
-        let row = Rect::new(menu.x, y, menu.width, 1);
-        let selected = app.view.settings.menu_selected == index;
-        let style = if selected {
-            palette
-                .text()
-                .bg(palette.sidebar_selection)
-                .fg(palette.background)
-        } else if app.hovered(row) {
-            palette.text().bg(palette.selection)
+        3
+    });
+    let body_height = inner.height.saturating_sub(footer_height);
+    let compact_online = app.settings_page().is_online() && inner.width < 64;
+    let menu_visible = !compact_online || app.settings_focus() != SettingsFocus::Parameters;
+    let min_menu_width = if inner.width < 45 { 10 } else { 12 };
+    let menu_width = if !menu_visible {
+        0
+    } else if compact_online {
+        inner.width
+    } else {
+        if app.view.settings.themes_expanded
+            || app.view.settings.mods_expanded
+            || app.view.settings.services_expanded
+        {
+            (inner.width / 3).clamp(min_menu_width, 24)
         } else {
-            palette.text()
-        };
-        let (prefix, label) = match target {
-            Target::SettingsThemes => (
-                if app.view.settings.themes_expanded {
-                    "▾ "
-                } else {
-                    "▸ "
-                },
-                SettingsPage::Themes.name(app.settings.preferences.language),
-            ),
-            Target::SettingsTab(page) => (
-                if page == SettingsPage::Typography {
-                    "  └─ "
-                } else {
-                    "  ├─ "
-                },
-                if page == SettingsPage::Typography
-                    && menu.width
-                        < Span::raw(page.name(app.settings.preferences.language)).width() as u16 + 5
-                {
-                    app.text("Font", "Шрифт")
-                } else {
-                    page.tab_name(app.settings.preferences.language)
-                },
-            ),
-            Target::SettingsPage(page) => ("  ", page.name(app.settings.preferences.language)),
-            _ => continue,
-        };
+            (inner.width / 5).clamp(min_menu_width, 20)
+        }
+        .min(inner.width / 2)
+    };
+    let menu = Rect::new(inner.x, inner.y, menu_width, body_height);
+    let mut content = if compact_online {
+        if menu_visible {
+            Rect::default()
+        } else {
+            Rect::new(inner.x, inner.y, inner.width, body_height)
+        }
+    } else {
+        Rect::new(
+            menu.right() + 2,
+            inner.y,
+            inner.width.saturating_sub(menu_width + 3),
+            body_height,
+        )
+    };
+    app.view.settings.menu_area = menu;
+    if menu_visible {
         frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    prefix,
-                    if selected {
-                        style
+            Paragraph::new(app.text("Sections", "Разделы")).style(palette.text().fg(palette.muted)),
+            Rect::new(menu.x, menu.y, menu.width, 1),
+        );
+        let menu_targets = app.settings_menu_targets();
+        let menu_offset = visible_offset(
+            0,
+            app.view.settings.menu_selected,
+            menu.height.saturating_sub(2) as usize,
+            menu_targets.len(),
+        );
+        for (index, target) in menu_targets.into_iter().enumerate().skip(menu_offset) {
+            let y = menu.y + (index - menu_offset) as u16 + 2;
+            if y >= menu.bottom() {
+                break;
+            }
+            let row = Rect::new(menu.x, y, menu.width, 1);
+            let selected = app.view.settings.menu_selected == index;
+            let style = if selected {
+                palette
+                    .text()
+                    .bg(palette.sidebar_selection)
+                    .fg(palette.background)
+            } else if app.hovered(row) {
+                palette.text().bg(palette.selection)
+            } else {
+                palette.text()
+            };
+            let (prefix, label) = match target {
+                Target::SettingsThemes => (
+                    if app.view.settings.themes_expanded {
+                        "▾ "
                     } else {
-                        style.fg(palette.separator)
+                        "▸ "
+                    },
+                    SettingsPage::Themes.name(app.settings.preferences.language),
+                ),
+                Target::SettingsGroup(page) => (
+                    if app.settings_expanded(page) {
+                        "▾ "
+                    } else {
+                        "▸ "
+                    },
+                    if page == SettingsPage::Services && menu.width < 22 {
+                        app.text("Services", "Сервисы")
+                    } else {
+                        page.name(app.settings.preferences.language)
                     },
                 ),
-                Span::raw(label),
-            ]))
-            .style(style),
-            row,
-        );
-        app.view.hits.push(Hit {
-            area: row,
-            target,
-            enabled: true,
-        });
+                Target::SettingsTab(page) => (
+                    if page.tabs().last() == Some(&page) {
+                        "  └─ "
+                    } else {
+                        "  ├─ "
+                    },
+                    if page == SettingsPage::Typography
+                        && menu.width
+                            < Span::raw(page.name(app.settings.preferences.language)).width() as u16
+                                + 5
+                    {
+                        app.text("Font", "Шрифт")
+                    } else {
+                        page.tab_name(app.settings.preferences.language)
+                    },
+                ),
+                Target::SettingsPage(page) => ("  ", page.name(app.settings.preferences.language)),
+                _ => continue,
+            };
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(
+                        prefix,
+                        if selected {
+                            style
+                        } else {
+                            style.fg(palette.separator)
+                        },
+                    ),
+                    Span::raw(label),
+                ]))
+                .style(style),
+                row,
+            );
+            app.view.hits.push(Hit {
+                area: row,
+                target,
+                enabled: true,
+            });
+        }
+        if !compact_online {
+            frame.render_widget(
+                Paragraph::new("│\n".repeat(usize::from(body_height)))
+                    .style(palette.text().fg(palette.separator)),
+                Rect::new(menu.right(), menu.y, 1, body_height),
+            );
+        }
     }
-    frame.render_widget(
-        Paragraph::new("│\n".repeat(usize::from(body_height)))
-            .style(palette.text().fg(palette.separator)),
-        Rect::new(menu.right(), menu.y, 1, body_height),
-    );
-    let heading = if app.view.settings.page.section() == SettingsPage::Themes {
+    let heading = if !app.view.settings.page.tabs().is_empty() {
         app.view
             .settings
             .page
@@ -173,6 +215,56 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     content.y += 2;
     content.height = content.height.saturating_sub(2);
     app.view.settings.parameters_area = content;
+    if app.settings_page().is_online() {
+        if !content.is_empty() {
+            online::render(frame, app, content, palette);
+        }
+        let back = app.text("Back", "Назад");
+        let width = button_width(app, back, &Target::CloseDialog).min(inner.width);
+        let footer = Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1);
+        if compact_online {
+            buttons(
+                frame,
+                app,
+                footer,
+                vec![
+                    (
+                        if menu_visible {
+                            app.text("Open", "Открыть")
+                        } else {
+                            app.text("Sections", "Разделы")
+                        }
+                        .into(),
+                        Target::SettingsPane,
+                        true,
+                    ),
+                    (back.into(), Target::CloseDialog, true),
+                ],
+                palette,
+            );
+            return;
+        }
+        frame.render_widget(
+            Paragraph::new(app.text("Tab: sections / content", "Tab: разделы / содержимое"))
+                .style(palette.text().fg(palette.muted)),
+            Rect::new(
+                footer.x,
+                footer.y,
+                footer.width.saturating_sub(width + 1),
+                1,
+            ),
+        );
+        quiet_button(
+            frame,
+            app,
+            Rect::new(footer.right().saturating_sub(width), footer.y, width, 1),
+            back,
+            Target::CloseDialog,
+            true,
+            palette,
+        );
+        return;
+    }
     let rows = app.settings_rows();
     app.view.settings.selected = app.view.settings.selected.min(rows.len().saturating_sub(1));
     let stacked = content.width < 40;
@@ -489,7 +581,7 @@ fn breadcrumbs(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
             Target::SettingsPage(page.section()),
         ),
     ];
-    if page.section() == SettingsPage::Themes {
+    if !page.tabs().is_empty() {
         entries.push((
             page.tab_name(app.settings.preferences.language).to_owned(),
             Target::SettingsTab(page),

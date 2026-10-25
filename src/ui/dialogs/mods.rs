@@ -56,7 +56,26 @@ pub(super) fn render(
         48,
         palette,
     );
+    render_content(frame, app, view, inner, palette);
+}
+
+pub(in crate::ui) fn render_content(
+    frame: &mut Frame,
+    app: &mut App,
+    view: &mut ModsView,
+    inner: Rect,
+    palette: Palette,
+) {
     if inner.width < 24 || inner.height < 18 {
+        frame.render_widget(
+            Paragraph::new(app.text(
+                "Enlarge the window to manage mods.",
+                "Увеличьте окно для управления модами.",
+            ))
+            .style(palette.text())
+            .wrap(Wrap { trim: false }),
+            inner,
+        );
         return;
     }
     let busy = app.mods_loading();
@@ -139,7 +158,6 @@ pub(super) fn render(
                 selected.is_some(),
             ));
         }
-        items.push(action(app.text("Back", "Назад"), A::Back, true));
         items
     };
     if view.opened

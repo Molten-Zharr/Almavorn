@@ -503,8 +503,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
     q.keys(
         &[p(Left), p(Right)],
-        "Change a parameter; in the category list, collapse or expand Themes and select its tabs.",
-        "Изменить значение настройки. В списке разделов — раскрыть или свернуть Темы и выбрать вкладку.",
+        "Change a setting. In the section list, expand or collapse Themes, Mods or Music services and choose a tab.",
+        "Изменить значение настройки. В списке разделов — раскрыть или свернуть Темы, Моды или Сервисы и выбрать вкладку.",
     );
     q.keys(
         &[p(Enter), p(Char(' '))],
@@ -860,6 +860,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Services as usize];
+    q.note("Manage accounts, music, playlists and devices in Settings → Music services. Tab switches between the section list and its content.",
+        "Подключения, музыка, плейлисты и устройства находятся в Настройки → Музыкальные сервисы. Tab переключает список разделов и содержимое.");
     q.keys(
         &[p(Enter)],
         "Open the selected service, playlist or track.",
@@ -887,6 +889,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Mods as usize];
+    q.note("Manage mods in Settings → Mods → Installed. The creation guide is in the neighboring tab. Tab switches between sections and content.",
+        "Управление модами: Настройки → Моды → Установленные. Руководство по созданию — в соседней вкладке. Tab переключает разделы и содержимое.");
     q.keys(
         &[p(Enter)],
         "Open the selected mod. In an installation confirmation, Enter returns without installing.",
@@ -920,6 +924,13 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "1–9 запускает соответствующую команду выбранного мода.",
     );
 
+    for category in [C::Services, C::Mods] {
+        sections[category as usize].keys(
+            &[p(Home), p(End)],
+            "Go to the beginning or end of the list or mod description.",
+            "Перейти в начало или конец списка либо описания мода.",
+        );
+    }
     for category in [C::Tags, C::Lyrics, C::Downloads, C::Services, C::Mods] {
         let q = &mut sections[category as usize];
         q.keys(

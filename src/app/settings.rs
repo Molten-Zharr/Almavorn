@@ -1,6 +1,7 @@
 mod catalogs;
 mod files;
 mod items;
+mod online;
 mod persistence;
 
 use super::{App, Dialog, Target, TextPurpose, bounded};
@@ -27,9 +28,16 @@ pub enum SettingsPage {
     Palettes,
     Typography,
     Shortcuts,
+    Mods,
+    ModGuide,
+    Services,
+    ServiceTracks,
+    ServicePlaylists,
+    ServiceDevices,
+    ServiceGuide,
 }
 impl SettingsPage {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 14] = [
         Self::General,
         Self::Lyrics,
         Self::Profiles,
@@ -37,23 +45,46 @@ impl SettingsPage {
         Self::Palettes,
         Self::Typography,
         Self::Shortcuts,
+        Self::Mods,
+        Self::ModGuide,
+        Self::Services,
+        Self::ServiceTracks,
+        Self::ServicePlaylists,
+        Self::ServiceDevices,
+        Self::ServiceGuide,
     ];
-    pub const SECTIONS: [Self; 5] = [Self::General, Self::Lyrics, Self::Profiles, Self::Themes, Self::Shortcuts];
+    pub const SECTIONS: [Self; 7] = [Self::General, Self::Lyrics, Self::Profiles, Self::Themes, Self::Shortcuts, Self::Mods, Self::Services];
     pub const THEME_TABS: [Self; 3] = [Self::Themes, Self::Palettes, Self::Typography];
+    pub const MOD_TABS: [Self; 2] = [Self::Mods, Self::ModGuide];
+    pub const SERVICE_TABS: [Self; 5] = [Self::Services, Self::ServiceTracks, Self::ServicePlaylists, Self::ServiceDevices, Self::ServiceGuide];
 
     pub fn section(self) -> Self {
         match self {
             Self::Palettes | Self::Typography => Self::Themes,
+            Self::ModGuide => Self::Mods,
+            Self::ServiceTracks | Self::ServicePlaylists | Self::ServiceDevices | Self::ServiceGuide => Self::Services,
             page => page,
         }
     }
 
     pub fn tab_name(self, language: Language) -> &'static str {
-        if self == Self::Themes {
-            language.text("Presets", "Пресеты")
-        } else {
-            self.name(language)
+        match self {
+            Self::Themes => language.text("Presets", "Пресеты"),
+            Self::Mods => language.text("Installed", "Установленные"),
+            Self::Services => language.text("Connections", "Подключения"),
+            _ => self.name(language),
         }
+    }
+    pub fn tabs(self) -> &'static [Self] {
+        match self.section() {
+            Self::Themes => &Self::THEME_TABS,
+            Self::Mods => &Self::MOD_TABS,
+            Self::Services => &Self::SERVICE_TABS,
+            _ => &[],
+        }
+    }
+    pub fn is_online(self) -> bool {
+        matches!(self.section(), Self::Mods | Self::Services)
     }
     pub fn name(self, language: Language) -> &'static str {
         match self {
@@ -64,6 +95,13 @@ impl SettingsPage {
             Self::Palettes => language.text("Palettes", "Палитры"),
             Self::Typography => language.text("Font and geometry", "Шрифт и геометрия"),
             Self::Shortcuts => language.text("Shortcuts", "Клавиши"),
+            Self::Mods => language.text("Mods", "Моды"),
+            Self::ModGuide => language.text("Create a mod", "Создание модов"),
+            Self::Services => language.text("Music services", "Музыкальные сервисы"),
+            Self::ServiceTracks => language.text("Music", "Музыка"),
+            Self::ServicePlaylists => language.text("Playlists", "Плейлисты"),
+            Self::ServiceDevices => language.text("Devices", "Устройства"),
+            Self::ServiceGuide => language.text("Connection guide", "Как подключить"),
         }
     }
 }
@@ -85,6 +123,8 @@ pub(crate) struct SettingsView {
     pub offset: usize,
     pub menu_selected: usize,
     pub themes_expanded: bool,
+    pub mods_expanded: bool,
+    pub services_expanded: bool,
     pub menu_area: Rect,
     pub parameters_area: Rect,
     pub binding_modifiers: [bool; 3],
@@ -261,9 +301,7 @@ impl App {
     }
     pub(super) fn sync_settings_menu(&mut self) {
         let page = self.view.settings.page;
-        if page.section() == SettingsPage::Themes {
-            self.view.settings.themes_expanded = true;
-        }
+        self.set_settings_expanded(page.section(), true);
         self.view.settings.menu_selected = self
             .settings_menu_targets()
             .iter()
@@ -274,7 +312,8 @@ impl App {
             .unwrap_or(0);
     }
     pub fn open_settings_page(&mut self, page: SettingsPage) {
-        if !matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
+        self.remember_service_selection();
+        if !page.is_online() && !self.view.dialog.as_ref().is_some_and(Dialog::is_settings) {
             self.message(
                 self.text(
                     "Changes save automatically to the active profile",
@@ -291,14 +330,21 @@ impl App {
         self.show_settings();
     }
     pub(super) fn show_settings(&mut self) {
+        if self.show_online_settings() {
+            return;
+        }
         self.view.dialog = Some(Dialog::Settings {
             selected: self.view.settings.selected,
         });
     }
     pub(super) fn select_settings_tab(&mut self, page: SettingsPage) {
-        if SettingsPage::THEME_TABS.contains(&page) {
+        if page.tabs().contains(&page) {
             self.open_settings_page(page);
-            self.view.settings.focus = SettingsFocus::Subtabs;
+            self.view.settings.focus = if page.is_online() {
+                SettingsFocus::Parameters
+            } else {
+                SettingsFocus::Subtabs
+            };
         }
     }
     pub(crate) fn settings_menu_targets(&self) -> Vec<Target> {
@@ -311,24 +357,19 @@ impl App {
             items.extend(SettingsPage::THEME_TABS.map(Target::SettingsTab));
         }
         items.push(Target::SettingsPage(SettingsPage::Shortcuts));
+        for section in [SettingsPage::Mods, SettingsPage::Services] {
+            items.push(Target::SettingsGroup(section));
+            if self.settings_expanded(section) {
+                items.extend(section.tabs().iter().copied().map(Target::SettingsTab));
+            }
+        }
         items
     }
     fn focus_settings_themes(&mut self) {
-        self.view.settings.menu_selected = self
-            .settings_menu_targets()
-            .iter()
-            .position(|target| matches!(target, Target::SettingsThemes))
-            .unwrap_or(0);
-        self.view.settings.focus = SettingsFocus::Menu;
+        self.focus_settings_group(SettingsPage::Themes);
     }
     pub(super) fn toggle_settings_themes(&mut self) {
-        let expanded = !self.view.settings.themes_expanded;
-        if expanded && self.view.settings.page.section() != SettingsPage::Themes {
-            self.open_settings_page(SettingsPage::Themes);
-        }
-        self.view.settings.themes_expanded = expanded;
-        self.focus_settings_themes();
-        self.show_settings();
+        self.toggle_settings_group(SettingsPage::Themes);
     }
     fn select_settings_menu(&mut self, index: usize) {
         let targets = self.settings_menu_targets();
@@ -348,11 +389,12 @@ impl App {
                 self.view.settings.menu_selected = index;
             }
             Target::SettingsThemes => self.focus_settings_themes(),
+            Target::SettingsGroup(page) => self.focus_settings_group(*page),
             _ => {}
         }
     }
     pub(super) fn hover_settings(&mut self) {
-        if !matches!(self.view.dialog, Some(Dialog::Settings { .. }))
+        if !self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root)
             || self.view.workspace.gesture.is_some()
         {
             return;
@@ -368,6 +410,7 @@ impl App {
             let index = self.settings_menu_targets().iter().position(|item| {
                 match (item, target.as_ref()) {
                     (Target::SettingsThemes, Some(Target::SettingsThemes)) => true,
+                    (Target::SettingsGroup(a), Some(Target::SettingsGroup(b))) => a == b,
                     (Target::SettingsPage(a), Some(Target::SettingsPage(b)))
                     | (Target::SettingsTab(a), Some(Target::SettingsTab(b))) => a == b,
                     _ => false,
@@ -440,6 +483,9 @@ impl App {
             );
             self.select_settings_menu(index);
         } else {
+            if self.scroll_online_settings(direction) {
+                return;
+            }
             self.view.settings.selected = bounded(
                 self.view.settings.selected,
                 direction,
@@ -450,6 +496,18 @@ impl App {
     }
     pub(super) fn settings_key(&mut self, key: KeyPress) -> Result<()> {
         let key = key.normalized();
+        if self.view.settings.focus == SettingsFocus::Parameters && key.key != Key::Tab {
+            if matches!(self.view.dialog, Some(Dialog::Mods(_))) {
+                return self.mods_key(key);
+            }
+            if matches!(self.view.dialog, Some(Dialog::Services(_))) {
+                return self.services_key(key);
+            }
+            if self.settings_guide().is_some() {
+                self.settings_guide_key(key);
+                return Ok(());
+            }
+        }
         match key.key {
             Key::Tab => {
                 self.view.settings.focus = if self.view.settings.focus == SettingsFocus::Parameters
@@ -466,15 +524,11 @@ impl App {
             Key::PageUp => self.settings_scroll(-5),
             Key::PageDown => self.settings_scroll(5),
             Key::Right if self.view.settings.focus != SettingsFocus::Parameters => {
-                if matches!(
-                    self.settings_menu_targets()
-                        .get(self.view.settings.menu_selected),
-                    Some(Target::SettingsThemes)
-                ) {
-                    if self.view.settings.themes_expanded {
+                if let Some(section) = self.selected_settings_group() {
+                    if self.settings_expanded(section) {
                         self.select_settings_menu(self.view.settings.menu_selected + 1);
                     } else {
-                        self.toggle_settings_themes();
+                        self.toggle_settings_group(section);
                     }
                 } else {
                     self.view.settings.focus = SettingsFocus::Parameters;
@@ -485,9 +539,12 @@ impl App {
                     .settings_menu_targets()
                     .get(self.view.settings.menu_selected)
                 {
-                    Some(Target::SettingsTab(_)) => self.focus_settings_themes(),
+                    Some(Target::SettingsTab(page)) => self.focus_settings_group(page.section()),
                     Some(Target::SettingsThemes) if self.view.settings.themes_expanded => {
                         self.toggle_settings_themes();
+                    }
+                    Some(Target::SettingsGroup(page)) if self.settings_expanded(*page) => {
+                        self.toggle_settings_group(*page);
                     }
                     _ => {}
                 }
@@ -498,12 +555,8 @@ impl App {
             }
             Key::Enter | Key::Char(' ') => {
                 if self.view.settings.focus != SettingsFocus::Parameters {
-                    if matches!(
-                        self.settings_menu_targets()
-                            .get(self.view.settings.menu_selected),
-                        Some(Target::SettingsThemes)
-                    ) {
-                        self.toggle_settings_themes();
+                    if let Some(section) = self.selected_settings_group() {
+                        self.toggle_settings_group(section);
                     } else {
                         self.view.settings.focus = SettingsFocus::Parameters;
                     }

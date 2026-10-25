@@ -222,6 +222,8 @@ fn run() -> Result<()> {
                             | Target::SettingHelp(_)
                             | Target::SettingsPage(_)
                             | Target::SettingsThemes
+                            | Target::SettingsGroup(_)
+                            | Target::SettingsPane
                             | Target::SettingsTab(_)
                             | Target::CloseDialog
                             | Target::Submit

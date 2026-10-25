@@ -141,6 +141,11 @@ impl App {
             Input::Click { x, y, double } => {
                 self.view.mark_drag=None;
                 self.view.pointer = Position::new(x, y);
+                if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root)
+                    && self.view.settings.parameters_area.contains(self.view.pointer)
+                {
+                    self.view.settings.focus = super::SettingsFocus::Parameters;
+                }
                 if self.view.dialog.is_none() {
                     self.view.toolbar_selected = None;
                     self.focus_point(self.view.pointer);
@@ -271,7 +276,7 @@ impl App {
                     return Ok(());
                 }
                 let delta = delta * self.wheel_step(position, ctrl, shift, 1);
-                if matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
+                if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root) {
                     let position = Position::new(x, y);
                     self.view.settings.focus = if self.view.settings.menu_area.contains(position) {
                         super::SettingsFocus::Menu
@@ -463,7 +468,9 @@ impl App {
                 .preferences
                 .bindings
                 .iter()
-                .any(|binding| binding.action == action && binding.key == normalized)
+                .any(|binding| binding.key == normalized && (binding.action == action
+                    || (binding.action == Action::Settings
+                        && self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root))))
                 || (matches!(
                     self.view.dialog,
                     Some(Dialog::SettingsHelp { .. } | Dialog::CopyableHelp { .. })
@@ -990,6 +997,14 @@ impl App {
             Target::SettingAdjust(index, direction) => self.adjust_setting(index, direction)?,
             Target::SettingsPage(page) => self.open_settings_page(page),
             Target::SettingsThemes => self.toggle_settings_themes(),
+            Target::SettingsGroup(page) => self.toggle_settings_group(page),
+            Target::SettingsPane => {
+                self.view.settings.focus = if self.view.settings.focus == super::SettingsFocus::Parameters {
+                    super::SettingsFocus::Menu
+                } else {
+                    super::SettingsFocus::Parameters
+                };
+            }
             Target::SettingsTab(page) => self.select_settings_tab(page),
             Target::SettingsVolume(index, area) => {
                 if area.width > 0 {
@@ -1073,6 +1088,9 @@ impl App {
             Target::SettingsThemes if self.view.settings.themes_expanded => {
                 self.toggle_settings_themes();
             }
+            Target::SettingsGroup(page) if self.settings_expanded(page) => {
+                self.toggle_settings_group(page);
+            }
             Target::DialogScroll(delta) => self.scroll_dialog(-delta),
             Target::CloseDialog => {
                 self.close_dialog();
@@ -1097,6 +1115,12 @@ impl App {
     }
 
     fn shift_dialog_page(&mut self, delta: i16) {
+        if self.settings_guide().is_some() && matches!(self.view.dialog, Some(Dialog::Settings { .. })) {
+            return;
+        }
+        if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root)
+            && self.view.settings.focus != super::SettingsFocus::Parameters
+        { return; }
         let offset = match &mut self.view.dialog {
             Some(Dialog::Browser(view)) => Some(&mut view.offset),
             Some(Dialog::Search(view)) => Some(if view.focus == super::SearchFocus::Playlists {
@@ -1128,6 +1152,14 @@ impl App {
                 .filter(|hit| predicate(&hit.target))
                 .count()
         };
+        if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root)
+            && self.view.settings.menu_area.contains(position)
+        {
+            return count(|target| matches!(target, Target::SettingsPage(_) | Target::SettingsTab(_) | Target::SettingsThemes | Target::SettingsGroup(_)));
+        }
+        if matches!(self.view.dialog, Some(Dialog::Settings { .. })) && self.settings_guide().is_some() {
+            return self.view.dialog_page_size.max(1);
+        }
         match &self.view.dialog {
             None => {
                 if let Some(Target::ListScroll(scroll)) = self.target_at(position) {

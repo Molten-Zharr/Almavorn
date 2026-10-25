@@ -108,6 +108,9 @@ impl App {
         let action = lang.text("Open", "Открыть").to_owned();
         let run = lang.text("Apply", "Применить").to_owned();
         match self.view.settings.page {
+            SettingsPage::Mods | SettingsPage::ModGuide | SettingsPage::Services
+            | SettingsPage::ServiceTracks | SettingsPage::ServicePlaylists
+            | SettingsPage::ServiceDevices | SettingsPage::ServiceGuide => Vec::new(),
             SettingsPage::Lyrics => {
                 let preferences = &self.settings.preferences.lyrics;
                 let checked = |value| if value { "[x]".to_owned() } else { "[ ]".to_owned() };

@@ -48,7 +48,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .is_some_and(crate::app::Dialog::is_settings)
     {
         settings::render_settings(frame, app, palette);
-        if !matches!(app.view.dialog, Some(crate::app::Dialog::Settings { .. }))
+        if !app.view.dialog.as_ref().is_some_and(crate::app::Dialog::is_settings_root)
             && let Some(mut dialog) = app.view.dialog.take()
         {
             app.view.hits.clear();

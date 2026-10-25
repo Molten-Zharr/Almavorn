@@ -147,6 +147,22 @@ pub enum Dialog {
 }
 
 impl Dialog {
+    pub(crate) fn settings_base(&self) -> &Self {
+        match self {
+            Self::Form(form) => form.back.as_deref().map_or(self, Self::settings_base),
+            _ => self,
+        }
+    }
+
+    pub(crate) fn is_settings_root(&self) -> bool {
+        match self {
+            Self::Settings { .. } => true,
+            Self::Mods(view) => view.remove.is_none() && view.install.is_none(),
+            Self::Services(view) => view.remove.is_none(),
+            _ => false,
+        }
+    }
+
     pub(super) fn opening_action(&self) -> Option<crate::input::Action> {
         use crate::input::Action;
         match self {
@@ -189,10 +205,15 @@ impl Dialog {
     }
 
     pub(crate) fn is_settings(&self) -> bool {
+        if let Self::Form(form) = self {
+            return form.back.as_deref().is_some_and(Self::is_settings);
+        }
         matches!(self, Self::Browser(browser) if browser.palette_file.is_some())
             || matches!(
                 self,
                 Self::Settings { .. }
+                    | Self::Mods(_)
+                    | Self::Services(_)
                     | Self::Text(TextDialog {
                         purpose: TextPurpose::Settings(_),
                         ..
@@ -208,8 +229,13 @@ impl Dialog {
 
 impl App {
     pub fn copy_help(&mut self, line: Option<usize>) -> bool {
-        let Some(Dialog::CopyableHelp { description, .. }) = &self.view.dialog else {
-            return false;
+        let description = match &self.view.dialog {
+            Some(Dialog::CopyableHelp { description, .. }) => description.as_str(),
+            Some(Dialog::Settings { .. }) => match self.settings_guide() {
+                Some(text) => text,
+                None => return false,
+            },
+            _ => return false,
         };
         let text = match line {
             Some(line) => {
@@ -218,7 +244,7 @@ impl App {
                 };
                 text.to_owned()
             }
-            None => description.clone(),
+            None => description.to_owned(),
         };
         self.view.clipboard_text = Some(text);
         true
@@ -267,6 +293,10 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root) {
+            self.settings_scroll(i64::from(direction));
+            return;
+        }
         if matches!(self.view.dialog, Some(Dialog::ScanFolders(_))) {
             self.scan_folders_scroll(i64::from(direction));
             return;

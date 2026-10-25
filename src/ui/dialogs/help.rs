@@ -39,7 +39,7 @@ pub(super) fn scroll_text(
     frame.render_widget(paragraph.scroll((*offset as u16, 0)), body);
 }
 
-pub(super) fn copyable_text(
+pub(in crate::ui) fn copyable_text(
     frame: &mut Frame,
     app: &mut App,
     offset: &mut usize,

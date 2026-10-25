@@ -29,12 +29,38 @@ pub(super) fn render(
         48,
         palette,
     );
+    render_content(frame, app, view, inner, palette);
+}
+
+pub(in crate::ui) fn render_content(
+    frame: &mut Frame,
+    app: &mut App,
+    view: &mut ServicesView,
+    inner: Rect,
+    palette: Palette,
+) {
     if inner.width < 24 || inner.height < 18 {
+        frame.render_widget(
+            Paragraph::new(app.text(
+                "Enlarge the window to manage music services.",
+                "Увеличьте окно для управления музыкальными сервисами.",
+            ))
+            .style(palette.text())
+            .wrap(Wrap { trim: false }),
+            inner,
+        );
         return;
     }
     let busy = app.services_loading();
     let selected = app.services.connections.get(view.selected);
-    let controls = if view.remove.is_some() {
+    let connection = app
+        .services
+        .connections
+        .iter()
+        .find(|c| Some(&c.id) == app.services.connection.as_ref() && c.enabled);
+    let ready = !busy && connection.is_some();
+    let spotify = connection.is_some_and(|c| c.provider == Provider::Spotify);
+    let mut controls = if view.remove.is_some() {
         vec![
             action(app.text("Cancel [Enter]", "Отмена [Enter]"), A::Back, true),
             action(
@@ -98,72 +124,76 @@ pub(super) fn render(
                 action(
                     app.text("Play [Enter]", "Играть [Enter]"),
                     A::Play,
-                    !busy
+                    ready
                         && app
                             .services
                             .tracks
                             .get(view.selected)
                             .is_some_and(|t| t.available),
                 ),
-                action(app.text("Search [F]", "Поиск [F]"), A::Search, !busy),
-                action(app.text("My music", "Моя музыка"), A::Library, !busy),
+                action(app.text("Search [F]", "Поиск [F]"), A::Search, ready),
+                action(app.text("My music", "Моя музыка"), A::Library, ready),
                 action(
                     app.text("Liked songs", "Любимые композиции"),
                     A::Liked,
-                    !busy,
+                    ready,
                 ),
-                action(app.text("Playlists", "Плейлисты"), A::Playlists, !busy),
+                action(app.text("Playlists", "Плейлисты"), A::Playlists, ready),
                 action(
                     app.text("Previous page", "Предыдущие записи"),
                     A::Page(-1),
-                    !busy && app.services.page > 0,
+                    ready && app.services.page > 0,
                 ),
                 action(
                     app.text("More recordings", "Еще записи"),
                     A::Page(1),
-                    !busy && !app.services.tracks.is_empty(),
+                    ready && !app.services.tracks.is_empty(),
                 ),
                 action(
                     app.text("Spotify devices", "Устройства Spotify"),
                     A::Devices,
-                    !busy
-                        && app.services.connections.iter().any(|c| {
-                            Some(&c.id) == app.services.connection.as_ref()
-                                && c.provider == Provider::Spotify
-                        }),
+                    ready && spotify,
                 ),
             ],
             ServicePage::Playlists => vec![
                 action(
+                    app.text("Refresh playlists", "Обновить плейлисты"),
+                    A::Playlists,
+                    ready,
+                ),
+                action(
                     app.text("Open [Enter]", "Открыть [Enter]"),
                     A::Open,
-                    !busy && !app.services.playlists.is_empty(),
+                    ready && !app.services.playlists.is_empty(),
                 ),
                 action(
                     app.text("Previous page", "Предыдущие плейлисты"),
                     A::Page(-1),
-                    !busy && app.services.page > 0,
+                    ready && app.services.page > 0,
                 ),
                 action(
                     app.text("More playlists", "Еще плейлисты"),
                     A::Page(1),
-                    !busy && !app.services.playlists.is_empty(),
+                    ready && !app.services.playlists.is_empty(),
                 ),
-                action(app.text("Search", "Поиск"), A::Search, !busy),
+                action(app.text("Search", "Поиск"), A::Search, ready),
             ],
             ServicePage::Devices => vec![
                 action(
                     app.text("Choose [Enter]", "Выбрать [Enter]"),
                     A::SelectDevice,
-                    app.services
-                        .devices
-                        .get(view.selected)
-                        .is_some_and(|d| d.id.is_some() && !d.is_restricted),
+                    ready
+                        && spotify
+                        && app
+                            .services
+                            .devices
+                            .get(view.selected)
+                            .is_some_and(|d| d.id.is_some() && !d.is_restricted),
                 ),
                 action(
                     app.text("Refresh devices", "Обновить устройства"),
                     A::Devices,
-                    !busy,
+                    ready && spotify,
                 ),
             ],
         };
@@ -199,9 +229,18 @@ pub(super) fn render(
             A::Guide,
             true,
         ));
-        items.push(action(app.text("Back", "Назад"), A::Back, true));
         items
     };
+    if view.remove.is_none() && view.page != ServicePage::Connections {
+        controls.insert(
+            0,
+            (
+                app.text("Connections", "Подключения").into(),
+                Target::SettingsTab(crate::app::SettingsPage::Services),
+                true,
+            ),
+        );
+    }
     let footer_height = buttons_height(app, inner.width, &controls)
         .max(2)
         .min(inner.height - 4);
@@ -369,21 +408,38 @@ pub(super) fn render(
     }
     if count == 0 && !busy {
         frame.render_widget(
-            Paragraph::new(match view.page {
-                ServicePage::Connections => app.text(
-                    "Add Yandex Music, Spotify or YouTube Music below.",
-                    "Добавьте Яндекс Музыку, Spotify или YouTube Music кнопками ниже.",
-                ),
-                ServicePage::Tracks => app.text(
-                    "No recordings found. Try another query or open My music.",
-                    "Записи не найдены. Измените запрос или откройте Мою музыку.",
-                ),
-                ServicePage::Playlists => app.text("No playlists found.", "Плейлисты не найдены."),
-                ServicePage::Devices => app.text(
-                    "No devices found. Open Spotify and refresh this list.",
-                    "Устройства не найдены. Откройте Spotify и обновите список.",
-                ),
-            })
+            Paragraph::new(
+                if view.page != ServicePage::Connections && connection.is_none() {
+                    app.text(
+                        "Choose an enabled account in Connections.",
+                        "Выберите включенное подключение в разделе Подключения.",
+                    )
+                } else if view.page == ServicePage::Devices && !spotify {
+                    app.text(
+                        "Device selection is available for Spotify. Choose Spotify in Connections.",
+                        "Устройства доступны для Spotify. Выберите его в разделе Подключения.",
+                    )
+                } else {
+                    match view.page {
+                        ServicePage::Connections => app.text(
+                            "Add Yandex Music, Spotify or YouTube Music below.",
+                            "Добавьте Яндекс Музыку, Spotify или YouTube Music кнопками ниже.",
+                        ),
+                        ServicePage::Tracks => app.text(
+                            "No recordings found. Try another query or open My music.",
+                            "Записи не найдены. Измените запрос или откройте Мою музыку.",
+                        ),
+                        ServicePage::Playlists => app.text(
+                            "Press Refresh playlists to load this account's playlists.",
+                            "Нажмите Обновить плейлисты, чтобы загрузить их из аккаунта.",
+                        ),
+                        ServicePage::Devices => app.text(
+                            "No devices found. Open Spotify and refresh this list.",
+                            "Устройства не найдены. Откройте Spotify и обновите список.",
+                        ),
+                    }
+                },
+            )
             .style(palette.text())
             .wrap(Wrap { trim: false }),
             body,

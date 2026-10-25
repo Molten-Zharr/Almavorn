@@ -46,6 +46,7 @@ pub struct ModsState {
     pub rows: Vec<Mod>,
     pub error: Option<String>,
     pub panels: HashMap<String, String>,
+    pub(super) pending_install: Option<Box<Mod>>,
     job: LatestJob<Request, Response>,
     cancel: Option<Arc<AtomicBool>>,
     events: VecDeque<(String, String)>,
@@ -59,6 +60,7 @@ impl Default for ModsState {
             rows: vec![],
             error: None,
             panels: HashMap::new(),
+            pending_install: None,
             job: LatestJob::default(),
             cancel: None,
             events: VecDeque::new(),
@@ -120,7 +122,10 @@ impl App {
         self.mod_request(Operation::Load);
     }
     pub(super) fn open_mods(&mut self) {
-        self.view.dialog = Some(Dialog::Mods(ModsView::default()));
+        self.open_settings_page(super::SettingsPage::Mods);
+        self.view.settings.focus = super::SettingsFocus::Parameters;
+    }
+    pub(super) fn ensure_mods_loaded(&mut self) {
         if !self.mods.initialized && !self.mods_loading() {
             self.initialize_mods();
         }
@@ -189,6 +194,7 @@ impl App {
         self.mod_request(Operation::Save(value));
     }
     pub(super) fn import_mod(&mut self, path: PathBuf) {
+        self.mods.pending_install = None;
         self.view.dialog = Some(Dialog::Mods(ModsView::default()));
         self.mod_request(Operation::Package(path));
     }
@@ -240,10 +246,11 @@ impl App {
                         }
                     }
                     Ok(Response::Package(value)) => {
-                        self.view.dialog = Some(Dialog::Mods(ModsView {
-                            install: Some(Box::new(value)),
-                            ..Default::default()
-                        }));
+                        if let Some(Dialog::Mods(view)) = &mut self.view.dialog {
+                            view.install = Some(Box::new(value));
+                        } else {
+                            self.mods.pending_install = Some(Box::new(value));
+                        }
                     }
                     Ok(Response::Saved(value)) => {
                         let id = value.manifest.id.clone();
@@ -498,6 +505,8 @@ impl App {
         match key.key {
             Key::Up => self.mods_scroll(-1),
             Key::Down => self.mods_scroll(1),
+            Key::Home => self.mods_scroll(i64::MIN),
+            Key::End => self.mods_scroll(i64::MAX),
             Key::PageUp => self.mods_scroll(-10),
             Key::PageDown => self.mods_scroll(10),
             Key::Enter => self.mod_action(ModAction::Open)?,
@@ -516,6 +525,7 @@ impl App {
         Ok(())
     }
     pub(super) fn mod_action(&mut self, action: ModAction) -> Result<()> {
+        self.view.settings.focus = super::SettingsFocus::Parameters;
         if let Err(error) = self.mod_action_inner(action) {
             self.mods.error = Some(format!("{error:#}"));
         }
@@ -567,7 +577,7 @@ impl App {
             ModAction::Run(index)=>{let value=self.mods.rows.get(selected).context("Выберите мод.")?;ensure!(value.enabled,"Включите мод.");let action=value.manifest.actions.get(index).context("У мода нет такого действия.")?;self.queue_mod_event(value.manifest.id.clone(),format!("action:{}",action.id));},
             ModAction::Refresh=>self.initialize_mods(),
             ModAction::Cancel=>{self.mods.cancel_all();self.mods.job.cancel();self.mods.events.clear();},
-            ModAction::Guide=>{self.view.dialog=Some(Dialog::CopyableHelp{title:self.text("Creating mods","Создание модов").into(),description:self.text(include_str!("../../docs/MODS.md"),include_str!("../../docs/MODS.ru.md")).into(),offset:0});},
+            ModAction::Guide=>{self.open_settings_page(super::SettingsPage::ModGuide);self.view.settings.focus=super::SettingsFocus::Parameters;},
             ModAction::Row(_)|ModAction::Back=>{}
         }
         Ok(())

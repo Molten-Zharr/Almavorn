@@ -135,6 +135,27 @@ impl Default for ServicesState {
     }
 }
 impl ServicesState {
+    pub(super) fn select_connection(&mut self, id: String) {
+        if self.connection.as_ref() != Some(&id) {
+            if self.aux.requested().is_some_and(|request| matches!(
+                &request.operation, Operation::Browse(..) | Operation::Search(..) | Operation::Devices(..)
+            )) {
+                if let Some(cancel) = &self.cancel { cancel.store(true, Ordering::Relaxed); }
+                self.aux.cancel();
+            }
+            self.tracks.clear();
+            self.playlists.clear();
+            self.devices.clear();
+            self.selected_device = None;
+            self.devices_connection = None;
+            self.query = None;
+            self.collection = None;
+            self.library_kind = "library".into();
+            self.page = 0;
+        }
+        self.connection = Some(id);
+    }
+
     pub(super) fn cancel_all(&self) {
         if let Some(cancel) = &self.cancel {
             cancel.store(true, Ordering::Relaxed);
@@ -204,8 +225,11 @@ impl App {
         self.services.native.is_some() || self.services.remote_connection.is_some()
     }
     pub(super) fn open_services(&mut self) {
-        self.view.dialog = Some(Dialog::Services(ServicesView::default()));
-        if self.services.connections.is_empty() {
+        self.open_settings_page(super::SettingsPage::Services);
+        self.view.settings.focus = super::SettingsFocus::Parameters;
+    }
+    pub(super) fn ensure_services_loaded(&mut self) {
+        if self.services.connections.is_empty() && !self.services_loading() {
             self.service_request(Operation::Load);
         }
     }
@@ -341,10 +365,12 @@ impl App {
         });
     }
     pub(super) fn service_save(&mut self, connection: Connection) {
+        self.services.select_connection(connection.id.clone());
         self.view.dialog = Some(Dialog::Services(ServicesView::default()));
         self.service_request(Operation::Save(connection));
     }
     pub(super) fn service_headers(&mut self, connection: Connection, headers: String) {
+        self.services.select_connection(connection.id.clone());
         self.view.dialog = Some(Dialog::Services(ServicesView::default()));
         self.service_request(Operation::YouTube(connection, headers));
     }
@@ -406,6 +432,13 @@ impl App {
                 match completed.result {
                     Ok(Response::Connections(rows)) => {
                         self.services.connections = rows;
+                        if let Some(Dialog::Services(view)) = &mut self.view.dialog
+                            && view.page == ServicePage::Connections
+                        {
+                            view.selected = self.services.connections.iter()
+                                .position(|c| Some(&c.id) == self.services.connection.as_ref())
+                                .unwrap_or(0);
+                        }
                     }
                     Ok(Response::Playlists(rows)) => {
                         self.services.playlists = rows;
@@ -447,10 +480,6 @@ impl App {
                     ),
                     Ok(Response::Devices(devices)) => {
                         self.services.devices = devices;
-                        self.view.dialog = Some(Dialog::Services(ServicesView {
-                            page: ServicePage::Devices,
-                            ..Default::default()
-                        }));
                     }
                     Err(error) => {
                         self.services.error = Some(format!("{error:#}"));
@@ -926,6 +955,8 @@ impl App {
         match key.key {
             Key::Up => self.services_scroll(-1),
             Key::Down => self.services_scroll(1),
+            Key::Home => self.services_scroll(i64::MIN),
+            Key::End => self.services_scroll(i64::MAX),
             Key::PageUp => self.services_scroll(-10),
             Key::PageDown => self.services_scroll(10),
             Key::Enter => self.service_action(ServiceAction::Open)?,
@@ -938,6 +969,7 @@ impl App {
         Ok(())
     }
     pub(super) fn service_action(&mut self, action: ServiceAction) -> Result<()> {
+        self.view.settings.focus = super::SettingsFocus::Parameters;
         if let Err(error) = self.service_action_inner(action) {
             self.services.error = Some(format!("{error:#}"));
         }
@@ -976,7 +1008,8 @@ impl App {
         if page == ServicePage::Connections
             && let Some(connection) = self.services.connections.get(selected)
         {
-            self.services.connection = Some(connection.id.clone());
+            let id = connection.id.clone();
+            self.services.select_connection(id);
         }
         match action {
             ServiceAction::Add(_) | ServiceAction::Edit => {
@@ -1147,6 +1180,10 @@ impl App {
                     connection.provider == Provider::Spotify,
                     "Выбор устройства доступен для Spotify Connect."
                 );
+                self.view.dialog = Some(Dialog::Services(ServicesView {
+                    page: ServicePage::Devices,
+                    ..Default::default()
+                }));
                 self.service_request(Operation::Devices(connection));
             }
             ServiceAction::SelectDevice => {
@@ -1167,16 +1204,8 @@ impl App {
                 }));
             }
             ServiceAction::Guide => {
-                self.view.dialog = Some(Dialog::CopyableHelp {
-                    title: self.text("Online music", "Музыка из интернета").into(),
-                    description: self
-                        .text(
-                            include_str!("../../docs/ONLINE_MUSIC.md"),
-                            include_str!("../../docs/ONLINE_MUSIC.ru.md"),
-                        )
-                        .into(),
-                    offset: 0,
-                });
+                self.open_settings_page(super::SettingsPage::ServiceGuide);
+                self.view.settings.focus = super::SettingsFocus::Parameters;
             }
             ServiceAction::Install => self.service_request(Operation::Install),
             ServiceAction::Tools => self.open_downloads(),

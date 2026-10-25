@@ -9,6 +9,9 @@ impl App {
     /// Dispatch after global cancellation and the dialog's opening shortcut.
     /// Every dialog owns its remaining keys, including keys it ignores.
     pub(in crate::app) fn dialog_key(&mut self, key: KeyPress) -> Result<()> {
+        if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root) {
+            return self.settings_key(key);
+        }
         match self.view.dialog.as_ref() {
             Some(Dialog::Help { .. }) => self.help_key(key),
             Some(Dialog::ScanFolders(_)) => self.scan_folders_key(key),

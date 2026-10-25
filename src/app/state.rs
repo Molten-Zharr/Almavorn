@@ -137,6 +137,8 @@ pub enum Target {
     Setting(usize),
     SettingsPage(SettingsPage),
     SettingsThemes,
+    SettingsGroup(super::SettingsPage),
+    SettingsPane,
     SettingsTab(SettingsPage),
     SettingsVolume(usize, Rect),
     SettingsTimeline(usize, crate::preferences::PlaybackTimeline),
