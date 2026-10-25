@@ -80,7 +80,7 @@ pub(super) fn folders(
     let checkbox_y = inner.y + hints + u16::from(hints > 0);
     let checkbox = format!(
         "[{}] {}",
-        if app.settings.preferences.scan_subfolders {
+        if app.settings.preferences.scan_new_subfolders {
             'x'
         } else {
             ' '

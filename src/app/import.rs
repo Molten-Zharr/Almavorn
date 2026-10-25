@@ -211,7 +211,7 @@ impl App {
                 name: playlist.display_name(self.settings.preferences.language).to_owned(),
                 folders,
                 known: playlist.entries.iter().map(|entry| entry.track.path.clone()).collect(),
-                recursive: playlist.kind == PlaylistKind::Normal && self.settings.preferences.scan_subfolders,
+                recursive: playlist.kind == PlaylistKind::Normal && self.settings.preferences.scan_new_subfolders,
             });
         }
         self.start_import_into(Vec::new(), HashSet::new(), ImportDestination::Scan(scans), false, recovery)

@@ -369,6 +369,8 @@ pub struct ProfilePreferences {
     pub tuner: crate::tuner::TunerSettings,
     pub sorting_desk: bool,
     pub scan_subfolders: bool,
+    // Refreshing a playlist requires a separate opt-in from importing a folder.
+    pub scan_new_subfolders: bool,
     pub playlist_placement: Placement,
     pub player_placement: Placement,
     pub workspace: crate::workspace::WorkspaceLayout,
@@ -415,6 +417,7 @@ impl Default for ProfilePreferences {
             tuner: Default::default(),
             sorting_desk: true,
             scan_subfolders: true,
+            scan_new_subfolders: false,
             playlist_placement: Placement::Left,
             player_placement: Placement::Bottom,
             workspace: Default::default(),

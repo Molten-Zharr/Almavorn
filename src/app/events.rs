@@ -808,8 +808,15 @@ impl App {
                         || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none()),
                     AppError::FolderNotReady
                 );
-                self.settings.preferences.scan_subfolders =
-                    !self.settings.preferences.scan_subfolders;
+                let recursive = if matches!(
+                    self.view.dialog,
+                    Some(Dialog::Folders { .. } | Dialog::ScanFolders(_))
+                ) {
+                    &mut self.settings.preferences.scan_new_subfolders
+                } else {
+                    &mut self.settings.preferences.scan_subfolders
+                };
+                *recursive = !*recursive;
                 self.save_settings()?;
             }
             Target::Text(c) => {

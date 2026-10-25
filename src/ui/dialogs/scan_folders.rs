@@ -41,7 +41,7 @@ pub(super) fn render(
         (
             format!(
                 "[{}] {}",
-                if app.settings.preferences.scan_subfolders {
+                if app.settings.preferences.scan_new_subfolders {
                     'x'
                 } else {
                     ' '
