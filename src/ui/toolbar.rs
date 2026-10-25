@@ -63,8 +63,8 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     if app.scope().is_some() && area.height > 0 {
         frame.render_widget(
             Paragraph::new(app.text(
-                "Undo history lasts until exit",
-                "История отмены — до выхода",
+                "Undo history: up to 100 actions",
+                "История отмены: до 100 действий",
             ))
             .style(palette.text().fg(palette.muted)),
             Rect::new(area.x, area.bottom() - 1, area.width, 1),

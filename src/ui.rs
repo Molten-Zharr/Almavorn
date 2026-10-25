@@ -111,8 +111,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     "{}. {}",
                     app.history_caption(*action == Action::Redo),
                     app.text(
-                        "History lasts until exit; file tags are not restored.",
-                        "История до закрытия приложения; теги в файлах не восстанавливаются."
+                        "Up to 100 actions until you close the player; file tags are not restored.",
+                        "До 100 действий до закрытия плеера; теги в файлах не восстанавливаются."
                     )
                 )
             } else {
