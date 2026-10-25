@@ -91,6 +91,7 @@ pub struct UiState {
     pub(crate) toolbar_areas: Vec<Rect>,
     pub(crate) dialog_scroll_max: usize,
     pub(crate) dialog_page_size: usize,
+    pub(crate) help_sections: Vec<usize>,
     pub filter_editing: bool,
     pub filter_keyboard: bool,
     pub(crate) filter_field: Rect,

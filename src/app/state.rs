@@ -57,6 +57,7 @@ pub enum Target {
     TogglePlayerSpecialButtons,
     ToggleExpandedToolbar,
     CopyHelp(Option<usize>),
+    HelpSection(usize),
     Tags(super::TagAction),
     CommandMenu(super::CommandMenu),
     Visualizer(crate::visualizer::VisualizerKind),

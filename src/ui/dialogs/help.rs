@@ -1,4 +1,5 @@
 use super::super::{keycaps, theme::Palette};
+mod catalog;
 use crate::{
     app::{App, Hit, Target},
     input::{Key, KeyPress},
@@ -104,189 +105,22 @@ pub(super) fn help_dialog(
     guide: Vec<String>,
     palette: Palette,
 ) {
-    let mut entries: Vec<(Option<KeyPress>, String)> = vec![(
-        None,
-        app.text("Keyboard shortcuts", "Горячие клавиши").into(),
-    )];
-    for (key, en, ru) in [
-        (
-            Key::Escape,
-            "Close a menu or dialog, cancel dragging, or finish arranging blocks.",
-            "Закрыть меню или диалог, отменить перетаскивание или завершить компоновку.",
-        ),
-        (
-            Key::F(10),
-            "Open the focused panel's context menu; right click does the same.",
-            "Открыть меню активной панели; также доступно правой кнопкой мыши.",
-        ),
-        (
-            Key::Tab,
-            "Focus the next panel or the command bar. On the bar use Left/Right to select, Enter to open, Esc to return to the library.",
-            "Перейти к следующей панели или строке команд. В строке: ←→ — выбрать кнопку, Enter — открыть, Esc — вернуться в библиотеку.",
-        ),
-        (
-            Key::Enter,
-            "Play or confirm; in the file picker, open a folder or select a file.",
-            "Играть или подтвердить; в выборе файлов — открыть папку или отметить файл.",
-        ),
-        (
-            Key::Char(' '),
-            "In the file picker, select or unselect a file.",
-            "В выборе файлов — поставить или снять отметку файла.",
-        ),
-        (
-            Key::Up,
-            "Select above; in playback blocks, increase volume by 1%.",
-            "Выбрать выше; в блоках проигрывания — увеличить громкость на 1%.",
-        ),
-        (
-            Key::Down,
-            "Select below; in playback blocks, decrease volume by 1%.",
-            "Выбрать ниже; в блоках проигрывания — уменьшить громкость на 1%.",
-        ),
-        (
-            Key::PageUp,
-            "Scroll one page up.",
-            "Прокрутить на страницу вверх.",
-        ),
-        (
-            Key::PageDown,
-            "Scroll one page down.",
-            "Прокрутить на страницу вниз.",
-        ),
-    ] {
-        entries.push((Some(KeyPress::plain(key)), app.text(en, ru).into()));
+    let sections = catalog::sections(app, guide);
+    let names: Vec<_> = sections.iter().map(|section| section.name).collect();
+    let mut entries = Vec::new();
+    let mut headings = Vec::new();
+    for section in sections {
+        headings.push(entries.len());
+        entries.push((None, section.name.to_owned()));
+        entries.extend(section.entries);
     }
-    for (ctrl, alt, shift, key, en, ru) in [
-        (true,false,false,Key::Char('s'),"In file pickers, change sorting. Ctrl+Shift+S reverses the order.","В файловом окне сменить сортировку. Ctrl+Shift+S меняет направление."),
-        (
-            true,
-            false,
-            false,
-            Key::Char('f'),
-            "In Create playlist, choose a music folder. Ctrl+Enter accepts an explicitly selected folder; after going up it accepts the open folder. Ctrl+Shift+Enter always chooses the open music folder. Subfolders are skipped unless Subfolders as groups is on.",
-            "При создании плейлиста выбрать папку с музыкой. Ctrl+Enter — явно выбранную папку; после возврата наверх — открытую. Ctrl+Shift+Enter всегда выбирает открытую папку с музыкой. Подпапки пропускаются, если не включены группы.",
-        ),
-        (
-            true,
-            false,
-            false,
-            Key::Char('g'),
-            "In Create playlist after choosing a folder, include or exclude subfolders as track groups.",
-            "После выбора папки при создании плейлиста включить или выключить подпапки с группами композиций.",
-        ),
-        (
-            true,
-            false,
-            false,
-            Key::Enter,
-            "Add selected files in the file picker.",
-            "Добавить выбранные файлы в файловом окне.",
-        ),
-        (
-            true,
-            false,
-            true,
-            Key::Enter,
-            "In a music folder picker, choose the open folder even if a child folder is selected.",
-            "В выборе папки с музыкой выбрать открытую папку, даже если выделена подпапка.",
-        ),
-        (
-            false,
-            false,
-            true,
-            Key::Tab,
-            "Focus the previous panel or the command bar.",
-            "Перейти к предыдущей панели или строке команд.",
-        ),
-        (
-            true,
-            true,
-            false,
-            Key::Char(' '),
-            "Collapse or expand the focused block.",
-            "Свернуть или развернуть активный блок.",
-        ),
-        (
-            true,
-            true,
-            false,
-            Key::Delete,
-            "Hide the focused block; restore it through Blocks.",
-            "Скрыть активный блок; вернуть через меню «Блоки».",
-        ),
-    ] {
-        entries.push((
-            Some(KeyPress {
-                key,
-                ctrl,
-                alt,
-                shift,
-            }),
-            app.text(en, ru).into(),
-        ));
-    }
-    for binding in &app.settings.preferences.bindings {
-        entries.push((
-            Some(binding.key),
-            format!(
-                "{}\n{}",
-                binding.action.name(app.settings.preferences.language),
-                binding
-                    .action
-                    .description(app.settings.preferences.language)
-            ),
-        ));
-    }
-    for key in [Key::Up, Key::Down, Key::Left, Key::Right] {
-        entries.push((
-            Some(KeyPress {
-                key,
-                ctrl: true,
-                alt: true,
-                shift: false,
-            }),
-            app.text(
-                "Swap the block with a neighbor in this direction.",
-                "Обменять блок с соседним в этом направлении.",
-            )
-            .into(),
-        ));
-        entries.push((
-            Some(KeyPress {
-                key,
-                ctrl: true,
-                alt: false,
-                shift: true,
-            }),
-            app.text(
-                "Resize the block in this direction.",
-                "Изменить размер блока в этом направлении.",
-            )
-            .into(),
-        ));
-    }
-    let guide_heading = entries.len();
-    entries.push((None, app.text("Guide", "Руководство").into()));
-    for (en,ru) in [
-        ("Ctrl+wheel scrolls five times faster. Ctrl+Shift+wheel scrolls by a visible page.","Ctrl+колесо прокручивает в пять раз быстрее. Ctrl+Shift+колесо листает видимыми страницами."),
-        ("In file pickers, typing filters names. Esc clears the filter; press Esc again to close.","В файловых окнах ввод имени фильтрует список. Esc очищает фильтр, повторный Esc закрывает окно."),
-        ("Hold a track checkbox and move across rows to mark or unmark them. The list scrolls at its edge.","Зажмите чекбокс и ведите по строкам, чтобы поставить или снять отметки. У края список прокручивается."),
-        ("Click a group heading to mark its visible tracks. Click it again to clear them.","Нажмите заголовок группы, чтобы отметить ее видимые композиции. Повторное нажатие снимает отметки."),
-        ("Double-click the song title in the player to mark it and jump to its playlist.","Дважды нажмите название композиции в проигрывателе, чтобы отметить ее и перейти к ней в плейлисте."),
-    ]{entries.push((None,app.text(en,ru).into()));}
-
-    entries.extend(
-        guide
-            .into_iter()
-            .filter(|text| !text.is_empty())
-            .map(|text| (None, text)),
-    );
+    let header_height = inner.height.saturating_sub(3).min(2);
+    let sidebar_width = if inner.width >= 74 { 22 } else { 0 };
     let body = Rect::new(
-        inner.x,
-        inner.y,
-        inner.width,
-        inner.height.saturating_sub(3),
+        inner.x + sidebar_width,
+        inner.y + header_height,
+        inner.width.saturating_sub(sidebar_width),
+        inner.height.saturating_sub(3 + header_height),
     );
     // Offset is measured in rendered lines, including wrapped descriptions and keycaps.
     let layouts: Vec<_> = entries
@@ -314,6 +148,45 @@ pub(super) fn help_dialog(
     app.view.dialog_page_size = usize::from(body.height);
     app.view.dialog_scroll_max = total_height.saturating_sub(usize::from(body.height));
     *offset = (*offset).min(app.view.dialog_scroll_max);
+    app.view.help_sections.clear();
+    let mut section_start = 0usize;
+    for (index, layout) in layouts.iter().enumerate() {
+        if headings.contains(&index) { app.view.help_sections.push(section_start); }
+        section_start += usize::from(layout.4) + 1;
+    }
+    let current = if *offset == app.view.dialog_scroll_max && *offset > 0 { names.len() - 1 }
+        else { app.view.help_sections.partition_point(|start| *start <= *offset).saturating_sub(1) };
+    if sidebar_width > 0 {
+        frame.render_widget(Paragraph::new(app.text("Categories", "Категории"))
+            .style(palette.text().fg(palette.help_heading).add_modifier(Modifier::BOLD)),
+            Rect::new(inner.x, inner.y, sidebar_width.saturating_sub(1), 1));
+        let first = super::super::widgets::visible_offset(0, current, body.height as usize, names.len());
+        for (index, name) in names.iter().enumerate().skip(first).take(body.height as usize) {
+            let rect = Rect::new(inner.x, body.y + (index - first) as u16, sidebar_width - 2, 1);
+            let style = if index == current { palette.text().bg(palette.selection).fg(palette.selection_text) }
+                else if app.hovered(rect) { palette.text().fg(palette.accent) } else { palette.text() };
+            frame.render_widget(Paragraph::new(*name).style(style), rect);
+            app.view.hits.push(Hit { area: rect, target: Target::HelpSection(index), enabled: true });
+        }
+        frame.render_widget(Paragraph::new(app.text(
+            "Left/Right or Tab: category · PgUp/PgDn: page · Home/End: ends",
+            "←→ или Tab: раздел · PgUp/PgDn: страница · Home/End: края"))
+            .style(palette.text().fg(palette.muted)).wrap(Wrap { trim: true }),
+            Rect::new(body.x, inner.y, body.width, header_height));
+    } else if header_height > 0 {
+        super::super::widgets::button(frame, app, Rect::new(inner.x, inner.y, inner.width.min(3), 1),
+            "‹", Target::HelpSection(current.saturating_sub(1)), current > 0, palette);
+        frame.render_widget(Paragraph::new(format!("{}/{} · {}", current + 1, names.len(), names[current]))
+            .style(palette.text().fg(palette.help_heading)),
+            Rect::new(inner.x + inner.width.min(4), inner.y, inner.width.saturating_sub(8), 1));
+        super::super::widgets::button(frame, app,
+            Rect::new(inner.right().saturating_sub(3).max(inner.x), inner.y, inner.width.min(3), 1),
+            "›", Target::HelpSection((current + 1).min(names.len() - 1)), current + 1 < names.len(), palette);
+        if header_height > 1 {
+            frame.render_widget(Paragraph::new(app.text("Tab: category · PgUp/PgDn: page", "Tab: раздел · PgUp/PgDn: страница"))
+                .style(palette.text().fg(palette.muted)), Rect::new(inner.x, inner.y + 1, inner.width, 1));
+        }
+    }
     let mut cursor = 0;
     let visible_end = *offset + usize::from(body.height);
     for (index, ((key, text), &(text_x, text_y, text_height, cap_height, height))) in
@@ -350,7 +223,7 @@ pub(super) fn help_dialog(
         if top < bottom {
             frame.render_widget(
                 Paragraph::new(text.as_str())
-                    .style(palette.text().fg(if index == 0 || index == guide_heading {
+                    .style(palette.text().fg(if headings.contains(&index) {
                         palette.help_heading
                     } else {
                         palette.text

@@ -195,6 +195,14 @@ impl App {
                     return Ok(());
                 }
                 let position = Position::new(x, y);
+                if matches!(self.view.dialog, Some(Dialog::Help { .. }))
+                    && matches!(self.target_at(position), Some(Target::HelpSection(_)))
+                {
+                    let step = if ctrl && shift { self.view.dialog_page_size.max(1) as i64 }
+                        else if ctrl { 5 } else { 1 };
+                    self.move_help_section(i64::from(delta) * step);
+                    return Ok(());
+                }
                 if self.view.dialog.is_none() && self.lyrics.panel.area.contains(position) {
                     let step = if ctrl && shift { self.lyrics.panel.page_size.max(1) as i64 }
                         else if ctrl { 15 } else { 3 };
@@ -530,6 +538,7 @@ impl App {
 
     pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
         match target {
+            Target::HelpSection(index) => self.select_help_section(index),
             Target::ChooseScanFolders => self.choose_scan_folders()?,
             Target::ScanFolders(action) => self.scan_folders_action(action)?,
             Target::CopyHelp(line) => {

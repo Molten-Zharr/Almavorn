@@ -10,6 +10,7 @@ impl App {
     /// Every dialog owns its remaining keys, including keys it ignores.
     pub(in crate::app) fn dialog_key(&mut self, key: KeyPress) -> Result<()> {
         match self.view.dialog.as_ref() {
+            Some(Dialog::Help { .. }) => self.help_key(key),
             Some(Dialog::ScanFolders(_)) => self.scan_folders_key(key),
             Some(Dialog::Form(_)) => self.form_key(key),
             Some(Dialog::Lyrics(_)) => self.lyrics_key(key),
@@ -59,7 +60,6 @@ impl App {
             Some(
                 Dialog::RemoveEntry { .. }
                 | Dialog::Transfer { .. }
-                | Dialog::Help { .. }
                 | Dialog::ConfirmSettings { .. }
                 | Dialog::SettingsHelp { .. }
                 | Dialog::CopyableHelp { .. }
@@ -67,6 +67,44 @@ impl App {
             ) => self.dialog_navigation_key(key),
             None => Ok(()),
         }
+    }
+
+    pub(in crate::app) fn select_help_section(&mut self, index: usize) {
+        if let Some(Dialog::Help { offset }) = &mut self.view.dialog
+            && let Some(start) = self.view.help_sections.get(index)
+        {
+            *offset = (*start).min(self.view.dialog_scroll_max);
+        }
+    }
+
+    pub(in crate::app) fn move_help_section(&mut self, direction: i64) {
+        let Some(Dialog::Help { offset }) = &self.view.dialog else { return; };
+        let count = self.view.help_sections.len();
+        if count == 0 { return; }
+        let current = if *offset == self.view.dialog_scroll_max && *offset > 0 { count - 1 }
+            else { self.view.help_sections.partition_point(|start| *start <= *offset).saturating_sub(1) };
+        self.select_help_section(super::super::bounded(current, direction, count));
+    }
+
+    fn help_key(&mut self, key: KeyPress) -> Result<()> {
+        match key.key {
+            Key::Left => self.move_help_section(-1),
+            Key::Right => self.move_help_section(1),
+            Key::Tab => self.move_help_section(if key.shift { -1 } else { 1 }),
+            Key::Up => self.scroll_dialog(-1),
+            Key::Down => self.scroll_dialog(1),
+            Key::PageUp | Key::PageDown => {
+                let page = self.view.dialog_page_size.min(i16::MAX as usize).max(1) as i16;
+                self.scroll_dialog(if key.key == Key::PageUp { -page } else { page });
+            }
+            Key::Home | Key::End => {
+                if let Some(Dialog::Help { offset }) = &mut self.view.dialog {
+                    *offset = if key.key == Key::Home { 0 } else { self.view.dialog_scroll_max };
+                }
+            }
+            _ => {}
+        }
+        Ok(())
     }
 
     pub(in crate::app) fn dialog_navigation_key(&mut self, key: KeyPress) -> Result<()> {
