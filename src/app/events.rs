@@ -433,20 +433,19 @@ impl App {
             if self.close_equalizer_presets() {
                 return Ok(());
             }
-            if self.cancel_workspace_drag() {
+            let cancelled_drag = self.cancel_workspace_drag();
+            if self.close_dialog() || cancelled_drag {
                 return Ok(());
             }
-            if !self.close_dialog() {
-                if self.view.toolbar_selected.take().is_some() {
-                    return Ok(());
-                }
-                if self.view.layout_editing {
-                    self.view.layout_editing = false;
-                    return Ok(());
-                }
-                self.library.query.clear();
-                self.refresh()?;
+            if self.view.toolbar_selected.take().is_some() {
+                return Ok(());
             }
+            if self.view.layout_editing {
+                self.view.layout_editing = false;
+                return Ok(());
+            }
+            self.library.query.clear();
+            self.refresh()?;
             return Ok(());
         }
         let normalized = key.normalized();

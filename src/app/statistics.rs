@@ -178,6 +178,7 @@ impl App {
             return false;
         }
         match input {
+            Input::Key(key) if key.key == Key::Escape => false,
             Input::Click { x, y, .. } | Input::SecondaryClick { x, y } => {
                 self.statistics.view.focused =
                     self.view.overlay_area.contains(Position::new(*x, *y));
