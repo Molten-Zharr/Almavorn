@@ -53,7 +53,7 @@ const CATEGORIES: &[(Category, &str, &str)] = &[
     (Category::Tags, "Tags and file names", "Теги и имена файлов"),
     (Category::Lyrics, "Lyrics", "Тексты песен"),
     (Category::Downloads, "Downloads", "Загрузки"),
-    (Category::Services, "Streaming services", "Стриминг"),
+    (Category::Services, "Music services", "Музыкальные сервисы"),
     (Category::Mods, "Mods", "Моды"),
     (Category::Statistics, "Statistics", "Статистика"),
     (
@@ -68,7 +68,7 @@ const CATEGORIES: &[(Category, &str, &str)] = &[
     ),
     (Category::Mouse, "Mouse and scrolling", "Мышь и прокрутка"),
     (Category::System, "Global shortcuts", "Глобальные клавиши"),
-    (Category::Guide, "Player guide", "Принципы плеера"),
+    (Category::Guide, "Getting started", "Как пользоваться"),
 ];
 
 pub(super) struct Section {
@@ -168,11 +168,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         for category in categories(binding.action) {
             sections[*category as usize].entries.push((
                 Some(binding.key),
-                format!(
-                    "{}\n{}",
-                    binding.action.name(language),
-                    binding.action.description(language)
-                ),
+                binding.action.description(language).into(),
             ));
         }
     }
@@ -182,29 +178,49 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         .collect();
 
     let q = &mut sections[C::Navigation as usize];
-    q.note("Configurable shortcuts above follow the active profile. Keys inside dialogs are listed in their own sections. Configurable letter commands in the main window also work with the Russian keyboard layout.",
-        "Переназначаемые сочетания выше взяты из текущего профиля. Клавиши внутри окон описаны в своих разделах. Настраиваемые буквенные команды основного окна работают и в русской раскладке.");
-    q.keys(&[p(Escape)], "Close the open dialog first, even after clicking the player. In a file picker, first clear its filter; in an editor, return or confirm discarding the draft.", "Сначала закрыть открытое окно, даже после клика по плееру. В файловом окне сначала очищается фильтр; в редакторе — возврат или подтверждение отмены черновика.");
+    q.note("These shortcuts follow your settings. Letter shortcuts also work with a Russian keyboard layout. Each window's keys are listed in its own section.",
+        "Здесь показаны клавиши из ваших настроек. Буквенные команды работают и в русской раскладке. Клавиши каждого окна — в его разделе справки.");
+    q.keys(&[p(Escape)], "Close the open window, even after clicking the player. In an editor, go back. In a file picker, clear the filter first.", "Закрыть открытое окно, даже после клика по плееру. В редакторе — вернуться назад. В выборе файлов — сначала очистить фильтр.");
     q.keys(
         &[p(F(10))],
         "Open the active panel's menu. Right-click opens the same menu.",
         "Открыть меню активной панели. Правый клик открывает то же меню.",
     );
-    q.keys(&[p(Tab)], "Move to the next panel or the top command bar. In a menu on the bar, return to panel navigation.", "Перейти к следующей панели или верхней строке команд. Из открытого меню строки вернуться к навигации по панелям.");
+    q.keys(
+        &[p(Tab)],
+        "Go to the next panel or the top menu. If a top menu is open, leave it.",
+        "Перейти к следующей панели или верхнему меню. Если верхнее меню открыто — выйти из него.",
+    );
     q.keys(
         &[s(Tab)],
         "Move to the previous panel or the command bar.",
         "Перейти к предыдущей панели или строке команд.",
     );
-    q.keys(&[p(Up), p(Down)], "Select a row. On the command bar, select a button; in the player, change volume by 1%.", "Выбрать строку. В строке команд — выбрать кнопку; в проигрывателе — изменить громкость на 1%.");
-    q.keys(&[p(Left), p(Right)], "On the command bar or in its menu, switch buttons or menus. In Help, jump to the previous or next category.", "В строке команд и ее меню перейти к соседней кнопке или меню. В помощи перейти к предыдущей или следующей категории.");
-    q.keys(&[p(Enter)], "In playlists, focus tracks; in tracks, play the selection. In menus, run the selected command.", "В плейлистах перейти к композициям; в композициях — играть выбранную. В меню выполнить выбранную команду.");
+    q.keys(
+        &[p(Up), p(Down)],
+        "Select a row or a top-menu button. In the player, change volume by 1%.",
+        "Выбрать строку или кнопку верхнего меню. В проигрывателе — изменить громкость на 1%.",
+    );
+    q.keys(
+        &[p(Left), p(Right)],
+        "Switch top menus. In Help, switch sections.",
+        "Переключить верхнее меню. В справке — перейти к соседнему разделу.",
+    );
+    q.keys(
+        &[p(Enter)],
+        "Open a playlist, play the selected track or run a menu command.",
+        "Открыть плейлист, включить выбранный трек или выполнить команду меню.",
+    );
     q.keys(
         &[p(Char(' '))],
         "On the command bar, open the selected button's menu.",
         "В строке команд открыть меню выбранной кнопки.",
     );
-    q.keys(&[p(PageUp), p(PageDown)], "In the main library, move by 10 rows. In Help, scroll by the visible page. Other dialogs describe their own step below.", "В основной библиотеке перейти на 10 строк. В помощи листать видимыми страницами. Шаг других окон указан в их разделах.");
+    q.keys(
+        &[p(PageUp), p(PageDown)],
+        "Move by 10 rows in a playlist. In Help, scroll one page.",
+        "Перейти на 10 строк в плейлисте. В справке — прокрутить на страницу.",
+    );
     q.keys(
         &[p(Home), p(End)],
         "Go to the beginning or end of the library list, command bar or Help.",
@@ -213,65 +229,96 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(&[p(Tab), s(Tab)], "In Help: next or previous category. The category list also supports clicks and the mouse wheel.", "В помощи: следующая или предыдущая категория. Список категорий также поддерживает клик и колесо мыши.");
 
     let q = &mut sections[C::Playlists as usize];
-    q.note("To move playlists, select a regular playlist. Order requires Edit; Chaos allows changes directly. The desk remains first. Dedicated playlist-move shortcuts work even when tracks have focus.",
-        "Для перестановки выберите обычный плейлист. В Порядке сначала включите Редактировать; в Хаосе правка доступна сразу. Стол закреплен первым. Отдельные клавиши перемещения плейлистов работают и при фокусе на композициях.");
+    q.note("In Order, click Edit before moving a playlist. Chaos allows changes right away. The sorting desk stays first.",
+        "Чтобы переместить плейлист в Порядке, сначала нажмите \"Редактировать\". В Хаосе можно менять сразу. Сортировочный стол всегда стоит первым.");
+    q.note(
+        "The playlist up/down shortcuts also work while you are selecting tracks.",
+        "Клавиши перемещения плейлиста работают и тогда, когда вы выбираете треки.",
+    );
     q.keys(
         &[c(Char('d'))],
-        "Inside Create playlist: toggle creation of a real folder for the new playlist.",
-        "В окне создания плейлиста: включить или выключить создание настоящей папки.",
+        "When creating a playlist: choose whether to create a folder on disk.",
+        "При создании плейлиста: включить или выключить создание папки на диске.",
     );
-    q.keys(&[c(Char('f'))], "Inside Create playlist: choose music folders; when Create playlist folder is enabled, choose where to create it.", "В окне создания плейлиста: выбрать папки с музыкой; при включенном создании папки — выбрать место ее создания.");
+    q.keys(&[c(Char('f'))], "When creating a playlist: choose folders with music. If creating a new folder, choose where to put it.", "При создании плейлиста: выбрать папки с музыкой. Если создаете новую папку — выбрать место для нее.");
     q.keys(
         &[c(Char('g'))],
         "After choosing a source folder: include subfolders as track groups.",
         "После выбора исходной папки: включить ее подпапки как группы композиций.",
     );
-    q.keys(&[p(Insert)], "In Playlist folders: link another folder. Available for editable regular playlists.", "В Папках плейлиста: добавить связанную папку. Доступно для обычного плейлиста, открытого для правки.");
-    q.keys(&[p(F(3)), p(Enter)], "In Playlist folders: change the selected folder path. Desk group paths follow their tracks and cannot be edited here.", "В Папках плейлиста: изменить выбранный путь. Пути групп стола определяются композициями и здесь не редактируются.");
+    q.note("In Playlist folders:", "В окне \"Папки плейлиста\":");
+    q.keys(
+        &[p(Insert)],
+        "Link another folder. Enable editing first in Order.",
+        "Добавить папку для поиска новых треков. В Порядке сначала включите редактирование.",
+    );
+    q.keys(&[p(F(3)), p(Enter)], "Change the selected folder path. On the desk, these paths follow the tracks and cannot be edited here.", "Изменить путь к выбранной папке. На столе путь определяется самими треками и здесь не меняется.");
     q.keys(
         &[p(Delete)],
-        "In Playlist folders: unlink the selected folder, keeping its tracks in the playlist.",
-        "В Папках плейлиста: отключить выбранную папку, сохранив ее композиции в плейлисте.",
+        "Unlink the folder. Its tracks stay in the playlist.",
+        "Отключить папку. Ее треки останутся в плейлисте.",
     );
-    q.keys(&[p(Char('r'))], "In Playlist folders: find new tracks in this playlist's folders or the desk's current group folders.", "В Папках плейлиста: найти новые треки в его папках или текущих папках групп стола.");
+    q.keys(
+        &[p(Char('r'))],
+        "Find new tracks in these folders. On the desk, scan only its group folders.",
+        "Найти новые треки в этих папках. На столе — только в папках его групп.",
+    );
     q.keys(
         &[p(Char(' '))],
         "In a regular playlist's folder window: toggle searching subfolders.",
         "В окне папок обычного плейлиста: включить или выключить поиск в подпапках.",
     );
 
-    sections[C::Tracks as usize].note("Check tracks before copying, looping or batch tag editing. A group heading marks its visible tracks. Order requires Edit for changing playlist contents; the desk is always editable.",
-        "Отметьте треки перед копированием, повтором или массовой правкой тегов. Заголовок группы отмечает ее видимые композиции. Для изменения состава плейлиста Порядка включите Редактировать; стол доступен для правки всегда.");
+    sections[C::Tracks as usize].note("Use checkboxes to select tracks for copying, looping or editing tags together. Click a group heading to check its visible tracks.",
+        "Отметьте треки галочками, чтобы скопировать их, слушать по кругу или вместе изменить теги. Клик по заголовку группы отмечает все ее видимые треки.");
+    sections[C::Tracks as usize].note("In Order, click Edit before changing a playlist. The sorting desk is always editable.",
+        "Для изменения плейлиста в Порядке нажмите \"Редактировать\". Сортировочный стол можно править всегда.");
+    sections[C::Tracks as usize].note(
+        "To see your saved track order, sort by Position.",
+        "Чтобы видеть свой порядок треков, выберите сортировку \"Позиция\".",
+    );
 
     let q = &mut sections[C::Adding as usize];
-    q.note("The configured Add new shortcut scans the current playlist or desk groups in the main window. Inside the Add menu, the same shortcut opens folder selection.",
-        "Назначенное сочетание Добавить новые в основном окне проверяет текущий плейлист или группы стола. В открытом меню добавления это же сочетание открывает выбор папок.");
-    q.note("The shortcuts below work in file and folder pickers. Add files follows the mode; Add folder makes desk groups. Folders to playlists and Create playlist > From music folders share multiple-folder selection.",
-        "Клавиши ниже работают в выборе файлов и папок. Добавить файлы учитывает режим; Добавить папку создает группы на столе. Папки в плейлисты и Создать плейлист → Из папок с музыкой поддерживают выбор нескольких папок.");
+    q.note("Add new scans the open playlist. On the desk, it scans the folders of its groups. Run it from the Add music menu to choose which folders to scan.",
+        "\"Добавить новые\" проверяет открытый плейлист, а на столе — папки его групп. Чтобы выбрать папки для проверки, вызовите команду из меню добавления музыки.");
+    q.note("Folders to playlists creates a playlist for each checked folder. You can also select several folders when creating a playlist from folders.",
+        "\"Папки в плейлисты\" создает плейлист из каждой отмеченной папки. Выбрать несколько папок можно и при создании плейлиста из папок.");
+    q.note(
+        "In file and folder pickers:",
+        "В окне выбора файлов и папок:",
+    );
     q.keys(
         &[p(Enter)],
         "Open the highlighted folder or toggle a file's mark.",
         "Открыть выделенную папку или переключить отметку файла.",
     );
-    q.keys(&[p(Insert), c(Char(' '))], "Mark or unmark a file or playlist folder. In Add folder, Ctrl+Space toggles subfolder scanning.", "Отметить файл или папку для плейлиста. В Добавить папку сочетание Ctrl+Space переключает поиск в подпапках.");
-    q.keys(&[p(Char(' '))], "With an empty filter, toggle a mark; in Add folder, toggle subfolders. While typing a filter, insert a space.", "При пустом фильтре переключить отметку; в Добавить папку — подпапки. В непустой фильтр вводится пробел.");
-    q.keys(&[c(Char('a'))], "Mark all selectable entries in the filtered folder view; previously marked folders remain selected.", "Отметить все доступные строки текущего отфильтрованного каталога; прежние отметки сохраняются.");
+    q.keys(&[p(Insert), c(Char(' '))], "Check or uncheck a file or folder. In Add folder, Ctrl+Space toggles subfolders.", "Поставить или снять галочку у файла или папки. В окне \"Добавить папку\" Ctrl+Space включает подпапки.");
+    q.keys(&[p(Char(' '))], "Check an item if the filter is empty. In Add folder, toggle subfolders. When typing a filter, enter a space.", "Поставить галочку, если фильтр пуст. В окне \"Добавить папку\" — включить подпапки. При вводе фильтра — ввести пробел.");
+    q.keys(
+        &[c(Char('a'))],
+        "Check all files or folders shown in this list. Keep earlier selections.",
+        "Отметить все файлы или папки в текущем списке. Прежние отметки сохраняются.",
+    );
     q.keys(
         &[c(Char('d'))],
         "Clear all file or folder marks, including those in other folders.",
         "Снять все отметки файлов или папок, включая отметки в других каталогах.",
     );
-    q.keys(&[c(Enter)], "Add marked files or create playlists from marked folders. With no marks in a single-folder picker, accept the highlighted or open folder.", "Добавить отмеченные файлы или создать плейлисты из отмеченных папок. Без отметок при выборе одной папки — принять выделенную или открытую папку.");
-    q.keys(&[cs(Enter)], "In a music folder picker, choose the currently open folder, independently of the highlighted child folder.", "В выборе папки с музыкой принять открытую папку независимо от выделенной подпапки.");
+    q.keys(&[c(Enter)], "Add the checked files or create playlists from checked folders. With no checks, select the highlighted folder, or the open folder after going up.", "Добавить отмеченные файлы или создать плейлисты из отмеченных папок. Если отметок нет — выбрать выделенную папку, а после перехода наверх — открытую.");
+    q.keys(
+        &[cs(Enter)],
+        "Choose the folder you are currently viewing, even if a subfolder is highlighted.",
+        "Выбрать папку, которая сейчас открыта, даже если выделена подпапка.",
+    );
     q.keys(
         &[a(Up)],
         "Open the parent folder.",
-        "Открыть родительскую папку.",
+        "Перейти в папку уровнем выше.",
     );
     q.keys(
         &[p(Backspace)],
         "Remove a filter character; when the filter is empty, open the parent folder.",
-        "Убрать символ фильтра; при пустом фильтре открыть родительскую папку.",
+        "Стереть символ фильтра. Если фильтр пуст — перейти в папку уровнем выше.",
     );
     q.keys(
         &[p(Escape)],
@@ -281,7 +328,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[c(Char('s'))],
         "Cycle sorting: name, modification time, size, type.",
-        "Сменить сортировку: имя, изменение, размер, тип.",
+        "Сортировать по имени, дате изменения, размеру или типу.",
     );
     q.keys(
         &[cs(Char('s'))],
@@ -303,11 +350,46 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "In the file picker, move by eight rows. Ctrl+Shift+wheel scrolls a visible page.",
         "В файловом окне перейти на восемь строк. Ctrl+Shift+колесо листает видимыми страницами.",
     );
-    q.note("Find new dialog: Space/Insert marks a folder; Ctrl+A marks all, Ctrl+D clears all. Enter starts scanning. Ctrl+Space toggles subfolders for regular playlists. Up/Down, Home/End and PgUp/PgDn navigate; pages follow the visible list height. Desk scans only its existing group folders.",
-        "Окно Добавить новые: Space/Insert отмечает папку; Ctrl+A отмечает все, Ctrl+D снимает отметки. Enter запускает поиск. Ctrl+Space переключает подпапки обычных плейлистов. Стрелки, Home/End и PgUp/PgDn перемещают по списку; страницы соответствуют высоте списка. На столе проверяются только существующие группы.");
+    q.note("In Find new tracks:", "В окне \"Добавить новые\":");
+    q.keys(
+        &[p(Char(' ')), p(Insert)],
+        "Check or uncheck a folder.",
+        "Поставить или снять галочку у папки.",
+    );
+    q.keys(&[c(Char('a'))], "Check all folders.", "Отметить все папки.");
+    q.keys(
+        &[c(Char('d'))],
+        "Uncheck all folders.",
+        "Снять все отметки.",
+    );
+    q.keys(
+        &[p(Enter)],
+        "Find new tracks in the checked folders.",
+        "Найти новые треки в отмеченных папках.",
+    );
+    q.keys(
+        &[c(Char(' '))],
+        "Include subfolders in regular playlists. The desk scans only its existing groups.",
+        "Включить подпапки обычных плейлистов. На столе проверяются только папки его групп.",
+    );
+    q.keys(
+        &[p(Up), p(Down)],
+        "Select a folder.",
+        "Выбрать папку в списке.",
+    );
+    q.keys(
+        &[p(Home), p(End)],
+        "Go to the first or last folder.",
+        "Перейти к первой или последней папке.",
+    );
+    q.keys(
+        &[p(PageUp), p(PageDown)],
+        "Move one page through the folder list.",
+        "Перейти на страницу по списку папок.",
+    );
 
     let q = &mut sections[C::Search as usize];
-    q.keys(&[p(Tab), s(Tab)], "In Search, cycle query, results and playlist selection. In the inline filter, Tab finishes typing and keeps the filter.", "В Поиске переключить запрос, результаты и плейлисты. Во встроенном фильтре Tab завершает ввод, сохраняя фильтр.");
+    q.keys(&[p(Tab), s(Tab)], "In Search, cycle query, results and playlist selection. In the inline filter, Tab finishes typing and keeps the filter.", "В поиске — перейти между строкой запроса, результатами и плейлистами. В фильтре — закончить ввод и оставить фильтр включенным.");
     q.keys(
         &[c(Char('a'))],
         "Select the entire search query or inline filter.",
@@ -321,22 +403,22 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[c(Char('d'))],
         "With the playlist section focused, clear all playlist marks.",
-        "При фокусе на списке плейлистов снять все отметки.",
+        "В списке плейлистов поиска — снять все галочки.",
     );
     q.keys(
         &[c(Char(' '))],
         "With the playlist section focused, toggle the current playlist.",
-        "При фокусе на списке плейлистов переключить отметку текущего плейлиста.",
+        "В списке плейлистов поиска — поставить или снять галочку.",
     );
     q.keys(
         &[p(Left), p(Right)],
         "In Search's playlist section, select the previous or next playlist.",
-        "В разделе плейлистов Поиска выбрать предыдущий или следующий плейлист.",
+        "В поиске — выбрать соседний плейлист.",
     );
     q.keys(
         &[p(Up), p(Down)],
         "Select a matching track without leaving text input.",
-        "Выбрать найденную композицию, сохраняя возможность ввода запроса.",
+        "Выбрать найденный трек. Запрос можно продолжать вводить.",
     );
     q.keys(
         &[p(PageUp), p(PageDown)],
@@ -351,17 +433,17 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[p(Enter)],
         "Play the selected match and keep the query open.",
-        "Играть выбранную найденную композицию, сохранив открытый запрос.",
+        "Включить найденный трек. Окно поиска останется открытым.",
     );
     q.keys(
         &[p(Escape)],
         "Close Search. In the inline filter, restore its previous value and finish editing.",
-        "Закрыть Поиск. Во встроенном фильтре восстановить прежнее значение и завершить ввод.",
+        "Закрыть поиск. В фильтре — отменить текущий ввод и вернуть прежний запрос.",
     );
     q.keys(
         &[p(Backspace)],
         "Remove a character or the selected query.",
-        "Убрать символ или выделенный запрос.",
+        "Стереть символ или выделенный текст запроса.",
     );
 
     let q = &mut sections[C::Layout as usize];
@@ -369,12 +451,12 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         q.keys(
             &[ca(key)],
             "Swap the focused block with the neighbor in this direction.",
-            "Поменять активный блок с соседним в указанном направлении.",
+            "Поменять выбранный блок с соседним в направлении стрелки.",
         );
         q.keys(
             &[cs(key)],
             "Resize the focused block in this direction.",
-            "Изменить размер активного блока в указанном направлении.",
+            "Изменить размер выбранного блока в направлении стрелки.",
         );
     }
     q.keys(
@@ -395,19 +477,19 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[p(Char(' '))],
         "Inside Blocks: toggle visibility of the selected block or button.",
-        "В окне Блоки: переключить видимость выбранного блока или кнопки.",
+        "В окне Блоки: показать или скрыть выбранный блок или кнопку.",
     );
     q.keys(
         &[p(Enter)],
         "Inside Blocks: activate the selected row.",
-        "В окне Блоки: выполнить действие выбранной строки.",
+        "В окне Блоки: выбрать действие.",
     );
 
     let q = &mut sections[C::Settings as usize];
     q.keys(
         &[p(Tab)],
         "Switch between settings categories and parameters.",
-        "Переключить категории настроек и параметры.",
+        "Перейти между списком разделов и их настройками.",
     );
     q.keys(
         &[p(Up), p(Down), p(Home), p(End)],
@@ -422,7 +504,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[p(Left), p(Right)],
         "Change a parameter; in the category list, collapse or expand Themes and select its tabs.",
-        "Изменить параметр; в категориях свернуть или раскрыть Темы и перейти к их вкладкам.",
+        "Изменить значение настройки. В списке разделов — раскрыть или свернуть Темы и выбрать вкладку.",
     );
     q.keys(
         &[p(Enter), p(Char(' '))],
@@ -432,7 +514,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[p(Insert)],
         "Create a profile, palette or theme preset in its settings section.",
-        "Создать профиль, палитру или пресет темы в соответствующем разделе настроек.",
+        "Создать профиль, палитру или пресет в открытом разделе.",
     );
     q.keys(
         &[p(F(3))],
@@ -442,7 +524,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[p(Delete)],
         "Request deletion of the selected profile, palette or preset; a confirmation follows.",
-        "Запросить удаление выбранного профиля, палитры или пресета с подтверждением.",
+        "Удалить выбранный профиль, палитру или пресет после подтверждения.",
     );
     q.keys(
         &[p(F(1))],
@@ -450,63 +532,70 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "Открыть пояснение выбранного параметра.",
     );
     q.keys(
-        &[c(Char('i')), c(Char('e'))],
-        "In Palettes: import or export a palette, respectively.",
-        "В Палитрах: импортировать или экспортировать палитру соответственно.",
+        &[c(Char('i'))],
+        "In Palettes: import a palette from a file.",
+        "В Палитрах: загрузить палитру из файла.",
+    );
+    q.keys(
+        &[c(Char('e'))],
+        "In Palettes: save a palette to a file.",
+        "В Палитрах: сохранить палитру в файл.",
     );
     q.keys(
         &[c(Char('f'))],
         "In palette export: choose the destination folder.",
         "При экспорте палитры: выбрать папку назначения.",
     );
-    q.note("Assigning a shortcut: press the desired combination. Tab/Shift+Tab switches the local shortcut and global controls; arrows select a global control and Enter/Space activates it. Esc closes. Plain navigation keys remain reserved.",
-        "Назначение сочетания: нажмите нужную комбинацию. Tab/Shift+Tab переключает локальное сочетание и глобальные настройки; стрелки выбирают глобальную настройку, Enter/Space включает ее. Esc закрывает окно. Обычные клавиши навигации остаются зарезервированы.");
+    q.note("To change a shortcut, open its action and press the new combination. Navigation keys, such as plain arrows, cannot be assigned.",
+        "Чтобы изменить сочетание, откройте нужное действие и нажмите новые клавиши. Клавиши навигации, например стрелки без Ctrl, назначить нельзя.");
+    q.note("In the shortcut editor, Tab or Shift+Tab switches between player keys and global controls. Arrows select a global setting; Enter or Space changes it. Esc closes the editor.",
+        "В окне назначения Tab или Shift+Tab переключает клавиши плеера и глобальные настройки. Стрелки выбирают настройку, Enter или Space меняет ее. Esc закрывает окно.");
 
     let q = &mut sections[C::Palette as usize];
     q.keys(
         &[p(Tab), s(Tab), p(Up), p(Down)],
         "Switch between color channels and the HEX field.",
-        "Переключить цветовые каналы и поле HEX.",
+        "Выбрать ползунок цвета или поле HEX с кодом цвета.",
     );
     q.keys(
         &[p(Left), p(Right)],
         "On a channel, change it by one step; in HEX, move the cursor.",
-        "На канале изменить значение на шаг; в HEX переместить курсор.",
+        "Изменить цвет на один шаг. В поле HEX — переместить курсор.",
     );
     q.keys(
         &[s(Left), s(Right)],
         "On a channel, change it by ten steps; in HEX, extend the text selection.",
-        "На канале изменить значение на десять шагов; в HEX расширить выделение текста.",
+        "Изменить цвет на 10 шагов. В поле HEX — выделить текст.",
     );
     q.keys(
         &[p(PageUp), p(PageDown)],
         "On a color channel, increase or decrease by ten steps.",
-        "На цветовом канале увеличить или уменьшить значение на десять шагов.",
+        "Изменить значение ползунка цвета на 10 шагов.",
     );
     q.keys(
         &[p(Home), p(End)],
         "On a channel, set minimum or maximum; in HEX, go to the beginning or end.",
-        "На канале установить минимум или максимум; в HEX перейти в начало или конец.",
+        "Поставить ползунок на минимум или максимум. В поле HEX — перейти в начало или конец.",
     );
     q.keys(
         &[c(Left), c(Right), s(Home), s(End), cs(Left), cs(Right)],
         "In HEX: Ctrl+arrows go to the ends; Shift selects text up to the new cursor position.",
-        "В HEX: Ctrl+стрелки переходят к краям; Shift выделяет текст до новой позиции курсора.",
+        "В HEX: Ctrl+стрелка — в начало или конец. Shift — выделить текст до курсора.",
     );
     q.keys(
         &[c(Char('a'))],
         "Focus HEX and select its entire value.",
-        "Перейти в HEX и выделить все значение.",
+        "Выделить весь код цвета в поле HEX.",
     );
     q.keys(
         &[c(Char('c')), c(Insert)],
         "Copy the selected HEX text. Use Ctrl+A first to copy the entire color.",
-        "Скопировать выделенный HEX-текст. Чтобы скопировать весь цвет, сначала нажмите Ctrl+A.",
+        "Скопировать выделенный код цвета. Ctrl+A сначала выделит его целиком.",
     );
     q.keys(
         &[c(Char('x')), s(Delete)],
         "Cut the selected HEX text.",
-        "Вырезать выделенный HEX-текст.",
+        "Вырезать выделенный код цвета.",
     );
     q.keys(
         &[p(Backspace), p(Delete)],
@@ -523,13 +612,13 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "Apply the edited color.",
         "Применить измененный цвет.",
     );
-    q.note("Paste into HEX using your interface's paste command. In GUITUI this is Ctrl+V; terminal paste follows the terminal's settings.", "Вставляйте HEX через команду вставки вашего интерфейса. В GUITUI это Ctrl+V; в терминале сочетание задает терминал.");
+    q.note("Paste into HEX using your interface's paste command. In GUITUI this is Ctrl+V; terminal paste follows the terminal's settings.", "Вставить код цвета в версии с окном — Ctrl+V. В терминале используйте его клавиши вставки.");
 
     let q = &mut sections[C::Equalizer as usize];
     q.keys(
         &[p(Left), p(Right), p(Tab), s(Tab)],
         "Select the previous or next equalizer band, including preamp.",
-        "Выбрать предыдущую или следующую полосу эквалайзера, включая предусиление.",
+        "Выбрать полосу эквалайзера или предусиление.",
     );
     q.keys(
         &[p(Up), p(Down)],
@@ -608,16 +697,16 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
 
     let q = &mut sections[C::Tags as usize];
     q.note("On the desk, check several tracks to edit their tags together. The sample shows one file; only edited fields and checked cleanup choices apply to the others. File renaming and moving require a single track.",
-        "На столе отметьте несколько треков для массовой правки тегов. Образец показывает один файл; к остальным применяются только измененные поля и выбранная очистка. Для переименования и переноса файла выберите один трек.");
+        "Чтобы править несколько треков, отметьте их на столе. Редактор покажет теги одного из них. Ваши правки и выбранное удаление тегов применятся ко всем. Переименование и перенос доступны для одного файла.");
     q.keys(
         &[p(Tab)],
         "Switch editor tabs; inside a field editor, move to the next input.",
-        "Переключить вкладки редактора; внутри правки поля перейти к следующему вводу.",
+        "Перейти к следующей вкладке редактора. При вводе — к следующему полю.",
     );
     q.keys(
         &[s(Tab)],
         "Inside field editing, move to the previous input.",
-        "Внутри правки поля перейти к предыдущему вводу.",
+        "При вводе — перейти к предыдущему полю.",
     );
     q.keys(
         &[p(Left), p(Right)],
@@ -629,17 +718,21 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "Add a tag or cover; on the File tab, edit the file name.",
         "Добавить тег или обложку; на вкладке Файл изменить имя файла.",
     );
-    q.keys(&[p(Enter)], "Edit the selected field, apply a field draft, select a destination, or confirm the pending file operation.", "Изменить выбранное поле, применить черновик поля, выбрать назначение или подтвердить подготовленную запись файла.");
+    q.keys(&[p(Enter)], "Open a field or save its value. When moving a file, choose a folder. In a write confirmation, save the changes.", "Открыть поле или сохранить введенное значение. При переносе — выбрать папку. В подтверждении записи — записать изменения.");
     q.keys(
         &[p(Char(' ')), p(Delete)],
         "Mark the selected field, cover or tag block for removal.",
-        "Отметить выбранное поле, обложку или блок тегов для удаления.",
+        "Пометить тег, обложку или весь блок тегов на удаление.",
     );
-    q.keys(&[c(Char('s'))], "Outside a field input, open confirmation to write all selected tag changes to the file or checked files.", "Вне ввода поля открыть подтверждение записи выбранных изменений в файл или отмеченные файлы.");
+    q.keys(
+        &[c(Char('s'))],
+        "Finish editing the field, then confirm saving changes to the selected files.",
+        "Записать изменения в выбранные файлы после подтверждения. Сначала завершите ввод в поле.",
+    );
     q.keys(
         &[p(Char('f'))],
         "Open the File tab; inside destination-folder selection, enter a folder path.",
-        "Открыть вкладку Файл; при выборе папки назначения ввести путь.",
+        "Открыть вкладку Файл. При выборе папки для переноса — ввести путь к ней.",
     );
     q.keys(
         &[p(Char('t'))],
@@ -648,23 +741,23 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
     q.keys(
         &[p(Char('g'))],
-        "On the File tab, apply the template to the name draft.",
-        "На вкладке Файл применить шаблон к черновику имени.",
+        "On the File tab, build a name from the template.",
+        "На вкладке Файл — составить имя по шаблону.",
     );
     q.keys(
         &[p(Char('m'))],
-        "Choose a playlist and folder for physically moving the single selected file.",
-        "Выбрать плейлист и папку для физического переноса одного выбранного файла.",
+        "Choose the playlist folder to move this file to.",
+        "Выбрать плейлист и папку, куда перенести выбранный файл.",
     );
     q.keys(
         &[c(Char('a'))],
         "Inside field editing, select the entire value.",
-        "При правке поля выделить все значение.",
+        "Выделить весь текст в поле.",
     );
     q.keys(
         &[p(F(10)), c(Char('j'))],
         "Inside a tag text field, insert a newline.",
-        "В текстовом поле тега вставить перевод строки.",
+        "Начать новую строку в тексте тега.",
     );
     q.keys(
         &[p(Home), p(End)],
@@ -681,7 +774,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[p(Enter)],
         "Open the selected lyrics result.",
-        "Открыть выбранный найденный текст.",
+        "Открыть выбранный текст песни.",
     );
     for (key, en, ru) in [
         (
@@ -696,13 +789,13 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         ),
         (
             's',
-            "Save the lyrics locally.",
-            "Сохранить текст песни локально.",
+            "Save the lyrics in the player.",
+            "Сохранить текст песни в плеере.",
         ),
         (
             'e',
-            "Edit the lyrics draft.",
-            "Изменить черновик текста песни.",
+            "Open the lyrics for editing.",
+            "Открыть текст песни для редактирования.",
         ),
         (
             'x',
@@ -711,13 +804,13 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         ),
         (
             'l',
-            "Toggle following timed lyrics.",
-            "Переключить слежение за синхронизированным текстом.",
+            "Turn automatic lyrics scrolling on or off.",
+            "Включить или выключить прокрутку текста вслед за песней.",
         ),
         (
             'n',
             "Exclude this source for the current song and search elsewhere.",
-            "Исключить этот источник для текущей песни и искать в другом.",
+            "Искать текст этой песни в другом сервисе.",
         ),
         (
             'i',
@@ -734,8 +827,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         ('f', "Open music search.", "Открыть поиск музыки."),
         (
             'e',
-            "Edit the selected pending download.",
-            "Изменить выбранную ожидающую загрузку.",
+            "Edit a download that has not started yet.",
+            "Изменить загрузку, которая еще не началась.",
         ),
         (
             's',
@@ -784,8 +877,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
     q.keys(
         &[p(Delete)],
-        "Request removal of the selected connection.",
-        "Запросить удаление выбранного подключения.",
+        "Remove the connection after confirmation.",
+        "Удалить выбранное подключение после подтверждения.",
     );
     q.keys(
         &[p(Char(' '))],
@@ -819,8 +912,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
     q.keys(
         &[p(Delete)],
-        "Request removal of the selected mod.",
-        "Запросить удаление выбранного мода.",
+        "Remove the mod after confirmation.",
+        "Удалить выбранный мод после подтверждения.",
     );
     q.note(
         "1–9 runs the corresponding command of the selected mod.",
@@ -835,13 +928,13 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
             "Перемещаться по строкам или тексту этого окна.",
         );
         q.keys(&[p(PageUp), p(PageDown)], "Move by ten rows. In lyrics source information, move by the visible page.", "Перейти на десять строк. В сведениях об источниках текста песни — на видимую страницу.");
-        q.keys(&[p(Escape)], "Close the current subview or return. Unsaved changes may require a discard confirmation.", "Закрыть текущий вложенный экран или вернуться. Для несохраненных изменений может потребоваться подтверждение отмены.");
+        q.keys(&[p(Escape)], "Go back or close the window. If there are unsaved changes, confirm before leaving.", "Вернуться назад или закрыть окно. Если есть несохраненные правки, плеер попросит подтвердить выход.");
     }
     for category in [C::Lyrics, C::Downloads, C::Services, C::Mods] {
         sections[category as usize].keys(
             &[p(Char('d'))],
-            "In a removal confirmation, confirm deletion. Enter or Esc cancels it.",
-            "В подтверждении удаления подтвердить действие. Enter или Esc отменяет его.",
+            "Confirm deletion. Press Enter or Esc to cancel.",
+            "Подтвердить удаление. Чтобы отменить, нажмите Enter или Esc.",
         );
     }
 
@@ -879,19 +972,19 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[p(Escape)],
         "Close Statistics even when the main player has focus.",
-        "Закрыть Статистику даже при фокусе на основном плеере.",
+        "Закрыть статистику, даже если перед этим вы нажали на плеер.",
     );
 
     let q = &mut sections[C::Composition as usize];
     q.keys(
         &[p(Char(' '))],
         "Mark or unmark the selected source playlist or track.",
-        "Отметить или снять отметку выбранного исходного плейлиста или композиции.",
+        "Поставить или снять галочку у плейлиста или трека.",
     );
     q.keys(
         &[c(Char('a'))],
         "Select all sources or tracks in this step.",
-        "Выбрать все источники или композиции текущего шага.",
+        "Отметить все плейлисты или треки на этом шаге.",
     );
     q.keys(
         &[cs(Char('a'))],
@@ -901,7 +994,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[c(Up), c(Down)],
         "Move the selected source playlist up or down in the mix order.",
-        "Переместить выбранный исходный плейлист вверх или вниз в порядке сборки.",
+        "Переставить плейлисты в нужном порядке для подборки.",
     );
     q.keys(
         &[p(Backspace)],
@@ -928,23 +1021,23 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[c(Char('a'))],
         "Select the entire active text field.",
-        "Выделить все активное текстовое поле.",
+        "Выделить весь текст в выбранном поле.",
     );
     q.keys(
         &[p(Backspace)],
         "Delete the selected text or preceding character.",
         "Удалить выделенный текст или предыдущий символ.",
     );
-    q.keys(&[p(Enter)], "In a simple name field, save. In forms, toggle a checkbox, move to the next field, or save the last field; in multiline text, insert a newline.", "В простом поле имени сохранить. В формах переключить галочку, перейти к следующему полю или сохранить последнее; в многострочном тексте вставить перевод строки.");
+    q.keys(&[p(Enter)], "In a simple name field, save. In forms, toggle a checkbox, move to the next field, or save the last field; in multiline text, insert a newline.", "При вводе имени — сохранить. В форме — поставить галочку или перейти дальше; на последнем поле — сохранить. В многострочном тексте — начать новую строку.");
     q.keys(
         &[c(Char('s'))],
         "In forms such as lyrics and download settings, save all fields.",
-        "В формах, например текста песни и настроек загрузки, сохранить все поля.",
+        "Сохранить форму целиком: например, текст песни или настройки загрузки.",
     );
     q.keys(
         &[c(Enter)],
         "In a form's text field, save the form; on a checkbox, toggle it.",
-        "В текстовом поле формы сохранить форму; на галочке переключить ее.",
+        "Сохранить форму. Если выбрана галочка — поставить или снять ее.",
     );
     q.keys(
         &[p(Tab), s(Tab)],
@@ -969,21 +1062,27 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(
         &[c(Char('v'))],
         "GUITUI: paste into the active text input. In TUI, use the terminal's paste command.",
-        "GUITUI: вставить текст в активное поле. В TUI используйте команду вставки терминала.",
+        "В версии с окном — вставить текст в выбранное поле. В терминале используйте его клавиши вставки.",
     );
-    q.keys(&[c(Char('c'))], "Copyable help and system-control windows: copy the text. In TUI outside these windows or HEX, Ctrl+C exits the player.", "В копируемых справках и окне системного управления скопировать текст. В TUI вне этих окон и HEX сочетание Ctrl+C закрывает плеер.");
+    q.keys(&[c(Char('c'))], "Copyable help and system-control windows: copy the text. In TUI outside these windows or HEX, Ctrl+C exits the player.", "В справке с копированием и окне MPRIS — скопировать текст. В терминальной версии вне этих окон и поля HEX — закрыть плеер.");
     q.keys(
         &[p(Enter)],
         "In copyable help and system-control windows, copy all displayed text.",
-        "В копируемой справке и окне системного управления скопировать весь показанный текст.",
+        "В справке с копированием и окне MPRIS — скопировать весь текст.",
     );
     q.keys(
         &[p(Char('d'))],
-        "In a form's discard confirmation, discard its draft; Enter returns to editing.",
-        "В подтверждении отмены формы удалить ее черновик; Enter возвращает к редактированию.",
+        "Leave the form without saving. Press Enter to keep editing.",
+        "Выйти из формы без сохранения. Чтобы продолжить редактирование, нажмите Enter.",
     );
-    q.note("Playlist removal: Y or Д confirms; N or Н cancels. Arrows/Tab choose an answer, Enter accepts it. Resetting shortcuts also uses arrows/Tab and Enter/Space. Esc cancels confirmations. Tag-file confirmations use Enter to confirm the displayed operation.",
-        "Удаление плейлиста: Y или Д подтверждает, N или Н отменяет. Стрелки/Tab выбирают ответ, Enter принимает его. Сброс клавиш также использует стрелки/Tab и Enter/Space. Esc отменяет подтверждение. При записи тегов Enter подтверждает показанную операцию.");
+    q.note("Delete a playlist: Y or Д confirms; N or Н cancels. You can also choose a button with arrows or Tab, then press Enter.",
+        "Удаление плейлиста: Y или Д — удалить, N или Н — отменить. Также можно выбрать кнопку стрелками или Tab и нажать Enter.");
+    q.note(
+        "Reset shortcuts: choose a button with arrows or Tab, then press Enter or Space.",
+        "Сброс клавиш: выберите кнопку стрелками или Tab, затем нажмите Enter или Space.",
+    );
+    q.note("Save tags: Enter confirms writing the changes to the file. Esc cancels any confirmation window.",
+        "Запись тегов: Enter подтверждает изменения в файле. Esc отменяет действие в любом окне подтверждения.");
 
     let q = &mut sections[C::Mouse as usize];
     for (en, ru) in [
@@ -1021,7 +1120,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         ),
         (
             "Drag a block title or move handle: drop at an edge to place it beside another block, or in the center to swap. Drag a shared border to resize.",
-            "Тяните заголовок или ручку блока: край размещает его рядом с другим, центр меняет блоки местами. Общая граница меняет размеры.",
+            "Перетащите блок за заголовок или ручку. Бросьте у края другого блока, чтобы поставить рядом, или в центре — чтобы поменять местами. Потяните общую границу, чтобы изменить размеры.",
         ),
         (
             "Hold the timeline to preview a position; release to seek. Esc cancels. Click or drag the volume bar to change volume.",
@@ -1033,7 +1132,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         ),
         (
             "On color controls, drag or use the wheel to change the channel. In HEX, drag to select text; double-click selects all.",
-            "На цветовых ползунках перетаскивание или колесо меняет канал. В HEX протягивание выделяет текст, двойной клик выделяет все.",
+            "Меняйте цвет колесом или перетаскиванием ползунка. В поле HEX выделяйте текст мышью; двойной клик выделяет весь код цвета.",
         ),
         (
             "GUITUI file drop: Order sends files to the desk; Chaos sends them to the open playlist.",
@@ -1044,8 +1143,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     }
 
     let q = &mut sections[C::System as usize];
-    q.note("Global shortcuts are set in Settings > Keys. Apply the generated bindings in your desktop environment. Media keys use the environment's MPRIS player selection.",
-        "Глобальные сочетания задаются в Настройки → Клавиши. Примените готовые назначения в окружении рабочего стола. Мультимедийные клавиши используют выбранный окружением плеер MPRIS.");
+    q.note("To control music from another window, set shortcuts in Settings > Keys, then add the generated bindings to your desktop settings. Media keys use MPRIS, the system media controls.",
+        "Чтобы управлять плеером без переключения окна, задайте сочетания в Настройки → Клавиши. Затем добавьте готовые назначения в настройки рабочего стола. Медиаклавиши работают через MPRIS — системное управление музыкой.");
     for binding in &app.settings.preferences.global_shortcuts {
         q.entries.push((
             None,
@@ -1089,8 +1188,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
                         None,
                         language
                             .text(
-                                "Fixed keys and controls in this section:",
-                                "Фиксированные клавиши и управление в этом разделе:",
+                                "Window controls — fixed shortcuts:",
+                                "Клавиши окна — не переназначаются:",
                             )
                             .into(),
                     ),
@@ -1101,10 +1200,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
                 (
                     None,
                     language
-                        .text(
-                            "Configurable shortcuts from the active profile:",
-                            "Настраиваемые сочетания из текущего профиля:",
-                        )
+                        .text("Your shortcuts:", "Ваши горячие клавиши:")
                         .into(),
                 ),
             );
@@ -1115,8 +1211,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
                     None,
                     language
                         .text(
-                            "Fixed keys inside this window:",
-                            "Фиксированные клавиши внутри этого окна:",
+                            "Window controls — fixed shortcuts:",
+                            "Клавиши окна — не переназначаются:",
                         )
                         .into(),
                 ),

@@ -169,8 +169,8 @@ pub(super) fn help_dialog(
             app.view.hits.push(Hit { area: rect, target: Target::HelpSection(index), enabled: true });
         }
         frame.render_widget(Paragraph::new(app.text(
-            "Left/Right or Tab: category · PgUp/PgDn: page · Home/End: ends",
-            "←→ или Tab: раздел · PgUp/PgDn: страница · Home/End: края"))
+            "Left/Right or Tab: section · PgUp/PgDn: page · Home/End: start/end",
+            "←→ или Tab: раздел · PgUp/PgDn: страница · Home/End: начало/конец"))
             .style(palette.text().fg(palette.muted)).wrap(Wrap { trim: true }),
             Rect::new(body.x, inner.y, body.width, header_height));
     } else if header_height > 0 {
