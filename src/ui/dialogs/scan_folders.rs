@@ -46,7 +46,7 @@ pub(super) fn render(
                 } else {
                     ' '
                 },
-                app.text("Search subfolders", "Искать в подпапках")
+                app.text("Playlist subfolders", "Подпапки плейлистов")
             ),
             Target::ScanSubfolders,
             !app.busy(),
@@ -60,8 +60,8 @@ pub(super) fn render(
         palette,
     );
     let hint = app.text(
-        "Check playlist folders. New tracks go to their own playlists. Space: mark.",
-        "Отметьте папки. Новые композиции попадут в их плейлисты. Пробел: отметить.",
+        "New tracks go to the selected playlist or desk group. Desk scans only existing group folders. Space: mark.",
+        "Новые треки попадут в выбранный плейлист или группу стола. На столе проверяются только папки существующих групп. Пробел: отметить.",
     );
     let hint_height = (Paragraph::new(hint)
         .wrap(Wrap { trim: false })

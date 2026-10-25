@@ -302,7 +302,7 @@ impl App {
                 .playlists
                 .iter()
                 .find(|item| item.id == *playlist)
-                .map_or(0, |item| item.folders.len())
+                .map_or(0, |item| item.scan_folders().len())
         } else {
             0
         };

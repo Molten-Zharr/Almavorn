@@ -104,8 +104,8 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     };
     let tooltip = app.hovered_target().and_then(|target| match target {
         Target::ChooseScanFolders => Some(app.text(
-            "Choose saved playlist folders. New tracks are added to their own playlists.",
-            "Выберите папки плейлистов. Найденные композиции добавятся в соответствующие плейлисты."
+            "Choose playlist folders or desk groups. New tracks go to the corresponding playlist or desk group.",
+            "Выберите папки плейлистов или группы стола. Найденные композиции добавятся в соответствующий плейлист или группу стола."
         ).into()),
         Target::Action(action) => Some(format!(
             "{}{}",

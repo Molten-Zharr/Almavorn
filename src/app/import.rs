@@ -188,7 +188,7 @@ impl App {
             .iter()
             .find(|playlist| playlist.id == id)
             .context(AppError::PlaylistMissing)?;
-        self.start_playlist_scan(vec![(id, playlist.folders.clone())], None)
+        self.start_playlist_scan(vec![(id, playlist.scan_folders())], None)
     }
 
     pub(super) fn start_playlist_scan(
@@ -201,18 +201,17 @@ impl App {
         for (id, mut folders) in choices {
             let playlist = self.library.playlists.iter().find(|p| p.id == id)
                 .context(AppError::PlaylistMissing)?;
-            ensure!(playlist.kind == PlaylistKind::Normal,
-                "На сортировочный стол добавляйте конкретные файлы или папки.");
-            ensure!(!folders.is_empty() && folders.iter().all(|p| playlist.folders.contains(p)),
-                "Выберите связанные папки плейлиста.");
+            let available = playlist.scan_folders();
+            ensure!(!folders.is_empty() && folders.iter().all(|p| available.contains(p)),
+                "Выберите папки плейлиста или существующих групп сортировочного стола.");
             folders.sort();
             folders.dedup();
             scans.push(PlaylistScan {
                 id,
-                name: playlist.name.clone(),
+                name: playlist.display_name(self.settings.preferences.language).to_owned(),
                 folders,
                 known: playlist.entries.iter().map(|entry| entry.track.path.clone()).collect(),
-                recursive: self.settings.preferences.scan_subfolders,
+                recursive: playlist.kind == PlaylistKind::Normal && self.settings.preferences.scan_subfolders,
             });
         }
         self.start_import_into(Vec::new(), HashSet::new(), ImportDestination::Scan(scans), false, recovery)

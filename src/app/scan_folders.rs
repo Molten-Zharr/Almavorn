@@ -1,8 +1,5 @@
 use super::{App, Dialog};
-use crate::{
-    input::{Key, KeyPress},
-    model::PlaylistKind,
-};
+use crate::input::{Key, KeyPress};
 use anyhow::{Result, ensure};
 use std::path::PathBuf;
 
@@ -36,7 +33,7 @@ impl App {
                 .library
                 .playlists
                 .iter()
-                .any(|p| p.kind == PlaylistKind::Normal && !p.folders.is_empty())
+                .any(|p| p.has_scan_folders())
     }
 
     pub(super) fn choose_scan_folders(&mut self) -> Result<()> {
@@ -48,12 +45,13 @@ impl App {
             .library
             .playlists
             .iter()
-            .filter(|p| p.kind == PlaylistKind::Normal)
             .flat_map(|p| {
-                p.folders.iter().map(|folder| ScanFolder {
-                    playlist: p.id,
-                    name: p.name.clone(),
-                    folder: folder.clone(),
+                let playlist = p.id;
+                let name = p.display_name(self.settings.preferences.language).to_owned();
+                p.scan_folders().into_iter().map(move |folder| ScanFolder {
+                    playlist,
+                    name: name.clone(),
+                    folder,
                     checked: false,
                 })
             })

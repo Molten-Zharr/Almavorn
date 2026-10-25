@@ -177,7 +177,7 @@ impl App {
             AddNew => {
                 self
                         .playlist()
-                        .is_some_and(|playlist| playlist.kind == PlaylistKind::Normal && !playlist.folders.is_empty())
+                        .is_some_and(|playlist| playlist.has_scan_folders())
             }
             Undo | Redo => self.scope().is_some_and(|scope| {
                 self.library

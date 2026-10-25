@@ -126,6 +126,27 @@ impl Playlist {
         self.group_folders || self.kind == PlaylistKind::SortingDesk
     }
 
+    pub fn scan_folders(&self) -> Vec<PathBuf> {
+        let mut folders = if self.kind == PlaylistKind::SortingDesk {
+            // Desk groups follow their remaining tracks, not historical import roots.
+            self.entries.iter().filter_map(|entry| entry.track.path.parent())
+                .map(Path::to_path_buf).collect()
+        } else {
+            self.folders.clone()
+        };
+        folders.sort();
+        folders.dedup();
+        folders
+    }
+
+    pub fn has_scan_folders(&self) -> bool {
+        if self.kind == PlaylistKind::SortingDesk {
+            self.entries.iter().any(|entry| entry.track.path.parent().is_some())
+        } else {
+            !self.folders.is_empty()
+        }
+    }
+
     pub fn folder_group_name(&self, folder: &Path) -> String {
         if let Some(root) = self
             .folders

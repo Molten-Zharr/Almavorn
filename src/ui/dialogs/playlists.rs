@@ -25,15 +25,16 @@ pub(super) fn folders(
         app.text("Playlist folders", "Папки плейлиста"),
         playlist.display_name(app.settings.preferences.language)
     );
-    let editable = app.playlist_editable(playlist) && !app.busy();
+    let desk = playlist.kind == crate::model::PlaylistKind::SortingDesk;
+    let editable = !desk && app.playlist_editable(playlist) && !app.busy();
     let paths: Vec<_> = playlist
-        .folders
+        .scan_folders()
         .iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect();
     let scan = !app.busy() && app.allowed(crate::input::Action::AddNew);
     let inner = modal(frame, app, area, clean(&title), 24, palette);
-    let actions = vec![
+    let mut actions = vec![
         (
             app.text("Link folder", "Добавить папку").into(),
             Target::FolderAdd,
@@ -60,8 +61,14 @@ pub(super) fn folders(
             true,
         ),
     ];
+    if desk {
+        actions.retain(|(_, target, _)| matches!(target, Target::FolderScan | Target::CloseDialog));
+    }
     let footer_rows = action_rows(app, inner.width, &actions).min(inner.height);
-    let hint = app.text("Find new music in linked folders. The checkbox includes subfolders; otherwise only files directly in each folder are checked. Unlinking keeps tracks.", "Поиск новых треков идет в связанных папках. Галочка включает подпапки; без нее проверяются только файлы в каждой папке. Отключение сохраняет композиции.");
+    let hint = if desk {
+        app.text("These are the current desk group folders. Find new checks files directly in these folders. To remove a group, move or remove its tracks from the desk.",
+            "Это папки текущих групп стола. Поиск проверяет файлы непосредственно в этих папках. Чтобы убрать группу, перенесите или уберите ее композиции со стола.")
+    } else { app.text("Find new music in linked folders. The checkbox includes subfolders; otherwise only files directly in each folder are checked. Unlinking keeps tracks.", "Поиск новых треков идет в связанных папках. Галочка включает подпапки; без нее проверяются только файлы в каждой папке. Отключение сохраняет композиции.") };
     let hints = super::help::wrapped_height(hint, inner.width)
         .min(inner.height.saturating_sub(footer_rows + 6));
     frame.render_widget(
@@ -80,7 +87,7 @@ pub(super) fn folders(
         },
         app.text("Search subfolders", "Искать в подпапках")
     );
-    button(
+    if !desk { button(
         frame,
         app,
         Rect::new(
@@ -93,7 +100,7 @@ pub(super) fn folders(
         Target::ScanSubfolders,
         !app.busy(),
         palette,
-    );
+    ); }
     let list = Rect::new(
         inner.x,
         checkbox_y + 2,
@@ -108,10 +115,10 @@ pub(super) fn folders(
     let offset = visible_offset(0, *selected, capacity, paths.len());
     if paths.is_empty() {
         frame.render_widget(
-            Paragraph::new(app.text(
+            Paragraph::new(if desk { app.text("No groups on the desk. Add music first.", "На столе нет групп. Сначала добавьте музыку.") } else { app.text(
                 "Link a folder here, or create a playlist using Folders to playlists.",
                 "Добавьте связанную папку здесь или создайте плейлист через Папки в плейлисты.",
-            ))
+            ) })
             .style(palette.text())
             .wrap(Wrap { trim: false }),
             list,

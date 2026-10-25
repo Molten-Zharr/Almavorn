@@ -781,7 +781,7 @@ impl App {
                 if let Some(Dialog::Folders { selected, .. }) = &mut self.view.dialog {
                     *selected = index;
                 }
-                if double {
+                if double && self.playlist().is_some_and(|p| p.kind == crate::model::PlaylistKind::Normal) {
                     self.edit_playlist_folder(true)?;
                 }
             }

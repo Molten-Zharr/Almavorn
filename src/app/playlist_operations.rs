@@ -39,6 +39,11 @@ impl App {
     }
 
     pub(super) fn folders_key(&mut self, key: KeyPress) -> Result<()> {
+        if self.playlist().is_some_and(|p| p.kind == crate::model::PlaylistKind::SortingDesk)
+            && matches!(key.key, Key::Insert | Key::F(3) | Key::Enter | Key::Delete | Key::Char(' '))
+        {
+            return Ok(());
+        }
         if !key.ctrl && !key.alt {
             let target = match key.key {
                 Key::Insert => Some(Target::FolderAdd),
@@ -197,7 +202,7 @@ impl App {
             .context(AppError::PlaylistMissing)?;
         Ok((
             *playlist,
-            item.folders
+            item.scan_folders()
                 .get(*selected)
                 .map(|path| path.to_string_lossy().into_owned()),
         ))
@@ -211,6 +216,8 @@ impl App {
             .iter()
             .find(|playlist| playlist.id == id)
             .context(AppError::PlaylistMissing)?;
+        ensure!(playlist.kind == crate::model::PlaylistKind::Normal,
+            "Папки сортировочного стола определяются его группами.");
         ensure!(self.playlist_editable(playlist), AppError::OrderProtected);
         Ok(())
     }
