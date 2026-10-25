@@ -142,7 +142,7 @@ impl App {
                     entry.track.duration_ms
                 }),
             }
-            if playlist.group_folders {
+            if playlist.groups_by_folder() {
                 // Sorting stays within each folder; stored playlist positions are untouched.
                 let mut positions = HashMap::new();
                 for entry in entries {

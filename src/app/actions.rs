@@ -65,6 +65,7 @@ impl App {
             .playlist()
             .is_some_and(|playlist| self.playlist_editable(playlist));
         match action {
+            ToggleDesk => self.settings.mode == Mode::Chaos,
             PlaybackTuner if self.services_playing()=>false,
             Equalizer if self.services_remote_active()=>false,
             Lyrics => self.playback.current.is_some() || self.entry().is_some(),
@@ -174,10 +175,9 @@ impl App {
             Transfer | Metadata | Mark => self.entry().is_some(),
             AddFiles | AddFolder => self.import_target().is_some(),
             AddNew => {
-                self.import_target().is_some()
-                    && self
+                self
                         .playlist()
-                        .is_some_and(|playlist| !playlist.folders.is_empty())
+                        .is_some_and(|playlist| playlist.kind == PlaylistKind::Normal && !playlist.folders.is_empty())
             }
             Undo | Redo => self.scope().is_some_and(|scope| {
                 self.library

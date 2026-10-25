@@ -110,6 +110,10 @@ impl TagEdit {
 
 #[derive(Clone)]
 pub struct TagEditor {
+    pub batch: Vec<Track>,
+    pub batch_edits: crate::tags::BatchEdits,
+    pub batch_report: Option<String>,
+    pub batch_report_lines: usize,
     pub file_stem: String,
     pub name_template: String,
     pub move_picker: Option<MovePicker>,
@@ -134,6 +138,9 @@ pub struct TagEditor {
 
 impl TagEditor {
     pub fn changed(&self) -> bool {
+        if self.batch_report.is_some() { return false; }
+        if self.is_batch() && (!self.batch_edits.is_empty() || self.document.as_ref()
+            .is_some_and(|doc| doc.blocks.iter().any(|b| b.remove || b.clear_fields || b.clear_covers))) { return true; }
         self.document.as_ref().is_some_and(Document::changed)
             || self
                 .track
@@ -141,6 +148,7 @@ impl TagEditor {
                 .file_stem()
                 .is_none_or(|stem| stem != self.file_stem.as_str())
     }
+    pub fn is_batch(&self) -> bool { self.batch.len() > 1 }
     pub fn new_filename(&self) -> Result<String> {
         let stem = self.file_stem.trim();
         ensure!(
@@ -195,6 +203,7 @@ impl TagEditor {
             .into_owned()
     }
     pub fn length(&self) -> usize {
+        if self.batch_report.is_some() { return self.batch_report_lines; }
         if let Some(picker) = self.move_picker {
             return match picker {
                 MovePicker::Playlists => self.destinations.len(),
@@ -233,7 +242,10 @@ impl App {
             playlist.kind == PlaylistKind::SortingDesk,
             "Редактор тегов доступен на сортировочном столе."
         );
-        let track = self.entry().context("Выберите композицию.")?.track.clone();
+        let batch: Vec<_> = playlist.entries.iter().filter(|entry| self.library.marked.contains(&entry.id))
+            .map(|entry| entry.track.clone()).collect();
+        let track = if batch.len() > 1 { batch[0].clone() }
+            else { self.entry().context("Выберите композицию.")?.track.clone() };
         let shared = self
             .library
             .playlists
@@ -246,6 +258,10 @@ impl App {
             })
             .count();
         let editor = TagEditor {
+            batch,
+            batch_edits: Default::default(),
+            batch_report: None,
+            batch_report_lines: 0,
             file_stem: track
                 .path
                 .file_stem()
@@ -321,6 +337,10 @@ impl App {
             return false;
         };
         if self.tags.saving {
+            return true;
+        }
+        if editor.batch_report.is_some() {
+            self.view.dialog = None;
             return true;
         }
         if editor.confirm || editor.discard {
@@ -572,6 +592,12 @@ impl App {
             self.tags.load = None;
             return Ok(());
         }
+        if let Some(Dialog::Tags(editor)) = &self.view.dialog {
+            if editor.batch_report.is_some() { return Ok(()); }
+            if editor.is_batch() && matches!(action, TagAction::Move | TagAction::FormatName | TagAction::FileInput(_)) {
+                anyhow::bail!("Для переименования или переноса выберите одну композицию.");
+            }
+        }
         if matches!(action, TagAction::Confirm) {
             return self.save_file_tags();
         }
@@ -682,6 +708,7 @@ impl App {
                 editor.offset = 0;
             }
             TagAction::Tab(tab) => {
+                let tab = if editor.batch.len() > 1 && tab == TagsTab::File { TagsTab::Fields } else { tab };
                 editor.tab = tab;
                 editor.selected = 0;
                 editor.offset = 0;
@@ -902,6 +929,7 @@ impl App {
                     return Ok(());
                 }
                 let block = &mut document.blocks[editor.block];
+                let previous_cover = edit.index.and_then(|index| block.covers.get(index)).map(|cover| cover.picture.pic_type());
                 if edit.cover {
                     let mut picture = if edit.values[0].trim().is_empty() {
                         block
@@ -982,14 +1010,20 @@ impl App {
                     }
                     block.clear_fields = false;
                 }
+                if editor.batch.len() > 1 {
+                    if edit.cover {
+                        if let Some(kind) = previous_cover { editor.batch_edits.covers.push((block.kind, kind)); }
+                        if let Ok(kind) = edit.values[2].trim().parse::<u8>() {
+                            editor.batch_edits.covers.push((block.kind, PictureType::from_u8(kind)));
+                        }
+                    } else if edit.extra {
+                        editor.batch_edits.extras.push((block.kind, edit.values[1].clone()));
+                    } else { editor.batch_edits.fields.push((block.kind, edit.key)); }
+                }
                 editor.edit = None;
             }
             TagAction::ClearAll => {
-                let clear = !document
-                    .blocks
-                    .iter()
-                    .filter(|block| block.existed || block.changed())
-                    .all(|block| block.remove);
+                let clear = !document.blocks.iter().all(|block| block.remove);
                 for block in &mut document.blocks {
                     block.remove = clear;
                 }
@@ -1028,6 +1062,7 @@ impl App {
         };
         ensure!(editor.confirm, "Сначала подтвердите запись файла.");
         let editor = editor.clone();
+        if editor.is_batch() { return self.save_batch_tags(*editor); }
         let document = editor
             .document
             .as_ref()
@@ -1055,6 +1090,45 @@ impl App {
         self.tags.saving = true;
         Ok(())
     }
+
+    fn save_batch_tags(&mut self, editor: TagEditor) -> Result<()> {
+        let document = editor.document.clone().context("Теги еще не прочитаны.")?;
+        let mut recovery = editor.clone();
+        recovery.confirm = false;
+        self.start_database(Some(Dialog::Tags(Box::new(recovery))), move |store| {
+            document.verify_source()?;
+            let mut outcomes = Vec::new();
+            let mut failures = Vec::new();
+            let mut unchanged = 0;
+            let mut processed = 0;
+            for track in &editor.batch {
+                let result = (|| -> Result<Option<crate::store::FileEditOutcome>> {
+                    let mut target = Document::read(&track.path)?;
+                    document.apply_batch(&editor.batch_edits, &mut target)?;
+                    if !target.changed() { return Ok(None); }
+                    store.edit_audio_file(editor.desk, track.id, &target, &target.path, None, true).map(Some)
+                })();
+                processed += 1;
+                match result {
+                    Ok(Some(outcome)) => outcomes.push(outcome),
+                    Ok(None) => unchanged += 1,
+                    Err(error) => failures.push(batch_file_error(&track.path, &format!("{error:#}"))),
+                }
+                // A pending recovery belongs to one file and must never be overwritten by the next write.
+                if crate::tags::recovery_path(&store.path).exists() { break; }
+            }
+            Ok(DatabaseOutcome::FilesEdited {
+                outcomes, failures, unchanged, remaining: editor.batch.len() - processed,
+            })
+        })?;
+        self.tags.saving = true;
+        Ok(())
+    }
+}
+
+pub(super) fn batch_file_error(path: &Path, message: &str) -> String {
+    let clean = |text: &str| text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>();
+    format!("{}: {}", clean(&path.display().to_string()), clean(message))
 }
 
 fn format_filename(template: &str, path: &Path, document: &Document) -> Result<String> {

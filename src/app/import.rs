@@ -19,12 +19,13 @@ use std::{
 };
 
 struct ImportOutcome {
-    change: Change,
+    changes: Vec<Change>,
     errors: Vec<String>,
     skipped: usize,
 }
 enum ImportDestination {
     Existing(i64),
+    Scan(Vec<PlaylistScan>),
     Create {
         name: String,
         mode: Mode,
@@ -34,6 +35,14 @@ enum ImportDestination {
         mode: Mode,
         group_folders: bool,
     },
+}
+
+struct PlaylistScan {
+    id: i64,
+    name: String,
+    folders: Vec<PathBuf>,
+    known: HashSet<PathBuf>,
+    recursive: bool,
 }
 
 struct ImportedMusic {
@@ -67,7 +76,8 @@ impl App {
     }
 
     pub(crate) fn import_target(&self) -> Option<i64> {
-        if !self.settings.preferences.sorting_desk
+        if self.settings.mode == Mode::Chaos
+            && !self.settings.preferences.sorting_desk
             && let Some(playlist) = self
                 .playlist()
                 .filter(|playlist| self.playlist_editable(playlist))
@@ -96,6 +106,13 @@ impl App {
 
     pub fn start_import(&mut self, paths: Vec<PathBuf>) -> Result<()> {
         self.start_import_skipping(paths, HashSet::new())
+    }
+
+    pub(super) fn start_desk_folder(&mut self, paths: Vec<PathBuf>) -> Result<()> {
+        let desk = self.library.playlists.iter()
+            .find(|playlist| playlist.kind == PlaylistKind::SortingDesk)
+            .context(AppError::PlaylistMissing)?.id;
+        self.start_import_in_playlist(paths, HashSet::new(), desk)
     }
 
     pub fn dropped_import_target(&self) -> Option<i64> {
@@ -165,23 +182,40 @@ impl App {
     }
 
     pub(super) fn scan_playlist_folders(&mut self, id: i64) -> Result<()> {
-        ensure!(!self.busy(), AppError::LibraryBusy);
         let playlist = self
             .library
             .playlists
             .iter()
             .find(|playlist| playlist.id == id)
             .context(AppError::PlaylistMissing)?;
-        let mut folders = playlist.folders.clone();
-        folders.sort();
-        folders.dedup();
-        ensure!(!folders.is_empty(), AppError::FolderNotReady);
-        let known = playlist
-            .entries
-            .iter()
-            .map(|entry| entry.track.path.clone())
-            .collect();
-        self.start_import_skipping(folders, known)
+        self.start_playlist_scan(vec![(id, playlist.folders.clone())], None)
+    }
+
+    pub(super) fn start_playlist_scan(
+        &mut self,
+        choices: Vec<(i64, Vec<PathBuf>)>,
+        recovery: Option<Dialog>,
+    ) -> Result<()> {
+        ensure!(!choices.is_empty(), AppError::FolderSelectionRequired);
+        let mut scans = Vec::new();
+        for (id, mut folders) in choices {
+            let playlist = self.library.playlists.iter().find(|p| p.id == id)
+                .context(AppError::PlaylistMissing)?;
+            ensure!(playlist.kind == PlaylistKind::Normal,
+                "На сортировочный стол добавляйте конкретные файлы или папки.");
+            ensure!(!folders.is_empty() && folders.iter().all(|p| playlist.folders.contains(p)),
+                "Выберите связанные папки плейлиста.");
+            folders.sort();
+            folders.dedup();
+            scans.push(PlaylistScan {
+                id,
+                name: playlist.name.clone(),
+                folders,
+                known: playlist.entries.iter().map(|entry| entry.track.path.clone()).collect(),
+                recursive: self.settings.preferences.scan_subfolders,
+            });
+        }
+        self.start_import_into(Vec::new(), HashSet::new(), ImportDestination::Scan(scans), false, recovery)
     }
 
     fn start_import_skipping(
@@ -231,10 +265,12 @@ impl App {
         ensure!(!self.busy(), AppError::LibraryBusy);
         let target = match &destination {
             ImportDestination::Existing(id) => Some(*id),
+            ImportDestination::Scan(scans) => scans.first().map(|scan| scan.id),
             ImportDestination::Create { .. } | ImportDestination::CreateFolders { .. } => None,
         };
-        let creating = target.is_none();
-        let grouping = matches!(
+        let creating = matches!(destination, ImportDestination::Create { .. } | ImportDestination::CreateFolders { .. });
+        let grouping = target.is_some_and(|id| self.library.playlists.iter()
+            .find(|playlist| playlist.id == id).is_some_and(|playlist| playlist.groups_by_folder())) || matches!(
             &destination,
             ImportDestination::Create {
                 group_folders: true,
@@ -252,6 +288,29 @@ impl App {
         let progress = Arc::new(AtomicUsize::new(0));
         let worker_progress = progress.clone();
         let receiver = background(self.runtime(), move || {
+            if let ImportDestination::Scan(scans) = &destination {
+                let mut changes = Vec::new();
+                let mut errors = Vec::new();
+                let mut skipped = 0;
+                for scan in scans {
+                    if worker_cancel.load(Ordering::Relaxed) { break; }
+                    let result = read_music(scan.folders.clone(), scan.known.clone(), true,
+                        scan.recursive, scan.recursive, &worker_cancel, &worker_progress);
+                    let result = result.and_then(|music| {
+                        skipped += music.skipped;
+                        errors.extend(music.errors.into_iter().take(5usize.saturating_sub(errors.len())));
+                        // An explicit refresh only appends to its own playlist. It never uses the desk switch.
+                        worker_store.add_tracks_from_folders(scan.id, &music.tracks, &[], true)
+                    });
+                    match result {
+                        Ok(change) => changes.push(change),
+                        Err(error) => errors.push(format!("{}: {}", scan.name, crate::errors::message(&error, language))),
+                    }
+                }
+                ensure!(!changes.is_empty(), "{}", errors.first().map(String::as_str)
+                    .unwrap_or(language.text("Scan cancelled", "Поиск отменен")));
+                return Ok(ImportOutcome { changes, errors, skipped });
+            }
             if let ImportDestination::CreateFolders {
                 mode,
                 group_folders,
@@ -302,7 +361,7 @@ impl App {
                     &worker_cancel,
                 )?;
                 return Ok(ImportOutcome {
-                    change,
+                    changes: vec![change],
                     errors,
                     skipped,
                 });
@@ -336,12 +395,12 @@ impl App {
                     &folders,
                     group_folders,
                 )?,
-                ImportDestination::CreateFolders { .. } => {
+                ImportDestination::CreateFolders { .. } | ImportDestination::Scan(_) => {
                     unreachable!("folder playlists are imported above")
                 }
             };
             Ok(ImportOutcome {
-                change,
+                changes: vec![change],
                 errors,
                 skipped,
             })
@@ -479,14 +538,11 @@ impl App {
                     return Err(error);
                 }
             };
-            let change = outcome.change;
+            let changes = outcome.changes;
             let target = job
                 .target
                 .or_else(|| {
-                    change
-                        .after
-                        .playlists
-                        .iter()
+                    changes.iter().find_map(|change| change.after.playlists.iter()
                         .find(|playlist| {
                             !change
                                 .before
@@ -494,13 +550,10 @@ impl App {
                                 .iter()
                                 .any(|previous| previous.id == playlist.id)
                         })
-                        .map(|playlist| playlist.id)
+                        .map(|playlist| playlist.id))
                 })
                 .context(AppError::PlaylistMissing)?;
-            let mode = change
-                .after
-                .playlists
-                .iter()
+            let mode = changes.iter().flat_map(|change| &change.after.playlists)
                 .find(|playlist| playlist.id == target)
                 .map(|playlist| {
                     if playlist.kind == "desk" {
@@ -511,7 +564,7 @@ impl App {
                         Mode::Order
                     }
                 });
-            let added = change
+            let added: usize = changes.iter().map(|change| change
                 .after
                 .playlists
                 .iter()
@@ -524,13 +577,13 @@ impl App {
                         .iter()
                         .map(|playlist| playlist.entries.len())
                         .sum(),
-                );
-            let created = change
+                )).sum();
+            let created: usize = changes.iter().map(|change| change
                 .after
                 .playlists
                 .len()
-                .saturating_sub(change.before.playlists.len());
-            self.remember(change)?;
+                .saturating_sub(change.before.playlists.len())).sum();
+            for change in changes { self.remember(change)?; }
             if self.library.pending_selection.is_none()
                 && let Some(mode) = mode
             {

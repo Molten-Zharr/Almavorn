@@ -122,6 +122,10 @@ pub struct Playlist {
 }
 
 impl Playlist {
+    pub fn groups_by_folder(&self) -> bool {
+        self.group_folders || self.kind == PlaylistKind::SortingDesk
+    }
+
     pub fn folder_group_name(&self, folder: &Path) -> String {
         if let Some(root) = self
             .folders

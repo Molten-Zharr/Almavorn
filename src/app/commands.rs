@@ -76,7 +76,10 @@ impl App {
             .find(|binding| binding.key == normalized)
             .map(|binding| binding.action)
         {
+            let scan_picker = action == Action::AddNew
+                && matches!(self.view.dialog, Some(Dialog::Commands { menu: CommandMenu::Add, .. }));
             self.view.dialog = None;
+            if scan_picker { return self.choose_scan_folders(); }
             return self.action(action);
         }
         self.dialog_navigation_key(key)
@@ -119,7 +122,9 @@ impl App {
         match action {
             Action::ToggleEdit => self.edit_caption(),
             Action::Undo | Action::Redo => self.history_caption(action == Action::Redo),
-            Action::AddFiles | Action::AddFolder | Action::AddNew => format!(
+            Action::AddFolder => format!("{} · {}", action.name(self.settings.preferences.language),
+                self.text("Group on desk", "Группа на стол")),
+            Action::AddFiles => format!(
                 "{} · {}",
                 action.name(self.settings.preferences.language),
                 self.import_caption()
@@ -328,6 +333,7 @@ impl App {
                     MoveUp,
                     MoveDown,
                     Metadata,
+                    AddNew,
                     EditTags,
                     Lyrics,
                     Sort,
@@ -395,7 +401,7 @@ impl App {
             if self.control_visible(panel, *action) {
                 let checked = match action {
                     ToggleEdit => None,
-                    ToggleDesk => Some(self.settings.preferences.sorting_desk),
+                    ToggleDesk => Some(self.settings.mode == Mode::Order || self.settings.preferences.sorting_desk),
                     ToggleShuffle => Some(self.settings.preferences.shuffle),
                     PlayMarked => Some(
                         self.marked_playback_playlist().is_some()
@@ -424,12 +430,16 @@ impl App {
                         || name.clone(),
                         |value| format!("[{}] {name}", if value { 'x' } else { ' ' }),
                     ),
-                    target: if *action == CycleVisualizer {
+                    target: if *action == AddNew && menu == CommandMenu::Add {
+                        Target::ChooseScanFolders
+                    } else if *action == CycleVisualizer {
                         Target::CommandMenu(CommandMenu::Visualizer)
                     } else {
                         Target::Action(*action)
                     },
-                    enabled: self.allowed(*action),
+                    enabled: if *action == AddNew && menu == CommandMenu::Add {
+                        self.can_choose_scan_folders()
+                    } else { self.allowed(*action) },
                 });
             }
         }

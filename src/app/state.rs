@@ -101,6 +101,8 @@ pub enum Target {
     KeyboardLanguage,
     KeyboardCase,
     BrowserRow(usize),
+    ChooseScanFolders,
+    ScanFolders(super::ScanFolderAction),
     BrowserMark(usize),
     BrowserSort,
     BrowserSortDirection,

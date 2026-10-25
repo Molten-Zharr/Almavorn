@@ -702,7 +702,11 @@ impl App {
             return Ok(());
         };
         ensure!(!paths.is_empty(), AppError::MusicSelectionRequired);
-        self.start_import(paths)?;
+        if matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder) {
+            self.start_desk_folder(paths)?;
+        } else {
+            self.start_import(paths)?;
+        }
         self.cancel_browser();
         self.view.dialog = None;
         Ok(())

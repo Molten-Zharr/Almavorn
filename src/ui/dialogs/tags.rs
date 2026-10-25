@@ -41,7 +41,9 @@ pub(super) fn render(
         frame,
         app,
         area,
-        app.text("Tags and file name", "Теги и имя файла").into(),
+        if editor.is_batch() {
+            format!("{} ({})", app.text("Tags of checked tracks", "Теги отмеченных композиций"), editor.batch.len())
+        } else { app.text("Tags and file name", "Теги и имя файла").into() },
         42,
         palette,
     );
@@ -64,11 +66,20 @@ pub(super) fn render(
             frame,
             inner,
             app.text(
-                "Saving the file and updating the library…",
-                "Сохранение файла и обновление библиотеки…",
+                "Saving files and updating the library…",
+                "Сохранение файлов и обновление библиотеки…",
             ),
             palette,
         );
+        return;
+    }
+    if let Some(report) = &editor.batch_report {
+        let paragraph = Paragraph::new(report.as_str()).style(palette.text()).wrap(Wrap { trim: false });
+        editor.batch_report_lines = paragraph.line_count(inner.width.max(1));
+        editor.selected = editor.selected.min(editor.batch_report_lines.saturating_sub(1));
+        frame.render_widget(paragraph.scroll((editor.selected.min(u16::MAX as usize) as u16, 0)),
+            Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)));
+        buttons(frame, app, footer, vec![action(app.text("Close", "Закрыть"), TagAction::Back, true)], palette);
         return;
     }
     if editor.discard {
@@ -118,12 +129,19 @@ pub(super) fn render(
             )
             .into()
         };
-        let explanation = format!("{}\n{}\n\n{}\n{}\n\n{}", clean(&editor.track.path.display().to_string()),
+        let explanation = if editor.is_batch() {
+            format!("{}: {}\n\n{}\n\n{}\n\n{}", app.text("Files", "Файлов"), editor.batch.len(),
+                app.text("Apply the edited fields and cleanup choices to every checked file? Other tags keep their own values.",
+                    "Записать измененные поля и применить выбранную очистку ко всем отмеченным файлам? Остальные теги сохранят свои значения."),
+                app.text("Changes are written to the audio files and shown in every playlist. Undo cannot restore file tags.",
+                    "Изменения записываются в аудиофайлы и отображаются во всех плейлистах. Отмена не восстанавливает теги файлов."),
+                editor.batch.iter().map(|track| clean(&track.path.display().to_string())).collect::<Vec<_>>().join("\n"))
+        } else { format!("{}\n{}\n\n{}\n{}\n\n{}", clean(&editor.track.path.display().to_string()),
             clean(&format!("→ {destination}")), operation,
             app.text("All playlists using this file will show the new metadata. Chaos undo cannot undo file writes.",
                 "Путь и сведения обновятся во всех плейлистах. Отмена Хаоса не отменяет изменения файлов."),
             if editor.destructive() { app.text("The checked tags will be removed from the audio file.", "Отмеченные теги будут удалены из аудиофайла.") } else { "" }
-        );
+        ) };
         text(
             frame,
             Rect::new(inner.x, inner.y, inner.width, inner.height - 7),
@@ -147,7 +165,9 @@ pub(super) fn render(
             footer,
             vec![
                 action(
-                    if editor.move_confirm {
+                    if editor.is_batch() {
+                        app.text("Save files", "Сохранить файлы")
+                    } else if editor.move_confirm {
                         app.text("Move file", "Перенести файл")
                     } else {
                         app.text("Save file", "Сохранить файл")
@@ -194,12 +214,13 @@ pub(super) fn render(
     text(
         frame,
         Rect::new(inner.x, inner.y, inner.width, 1),
-        format!(
+        if editor.is_batch() { format!("{}: {} · {}: {}", app.text("Checked", "Отмечено"), editor.batch.len(),
+            app.text("Sample", "Образец"), clean(&editor.filename())) } else { format!(
             "{}  ·  {}: {}",
             clean(&editor.filename()),
             app.text("Playlists", "Плейлистов"),
             editor.shared
-        ),
+        ) },
         palette,
     );
     let header_height = buttons(
@@ -247,7 +268,7 @@ pub(super) fn render(
                 TagAction::Tab(TagsTab::Cleanup),
                 true,
             ),
-        ],
+        ].into_iter().filter(|(_, target, _)| !editor.is_batch() || !matches!(target, Target::Tags(TagAction::Tab(TagsTab::File)))).collect(),
         palette,
     )
     .min(3);
@@ -262,7 +283,10 @@ pub(super) fn render(
         );
         return;
     }
-    let hint = if editor.key_picker {
+    let hint = if editor.is_batch() && !editor.key_picker {
+        app.text("Values shown belong to the sample. Only edited fields and checked removals apply to all files.",
+            "Показаны теги образца. Измененные поля и выбранная очистка применяются ко всем файлам.")
+    } else if editor.key_picker {
         app.text(
             "Choose a field. Enter or double-click: add.",
             "Выберите поле. Enter или двойной клик: добавить.",
@@ -537,7 +561,8 @@ pub(super) fn render(
         footer,
         vec![
             action(
-                app.text("Save file", "Сохранить файл"),
+                if editor.is_batch() { app.text("Save files", "Сохранить файлы") }
+                    else { app.text("Save file", "Сохранить файл") },
                 TagAction::Save,
                 editor.changed() && !editor.key_picker,
             ),
@@ -547,7 +572,7 @@ pub(super) fn render(
                 !editor.key_picker,
             ),
             action(app.text("Close", "Закрыть"), TagAction::Back, true),
-        ],
+        ].into_iter().filter(|(_, target, _)| !editor.is_batch() || !matches!(target, Target::Tags(TagAction::Move))).collect(),
         palette,
     );
 }

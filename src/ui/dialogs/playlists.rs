@@ -109,8 +109,8 @@ pub(super) fn folders(
     if paths.is_empty() {
         frame.render_widget(
             Paragraph::new(app.text(
-                "Add a folder here or import one from Add > Add folder.",
-                "Добавьте папку здесь или через Добавить > Добавить папку.",
+                "Link a folder here, or create a playlist using Folders to playlists.",
+                "Добавьте связанную папку здесь или создайте плейлист через Папки в плейлисты.",
             ))
             .style(palette.text())
             .wrap(Wrap { trim: false }),

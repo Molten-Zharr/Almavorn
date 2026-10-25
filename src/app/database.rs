@@ -12,6 +12,12 @@ pub(super) enum DatabaseOutcome {
     Created(Change),
     Renamed,
     FileEdited(crate::store::FileEditOutcome),
+    FilesEdited {
+        outcomes: Vec<crate::store::FileEditOutcome>,
+        failures: Vec<String>,
+        unchanged: usize,
+        remaining: usize,
+    },
     Restored { change: Change, redo: bool },
 }
 pub(super) struct DatabaseJob {
@@ -118,6 +124,30 @@ impl App {
                 }
             }
             Ok(DatabaseOutcome::Renamed) => {}
+            Ok(DatabaseOutcome::FilesEdited { outcomes, mut failures, unchanged, remaining }) => {
+                let saved = outcomes.len();
+                for outcome in outcomes {
+                    self.update_file_references(&outcome.old_path, &outcome.track);
+                    if let Some(warning) = outcome.warning { failures.push(super::tags::batch_file_error(&outcome.track.path, &warning)); }
+                }
+                self.tags.recovery_required = crate::tags::recovery_path(&self.store.path).exists();
+                let summary = format!("{}: {saved}. {}: {unchanged}. {}: {}. {}: {remaining}.",
+                    self.text("Saved", "Записано"), self.text("Already match", "Уже совпадают"),
+                    self.text("Errors", "Ошибок"), failures.len(), self.text("Not processed", "Не обработано"));
+                let mut report = summary.clone();
+                if !failures.is_empty() { report.push_str("\n\n"); report.push_str(&failures.join("\n\n")); }
+                if self.tags.recovery_required { report.push_str(self.text(
+                    "\n\nRestart the player to finish file recovery.", "\n\nПерезапустите плеер для восстановления записи файла.")); }
+                if let Some(Dialog::Tags(editor)) = &mut self.view.dialog {
+                    editor.confirm = false;
+                    editor.batch_report = Some(report);
+                    editor.selected = 0;
+                    editor.offset = 0;
+                }
+                file_warning = !failures.is_empty() || remaining > 0;
+                file_message = Some(summary);
+                self.save_settings()?;
+            }
             Ok(DatabaseOutcome::FileEdited(outcome)) => {
                 let track = outcome.track;
                 self.update_file_references(&outcome.old_path, &track);

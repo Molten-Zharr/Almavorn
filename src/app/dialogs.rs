@@ -84,6 +84,7 @@ pub enum Dialog {
     Text(TextDialog),
     Search(super::search::SearchDialog),
     Browser(Browser),
+    ScanFolders(super::ScanFolders),
     Folders {
         playlist: i64,
         selected: usize,
@@ -150,7 +151,7 @@ impl Dialog {
         use crate::input::Action;
         match self {
             Self::Commands { menu, .. } => menu.opening_action(),
-            Self::Form(_) => None,
+            Self::Form(_) | Self::ScanFolders(_) => None,
             Self::Lyrics(_) => Some(Action::Lyrics),
             Self::Downloads(_) => Some(Action::Downloads),
             Self::Services(_) => Some(Action::Services),
@@ -266,6 +267,10 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if matches!(self.view.dialog, Some(Dialog::ScanFolders(_))) {
+            self.scan_folders_scroll(i64::from(direction));
+            return;
+        }
         if matches!(self.view.dialog,Some(Dialog::Mods(_))) { self.mods_scroll(i64::from(direction));return; }
         if matches!(self.view.dialog,Some(Dialog::Services(_))) { self.services_scroll(i64::from(direction));return; }
         if matches!(self.view.dialog,Some(Dialog::Downloads(_))) { self.downloads_scroll(i64::from(direction));return; }

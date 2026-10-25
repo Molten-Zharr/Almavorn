@@ -530,6 +530,8 @@ impl App {
 
     pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
         match target {
+            Target::ChooseScanFolders => self.choose_scan_folders()?,
+            Target::ScanFolders(action) => self.scan_folders_action(action)?,
             Target::CopyHelp(line) => {
                 self.copy_help(line);
             }
@@ -793,7 +795,7 @@ impl App {
             Target::ScanSubfolders => {
                 ensure!(!self.busy(), AppError::LibraryBusy);
                 ensure!(
-                    matches!(self.view.dialog, Some(Dialog::Folders { .. }))
+                    matches!(self.view.dialog, Some(Dialog::Folders { .. } | Dialog::ScanFolders(_)))
                         || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none()),
                     AppError::FolderNotReady
                 );
@@ -1163,6 +1165,7 @@ impl App {
                     | Target::Downloads(super::DownloadAction::Row(_))
                     | Target::Services(super::ServiceAction::Row(_))
                     | Target::Mods(super::ModAction::Row(_))
+                    | Target::ScanFolders(super::ScanFolderAction::Row(_))
             ))),
         }
     }

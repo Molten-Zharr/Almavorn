@@ -16,6 +16,9 @@ pub(super) fn browser_dialog(
     area: Rect,
     palette: Palette,
 ) {
+    let import_caption = if browser.folder {
+        app.text("Add to desk", "Добавить на стол").to_owned()
+    } else { app.import_caption() };
     let title = match &browser.palette_file {
         Some(PaletteFilePicker::Import) => {
             app.text("Import palette · JSON", "Импорт палитры · JSON")
@@ -327,9 +330,9 @@ pub(super) fn browser_dialog(
             app.text("Current folder", "Текущую папку").into()
         }
     } else if browser.folder {
-        app.import_caption()
+        import_caption.clone()
     } else {
-        format!("{} ({})", app.import_caption(), browser.marked.len())
+        format!("{} ({})", import_caption, browser.marked.len())
     };
     let mut footer = vec![(
         add,
@@ -356,7 +359,7 @@ pub(super) fn browser_dialog(
                 format!(
                     "{} · {}",
                     app.text("Current folder", "Текущая папка"),
-                    app.import_caption()
+                    import_caption
                 )
             },
             Target::BrowserCurrentFolder,

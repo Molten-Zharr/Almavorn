@@ -255,7 +255,7 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
     let entries = app.rows();
     let grouped = app
         .playlist()
-        .is_some_and(|playlist| playlist.group_folders);
+        .is_some_and(|playlist| playlist.groups_by_folder());
     let mut display = Vec::with_capacity(entries.len());
     let mut index = 0;
     while index < entries.len() {

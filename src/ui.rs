@@ -103,6 +103,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         context_hint(app, area.width < 120).into()
     };
     let tooltip = app.hovered_target().and_then(|target| match target {
+        Target::ChooseScanFolders => Some(app.text(
+            "Choose saved playlist folders. New tracks are added to their own playlists.",
+            "Выберите папки плейлистов. Найденные композиции добавятся в соответствующие плейлисты."
+        ).into()),
         Target::Action(action) => Some(format!(
             "{}{}",
             buttons::button_shortcut(app, target).map_or(String::new(), |key| format!("{key} · ")),

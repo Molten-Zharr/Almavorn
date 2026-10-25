@@ -19,6 +19,8 @@ mod extra;
 mod files;
 mod native;
 mod relocate;
+mod batch;
+pub use batch::BatchEdits;
 pub(crate) fn move_noreplace(source:&Path,destination:&Path)->Result<()>{
     files::rename_noreplace(source,destination)?;
     files::sync_directory(destination)

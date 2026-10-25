@@ -133,7 +133,7 @@ impl App {
         self.paint_to(id)
     }
     pub(super) fn mark_folder_group(&mut self, folder: &Path) -> Result<()> {
-        if !self.playlist().is_some_and(|p| p.group_folders) {
+        if !self.playlist().is_some_and(|p| p.groups_by_folder()) {
             return Ok(());
         }
         let ids = self

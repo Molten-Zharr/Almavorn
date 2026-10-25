@@ -10,6 +10,7 @@ impl App {
     /// Every dialog owns its remaining keys, including keys it ignores.
     pub(in crate::app) fn dialog_key(&mut self, key: KeyPress) -> Result<()> {
         match self.view.dialog.as_ref() {
+            Some(Dialog::ScanFolders(_)) => self.scan_folders_key(key),
             Some(Dialog::Form(_)) => self.form_key(key),
             Some(Dialog::Lyrics(_)) => self.lyrics_key(key),
             Some(Dialog::Downloads(_)) => self.downloads_key(key),
