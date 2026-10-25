@@ -195,6 +195,12 @@ impl App {
                     return Ok(());
                 }
                 let position = Position::new(x, y);
+                if self.view.dialog.is_none() && self.lyrics.panel.area.contains(position) {
+                    let step = if ctrl && shift { self.lyrics.panel.page_size.max(1) as i64 }
+                        else if ctrl { 15 } else { 3 };
+                    self.scroll_lyrics_panel(i64::from(delta) * step);
+                    return Ok(());
+                }
                 if self.color_picker_scroll(position, delta) {
                     return Ok(());
                 }
@@ -544,6 +550,11 @@ impl App {
             Target::Lyrics(action) => {
                 self.lyrics_action(action)?;
                 if double && matches!(action,super::LyricsAction::Row(_)) { self.lyrics_action(super::LyricsAction::Open)?; }
+            }
+            Target::LyricsPanel(action) => self.lyrics_panel_action(action)?,
+            Target::ToggleLyricsPanel => {
+                self.settings.preferences.lyrics.show_panel = !self.settings.preferences.lyrics.show_panel;
+                self.save_settings()?;
             }
             Target::Tags(action) => {
                 self.tag_action(action)?;

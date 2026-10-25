@@ -179,7 +179,7 @@ def main():
                 reason = "access"
             elif status == 429 or "ratelimit" in name:
                 reason = "limit"
-            elif "timeout" in name or "connection" in name:
+            elif "timeout" in name or "connection" in name or name in ("chunkedencodingerror", "brokenpipeerror", "gaierror"):
                 reason = "network"
             elif "modulenotfound" in name:
                 reason = "install"

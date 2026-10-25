@@ -2,6 +2,7 @@ mod buttons;
 mod dialogs;
 mod keycaps;
 mod library;
+mod lyrics_panel;
 mod menus;
 mod player;
 mod settings;
@@ -30,6 +31,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let palette = Palette::new(app);
     let command_hint = menus::hint(app);
     app.view.hits.clear();
+    app.lyrics.panel.area = Rect::default();
     app.view.keycaps.clear();
     app.view.dialog_scroll_max = 0;
     app.view.dialog_page_size = 0;

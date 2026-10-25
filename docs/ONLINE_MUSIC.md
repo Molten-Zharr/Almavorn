@@ -6,7 +6,13 @@ Press F9 for song lyrics. Almavorn searches tags and filenames, including revers
 
 Search uses nine sources: Genius, LRCLIB, Musixmatch, Yandex Music, lyrics.ovh, AZLyrics, SongLyrics, eLyrics and Letras. Genius takes priority among confident song matches.
 
+Enable "Show lyrics" in the Tracks menu to display the source, title and lyrics beside the playlist. Search follows the playing track. "Find elsewhere" excludes the current source for that song. Open F9 to choose uncertain matches.
+
+Under "Settings → Song lyrics", disable online search or individual sources. All sources are enabled by default. When the sources cannot be reached, automatic search pauses until you press "Search again" or re-enable search. Saved lyrics and file tags remain available offline.
+
 Open "Sources" to see which sites found lyrics or could not complete the search. You can add, replace or remove Genius and Musixmatch keys there. Genius uses public search without a key; Musixmatch requires an API key. Yandex Music uses the account connected under "Music services". Lyrics availability depends on the source, region and account access.
+
+Requests contain the artist, title and filename-derived search terms, followed by a source URL or track ID when fetching lyrics. Audio files, full paths, other files and computer specifications are not sent. Sources see your IP address and client name; authenticated services receive their own key or credentials. The Yandex Music library adds standard client information and a random device identifier during sign-in. JavaScript from lyric pages is not executed.
 
 ## Downloads
 

@@ -119,7 +119,13 @@ pub(super) fn render(
         let mut lines = Vec::new();
         for provider in Provider::ALL {
             let report = app.lyrics.reports.iter().find(|r| r.provider == provider);
-            let status = if let Some(report) = report {
+            let status = if !app.settings.preferences.lyrics.allows(provider) {
+                app.text("Disabled in settings", "Отключен в настройках")
+                    .into()
+            } else if app.lyrics.excluded.contains(&provider) {
+                app.text("Excluded for this song", "Исключен для этой песни")
+                    .into()
+            } else if let Some(report) = report {
                 if report.count > 0 {
                     format!("{}: {}", app.text("Found", "Найдено"), report.count)
                 } else if report.error.is_none() {
@@ -143,7 +149,9 @@ pub(super) fn render(
             if !status.is_empty() {
                 lines.push(Line::styled(status, palette.text()));
             }
-            if let Some(error) = report.and_then(|r| r.error.as_deref()) {
+            if app.settings.preferences.lyrics.allows(provider)
+                && let Some(error) = report.and_then(|r| r.error.as_deref())
+            {
                 lines.push(Line::styled(clean(error), palette.text().fg(palette.error)));
             }
             lines.push(Line::raw(""));
@@ -164,9 +172,14 @@ pub(super) fn render(
     } else if loading {
         frame.render_widget(
             Paragraph::new(format!(
-                "{} {}/9",
+                "{} {}/{}",
                 app.text("Sources checked:", "Проверено источников:"),
-                app.lyrics.reports.len()
+                app.lyrics.reports.len(),
+                Provider::ALL
+                    .into_iter()
+                    .filter(|p| app.settings.preferences.lyrics.allows(*p)
+                        && !app.lyrics.excluded.contains(p))
+                    .count()
             ))
             .style(palette.text()),
             body,
@@ -178,7 +191,7 @@ pub(super) fn render(
             "{} · {}{}",
             lyric.provider,
             if app.lyrics.saved {
-                app.text("Saved", "Сохранено")
+                app.text("Saved copy exists", "Есть сохраненная копия")
             } else {
                 app.text("Search result", "Результат поиска")
             },
@@ -254,10 +267,16 @@ pub(super) fn render(
         }
     } else if app.lyrics.results.is_empty() {
         frame.render_widget(
-            Paragraph::new(app.text(
+            Paragraph::new(if !app.settings.preferences.lyrics.enabled {
+                app.text("Online lyrics search is disabled in settings.", "Поиск текстов в интернете отключен в настройках.")
+            } else if app.lyrics.network_paused {
+                app.text("Cannot reach lyric sources. Automatic search is paused; use Search again to retry.", "Нет связи с источниками. Автопоиск приостановлен; нажмите Искать снова для новой попытки.")
+            } else if !Provider::ALL.into_iter().any(|p| app.settings.preferences.lyrics.allows(p) && !app.lyrics.excluded.contains(&p)) {
+                app.text("No sources left for this search. Choose sources in Settings.", "Для этого поиска не осталось источников. Выберите их в настройках.")
+            } else { app.text(
                 "No lyrics found in the connected services. Try changing the artist or title.",
                 "Текст не найден в подключенных сервисах. Уточните исполнителя или название.",
-            ))
+            ) })
             .style(palette.text())
             .wrap(Wrap { trim: false }),
             body,
@@ -326,6 +345,11 @@ fn controls(app: &App, view: &LyricsView, loading: bool) -> Vec<(String, Target,
         let ready = !app.lyrics_key_busy();
         return vec![
             action(
+                app.text("Search settings", "Настройки поиска"),
+                LyricsAction::Settings,
+                true,
+            ),
+            action(
                 app.text("Genius: enter key", "Genius: ввести ключ"),
                 LyricsAction::Key(Provider::Genius),
                 ready,
@@ -370,6 +394,11 @@ fn controls(app: &App, view: &LyricsView, loading: bool) -> Vec<(String, Target,
     }
     let selected = !loading && view.selected < app.lyrics.results.len();
     vec![
+        action(
+            app.text("Find elsewhere [N]", "Найти в другом [N]"),
+            LyricsAction::FindOther,
+            selected && app.settings.preferences.lyrics.enabled,
+        ),
         action(
             app.text("Sources [I]", "Источники [I]"),
             LyricsAction::Sources,

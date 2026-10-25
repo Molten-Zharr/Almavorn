@@ -421,6 +421,7 @@ impl App {
                 self.lyrics.results = vec![lyric];
                 self.lyrics.saved = true;
                 self.view.dialog = Some(Dialog::Lyrics(super::lyrics::LyricsView::content()));
+                self.update_panel_from_dialog();
             }
             FormPurpose::LyricsExport(lyric) => {
                 crate::lyrics::export(std::path::Path::new(form.fields[0].value.trim()), lyric)?;

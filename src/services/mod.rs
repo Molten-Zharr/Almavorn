@@ -185,6 +185,7 @@ fn bridge(
     let value: Value =
         serde_json::from_slice(&output.stdout).context("Сервис вернул неизвестный ответ.")?;
     if let Some(error) = value.get("error").and_then(Value::as_str) {
+        if error == "network" { return Err(crate::network::ConnectionFailure.into()); }
         bail!(match error {
             "auth" => "Вход истек. Подключите аккаунт снова.",
             "access" => "Запись недоступна для этого аккаунта или региона. Проверьте подписку.",

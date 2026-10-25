@@ -12,6 +12,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc,
 };
+mod panel;
+pub use panel::{LyricsPanel, PanelAction};
 
 #[derive(Clone)]
 struct Request {
@@ -19,6 +21,8 @@ struct Request {
     force: bool,
     cancel: Arc<AtomicBool>,
     progress: mpsc::Sender<ProviderReport>,
+    preferences: crate::preferences::LyricsPreferences,
+    excluded: Vec<Provider>,
 }
 #[derive(Default)]
 pub struct LyricsState {
@@ -27,6 +31,10 @@ pub struct LyricsState {
     pub error: Option<String>,
     pub saved: bool,
     pub reports: Vec<ProviderReport>,
+    pub excluded: Vec<Provider>,
+    pub panel: LyricsPanel,
+    pub network_paused: bool,
+    last_preferences: Option<crate::preferences::LyricsPreferences>,
     progress: Option<mpsc::Receiver<ProviderReport>>,
     key_job: Option<Background<()>>,
     job: LatestJob<Request, SearchResult>,
@@ -41,6 +49,7 @@ pub struct LyricsView {
     pub confirm_remove: bool,
     pub sources: bool,
     pub confirm_key: Option<Provider>,
+    pub panel_result: bool,
 }
 impl LyricsView {
     pub fn content() -> Self {
@@ -70,6 +79,8 @@ pub enum LyricsAction {
     RemoveKey(Provider),
     ConfirmKey,
     Services,
+    FindOther,
+    Settings,
 }
 
 impl App {
@@ -81,6 +92,15 @@ impl App {
             .or_else(|| self.entry().map(|e| &e.track))
             .context("Выберите композицию для поиска текста.")?
             .clone();
+        if self
+            .lyrics
+            .panel
+            .query
+            .as_ref()
+            .is_some_and(|q| q.track.id == track.id)
+        {
+            return self.open_panel_lyrics();
+        }
         self.start_lyrics(
             Query {
                 artist: track.artist.clone(),
@@ -92,6 +112,21 @@ impl App {
         Ok(())
     }
     pub(super) fn start_lyrics(&mut self, query: Query, force: bool) {
+        self.start_lyrics_excluding(query, force, vec![]);
+    }
+    fn start_lyrics_excluding(&mut self, query: Query, force: bool, excluded: Vec<Provider>) {
+        if self.settings.preferences.lyrics.enabled {
+            self.resume_lyrics_network();
+        }
+        if self
+            .lyrics
+            .panel
+            .query
+            .as_ref()
+            .is_some_and(|q| q.track.id == query.track.id)
+        {
+            self.lyrics.panel.cancel();
+        }
         if let Some(cancel) = self.lyrics.cancel.take() {
             cancel.store(true, Ordering::Relaxed);
         }
@@ -99,6 +134,7 @@ impl App {
         self.lyrics.query = Some(query.clone());
         self.lyrics.results.clear();
         self.lyrics.reports.clear();
+        self.lyrics.excluded = excluded.clone();
         let (progress, receiver) = mpsc::channel();
         self.lyrics.progress = Some(receiver);
         self.lyrics.error = None;
@@ -109,6 +145,8 @@ impl App {
             force,
             cancel,
             progress,
+            preferences: self.settings.preferences.lyrics.clone(),
+            excluded,
         });
         self.view.dialog = Some(Dialog::Lyrics(LyricsView::default()));
         self.start_lyrics_job();
@@ -118,35 +156,30 @@ impl App {
         let runtime = self.runtime.as_ref().expect("runtime is alive");
         self.lyrics.job.start(|request| {
             let request = request.clone();
-            background(runtime, move || {
-                if request.cancel.load(Ordering::Relaxed) {
-                    return Ok(SearchResult {
-                        matches: vec![],
-                        warnings: vec![],
-                    });
-                }
-                if !request.force {
-                    if let Some(lyric) = lyrics::cached(&data, request.query.track.id)? {
-                        return Ok(SearchResult {
-                            matches: vec![lyric],
-                            warnings: vec![],
-                        });
-                    }
-                    if let Some(lyric) = lyrics::embedded(&request.query.track) {
-                        return Ok(SearchResult {
-                            matches: vec![lyric],
-                            warnings: vec![],
-                        });
-                    }
-                }
-                lyrics::search(&data, &request.query, &request.cancel, &request.progress)
-            })
+            background(runtime, move || run_request(&data, &request))
         });
     }
     pub fn lyrics_loading(&self) -> bool {
         self.lyrics.job.requested().is_some()
+            || matches!(&self.view.dialog, Some(Dialog::Lyrics(view)) if view.panel_result)
+                && self.lyrics.panel_loading()
     }
     pub(super) fn tick_lyrics(&mut self) {
+        self.sync_lyrics_preferences();
+        self.tick_lyrics_panel();
+        if matches!(&self.view.dialog, Some(Dialog::Lyrics(view)) if view.panel_result) {
+            self.lyrics.query = self.lyrics.panel.query.clone();
+            self.lyrics.excluded = self.lyrics.panel.excluded.clone();
+            self.lyrics.reports = self.lyrics.panel.reports.clone();
+            if !self.lyrics.panel_loading() {
+                self.lyrics.results = self.lyrics.panel.results.clone();
+                self.lyrics.error = self.lyrics.panel.error.clone();
+                if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
+                    view.panel_result = false;
+                    view.content = self.lyrics.panel.lyric().is_some();
+                }
+            }
+        }
         if let Some(receiver) = &self.lyrics.progress {
             for report in receiver.try_iter() {
                 self.lyrics
@@ -178,8 +211,19 @@ impl App {
         if !completed.current {
             return;
         }
+        if let Some(receiver) = &self.lyrics.progress {
+            for report in receiver.try_iter() {
+                self.lyrics
+                    .reports
+                    .retain(|r| r.provider != report.provider);
+                self.lyrics.reports.push(report);
+            }
+        }
         match completed.result {
             Ok(result) => {
+                if result.network_failed {
+                    self.lyrics.network_paused = true;
+                }
                 self.lyrics.results = result.matches;
                 self.lyrics.error = (!result.warnings.is_empty()).then(|| {
                     self.text(
@@ -206,8 +250,26 @@ impl App {
                         view.follow = true;
                     }
                 }
+                if matches!(&self.view.dialog, Some(Dialog::Lyrics(view)) if view.content) {
+                    self.update_panel_from_dialog();
+                }
             }
             Err(error) => self.lyrics.error = Some(format!("{error:#}")),
+        }
+        if self
+            .lyrics
+            .query
+            .as_ref()
+            .zip(self.lyrics.panel.query.as_ref())
+            .is_some_and(|(manual, panel)| manual.track.id == panel.track.id)
+        {
+            self.lyrics.panel.cancel();
+            self.lyrics.panel.query = self.lyrics.query.clone();
+            self.lyrics.panel.results = self.lyrics.results.clone();
+            self.lyrics.panel.reports = self.lyrics.reports.clone();
+            self.lyrics.panel.excluded = self.lyrics.excluded.clone();
+            self.lyrics.panel.error = self.lyrics.error.clone();
+            self.lyrics.panel.remember();
         }
     }
     pub(super) fn lyrics_close(&mut self) -> bool {
@@ -304,6 +366,7 @@ impl App {
             Key::Char('r') => self.lyrics_action(LyricsAction::Refresh)?,
             Key::Char('l') => self.lyrics_action(LyricsAction::Follow)?,
             Key::Char('x') => self.lyrics_action(LyricsAction::Export)?,
+            Key::Char('n') => self.lyrics_action(LyricsAction::FindOther)?,
             _ => {}
         }
         Ok(())
@@ -369,6 +432,19 @@ impl App {
                 }
             }
             LyricsAction::Services => self.open_services(),
+            LyricsAction::Settings => self.open_settings_page(super::SettingsPage::Lyrics),
+            LyricsAction::FindOther => {
+                let mut excluded = self.lyrics.excluded.clone();
+                if let Some(lyric) = self.lyrics.results.get(selected)
+                    && let Some(provider) = Provider::ALL
+                        .into_iter()
+                        .find(|p| p.name() == lyric.provider)
+                    && !excluded.contains(&provider)
+                {
+                    excluded.push(provider);
+                }
+                self.start_lyrics_excluding(query, true, excluded);
+            }
             LyricsAction::Search => {
                 let title = self.text("Find lyrics", "Найти текст песни");
                 let description=self.text("Enter the artist and title. If no close match is found, the player also searches by title words.", "Укажите исполнителя и название. Если точного совпадения нет, плеер ищет также по словам названия.");
@@ -385,7 +461,7 @@ impl App {
             }
             LyricsAction::Refresh => {
                 let sources = view.sources;
-                self.start_lyrics(query, true);
+                self.start_lyrics_excluding(query, true, self.lyrics.excluded.clone());
                 if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
                     view.sources = sources;
                 }
@@ -396,6 +472,7 @@ impl App {
                     view.follow = true;
                     view.offset = 0;
                 }
+                self.update_panel_from_dialog();
             }
             LyricsAction::Follow => view.follow = !view.follow,
             LyricsAction::Remove => view.confirm_remove = true,
@@ -415,6 +492,7 @@ impl App {
                 lyrics::save(&self.data_directory(), query.track.id, lyric)?;
                 self.lyrics.saved = true;
                 self.lyrics.error = None;
+                self.update_panel_from_dialog();
             }
             LyricsAction::Edit => {
                 let lyric = self
@@ -490,6 +568,50 @@ impl App {
         }));
         Ok(())
     }
+}
+
+fn run_request(data: &std::path::Path, request: &Request) -> Result<SearchResult> {
+    if request.cancel.load(Ordering::Relaxed) {
+        return Ok(SearchResult::default());
+    }
+    let mut warnings = vec![];
+    if !request.force {
+        match lyrics::cached(data, request.query.track.id) {
+            Ok(Some(mut lyric)) => {
+                lyric.score = 1000;
+                return Ok(SearchResult {
+                    matches: vec![lyric],
+                    ..SearchResult::default()
+                });
+            }
+            Err(error) => warnings.push(error.to_string()),
+            _ => {}
+        }
+        if request.query.track.path.is_file()
+            && let Some(lyric) = lyrics::embedded(&request.query.track)
+        {
+            return Ok(SearchResult {
+                matches: vec![lyric],
+                ..SearchResult::default()
+            });
+        }
+    }
+    if !request.preferences.enabled {
+        return Ok(SearchResult {
+            warnings,
+            ..SearchResult::default()
+        });
+    }
+    let mut result = lyrics::search(
+        data,
+        &request.query,
+        &request.cancel,
+        &request.progress,
+        &request.preferences,
+        &request.excluded,
+    )?;
+    result.warnings.extend(warnings);
+    Ok(result)
 }
 
 impl Drop for LyricsState {

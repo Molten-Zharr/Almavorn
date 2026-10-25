@@ -21,6 +21,7 @@ use ratatui::layout::Rect;
 pub enum SettingsPage {
     #[default]
     General,
+    Lyrics,
     Profiles,
     Themes,
     Palettes,
@@ -28,15 +29,16 @@ pub enum SettingsPage {
     Shortcuts,
 }
 impl SettingsPage {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::General,
+        Self::Lyrics,
         Self::Profiles,
         Self::Themes,
         Self::Palettes,
         Self::Typography,
         Self::Shortcuts,
     ];
-    pub const SECTIONS: [Self; 4] = [Self::General, Self::Profiles, Self::Themes, Self::Shortcuts];
+    pub const SECTIONS: [Self; 5] = [Self::General, Self::Lyrics, Self::Profiles, Self::Themes, Self::Shortcuts];
     pub const THEME_TABS: [Self; 3] = [Self::Themes, Self::Palettes, Self::Typography];
 
     pub fn section(self) -> Self {
@@ -56,6 +58,7 @@ impl SettingsPage {
     pub fn name(self, language: Language) -> &'static str {
         match self {
             Self::General => language.text("General", "Общие"),
+            Self::Lyrics => language.text("Song lyrics", "Тексты песен"),
             Self::Profiles => language.text("Profiles", "Профили"),
             Self::Themes => language.text("Themes", "Темы"),
             Self::Palettes => language.text("Palettes", "Палитры"),
@@ -641,6 +644,17 @@ impl App {
         }
         self.select_setting(row);
         match item.control {
+            SettingControl::LyricsEnabled => {
+                self.settings.preferences.lyrics.enabled = !self.settings.preferences.lyrics.enabled;
+            }
+            SettingControl::LyricsPanel => {
+                self.settings.preferences.lyrics.show_panel = !self.settings.preferences.lyrics.show_panel;
+            }
+            SettingControl::LyricsProvider(provider) => {
+                let disabled = &mut self.settings.preferences.lyrics.disabled;
+                if disabled.contains(&provider) { disabled.retain(|p| *p != provider); }
+                else { disabled.push(provider); }
+            }
             SettingControl::Language => {
                 self.settings.preferences.language = cycle(
                     self.settings.preferences.language,

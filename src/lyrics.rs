@@ -76,9 +76,11 @@ pub struct Query {
     pub title: String,
 }
 
+#[derive(Clone, Default)]
 pub struct SearchResult {
     pub matches: Vec<Lyric>,
     pub warnings: Vec<String>,
+    pub network_failed: bool,
 }
 
 #[derive(Deserialize)]
@@ -258,7 +260,7 @@ fn search_lrc(
     }
     request
         .send()
-        .map_err(|_| anyhow::anyhow!("Не удалось связаться с LRCLIB."))
+        .map_err(network::connection_error)
         .and_then(network::json)
 }
 
@@ -332,6 +334,7 @@ fn search_lrclib(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
     let mut result = SearchResult {
         matches: Vec::new(),
         warnings: Vec::new(),
+        network_failed: false,
     };
     let mut ids = HashSet::new();
     let mut lrc_available = true;
@@ -344,6 +347,7 @@ fn search_lrclib(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
                 add_lrc_records(records, query, &guesses, &mut ids, &mut result.matches, 0);
             }
             Err(error) => {
+                result.network_failed |= network::is_connection_error(&error);
                 result.warnings.push(error.to_string());
                 lrc_available = false;
                 break;
@@ -365,6 +369,7 @@ fn search_lrclib(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
                     add_lrc_records(records, query, &guesses, &mut ids, &mut result.matches, 600);
                 }
                 Err(error) => {
+                    result.network_failed |= network::is_connection_error(&error);
                     result.warnings.push(error.to_string());
                     break;
                 }
@@ -387,6 +392,7 @@ fn search_ovh(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
     let mut result = SearchResult {
         matches: vec![],
         warnings: vec![],
+        network_failed: false,
     };
     {
         for (artist, title) in guesses.iter().filter(|(a, _)| !a.is_empty()).take(3) {
@@ -402,7 +408,7 @@ fn search_ovh(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
             let value: Result<serde_json::Value> = match response {
                 Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => continue,
                 Ok(response) => network::json(response),
-                Err(_) => Err(anyhow::anyhow!("Не удалось связаться с lyrics.ovh.")),
+                Err(error) => Err(network::connection_error(error)),
             };
             match value {
                 Ok(value) => {
@@ -429,6 +435,7 @@ fn search_ovh(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
                     }
                 }
                 Err(error) => {
+                    result.network_failed |= network::is_connection_error(&error);
                     result.warnings.push(error.to_string());
                     break;
                 }

@@ -49,6 +49,8 @@ pub enum Target {
     PlayingTrack,
     Form(super::FormAction),
     Lyrics(super::LyricsAction),
+    LyricsPanel(super::lyrics::PanelAction),
+    ToggleLyricsPanel,
     Downloads(super::DownloadAction),
     Services(super::ServiceAction),
     Mods(super::ModAction),

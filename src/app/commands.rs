@@ -435,6 +435,13 @@ impl App {
                 enabled: true,
             });
         }
+        if menu == CommandMenu::Tracks {
+            let position = items.iter().position(|item| matches!(item.target, Target::Action(Action::Lyrics))).map_or(items.len(), |index| index + 1);
+            items.insert(position, CommandItem {
+                label: format!("[{}] {}", if self.settings.preferences.lyrics.show_panel { 'x' } else { ' ' }, self.text("Show lyrics", "Показывать текст")),
+                target: Target::ToggleLyricsPanel, enabled: true,
+            });
+        }
         if menu == CommandMenu::Player {
             items.push(CommandItem {
                 label: format!("[{}] {}", if self.settings.preferences.appearance.show_player_special_buttons { 'x' } else { ' ' }, self.text("Show special buttons", "Показывать спецкнопки")),

@@ -236,7 +236,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         match panel {
             Panel::Player => player::player(frame, app, inner, palette),
             Panel::Playlists => library::playlists(frame, app, inner, palette),
-            Panel::Tracks => library::tracks_table(frame, app, inner, palette),
+            Panel::Tracks => super::lyrics_panel::render_tracks(frame, app, inner, palette),
             _ => {}
         }
     }

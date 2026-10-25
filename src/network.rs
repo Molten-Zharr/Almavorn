@@ -7,6 +7,21 @@ use std::{
     time::Duration,
 };
 
+#[derive(Debug)]
+pub(crate) struct ConnectionFailure;
+impl std::fmt::Display for ConnectionFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Нет соединения с сервисом.")
+    }
+}
+impl std::error::Error for ConnectionFailure {}
+pub(crate) fn connection_error(_: reqwest::Error) -> anyhow::Error {
+    ConnectionFailure.into()
+}
+pub(crate) fn is_connection_error(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<ConnectionFailure>().is_some()
+}
+
 pub(crate) fn client() -> Result<Client> {
     Client::builder()
         .user_agent(concat!(
@@ -52,7 +67,7 @@ pub(crate) fn json<T: DeserializeOwned>(response: Response) -> Result<T> {
     response
         .take(4 * 1024 * 1024 + 1)
         .read_to_end(&mut bytes)
-        .context("Не удалось прочитать ответ сервиса.")?;
+        .map_err(|_| ConnectionFailure)?;
     ensure!(
         bytes.len() <= 4 * 1024 * 1024,
         "Ответ сервиса слишком большой."

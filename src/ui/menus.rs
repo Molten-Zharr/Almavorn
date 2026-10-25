@@ -55,6 +55,10 @@ pub(super) fn hint(app: &App) -> Option<String> {
             "Show or hide the EQ, FX and VIS buttons.",
             "Показать или скрыть кнопки EQ, FX и VIS.",
         ),
+        Target::ToggleLyricsPanel => app.text(
+            "Show lyrics for the playing song beside the playlist.",
+            "Показывать текст играющей песни рядом с плейлистом.",
+        ),
         Target::ManagePanels => app.text(
             "Choose which player panels and buttons are visible.",
             "Выбрать видимые панели и кнопки плеера.",

@@ -7,6 +7,9 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub(crate) enum SettingControl {
+    LyricsEnabled,
+    LyricsPanel,
+    LyricsProvider(crate::lyrics::Provider),
     Language,
     Volume,
     Desk,
@@ -105,6 +108,16 @@ impl App {
         let action = lang.text("Open", "Открыть").to_owned();
         let run = lang.text("Apply", "Применить").to_owned();
         match self.view.settings.page {
+            SettingsPage::Lyrics => {
+                let preferences = &self.settings.preferences.lyrics;
+                let checked = |value| if value { "[x]".to_owned() } else { "[ ]".to_owned() };
+                let mut rows = vec![
+                    make(lang.text("Enable lyrics search", "Включить поиск текстов песен"), checked(preferences.enabled), lang.text("Allow online searches. When disabled, only saved lyrics and file tags are read.", "Разрешить поиск в интернете. При отключении читаются только сохраненные тексты и теги файлов."), SettingControl::LyricsEnabled, true),
+                    make(lang.text("Show lyrics", "Показывать текст"), checked(preferences.show_panel), lang.text("Show lyrics beside the playlist and search when playback changes tracks.", "Показывать текст рядом с плейлистом и искать его при смене играющей композиции."), SettingControl::LyricsPanel, true),
+                ];
+                rows.extend(crate::lyrics::Provider::ALL.into_iter().map(|provider| make(provider.name(), checked(!preferences.disabled.contains(&provider)), lang.text("Include this source in searches. Genius has priority among confident matches.", "Искать в этом источнике. При уверенном совпадении первым выбирается Genius."), SettingControl::LyricsProvider(provider), true)));
+                rows
+            }
             SettingsPage::General => vec![
                 // Existing controls retain their keyboard order; animation controls follow them.
                 make(lang.text("Language", "Язык"), if lang == crate::model::Language::English { "English" } else { "Русский" }.into(), lang.text("Language of menus, descriptions, notices and keyboard hints.", "Язык меню, описаний, уведомлений и подсказок клавиш."), SettingControl::Language, true),

@@ -41,7 +41,7 @@ pub use context::{LibraryState, PlaybackState, UiState};
 pub use dialogs::{Dialog, TextDialog, TextPurpose};
 pub use forms::{Form,FormAction,FormField,FormPurpose};
 pub use downloads::{DownloadsState,DownloadsView,DownloadAction};
-pub use lyrics::{LyricsState,LyricsView,LyricsAction};
+pub use lyrics::{LyricsState,LyricsView,LyricsAction, PanelAction as LyricsPanelAction};
 pub use options::Options;
 pub use search::{SearchDialog, SearchFocus};
 pub(crate) use settings::{SettingControl, SettingGroup};

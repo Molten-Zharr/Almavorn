@@ -15,7 +15,7 @@ use std::{
     time::Duration,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Provider {
     Genius,
     Lrclib,
@@ -108,6 +108,8 @@ pub fn search(
     query: &Query,
     cancel: &AtomicBool,
     progress: &Sender<ProviderReport>,
+    preferences: &crate::preferences::LyricsPreferences,
+    excluded: &[Provider],
 ) -> Result<SearchResult> {
     ensure!(
         !candidates(query).is_empty(),
@@ -116,41 +118,57 @@ pub fn search(
     let mut result = SearchResult {
         matches: vec![],
         warnings: vec![],
+        network_failed: false,
     };
+    let providers: Vec<_> = Provider::ALL
+        .into_iter()
+        .filter(|p| preferences.allows(*p) && !excluded.contains(p))
+        .collect();
+    let mut connection_results = vec![];
     // Sources run concurrently. Cancellation is checked between bounded requests;
     // the UI discards results from older search generations.
     std::thread::scope(|scope| {
-        let jobs = Provider::ALL.map(|provider| {
-            (
-                provider,
-                scope.spawn(move || {
-                    if cancel.load(Ordering::Relaxed) {
-                        return Ok(SearchResult {
-                            matches: vec![],
-                            warnings: vec![],
-                        });
-                    }
-                    let found = search_provider(provider, data, query, cancel);
-                    let report = match &found {
-                        Ok(value) => ProviderReport {
-                            provider,
-                            count: value.matches.len(),
-                            error: (!value.warnings.is_empty()).then(|| value.warnings.join(" ")),
-                        },
-                        Err(error) => ProviderReport {
-                            provider,
-                            count: 0,
-                            error: Some(error.to_string()),
-                        },
-                    };
-                    let _ = progress.send(report);
-                    found
-                }),
-            )
-        });
+        let jobs: Vec<_> = providers
+            .into_iter()
+            .map(|provider| {
+                (
+                    provider,
+                    scope.spawn(move || {
+                        if cancel.load(Ordering::Relaxed) {
+                            return Ok(SearchResult {
+                                matches: vec![],
+                                warnings: vec![],
+                                network_failed: false,
+                            });
+                        }
+                        let found = search_provider(provider, data, query, cancel);
+                        let report = match &found {
+                            Ok(value) => ProviderReport {
+                                provider,
+                                count: value.matches.len(),
+                                error: (!value.warnings.is_empty())
+                                    .then(|| value.warnings.join(" ")),
+                            },
+                            Err(error) => ProviderReport {
+                                provider,
+                                count: 0,
+                                error: Some(error.to_string()),
+                            },
+                        };
+                        let _ = progress.send(report);
+                        found
+                    }),
+                )
+            })
+            .collect();
         for (provider, job) in jobs {
             match job.join() {
                 Ok(Ok(found)) => {
+                    if !matches!(provider, Provider::Musixmatch | Provider::Yandex)
+                        || found.network_failed
+                    {
+                        connection_results.push(found.network_failed);
+                    }
                     result.matches.extend(found.matches);
                     result.warnings.extend(
                         found
@@ -159,9 +177,15 @@ pub fn search(
                             .map(|w| format!("{}: {w}", provider.name())),
                     );
                 }
-                Ok(Err(error)) => result
-                    .warnings
-                    .push(format!("{}: {error}", provider.name())),
+                Ok(Err(error)) => {
+                    let failed = network::is_connection_error(&error);
+                    if !matches!(provider, Provider::Musixmatch | Provider::Yandex) || failed {
+                        connection_results.push(failed);
+                    }
+                    result
+                        .warnings
+                        .push(format!("{}: {error}", provider.name()));
+                }
                 Err(_) => {
                     let error = "Поиск прерван. Повторите попытку.".to_owned();
                     let _ = progress.send(ProviderReport {
@@ -176,6 +200,8 @@ pub fn search(
             }
         }
     });
+    result.network_failed =
+        !connection_results.is_empty() && connection_results.iter().all(|failed| *failed);
     let mut seen = HashSet::new();
     result.matches.retain(|lyric| {
         seen.insert((
@@ -219,6 +245,7 @@ fn search_provider(
         _ => pages(&client, provider, query, &guesses, cancel).map(|matches| SearchResult {
             matches,
             warnings: vec![],
+            network_failed: false,
         }),
     }
 }
@@ -264,7 +291,7 @@ fn get_page(client: &Client, provider: Provider, url: &str) -> Result<Option<Str
         .header("Accept", "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
         .header("Accept-Language", "ru,en;q=0.8")
         .send()
-        .map_err(|_| anyhow::anyhow!("Нет ответа от сервиса."))?;
+        .map_err(network::connection_error)?;
     let status = response.status().as_u16();
     if status == 404 {
         return Ok(None);
@@ -283,7 +310,7 @@ fn get_page(client: &Client, provider: Provider, url: &str) -> Result<Option<Str
     response
         .take(4 * 1024 * 1024 + 1)
         .read_to_end(&mut bytes)
-        .context("Не удалось прочитать страницу.")?;
+        .map_err(|_| network::ConnectionFailure)?;
     ensure!(bytes.len() <= 4 * 1024 * 1024, "Страница слишком большая.");
     Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
@@ -369,11 +396,7 @@ fn lyric(provider: Provider, artist: &str, title: &str, source: String, plain: S
 }
 
 fn request_json(request: reqwest::blocking::RequestBuilder) -> Result<Value> {
-    network::json(
-        request
-            .send()
-            .map_err(|_| anyhow::anyhow!("Нет ответа от сервиса."))?,
-    )
+    network::json(request.send().map_err(network::connection_error)?)
 }
 
 fn genius(
@@ -388,6 +411,7 @@ fn genius(
     let key = secrets::get(data, Provider::Genius.key_id()?).unwrap_or(None);
     let mut found = vec![];
     let mut warnings = vec![];
+    let mut network_failed = false;
     let mut seen = HashSet::new();
     let mut queries = HashSet::new();
     let attempts = guesses
@@ -471,6 +495,7 @@ fn genius(
                     }
                     Ok(None) => {}
                     Err(error) => {
+                        network_failed |= network::is_connection_error(&error);
                         warnings.push(error.to_string());
                         break;
                     }
@@ -483,6 +508,7 @@ fn genius(
         Ok(())
     })();
     if let Err(error) = operation {
+        network_failed |= network::is_connection_error(&error);
         warnings.push(error.to_string());
     }
     warnings.sort();
@@ -490,6 +516,7 @@ fn genius(
     Ok(SearchResult {
         matches: found,
         warnings,
+        network_failed,
     })
 }
 
@@ -589,6 +616,10 @@ fn musixmatch(
     })();
     Ok(SearchResult {
         matches: found,
+        network_failed: operation
+            .as_ref()
+            .err()
+            .is_some_and(network::is_connection_error),
         warnings: operation.err().map(|e| e.to_string()).into_iter().collect(),
     })
 }
@@ -777,6 +808,10 @@ fn yandex(data: &Path, query: &Query, cancel: &AtomicBool) -> Result<SearchResul
     })();
     Ok(SearchResult {
         matches,
+        network_failed: operation
+            .as_ref()
+            .err()
+            .is_some_and(network::is_connection_error),
         warnings: operation.err().map(|e| e.to_string()).into_iter().collect(),
     })
 }

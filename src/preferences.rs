@@ -376,6 +376,25 @@ pub struct ProfilePreferences {
     pub bindings: Vec<Binding>,
     pub global_shortcuts: Vec<crate::remote::GlobalShortcut>,
     pub appearance: Appearance,
+    pub lyrics: LyricsPreferences,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LyricsPreferences {
+    pub enabled: bool,
+    pub show_panel: bool,
+    pub disabled: Vec<crate::lyrics::Provider>,
+}
+impl Default for LyricsPreferences {
+    fn default() -> Self {
+        Self { enabled: true, show_panel: true, disabled: vec![] }
+    }
+}
+impl LyricsPreferences {
+    pub fn allows(&self, provider: crate::lyrics::Provider) -> bool {
+        self.enabled && !self.disabled.contains(&provider)
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SettingsProfile {
@@ -412,6 +431,7 @@ impl Default for ProfilePreferences {
             bindings: crate::input::default_bindings(),
             global_shortcuts: Vec::new(),
             appearance: Default::default(),
+            lyrics: Default::default(),
         }
     }
 }
