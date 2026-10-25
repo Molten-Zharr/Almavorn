@@ -244,7 +244,7 @@ impl App {
         if key.key == Key::Enter && key.ctrl {
             if key.key == Key::Enter
                 && key.shift
-                && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.palette_file.is_none())
+                && matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && (browser.folder_playlists.is_none() || matches!(browser.playlist_name, Some(PlaylistFolderPicker::Source(_)))) && browser.palette_file.is_none())
             {
                 return self.browser_add_current_folder();
             }
@@ -372,6 +372,13 @@ impl App {
         };
         self.show_browser(directory, true);
         if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            browser.folder_playlists = Some(matches!(
+                dialog.purpose,
+                TextPurpose::CreateFromFolder {
+                    group_subfolders: true,
+                    ..
+                }
+            ));
             browser.playlist_name = Some(PlaylistFolderPicker::Source(dialog));
         }
         Ok(())
@@ -586,6 +593,8 @@ impl App {
         }
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(group_subfolders) = browser.folder_playlists
+            && (!matches!(browser.playlist_name, Some(PlaylistFolderPicker::Source(_)))
+                || (!current_folder && !browser.marked.is_empty()))
         {
             let mut folders: Vec<_> = browser.marked.iter().cloned().collect();
             folders.sort();
@@ -664,13 +673,7 @@ impl App {
                 name.trim().to_owned()
             };
             dialog.text = self.fresh_playlist_name(&name);
-            let group_subfolders = matches!(
-                dialog.purpose,
-                TextPurpose::CreateFromFolder {
-                    group_subfolders: true,
-                    ..
-                }
-            );
+            let group_subfolders = browser.folder_playlists.unwrap_or(false);
             dialog.purpose = TextPurpose::CreateFromFolder {
                 folder,
                 group_subfolders,

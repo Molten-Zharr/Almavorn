@@ -28,7 +28,7 @@ pub(super) fn browser_dialog(
             app.text("Where to create the playlist folder", "Где создать папку плейлиста")
         }
         None if browser.playlist_name.is_some() => {
-            app.text("Playlist from folder", "Плейлист из папки")
+            app.text("Playlists from folders", "Плейлисты из папок")
         }
         None if browser.folder_playlists.is_some() => {
             app.text("Folders to playlists", "Папки в плейлисты")
@@ -147,9 +147,12 @@ pub(super) fn browser_dialog(
         controls,
         palette,
     );
-    let music_folder =
-        browser.folder && browser.folder_playlists.is_none() && browser.palette_file.is_none();
-    let current_choice = music_folder && browser.selection_explicit;
+    let source_folder = matches!(browser.playlist_name, Some(PlaylistFolderPicker::Source(_)));
+    let marked_folders = browser.folder_playlists.is_some() && !browser.marked.is_empty();
+    let music_folder = browser.folder
+        && (browser.folder_playlists.is_none() || source_folder)
+        && browser.palette_file.is_none();
+    let current_choice = music_folder && (browser.selection_explicit || marked_folders);
     let footer_height = if music_folder || browser.folder_playlists.is_some() {
         3
     } else {
@@ -311,10 +314,10 @@ pub(super) fn browser_dialog(
             }
             PaletteFilePicker::Export { .. } => app.text("Current folder", "Текущую папку").into(),
         }
-    } else if browser.folder_playlists.is_some() {
+    } else if browser.folder_playlists.is_some() && (marked_folders || !source_folder) {
         format!(
             "{} ({})",
-            app.text("Create", "Создать"),
+            app.text("Create playlists", "Создать плейлисты"),
             browser.marked.len()
         )
     } else if browser.playlist_name.is_some() {
@@ -334,7 +337,7 @@ pub(super) fn browser_dialog(
         app.browser_ready()
             && if browser.search_failed() {
                 !browser.marked.is_empty()
-            } else if browser.folder_playlists.is_some() {
+            } else if browser.folder_playlists.is_some() && !source_folder {
                 !browser.marked.is_empty()
             } else {
                 browser.folder
@@ -347,11 +350,15 @@ pub(super) fn browser_dialog(
     )];
     if current_choice {
         footer.push((
-            format!(
-                "{} · {}",
-                app.text("Current folder", "Текущая папка"),
-                app.import_caption()
-            ),
+            if browser.playlist_name.is_some() {
+                app.text("Current folder", "Текущую папку").into()
+            } else {
+                format!(
+                    "{} · {}",
+                    app.text("Current folder", "Текущая папка"),
+                    app.import_caption()
+                )
+            },
             Target::BrowserCurrentFolder,
             app.browser_ready(),
         ));

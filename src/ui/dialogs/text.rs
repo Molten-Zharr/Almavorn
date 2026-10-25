@@ -216,7 +216,7 @@ pub(super) fn text_dialog(
             ));
         }
         controls.push((
-            app.text("From music folder", "Из папки с музыкой").into(),
+            app.text("From music folders", "Из папок с музыкой").into(),
             Target::PlaylistAutoName,
             !app.busy(),
         ));
