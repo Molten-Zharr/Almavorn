@@ -1,7 +1,6 @@
 use super::{
-    library,
     theme::Palette,
-    widgets::{block, buttons, buttons_height, clean, visible_offset},
+    widgets::{buttons, buttons_height, clean, visible_offset},
 };
 use crate::{
     app::{App, Hit, LyricsPanelAction as Action, Target},
@@ -10,54 +9,14 @@ use crate::{
 };
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     style::Modifier,
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
 };
 
-pub(super) fn render_tracks(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    if !app.settings.preferences.lyrics.show_panel || area.width < 24 || area.height < 7 {
-        library::tracks_table(frame, app, area, palette);
-        return;
-    }
-    let side_by_side = area.width >= 85;
-    let parts = if side_by_side {
-        Layout::horizontal([
-            Constraint::Min(40),
-            Constraint::Length((area.width / 3).clamp(30, 65)),
-        ])
-        .split(area)
-    } else {
-        Layout::vertical([
-            Constraint::Min(3),
-            Constraint::Length((area.height / 2).max(4)),
-        ])
-        .split(area)
-    };
-    let mut tracks = parts[0];
-    if side_by_side {
-        // Leave the track scrollbar its own column before the lyrics border.
-        tracks.width = tracks.width.saturating_sub(1);
-    }
-    library::tracks_table(frame, app, tracks, palette);
-    render(frame, app, parts[1], palette);
-}
-
-fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    app.lyrics.panel.area = area;
-    let border = block(
-        app.text("Song lyrics", "Текст песни").into(),
-        palette,
-        false,
-    )
-    .border_style(palette.text().fg(if app.lyrics.panel.focused {
-        palette.accent
-    } else {
-        palette.separator
-    }));
-    let inner = border.inner(area);
-    frame.render_widget(border, area);
+pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Palette) {
+    app.lyrics.panel.area = inner;
     if inner.width == 0 || inner.height == 0 {
         return;
     }

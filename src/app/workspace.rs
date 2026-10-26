@@ -7,6 +7,13 @@ use anyhow::Result;
 use ratatui::layout::Position;
 
 impl App {
+    pub(crate) fn panel_visible(&self, panel: Panel) -> bool {
+        if panel == Panel::Lyrics {
+            self.settings.preferences.lyrics.show_panel
+        } else {
+            !self.settings.preferences.workspace.hidden.contains(&panel)
+        }
+    }
     fn workspace_fits(&self, root: &Dock) -> bool {
         crate::layout::workspace_metrics(self).fits(root, self.view.workspace.bounds)
     }
@@ -110,6 +117,7 @@ impl App {
     pub(crate) fn focus_panel(&mut self, panel: Panel) {
         self.view.toolbar_selected = None;
         self.view.workspace.focus = panel;
+        self.lyrics.panel.focused = panel == Panel::Lyrics;
         match panel {
             Panel::Playlists => self.view.focus = Focus::Playlists,
             Panel::Tracks => self.view.focus = Focus::Tracks,
@@ -131,7 +139,10 @@ impl App {
     }
 
     pub(crate) fn close_panel(&mut self, panel: Panel) -> Result<()> {
-        if !self.settings.preferences.workspace.hidden.contains(&panel) {
+        if panel == Panel::Lyrics {
+            self.settings.preferences.lyrics.show_panel = false;
+            self.lyrics.panel.focused = false;
+        } else if !self.settings.preferences.workspace.hidden.contains(&panel) {
             self.settings.preferences.workspace.hidden.push(panel);
         }
         if self.view.workspace.focus == panel {
@@ -151,7 +162,7 @@ impl App {
                 .skip(index + 1)
                 .take(self.view.workspace.areas.len())
                 .map(|(panel, _)| *panel)
-                .find(|panel| !self.settings.preferences.workspace.hidden.contains(panel));
+                .find(|panel| self.panel_visible(*panel));
             if let Some(next) = next {
                 self.focus_panel(next);
             }
@@ -186,7 +197,10 @@ impl App {
                 .position(|row| matches!(row, PanelRow::Category(value) if *value == panel))
                 .unwrap_or(*selected);
         }
-        if self.settings.preferences.workspace.hidden.contains(&panel) {
+        if !self.panel_visible(panel) {
+            if panel == Panel::Lyrics {
+                self.settings.preferences.lyrics.show_panel = true;
+            }
             self.settings
                 .preferences
                 .workspace

@@ -111,7 +111,7 @@ impl WorkspaceMetrics {
         } else {
             (Panel::Tracks, Panel::Playlists)
         };
-        let library = Dock::split(
+        let mut library = Dock::split(
             if list_horizontal {
                 Axis::Horizontal
             } else {
@@ -125,6 +125,7 @@ impl WorkspaceMetrics {
             Dock::Panel(first),
             Dock::Panel(second),
         );
+        library.attach_lyrics();
         let side_player =
             area.width >= 80 && matches!(self.player_placement, Placement::Left | Placement::Right);
         let player_first = matches!(self.player_placement, Placement::Left | Placement::Top);
@@ -174,6 +175,7 @@ impl WorkspaceMetrics {
                     match panel {
                         Panel::Playlists => self.playlist_min_width,
                         Panel::Tracks => 30,
+                        Panel::Lyrics => 24,
                         _ => 20,
                     }
                 }
@@ -243,6 +245,7 @@ impl WorkspaceMetrics {
                             6
                         }
                     }
+                    Panel::Lyrics => if compact { 3 } else { 4 },
                     _ => 3,
                 }
             }

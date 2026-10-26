@@ -212,7 +212,7 @@ impl App {
                     return Ok(());
                 }
                 if self.view.dialog.is_none() && self.lyrics.panel.area.contains(position) {
-                    self.lyrics.panel.focused = true;
+                    self.focus_panel(crate::workspace::Panel::Lyrics);
                     let step = if ctrl && shift { self.lyrics.panel.page_size.max(1) as i64 }
                         else if ctrl { 15 } else { 3 };
                     self.scroll_lyrics_panel(i64::from(delta) * step);
@@ -575,8 +575,7 @@ impl App {
             }
             Target::LyricsPanel(action) => self.lyrics_panel_action(action)?,
             Target::ToggleLyricsPanel => {
-                self.settings.preferences.lyrics.show_panel = !self.settings.preferences.lyrics.show_panel;
-                self.save_settings()?;
+                self.show_panel(crate::workspace::Panel::Lyrics)?;
             }
             Target::Tags(action) => {
                 self.tag_action(action)?;

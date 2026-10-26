@@ -68,7 +68,7 @@ pub(super) fn render(
                     (
                         format!(
                             "{indicator} [{}] ",
-                            if app.settings.preferences.workspace.hidden.contains(panel) {
+                            if !app.panel_visible(*panel) {
                                 ' '
                             } else {
                                 'x'
@@ -83,7 +83,7 @@ pub(super) fn render(
                         .iter()
                         .find(|panel| panel.controls().contains(control))
                         .is_some_and(|panel| {
-                            app.settings.preferences.workspace.hidden.contains(panel)
+                            !app.panel_visible(*panel)
                         });
                     (
                         format!(

@@ -705,7 +705,7 @@ impl App {
                 self.settings.preferences.lyrics.enabled = !self.settings.preferences.lyrics.enabled;
             }
             SettingControl::LyricsPanel => {
-                self.settings.preferences.lyrics.show_panel = !self.settings.preferences.lyrics.show_panel;
+                return self.show_panel(crate::workspace::Panel::Lyrics);
             }
             SettingControl::LyricsProvider(provider) => {
                 let disabled = &mut self.settings.preferences.lyrics.disabled;

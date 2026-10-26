@@ -370,7 +370,7 @@ impl App {
     }
 
     pub(in crate::app) fn lyrics_panel_action(&mut self, action: PanelAction) -> Result<()> {
-        self.lyrics.panel.focused = true;
+        self.focus_panel(crate::workspace::Panel::Lyrics);
         match action {
             PanelAction::Focus => {}
             PanelAction::Choose(index) => {
@@ -396,9 +396,7 @@ impl App {
             PanelAction::Open => self.open_panel_lyrics()?,
             PanelAction::Settings => self.open_settings_page(crate::app::SettingsPage::Lyrics),
             PanelAction::Close => {
-                self.lyrics.panel.focused = false;
-                self.settings.preferences.lyrics.show_panel = false;
-                self.save_settings()?;
+                self.close_panel(crate::workspace::Panel::Lyrics)?;
             }
             PanelAction::Retry | PanelAction::Other => {
                 if matches!(action, PanelAction::Retry) {
@@ -429,6 +427,9 @@ impl App {
 
     pub(in crate::app) fn lyrics_panel_key(&mut self, key: KeyPress) -> Result<bool> {
         if self.view.dialog.is_some()
+            || self.view.toolbar_selected.is_some()
+            || self.view.layout_editing
+            || self.view.workspace.gesture.is_some()
             || !self.lyrics.panel.focused
             || self.lyrics.panel.area.is_empty()
         {
@@ -453,7 +454,7 @@ impl App {
                 if self.lyrics.panel.choosing && self.lyrics.panel.selected.is_some() {
                     self.lyrics_panel_action(PanelAction::Content)?;
                 } else {
-                    self.lyrics.panel.focused = false;
+                    self.focus_panel(crate::workspace::Panel::Tracks);
                 }
                 return Ok(true);
             }

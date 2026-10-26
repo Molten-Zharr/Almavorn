@@ -89,7 +89,10 @@ pub(crate) fn workspace_metrics(app: &App) -> WorkspaceMetrics {
     WorkspaceMetrics {
         playlist_placement: app.settings.preferences.playlist_placement,
         player_placement: app.settings.preferences.player_placement,
-        hidden: app.settings.preferences.workspace.hidden.clone(),
+        hidden: Panel::CONTENT
+            .into_iter()
+            .filter(|panel| !app.panel_visible(*panel))
+            .collect(),
         collapsed: app.settings.preferences.workspace.collapsed.clone(),
         playlist_min_width: (title_reserved(app, Panel::Playlists)
             + Span::raw(Panel::Playlists.name(app.settings.preferences.language)).width() as u16)

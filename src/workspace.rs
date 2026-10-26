@@ -15,19 +15,21 @@ pub enum Panel {
     Application,
     Playlists,
     Tracks,
+    Lyrics,
     Player,
     Playback,
     Volume,
 }
 
 impl Panel {
-    pub const CONTENT: [Self; 3] = [Self::Playlists, Self::Tracks, Self::Player];
-    pub const ALL: [Self; 6] = [
+    pub const CONTENT: [Self; 4] = [Self::Playlists, Self::Tracks, Self::Lyrics, Self::Player];
+    pub const ALL: [Self; 7] = [
         Self::Application,
         Self::Add,
         Self::PlaylistActions,
         Self::Playlists,
         Self::Tracks,
+        Self::Lyrics,
         Self::Player,
     ];
 
@@ -122,6 +124,7 @@ impl Panel {
             Self::Application => language.text("Application", "Приложение"),
             Self::Playlists => language.text("Playlists", "Плейлисты"),
             Self::Tracks => language.text("Tracks", "Композиции"),
+            Self::Lyrics => language.text("Song lyrics", "Текст песни"),
             Self::Player => language.text("Player", "Проигрыватель"),
             Self::Playback => language.text("Playback", "Управление"),
             Self::Volume => language.text("Volume", "Громкость"),
@@ -224,9 +227,7 @@ impl Dock {
     }
     fn only_buttons(&self) -> bool {
         match self {
-            Self::Panel(panel) => {
-                !matches!(panel, Panel::Playlists | Panel::Tracks | Panel::Player)
-            }
+            Self::Panel(panel) => !Panel::CONTENT.contains(panel),
             Self::Split { first, second, .. } => first.only_buttons() && second.only_buttons(),
         }
     }
@@ -334,6 +335,24 @@ impl Dock {
             Some(self)
         }
     }
+
+    pub(crate) fn attach_lyrics(&mut self) {
+        match self {
+            Self::Panel(Panel::Tracks) => {
+                *self = Self::split(
+                    Axis::Horizontal,
+                    667,
+                    Self::Panel(Panel::Tracks),
+                    Self::Panel(Panel::Lyrics),
+                );
+            }
+            Self::Split { first, second, .. } => {
+                first.attach_lyrics();
+                second.attach_lyrics();
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -351,7 +370,7 @@ pub struct WorkspaceLayout {
 impl Default for WorkspaceLayout {
     fn default() -> Self {
         Self {
-            version: 3,
+            version: 4,
             root: None,
             hidden: Vec::new(),
             collapsed: Vec::new(),
@@ -434,10 +453,11 @@ impl WorkspaceLayout {
             self.hidden = Panel::ALL
                 .into_iter()
                 .filter(|category| {
-                    Panel::LEGACY
-                        .iter()
-                        .filter(|panel| panel.category() == *category)
-                        .all(|panel| hidden.contains(panel))
+                    *category != Panel::Lyrics
+                        && Panel::LEGACY
+                            .iter()
+                            .filter(|panel| panel.category() == *category)
+                            .all(|panel| hidden.contains(panel))
                 })
                 .collect();
             self.collapsed = Panel::ALL
@@ -458,6 +478,16 @@ impl WorkspaceLayout {
                 root.compact_player();
             }
             self.version = 3;
+        }
+        if self.version < 4 {
+            if let Some(root) = &mut self.root {
+                let mut panels = Vec::new();
+                root.panels(&mut panels);
+                if !panels.contains(&Panel::Lyrics) {
+                    root.attach_lyrics();
+                }
+            }
+            self.version = 4;
         }
         if let Some(root) = &self.root {
             let mut panels = Vec::new();

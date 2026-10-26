@@ -116,7 +116,7 @@ impl App {
                 let checked = |value| if value { "[x]".to_owned() } else { "[ ]".to_owned() };
                 let mut rows = vec![
                     make(lang.text("Enable lyrics search", "Включить поиск текстов песен"), checked(preferences.enabled), lang.text("Allow online searches. When disabled, only saved lyrics and file tags are read.", "Разрешить поиск в интернете. При отключении читаются только сохраненные тексты и теги файлов."), SettingControl::LyricsEnabled, true),
-                    make(lang.text("Show lyrics", "Показывать текст"), checked(preferences.show_panel), lang.text("Show lyrics beside the playlist and search when playback changes tracks.", "Показывать текст рядом с плейлистом и искать его при смене играющей композиции."), SettingControl::LyricsPanel, true),
+                    make(lang.text("Show lyrics", "Показывать текст"), checked(preferences.show_panel), lang.text("Show a separate lyrics block and search when tracks change. Move and resize it in Layout mode.", "Показывать отдельный блок текста и искать его при смене композиции. Положение и размер меняются в режиме Блоки."), SettingControl::LyricsPanel, true),
                 ];
                 rows.extend(crate::lyrics::Provider::ALL.into_iter().map(|provider| make(provider.name(), checked(!preferences.disabled.contains(&provider)), lang.text("Include this source in searches. Genius has priority among confident matches.", "Искать в этом источнике. При уверенном совпадении первым выбирается Genius."), SettingControl::LyricsProvider(provider), true)));
                 rows

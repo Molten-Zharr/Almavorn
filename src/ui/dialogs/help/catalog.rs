@@ -782,6 +782,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Lyrics as usize];
+    q.note("Song lyrics is a separate block. In Layout mode, drag its title or [↕], resize shared borders, or collapse it. Its position is saved with the layout. Visibility brings back a hidden lyrics block.",
+        "Текст песни — отдельный блок. В режиме Блоки тяните его за заголовок или [↕], меняйте размер общей границей или сворачивайте. Положение сохраняется вместе с раскладкой. Скрытый блок можно вернуть через Видимость.");
     q.note("A word is underlined only when extended LRC provides explicit start and end markers for it. Plain text, line-only timing and incomplete word timing keep the line highlight.",
         "Слово подчеркивается только при явных метках его начала и конца в расширенном LRC. При обычной или неполной разметке остается подсветка строки.");
     q.note("The panel opens a confident match automatically. Otherwise, click a song in the panel. Variants lets you change your choice.",
