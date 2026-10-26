@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-const REDIRECT: &str = "http://127.0.0.1:43827/callback";
+use super::SPOTIFY_REDIRECT as REDIRECT;
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

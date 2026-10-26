@@ -24,6 +24,7 @@ enum Operation {
     Load,
     Browse(Connection, String, Option<String>, u32),
     Save(Connection),
+    SaveAndLogin(Connection),
     Remove(Connection),
     Logout(Connection),
     Install,
@@ -269,6 +270,7 @@ impl App {
             matches!(
                 &r.operation,
                 Operation::Save(_)
+                    | Operation::SaveAndLogin(_)
                     | Operation::Remove(_)
                     | Operation::Logout(_)
                     | Operation::Login(_)
@@ -311,7 +313,7 @@ impl App {
                         }
                     }
                     Operation::Load => Ok(Response::Connections(services::list(&data)?)),
-                    Operation::Save(connection) => {
+                    Operation::Save(connection) | Operation::SaveAndLogin(connection) => {
                         services::save(&data, &connection)?;
                         Ok(Response::Connections(services::list(&data)?))
                     }
@@ -337,6 +339,11 @@ impl App {
                             Ok(Response::Device(connection, code))
                         } else {
                             services::spotify_login(&data, &connection, cancel, |value| {
+                                if !cancel.load(Ordering::Relaxed) {
+                                    // The explicit Connect/Sign in action opens the browser once.
+                                    // The same link stays available for manual opening or copying.
+                                    let _ = open_service_page(&value);
+                                }
                                 if let Ok(mut link) = link.lock() {
                                     *link = Some(value);
                                 }
@@ -368,6 +375,23 @@ impl App {
         self.services.select_connection(connection.id.clone());
         self.view.dialog = Some(Dialog::Services(ServicesView::default()));
         self.service_request(Operation::Save(connection));
+    }
+    fn spotify_setup(&mut self, connection: Connection) {
+        let field = FormField::new("Client ID", connection.client_id.clone());
+        let step = if connection.client_id.is_empty() { 0 } else { 2 };
+        self.open_form(self.text("Connect Spotify", "Подключить Spotify"), "", vec![field], FormPurpose::SpotifyConnect(connection, step));
+    }
+    pub(super) fn connect_spotify(&mut self, connection: Connection) -> Result<()> {
+        ensure!(!self.services_loading(), "Дождитесь завершения текущей операции.");
+        ensure!(connection.client_id.len() == 32 && connection.client_id.bytes().all(|c| c.is_ascii_hexdigit()),
+            "Скопируйте значение поля Client ID со страницы приложения Spotify и вставьте его сюда. Это 32 буквы и цифры.");
+        self.services.select_connection(connection.id.clone());
+        self.services.authorization = None;
+        self.services.login_code = None;
+        if let Ok(mut link) = self.services.link.lock() { *link = None; }
+        self.view.dialog = Some(Dialog::Services(ServicesView::default()));
+        self.service_request(Operation::SaveAndLogin(connection));
+        Ok(())
     }
     pub(super) fn service_headers(&mut self, connection: Connection, headers: String) {
         self.services.select_connection(connection.id.clone());
@@ -438,6 +462,9 @@ impl App {
                             view.selected = self.services.connections.iter()
                                 .position(|c| Some(&c.id) == self.services.connection.as_ref())
                                 .unwrap_or(0);
+                        }
+                        if let Operation::SaveAndLogin(connection) = completed.request.operation {
+                            self.service_request(Operation::Login(connection));
                         }
                     }
                     Ok(Response::Playlists(rows)) => {
@@ -1018,6 +1045,10 @@ impl App {
                 } else {
                     self.service_connection()?
                 };
+                if matches!(action, ServiceAction::Add(Provider::Spotify)) {
+                    self.spotify_setup(connection);
+                    return Ok(());
+                }
                 let mut fields = vec![FormField::new(
                     self.text("Connection name", "Название подключения"),
                     connection.name.clone(),
@@ -1059,6 +1090,12 @@ impl App {
             ServiceAction::Login => {
                 let connection = self.service_connection()?;
                 ensure!(connection.enabled, "Включите подключение.");
+                if connection.provider == Provider::Spotify && (connection.client_id.len() != 32
+                    || !connection.client_id.bytes().all(|c| c.is_ascii_hexdigit()))
+                {
+                    self.spotify_setup(connection);
+                    return Ok(());
+                }
                 self.services.authorization = None;
                 self.services.login_code = None;
                 if let Ok(mut link) = self.services.link.lock() {
@@ -1118,6 +1155,10 @@ impl App {
                 self.service_search(None, 0)?;
             }
             ServiceAction::Open if page == ServicePage::Connections => {
+                let connection = self.service_connection()?;
+                if connection.provider == Provider::Spotify {
+                    return self.service_action_inner(if connection.authenticated { ServiceAction::Library } else { ServiceAction::Login });
+                }
                 return self.service_action_inner(ServiceAction::Search);
             }
             ServiceAction::Open if page == ServicePage::Devices => {
@@ -1220,19 +1261,11 @@ impl App {
                 if matches!(action, ServiceAction::CopyLink) {
                     self.view.clipboard_text = Some(link);
                 } else {
-                    let url = crate::network::public_url(&link)?;
-                    ensure!(url.scheme() == "https", "Неверная ссылка входа.");
-                    let mut child=std::process::Command::new("xdg-open")
-                        .arg(url.as_str())
-                        .stdin(std::process::Stdio::null())
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .spawn()
-                        .context("Не удалось открыть браузер. Скопируйте ссылку.")?;
-                    std::thread::spawn(move||{let _=child.wait();});
+                    open_service_page(&link)?;
                 }
             }
             ServiceAction::Cancel => {
+                let reload = self.services.aux.requested().is_some_and(|request| matches!(request.operation, Operation::SaveAndLogin(_)));
                 if let Some(cancel) = &self.services.cancel {
                     cancel.store(true, Ordering::Relaxed);
                 }
@@ -1242,6 +1275,7 @@ impl App {
                 if let Ok(mut link) = self.services.link.lock() {
                     *link = None;
                 }
+                if reload { self.service_request(Operation::Load); }
             }
             ServiceAction::Page(direction) => {
                 let page = self.services.page.saturating_add_signed(direction);
@@ -1257,6 +1291,20 @@ impl App {
         Ok(())
     }
 }
+pub(super) fn open_service_page(link: &str) -> Result<()> {
+    let url = crate::network::public_url(link)?;
+    ensure!(url.scheme() == "https", "Неверная ссылка входа.");
+    let mut child = std::process::Command::new("xdg-open")
+        .arg(url.as_str())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .context("Не удалось открыть браузер. Откройте страницу вручную.")?;
+    std::thread::spawn(move || { let _ = child.wait(); });
+    Ok(())
+}
+
 fn service_track(connection: &Connection, track: &Track) -> crate::model::Track {
     crate::model::Track {
         id: service_track_id(connection, track),

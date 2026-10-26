@@ -53,6 +53,7 @@ pub(in crate::ui) fn render_content(
     }
     let busy = app.services_loading();
     let selected = app.services.connections.get(view.selected);
+    let selected_spotify = selected.is_some_and(|c| c.provider == Provider::Spotify);
     let connection = app
         .services
         .connections
@@ -76,12 +77,18 @@ pub(in crate::ui) fn render_content(
                 action("+ Spotify", A::Add(Provider::Spotify), !busy),
                 action("+ YouTube Music", A::Add(Provider::YouTube), !busy),
                 action(
-                    app.text("Open [Enter]", "Открыть [Enter]"),
+                    if selected_spotify {
+                        if selected.is_some_and(|c| c.authenticated) {
+                            app.text("My music [Enter]", "Моя музыка [Enter]")
+                        } else { app.text("Connect [Enter]", "Подключить [Enter]") }
+                    } else { app.text("Open [Enter]", "Открыть [Enter]") },
                     A::Open,
                     !busy && selected.is_some_and(|c| c.enabled),
                 ),
                 action(
-                    app.text("Sign in", "Войти"),
+                    if selected_spotify && selected.is_some_and(|c| c.authenticated) {
+                        app.text("Sign in again", "Повторить вход")
+                    } else { app.text("Sign in", "Войти") },
                     A::Login,
                     !busy && selected.is_some_and(|c| c.enabled),
                 ),
@@ -197,6 +204,15 @@ pub(in crate::ui) fn render_content(
                 ),
             ],
         };
+        if view.page == ServicePage::Connections && selected_spotify {
+            if !selected.is_some_and(|c| c.authenticated) {
+                items.retain(|(_, target, _)| !matches!(target, Target::Services(A::Login)));
+            }
+            if selected.is_some_and(|c| c.authenticated) {
+                items.insert(4, action(app.text("Choose device", "Выбрать устройство"), A::Devices,
+                    !busy && selected.is_some_and(|c| c.enabled)));
+            }
+        }
         if app.services_playing() {
             items.extend([
                 action(app.text("Previous", "Предыдущая"), A::Previous, true),
@@ -306,12 +322,23 @@ pub(in crate::ui) fn render_content(
                 "Введите этот код на странице входа"
             )
         )
+    } else if busy && app.services.link.lock().is_ok_and(|link| link.is_some()) {
+        app.text("Confirm access in your browser. If it did not open, use Open sign-in page below.",
+            "Подтвердите доступ в браузере. Если он не открылся, нажмите Открыть страницу входа внизу.").into()
     } else if busy {
         app.text(
             "Working… You can close this window.",
             "Выполняется… Можно закрыть это окно.",
         )
         .into()
+    } else if view.page == ServicePage::Connections && selected_spotify {
+        if selected.is_some_and(|c| c.authenticated) {
+            app.text("Account connected. Open Spotify on your device, then click Choose device.",
+                "Аккаунт подключен. Откройте Spotify на устройстве и нажмите Выбрать устройство.")
+        } else {
+            app.text("Click Connect. The player will guide you through the first sign-in.",
+                "Нажмите Подключить. Плеер проведет через первый вход.")
+        }.into()
     } else if app.services_playing() {
         app.playback_source_caption()
     } else {
@@ -322,8 +349,8 @@ pub(in crate::ui) fn render_content(
         .into()
     };
     frame.render_widget(
-        Paragraph::new(clean(&notice)).style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, inner.y + 1, inner.width, 1),
+        Paragraph::new(clean(&notice)).style(palette.text().fg(palette.muted)).wrap(Wrap { trim: false }),
+        Rect::new(inner.x, inner.y + 1, inner.width, 2),
     );
     let error_height = if app.services.error.is_some() {
         3.min(footer.y.saturating_sub(inner.y + 3))

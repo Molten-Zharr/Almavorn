@@ -879,6 +879,14 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Services as usize];
+    q.note("First Spotify sign-in has three steps: create an app on Spotify, copy its return address, then paste Client ID. Connect opens browser sign-in automatically.",
+        "Первый вход в Spotify проходит за три шага: создать приложение на сайте, скопировать адрес возврата, вставить Client ID. Кнопка \"Подключить\" сама открывает вход в браузере.");
+    q.keys(&[c(Char('1'))], "In Spotify setup: open the app registration page.",
+        "При подключении Spotify: открыть страницу создания приложения.");
+    q.keys(&[c(Char('2'))], "In Spotify setup: copy the return address for Redirect URIs.",
+        "При подключении Spotify: скопировать адрес для поля Redirect URIs.");
+    q.keys(&[p(Enter)], "In Spotify setup: go to the next step; on the last step, connect the account.",
+        "При подключении Spotify: перейти к следующему шагу; на последнем шаге — подключить аккаунт.");
     q.note("Manage accounts, music, playlists and devices in Settings → Music services. Tab switches between the section list and its content.",
         "Подключения, музыка, плейлисты и устройства находятся в Настройки → Музыкальные сервисы. Tab переключает список разделов и содержимое.");
     q.keys(

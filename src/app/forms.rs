@@ -16,6 +16,7 @@ pub enum FormPurpose {
     ModManifest(crate::mods::Mod),
     ModExport(crate::mods::Mod),
     ServiceConnection(crate::services::Connection),
+    SpotifyConnect(crate::services::Connection, usize),
     ServiceHeaders(crate::services::Connection),
     ModFields(crate::mods::Mod, Vec<String>),
     ServiceSearch,
@@ -65,6 +66,9 @@ pub struct Form {
 
 #[derive(Clone, Copy)]
 pub enum FormAction {
+    SpotifyDashboard,
+    SpotifyRedirect,
+    SpotifyNext,
     Field(usize),
     ToggleField(usize),
     Save,
@@ -104,6 +108,11 @@ impl App {
         };
         if form.discard {
             form.discard = false;
+        } else if let FormPurpose::SpotifyConnect(_, step) = &mut form.purpose
+            && *step > 0
+        {
+            *step -= 1;
+            form.error = None;
         } else if form
             .fields
             .iter()
@@ -122,7 +131,7 @@ impl App {
         let Some(Dialog::Form(form)) = &mut self.view.dialog else {
             return;
         };
-        if form.discard {
+        if form.discard || matches!(form.purpose, FormPurpose::SpotifyConnect(_, 0 | 1)) {
             return;
         }
         let field = &mut form.fields[form.selected];
@@ -168,6 +177,19 @@ impl App {
                 Key::Enter => self.form_action(FormAction::Back),
                 _ => Ok(()),
             };
+        }
+        if let FormPurpose::SpotifyConnect(_, step) = form.purpose {
+            if key.ctrl {
+                match key.key {
+                    Key::Char('1') => return self.form_action(FormAction::SpotifyDashboard),
+                    Key::Char('2') => return self.form_action(FormAction::SpotifyRedirect),
+                    _ => {},
+                }
+            }
+            if step < 2 {
+                if key.key == Key::Enter { return self.form_action(FormAction::SpotifyNext); }
+                return Ok(());
+            }
         }
         if key.ctrl && key.key == Key::Char('s') {
             return self.form_action(FormAction::Save);
@@ -280,6 +302,22 @@ impl App {
             return Ok(());
         };
         match action {
+            FormAction::SpotifyDashboard if matches!(form.purpose, FormPurpose::SpotifyConnect(..)) => {
+                form.error = None;
+                if let Err(error) = super::services::open_service_page("https://developer.spotify.com/dashboard") {
+                    form.error = Some(error.to_string());
+                }
+            }
+            FormAction::SpotifyRedirect if matches!(form.purpose, FormPurpose::SpotifyConnect(..)) => {
+                form.error = None;
+                self.view.clipboard_text = Some(crate::services::SPOTIFY_REDIRECT.into());
+            }
+            FormAction::SpotifyNext => {
+                if let FormPurpose::SpotifyConnect(_, step) = &mut form.purpose {
+                    *step = (*step + 1).min(2);
+                    form.error = None;
+                }
+            }
             FormAction::ToggleField(index)
                 if index < form.fields.len() && form.fields[index].checkbox =>
             {
@@ -310,6 +348,12 @@ impl App {
 
     fn apply_form(&mut self, form: &Form) -> Result<()> {
         match &form.purpose {
+            FormPurpose::SpotifyConnect(previous, step) => {
+                anyhow::ensure!(*step == 2, "Перейдите к шагу с Client ID.");
+                let mut connection = previous.clone();
+                connection.client_id = form.fields[0].value.trim().to_owned();
+                self.connect_spotify(connection)?;
+            }
             FormPurpose::MoveFilesFolder(view) => {
                 let folder = std::path::PathBuf::from(form.fields[0].value.trim()).canonicalize()?;
                 anyhow::ensure!(folder.is_dir(), "Выберите существующую папку.");

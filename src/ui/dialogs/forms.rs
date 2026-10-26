@@ -18,6 +18,10 @@ pub(super) fn render(
     area: Rect,
     palette: Palette,
 ) {
+    if matches!(form.purpose, crate::app::FormPurpose::SpotifyConnect(..)) && !form.discard {
+        super::spotify::render(frame, app, form, area, palette);
+        return;
+    }
     let inner = file_modal(frame, app, area, form.title.clone(), 44, palette);
     if inner.width < 20 || inner.height < 12 {
         return;

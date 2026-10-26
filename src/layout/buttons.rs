@@ -6,6 +6,9 @@ use ratatui::text::Span;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::Form(crate::app::FormAction::SpotifyDashboard) => Some("Ctrl+1".into()),
+        Target::Form(crate::app::FormAction::SpotifyRedirect) => Some("Ctrl+2".into()),
+        Target::Form(crate::app::FormAction::SpotifyNext) => Some("Enter".into()),
         Target::TransferEdit => app.settings.preferences.bindings.iter()
             .find(|binding| binding.action == Action::ToggleEdit).map(|binding| binding.key.label()),
         Target::TransferMove => Some("Ctrl+Enter".into()),

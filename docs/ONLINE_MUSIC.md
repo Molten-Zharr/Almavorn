@@ -38,11 +38,13 @@ For your library, choose "Sign in" and paste headers from your YouTube Music bro
 
 Spotify plays on a Spotify Connect device. Premium and a Client ID from [Spotify for Developers](https://developer.spotify.com/dashboard) are required.
 
-1. Register http://127.0.0.1:43827/callback as the app's redirect URI.
-2. Add Spotify in Almavorn and enter its Client ID.
-3. Choose "Sign in", open the sign-in page and authorize access.
-4. Open Spotify on the desired device and select it under "Spotify devices".
-5. Search or browse your music, then select "Play".
+1. In Almavorn, open "Settings", "Music services", "Connections" and choose "+ Spotify".
+2. Click "Open website". Choose Create app; you can name it Almavorn. Return to the player and click "Next".
+3. Click "Copy address". Paste it into Redirect URIs in the app's settings on the website and save. Click "Next" in the player.
+4. Copy Client ID from the app's page into Almavorn's single field. Click "Connect": the browser opens sign-in, and the player waits for confirmation automatically.
+5. Open Spotify on the desired device. In Almavorn, click "Choose device", then open "My music".
+
+If the browser does not open, use "Open sign-in page" or "Copy link". Later sign-ins reuse the saved setup.
 
 A personal Spotify developer app must allow the accounts that use it. See [Spotify quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
 

@@ -3,6 +3,7 @@ mod browser;
 mod color_picker;
 mod equalizer;
 mod forms;
+mod spotify;
 mod lyrics;
 mod downloads;
 pub(super) mod services;

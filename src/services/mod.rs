@@ -1,4 +1,5 @@
 mod spotify;
+pub const SPOTIFY_REDIRECT: &str = "http://127.0.0.1:43827/callback";
 use crate::{network, process, secrets};
 use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
