@@ -10,7 +10,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, selected: &mut usize, are
         (app.text("Defaults", "По умолчанию").into(), Target::QuickAccess(QuickAction::Reset), true),
     ];
     let top = buttons(frame, app, Rect::new(inner.x, inner.y, inner.width, inner.height.min(4)), actions, palette);
-    let active = format!("[{}] {}", if app.settings.preferences.appearance.quick_access.show_active { 'x' } else { ' ' }, app.text("Show active modes automatically", "Автоматически показывать включенные режимы"));
+    let active = format!("[{}] {}", if app.settings.preferences.appearance.quick_access.show_active { 'x' } else { ' ' }, app.text("Show layout editing while active", "Показывать активное редактирование блоков"));
     let toggle = buttons(frame, app, Rect::new(inner.x, inner.y + top, inner.width, inner.height.saturating_sub(top).min(3)), vec![(active, Target::QuickAccess(QuickAction::Active), true)], palette);
     let start = inner.y + top + toggle + 1;
     let capacity = usize::from(inner.bottom().saturating_sub(start + 3));

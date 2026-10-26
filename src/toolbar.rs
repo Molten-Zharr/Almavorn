@@ -31,7 +31,7 @@ impl QuickButton {
             Self::Marked => ("Checked tracks only", "Только отмеченные"),
             Self::Lyrics => ("Lyrics panel", "Панель текста песни"),
             Self::SpecialButtons => ("Player special buttons", "Спецкнопки проигрывателя"),
-            Self::Layout => ("Arrange blocks", "Перемещение блоков"),
+            Self::Layout => ("Edit layout", "Редактирование блоков"),
             Self::Equalizer => ("Equalizer", "Эквалайзер"),
             Self::Effects => ("Playback effects", "Эффекты воспроизведения"),
             Self::Animation => ("Background animation", "Анимация фона"),
@@ -69,6 +69,7 @@ impl QuickButton {
 #[serde(default)]
 pub struct QuickAccess {
     pub pinned: Vec<QuickButton>,
+    // Keep the saved key compatible; only layout editing appears automatically.
     pub show_active: bool,
 }
 

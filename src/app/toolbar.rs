@@ -70,7 +70,7 @@ impl App {
             Repeat => format!("{}: {}", self.text("Repeat", "Повтор"), self.settings.preferences.repeat.name(language)),
             Lyrics => self.text("Lyrics", "Текст песни").into(),
             SpecialButtons => self.text("Special buttons", "Спецкнопки").into(),
-            Layout => self.text("Arrange blocks", "Перемещение блоков").into(),
+            Layout => self.text("Edit layout", "Редактирование блоков").into(),
             _ => button.name(language).into(),
         };
         let label = if self.quick_active(button) { format!("[x] {name}") } else { name };
@@ -91,7 +91,8 @@ impl App {
         let mut y = 0u16;
         let mut placed = Vec::new();
         for button in QuickButton::ALL {
-            if !settings.pinned.contains(&button) && !(settings.show_active && self.quick_active(button)) { continue; }
+            let show_layout = settings.show_active && button == QuickButton::Layout && self.view.layout_editing;
+            if !settings.pinned.contains(&button) && !show_layout { continue; }
             let item = self.quick_item(button);
             let length = crate::layout::buttons::button_width(self, &item.label, &item.target).min(width);
             if x.saturating_add(length) > width { x = 0; y += 1; }
