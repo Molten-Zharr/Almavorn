@@ -235,6 +235,11 @@ fn run() -> Result<()> {
                             | Target::Mode(_)
                             | Target::CommandMenu(_)
                             | Target::CommandRow(_)
+                            | Target::StatisticsControl(_)
+                            | Target::StatisticsPage(_)
+                            | Target::StatisticsSort
+                            | Target::StatisticsRefresh
+                            | Target::StatisticsRow(_)
                             | Target::ManagePanels
                             | Target::PanelCollapse(_)
                             | Target::PanelClose(_)
