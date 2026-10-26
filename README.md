@@ -11,7 +11,7 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.ru.md">Русский</a></p>
 
-<p align="center"><a href="#install"><img src="docs/images/readme/download.svg" width="16" height="16" alt=""> Install</a> &nbsp; · &nbsp; <a href="#screenshots"><img src="docs/images/readme/gallery.svg" width="16" height="16" alt=""> Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch"><img src="docs/images/readme/keyboard.svg" width="16" height="16" alt=""> Getting started</a></p>
+<p align="center"><a href="#install"><img src="docs/images/readme/download.svg" width="16" height="16" alt="">&nbsp;Install</a> &nbsp; · &nbsp; <a href="#screenshots"><img src="docs/images/readme/gallery.svg" width="16" height="16" alt="">&nbsp;Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch"><img src="docs/images/readme/keyboard.svg" width="16" height="16" alt="">&nbsp;Getting&nbsp;started</a></p>
 
 <p align="center">
   <a href="docs/images/almavorn-lyrics.png"><img src="docs/images/almavorn-lyrics.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists."></a>
