@@ -445,7 +445,9 @@ impl App {
             }
             FormPurpose::DownloadSettings => {
                 let mut config = self.downloads.config.clone();
-                config.directory = form.fields[0].value.trim().into();
+                config.directory = crate::downloads::destination_folder(
+                    std::path::Path::new(form.fields[0].value.trim()),
+                )?;
                 config.cobalt_url = form.fields[1].value.trim().into();
                 let key = (!form.fields[2].value.trim().is_empty())
                     .then(|| form.fields[2].value.trim().to_owned());

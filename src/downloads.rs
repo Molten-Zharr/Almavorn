@@ -6,8 +6,11 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
-    time::Duration,
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
+    time::{Duration, Instant},
 };
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -57,6 +60,8 @@ pub struct Download {
     pub status: Status,
     pub path: Option<PathBuf>,
     pub error: Option<String>,
+    #[serde(default)]
+    pub notice: Option<String>,
     pub imported: bool,
     #[serde(default)]
     pub created: u64,
@@ -68,10 +73,7 @@ pub struct Download {
 impl Download {
     pub fn new(url: String, name: String, folder: PathBuf, engine: Engine) -> Result<Self> {
         network::public_url(&url)?;
-        ensure!(
-            folder.is_absolute(),
-            "Укажите полный путь к папке загрузки."
-        );
+        let folder = destination_folder(&folder)?;
         Ok(Self {
             id: format!("{:032x}", fastrand::u128(..)),
             url,
@@ -81,6 +83,7 @@ impl Download {
             status: Status::Queued,
             path: None,
             error: None,
+            notice: None,
             imported: false,
             created: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -99,6 +102,49 @@ impl Download {
                 })
         })
     }
+}
+
+fn downloads_folder() -> Result<PathBuf> {
+    dirs::download_dir()
+        .or_else(|| dirs::home_dir().map(|home| home.join("Downloads")))
+        .context("Не найдена папка Загрузки. Укажите папку в настройках загрузок.")
+}
+
+pub fn destination_folder(value: &Path) -> Result<PathBuf> {
+    if value.as_os_str().is_empty() {
+        return downloads_folder();
+    }
+    ensure!(value.is_absolute(), "Укажите полный путь к папке загрузки.");
+    Ok(value.to_owned())
+}
+
+fn staging_folder(requested: &Path, cancel: &AtomicBool) -> Result<(PathBuf, tempfile::TempDir)> {
+    let mut candidates = vec![destination_folder(requested)?];
+    if let Ok(downloads) = downloads_folder() {
+        for folder in [downloads.join("Almavorn"), downloads] {
+            if !candidates.contains(&folder) {
+                candidates.push(folder);
+            }
+        }
+    }
+    let mut errors = Vec::new();
+    for folder in candidates {
+        ensure!(!cancel.load(Ordering::Relaxed), "Загрузка отменена.");
+        let prepare = || -> Result<_> {
+            std::fs::create_dir_all(&folder)?;
+            let folder = folder.canonicalize()?;
+            // Creating staging checks that this directory is actually writable.
+            let staging = tempfile::Builder::new()
+                .prefix(".almavorn-download-")
+                .tempdir_in(&folder)?;
+            Ok((folder, staging))
+        };
+        match prepare() {
+            Ok(prepared) => return Ok(prepared),
+            Err(error) => errors.push(format!("{}: {error:#}", folder.display())),
+        }
+    }
+    bail!("Не удалось создать папку для музыки. Выберите доступную папку в настройках загрузок.\n{}", errors.join("\n"))
 }
 
 #[derive(Clone)]
@@ -202,6 +248,7 @@ pub fn list(data: &Path) -> Result<Vec<Download>> {
                         "Запись очереди повреждена. Измените ссылку и папку или удалите запись."
                             .into(),
                     ),
+                    notice: None,
                     imported: false,
                     created: 0,
                     expected_digest: None,
@@ -427,15 +474,18 @@ pub fn download(
     progress: &AtomicU64,
 ) -> Download {
     let result = (|| -> Result<()> {
-        ensure!(
-            job.folder.is_absolute(),
-            "Укажите полный путь к папке загрузки."
-        );
-        std::fs::create_dir_all(&job.folder)?;
-        job.folder = job.folder.canonicalize()?;
-        let staging = tempfile::Builder::new()
-            .prefix(".almavorn-download-")
-            .tempdir_in(&job.folder)?;
+        let requested = job.folder.clone();
+        let (folder, staging) = staging_folder(&requested, cancel)?;
+        job.notice = if requested.canonicalize().ok().as_ref() != Some(&folder) {
+            Some(format!(
+                "Выбранная папка недоступна. Папка для этой загрузки: {}.",
+                folder.display()
+            ))
+        } else {
+            None
+        };
+        job.folder = folder;
+        save(data, &job)?;
         let file = match job.engine {
             Engine::Cobalt => cobalt(data, config, &job.url, cancel, progress, staging.path())?,
             Engine::YtDlp => {
@@ -515,7 +565,71 @@ pub fn download(
     job
 }
 
-pub fn install_tools(_data: &Path, cancel: &AtomicBool, progress: &AtomicU64) -> Result<()> {
+static TOOLS_FAILURE: Mutex<Option<(Instant, String)>> = Mutex::new(None);
+
+fn tools_ready(cancel: &AtomicBool) -> Result<bool> {
+    for name in ["yt-dlp", "deno"] {
+        let mut command = Command::new(crate::components::tool(name)?);
+        command.arg("--version");
+        let output = process::run(command, None, cancel, Duration::from_secs(15), 16 * 1024);
+        ensure!(!cancel.load(Ordering::Relaxed), "Подготовка загрузки отменена.");
+        match output {
+            Ok(output) if output.success => {}
+            _ => return Ok(false),
+        }
+    }
+    Ok(true)
+}
+
+pub fn prepare_tools(data: &Path, cancel: &AtomicBool, progress: &AtomicU64) -> Result<()> {
+    prepare_tools_inner(data, cancel, progress, false)
+}
+
+pub fn install_tools(data: &Path, cancel: &AtomicBool, progress: &AtomicU64) -> Result<()> {
+    prepare_tools_inner(data, cancel, progress, true)
+}
+
+fn prepare_tools_inner(
+    _data: &Path,
+    cancel: &AtomicBool,
+    progress: &AtomicU64,
+    update: bool,
+) -> Result<()> {
+    // Serialize installation and avoid repeated network attempts for a queued batch.
+    let mut failure = loop {
+        ensure!(!cancel.load(Ordering::Relaxed), "Подготовка загрузки отменена.");
+        match TOOLS_FAILURE.try_lock() {
+            Ok(guard) => break guard,
+            Err(std::sync::TryLockError::Poisoned(error)) => break error.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => std::thread::sleep(Duration::from_millis(50)),
+        }
+    };
+    if !update {
+        if tools_ready(cancel)? {
+            *failure = None;
+            return Ok(());
+        }
+        if let Some((time, message)) = failure.as_ref()
+            && time.elapsed() < Duration::from_secs(60)
+        {
+            bail!("{message}");
+        }
+    }
+    let result = fetch_tools(cancel, progress)
+        .and_then(|()| {
+            ensure!(tools_ready(cancel)?, "Установленные компоненты не запускаются на этой системе.");
+            Ok(())
+        })
+        .context("Не удалось подготовить скачивание. Проверьте подключение к интернету и нажмите Установить / обновить компоненты");
+    if !cancel.load(Ordering::Relaxed) {
+        *failure = result.as_ref().err()
+            .map(|error| (Instant::now(), format!("{error:#}")));
+    }
+    progress.store(0, Ordering::Relaxed);
+    result
+}
+
+fn fetch_tools(cancel: &AtomicBool, progress: &AtomicU64) -> Result<()> {
     let architecture = std::env::consts::ARCH;
     let (yt, deno) = match architecture {
         "x86_64" => ("yt-dlp_linux", "deno-x86_64-unknown-linux-gnu.zip"),

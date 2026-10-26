@@ -35,6 +35,7 @@ pub(super) fn render(
         return;
     }
     let loading = app.downloads_loading();
+    let preparing = app.downloads.preparing.load(Ordering::Relaxed);
     let selected = app.downloads.rows.get(view.selected);
     let active = selected.is_some_and(|r| app.downloads.active.as_deref() == Some(&r.id));
     let controls = if view.remove.is_some() {
@@ -143,12 +144,12 @@ pub(super) fn render(
     } else {
         format!(
             "{} · {}",
-            if app.downloads.config.engine == Engine::Cobalt {
+            if selected.map_or(app.downloads.config.engine, |job| job.engine) == Engine::Cobalt {
                 "Cobalt"
             } else {
                 "yt-dlp"
             },
-            app.downloads.config.directory.display()
+            selected.map_or(&app.downloads.config.directory, |job| &job.folder).display()
         )
     };
     frame.render_widget(
@@ -158,18 +159,19 @@ pub(super) fn render(
     let busy = loading || app.downloads.active.is_some();
     let hint = if busy {
         let bytes = app.downloads.progress.load(Ordering::Relaxed);
+        let action = if preparing {
+            app.text("Preparing downloads…", "Подготовка скачивания…")
+        } else {
+            app.text("Working…", "Выполняется…")
+        };
         if bytes > 0 {
             format!(
                 "{} · {:.1} MB",
-                app.text("Working…", "Выполняется…"),
+                action,
                 bytes as f64 / 1048576.
             )
         } else {
-            app.text(
-                "Working… You can close this window.",
-                "Выполняется… Можно закрыть это окно.",
-            )
-            .into()
+            format!("{action} {}", app.text("You can close this window.", "Можно закрыть это окно."))
         }
     } else {
         app.text(
@@ -187,7 +189,9 @@ pub(super) fn render(
         .error
         .as_ref()
         .or_else(|| selected.and_then(|r| r.error.as_ref()));
-    let error_height = if error.is_some() {
+    let notice = selected.and_then(|r| r.notice.as_ref());
+    let detail = error.or(notice);
+    let error_height = if detail.is_some() {
         3.min(footer.y.saturating_sub(inner.y + 3))
     } else {
         0
@@ -213,6 +217,7 @@ pub(super) fn render(
             let job = &app.downloads.rows[index];
             let status = match job.status {
                 Status::Queued => app.text("Queued", "В очереди"),
+                Status::Running if preparing && app.downloads.active.as_deref() == Some(&job.id) => app.text("Preparing", "Подготовка"),
                 Status::Running | Status::Publishing => app.text("Downloading", "Скачивается"),
                 Status::Done => app.text("Saved", "Скачано"),
                 Status::Failed => app.text("Failed", "Ошибка"),
@@ -263,10 +268,10 @@ pub(super) fn render(
             body,
         );
     }
-    if let Some(error) = error {
+    if let Some(detail) = detail {
         frame.render_widget(
-            Paragraph::new(clean(error))
-                .style(palette.text().fg(palette.error))
+            Paragraph::new(clean(detail))
+                .style(palette.text().fg(if error.is_some() { palette.error } else { palette.muted }))
                 .wrap(Wrap { trim: false }),
             Rect::new(inner.x, footer.y - error_height, inner.width, error_height),
         );

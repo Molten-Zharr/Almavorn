@@ -44,6 +44,7 @@ pub struct DownloadsState {
     pub query: String,
     pub error: Option<String>,
     pub progress: Arc<AtomicU64>,
+    pub preparing: Arc<AtomicBool>,
     pub active: Option<String>,
     pub initialized: bool,
     job: Option<Job>,
@@ -61,6 +62,7 @@ impl Default for DownloadsState {
             query: String::new(),
             error: None,
             progress: Arc::new(AtomicU64::new(0)),
+            preparing: Arc::new(AtomicBool::new(false)),
             active: None,
             initialized: false,
             job: None,
@@ -138,12 +140,17 @@ impl App {
         self.start_download_aux();
     }
     fn start_download_aux(&mut self) {
+        if self.downloads.job.is_some() {
+            return;
+        }
         let data = self.data_directory();
         let progress = self.downloads.progress.clone();
+        let preparing = self.downloads.preparing.clone();
         let runtime = self.runtime.as_ref().expect("runtime");
         self.downloads.aux.start(|request| {
             let request = request.clone();
             background(runtime, move || {
+                progress.store(0, Ordering::Relaxed);
                 ensure!(
                     !request.cancel.load(Ordering::Relaxed),
                     "Операция отменена."
@@ -153,17 +160,26 @@ impl App {
                         downloads::config(&data)?,
                         downloads::list(&data)?,
                     )),
-                    Auxiliary::Search(query) => Ok(Response::Found(downloads::search(
-                        &data,
-                        &query,
-                        &request.cancel,
-                    )?)),
+                    Auxiliary::Search(query) => {
+                        preparing.store(true, Ordering::Relaxed);
+                        let result = downloads::prepare_tools(&data, &request.cancel, &progress);
+                        preparing.store(false, Ordering::Relaxed);
+                        result?;
+                        Ok(Response::Found(downloads::search(
+                            &data,
+                            &query,
+                            &request.cancel,
+                        )?))
+                    }
                     Auxiliary::Configure(config, key) => {
                         downloads::save_config(&data, &config, key.as_deref())?;
                         Ok(Response::Configured(config))
                     }
                     Auxiliary::Tools => {
-                        downloads::install_tools(&data, &request.cancel, &progress)?;
+                        preparing.store(true, Ordering::Relaxed);
+                        let result = downloads::install_tools(&data, &request.cancel, &progress);
+                        preparing.store(false, Ordering::Relaxed);
+                        result?;
                         Ok(Response::Installed)
                     }
                 }
@@ -215,6 +231,7 @@ impl App {
     }
     pub(super) fn tick_downloads(&mut self) -> Result<()> {
         if let Some(completed) = self.downloads.aux.poll() {
+            self.downloads.preparing.store(false, Ordering::Relaxed);
             self.start_download_aux();
             if completed.current {
                 match completed.result {
@@ -257,6 +274,7 @@ impl App {
         {
             let active = self.downloads.job.take().expect("download job");
             self.downloads.active = None;
+            self.downloads.preparing.store(false, Ordering::Relaxed);
             match result {
                 Ok(job) => {
                     if job.status == Status::Done {
@@ -269,7 +287,6 @@ impl App {
                             .into(),
                         );
                     }
-                    self.downloads.error = job.error.clone();
                     if let Some(row) = self.downloads.rows.iter_mut().find(|r| r.id == job.id) {
                         *row = job;
                     }
@@ -277,15 +294,23 @@ impl App {
                 Err(error) => {
                     let data = self.data_directory();
                     if let Some(row) = self.downloads.rows.iter_mut().find(|r| r.id == active.id) {
-                        row.status = Status::Failed;
+                        row.status = if active.cancel.load(Ordering::Relaxed) {
+                            Status::Cancelled
+                        } else {
+                            Status::Failed
+                        };
                         row.error = Some(format!("{error:#}"));
                         downloads::save(&data, row)?;
                     }
-                    self.downloads.error = Some(format!("{error:#}"));
                 }
             }
         }
-        if self.downloads.initialized && self.downloads.job.is_none() {
+        self.start_download_aux();
+        if self.downloads.initialized
+            && self.downloads.job.is_none()
+            && !self.downloads.aux.is_running()
+            && !self.downloads_loading()
+        {
             if let Some(index) = self
                 .downloads
                 .rows
@@ -298,6 +323,7 @@ impl App {
                 let mut row = self.downloads.rows[index].clone();
                 row.status = Status::Running;
                 row.error = None;
+                self.downloads.error = None;
                 downloads::save(&self.data_directory(), &row)?;
                 self.downloads.rows[index] = row.clone();
                 let data = self.data_directory();
@@ -305,9 +331,16 @@ impl App {
                 let cancel = Arc::new(AtomicBool::new(false));
                 let worker_cancel = cancel.clone();
                 let progress = self.downloads.progress.clone();
+                let preparing = self.downloads.preparing.clone();
                 progress.store(0, Ordering::Relaxed);
                 let id = row.id.clone();
                 let receiver = background(self.runtime(), move || {
+                    if row.engine == Engine::YtDlp {
+                        preparing.store(true, Ordering::Relaxed);
+                        let result = downloads::prepare_tools(&data, &worker_cancel, &progress);
+                        preparing.store(false, Ordering::Relaxed);
+                        result?;
+                    }
                     Ok(downloads::download(
                         &data,
                         &config,
@@ -504,8 +537,8 @@ impl App {
                 self.open_form(
                     self.text("Download music", "Скачать музыку"),
                     self.text(
-                        "The file will be saved and added to the sorting desk.",
-                        "Файл будет сохранен и добавлен на сортировочный стол.",
+                        "Downloaded music goes to the sorting desk. Leave the folder empty to save directly to Downloads.",
+                        "Скачанная музыка попадет на сортировочный стол. Оставьте папку пустой, чтобы сохранить прямо в Загрузки.",
                     ),
                     vec![
                         FormField::new(self.text("Link", "Ссылка"), url),
@@ -530,7 +563,7 @@ impl App {
                     "",
                 );
                 key.secret = true;
-                self.open_form(self.text("Download settings", "Настройки загрузок"),self.text("Choose a folder. Cobalt is optional and needs an API address provided by its owner.", "Выберите папку. Для Cobalt нужен адрес API, предоставленный владельцем сервера."),vec![
+                self.open_form(self.text("Download settings", "Настройки загрузок"),self.text("Missing folders are created automatically. If a folder is unavailable, music goes to Downloads/Almavorn or Downloads. Leave the folder empty to use Downloads directly.", "Папка будет создана автоматически. Если она недоступна, музыка попадет в Загрузки/Almavorn или в Загрузки. Пустое поле означает сохранение прямо в Загрузки."),vec![
                     FormField::new(self.text("Download folder", "Папка загрузки"),self.downloads.config.directory.display().to_string()),
                     FormField::new(self.text("Cobalt API address (optional)", "Адрес API Cobalt (необязательно)"),self.downloads.config.cobalt_url.clone()),key,
                 ],FormPurpose::DownloadSettings);
@@ -550,16 +583,17 @@ impl App {
             }
             DownloadAction::Tools => self.downloads_request(Auxiliary::Tools),
             DownloadAction::Cancel => {
-                if search || self.downloads_loading() {
+                if !search
+                    && let Some(job) = &self.downloads.job
+                    && self.downloads.rows.get(selected).is_some_and(|row| row.id == job.id)
+                {
+                    job.cancel.store(true, Ordering::Relaxed);
+                } else if search || self.downloads_loading() {
                     if let Some(cancel) = &self.downloads.cancel {
                         cancel.store(true, Ordering::Relaxed);
                     }
                 } else if let Some(row) = self.downloads.rows.get_mut(selected) {
-                    if let Some(job) = &self.downloads.job
-                        && job.id == row.id
-                    {
-                        job.cancel.store(true, Ordering::Relaxed);
-                    } else if row.status == Status::Queued {
+                    if row.status == Status::Queued {
                         row.status = Status::Cancelled;
                         let row = row.clone();
                         downloads::save(&self.data_directory(), &row)?;
@@ -584,6 +618,7 @@ impl App {
                 let mut retry = row.clone();
                 retry.status = Status::Queued;
                 retry.error = None;
+                retry.notice = None;
                 retry.path = None;
                 retry.expected_digest = None;
                 retry.expected_size = None;

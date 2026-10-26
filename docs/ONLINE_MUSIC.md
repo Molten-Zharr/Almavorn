@@ -16,7 +16,11 @@ Requests contain the artist, title and filename-derived search terms, followed b
 
 ## Downloads
 
-Open "Downloads" and select "Install / update components". Find a song or add a link, then choose its folder and file name. Downloaded music appears on the sorting desk.
+Open "Downloads" and find a song or add a link. The player installs missing components before the first search or download. You can close the window or cancel while it prepares. Downloaded music appears on the sorting desk.
+
+Choose a folder and, optionally, a file name. The player creates missing folders. If the chosen folder is unavailable, it tries "Downloads/Almavorn", then "Downloads" itself. The actual folder appears above the selected history entry. Leave the folder field empty to download directly into "Downloads".
+
+If preparation fails, check your connection, select "Install / update components", then retry the download. Automatic installation pauses for a minute after a failure; the button retries immediately.
 
 Cancel, retry or edit pending downloads. The queue and history survive restarts; retry starts a fresh download. Removing a history entry keeps its audio file.
 
