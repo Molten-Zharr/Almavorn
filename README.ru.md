@@ -1,33 +1,39 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="docs/images/almavorn-logo-light.png">
-    <img src="docs/images/almavorn-logo.png" width="192" height="192" alt="Логотип Almavorn">
+    <img src="docs/images/almavorn-logo.png" width="160" height="160" alt="Логотип Almavorn">
   </picture>
 </p>
-# Almavorn
 
-[English](README.md) | [Русский](README.ru.md)
+<h1 align="center">Almavorn</h1>
 
-### УСТАНОВИТЬ: [curl](#curl) - [AppImage](#appimage) - [Flatpak](#flatpak) - [Гайд к установке](#хочу-скачать-и-установить-что-есть)
+<p align="center">Музыкальный плеер для Linux, вдохновленный AIMP и Strawberry.<br><sub>Своя музыка. Свои клавиши. Свое расположение блоков.</sub></p>
+
+<p align="center"><a href="README.md">English</a> · <a href="README.ru.md">Русский</a></p>
+
+<p align="center"><a href="#install"><img src="docs/images/readme/download.svg" width="16" height="16" alt=""> Установить</a> &nbsp; · &nbsp; <a href="#screenshots"><img src="docs/images/readme/gallery.svg" width="16" height="16" alt=""> Скриншоты</a> &nbsp; · &nbsp; <a href="#first-launch"><img src="docs/images/readme/keyboard.svg" width="16" height="16" alt=""> Первый запуск</a></p>
 
 <p align="center">
-Музыкальный плеер для локального прослушивания на Linux, вдохновленный AIMP и Strawberry.
+  <a href="docs/images/almavorn-lyrics.png"><img src="docs/images/almavorn-lyrics.png" width="100%" alt="King Crimson, The Court of the Crimson King: текст найден в Genius и открыт рядом с композицией и плейлистами."></a>
+  <br>
+  <sub>King Crimson, The Court of the Crimson King: текст найден в Genius и открыт рядом с композицией и плейлистами.</sub>
 </p>
 
+<p align="center"><img src="docs/images/readme/divider.svg" width="100%" alt=""></p>
+
 **Almavorn** создан, чтобы подарить максимум удобства и функциональности:
+
 - Управляйте плеером с клавиатуры, с мыши, или с обоих устройств одновременно!
 - Эквалайзер, настройки проигрывания, анимации фона!
 - Подсказки, описание действий и произвольная подсветка горячих клавиш!
-- Переназначить клавиши? Поменять положение панелей? Разукрасить палитру в свои цвета? Редактировать мета-данные трека и его название? 
+- Переназначить клавиши? Поменять положение панелей? Разукрасить палитру в свои цвета? Редактировать мета-данные трека и его название?
   **Все это возможно в нашем плеере из коробки!**
-- Два режима работы: Хотите осторожные, защищенные от редактирования плейлисты? Режим "**Порядка**" тут. 
+- Два режима работы: Хотите осторожные, защищенные от редактирования плейлисты? Режим "**Порядка**" тут.
   Желаете добавлять треки сразу в плейлисты и папки? Переключаемся на режим "**Хаоса**"!
 
 Мы открыты к предложениям и обратной связи. Мы только начали разгоняться, поэтому надеемся, что вам понравится наш плеер!
 
-![King Crimson: The Court of the Crimson King, найденный текст из Genius и панель плейлистов](docs/images/almavorn-lyrics.png)
-
-## Порядок, Хаос, сортировочный стол - что это?
+## <img src="docs/images/readme/folder.svg" width="24" height="24" alt=""> Порядок, Хаос, сортировочный стол - что это?
 
 - **Порядок - "моя неделимая коллекция".** Плейлисты защищены от случайных изменений, а для правок нужно нажать "Редактировать", и после - "Готово". Сортировка на экране не меняет сохраненный порядок композиций.
 - **Сортировочный стол - важная часть режима "Порядка"**. Это общий плейлист для обоих режимов: здесь мы добавляем файлы, поправляем названия, теги и обложки, а затем перемещаем композиции в нужные плейлисты!
@@ -35,7 +41,7 @@
 
 Редактор тегов сохраняет изменения в сам аудиофайл. Они затрагивают этот файл во всех плейлистах.
 
-## А что еще?
+## <img src="docs/images/readme/music.svg" width="24" height="24" alt=""> А что еще?
 
 - Находите музыку поиском, фильтрами и сортировкой плейлистов.
 - Создавайте плейлисты сами или из папок - с подпапками или без них.
@@ -59,63 +65,88 @@
   (можно лежать, уткнувшись в подушку, и настраивать все одной рукой)
 - Внутри плейлиста вы можете отметить конкретные композиции - и прослушивать только их!
 
-## Скриншоты
+<a id="screenshots"></a>
 
-Green: проигрыватель снизу, композиции Starbound сверху.
+## <img src="docs/images/readme/gallery.svg" width="24" height="24" alt=""> Плеер в действии
 
-![Тема Green, английский интерфейс и проигрыватель под списком композиций](docs/images/almavorn-green.png)
+<p align="center">
+  <a href="docs/images/almavorn-green.png"><img src="docs/images/almavorn-green.png" width="100%" alt="Тема Green и свое размещение: плейлисты справа, проигрыватель снизу, композиции Starbound сверху."></a>
+  <br>
+  <sub>Тема Green и свое размещение: плейлисты справа, проигрыватель снизу, композиции Starbound сверху.</sub>
+</p>
 
-Редактор блоков: перемещайте панели, меняйте размеры и скрывайте лишнее.
+<p align="center">
+  <a href="docs/images/almavorn-statistics.png"><img src="docs/images/almavorn-statistics.png" width="100%" alt="Статистика прослушивания: время, включения и прослушивания каждой композиции."></a>
+  <br>
+  <sub>Статистика прослушивания: время, включения и прослушивания каждой композиции.</sub>
+</p>
 
-![Редактор расположения проигрывателя, композиций, плейлистов и текста песни](docs/images/almavorn-layout.png)
+<p align="center">
+  <a href="docs/images/almavorn-layout.png"><img src="docs/images/almavorn-layout.png" width="100%" alt="Редактор блоков: пример компактной компоновки с плейлистами и текстом песни под списком композиций."></a>
+  <br>
+  <sub>Редактор блоков: пример компактной компоновки с плейлистами и текстом песни под списком композиций.</sub>
+</p>
 
-Настройки оформления, управления, модов и музыкальных сервисов.
+<p align="center">
+  <a href="docs/images/almavorn-settings.png"><img src="docs/images/almavorn-settings.png" width="100%" alt="Настройки плеера: управление, обложки и расположение панелей. Темы, клавиши, моды и сервисы доступны в разделах слева."></a>
+  <br>
+  <sub>Настройки плеера: управление, обложки и расположение панелей. Темы, клавиши, моды и сервисы доступны в разделах слева.</sub>
+</p>
 
-![Настройки Almavorn с разделами Темы, Клавиши, Моды и Сервисы](docs/images/almavorn-settings.png)
+<p align="center">
+  <a href="docs/images/almavorn-help.png"><img src="docs/images/almavorn-help.png" width="100%" alt="Поиск в помощи своими словами: запрос &quot;передвинуть окно&quot; находит настройку блоков и показывает ваши горячие клавиши."></a>
+  <br>
+  <sub>Поиск в помощи своими словами: запрос "передвинуть окно" находит настройку блоков и показывает ваши горячие клавиши.</sub>
+</p>
 
-Статистика: время прослушивания, включения и число прослушиваний.
+<p align="center">
+  <a href="docs/images/almavorn-create-playlist.png"><img src="docs/images/almavorn-create-playlist.png" width="100%" alt="Создание плейлиста: задайте название, создайте новую папку или выберите существующие папки с музыкой."></a>
+  <br>
+  <sub>Создание плейлиста: задайте название, создайте новую папку или выберите существующие папки с музыкой.</sub>
+</p>
 
-![Статистика прослушивания музыки из выбранных плейлистов](docs/images/almavorn-statistics.png)
+<p align="center">
+  <a href="docs/images/almavorn-search.png"><img src="docs/images/almavorn-search.png" width="100%" alt="Поиск композиций по выбранным плейлистам: шесть совпадений по запросу &quot;Theme&quot; в Starbound."></a>
+  <br>
+  <sub>Поиск композиций по выбранным плейлистам: шесть совпадений по запросу "Theme" в Starbound.</sub>
+</p>
 
-Помощь по категориям с вашими сочетаниями клавиш.
+<a id="layout"></a>
 
-![Помощь Almavorn: категории и горячие клавиши навигации](docs/images/almavorn-help.png)
+## <img src="docs/images/readme/layout.svg" width="24" height="24" alt=""> Темы, оформление и удобство
 
-Создавайте пустые плейлисты или добавляйте папки с музыкой.
+<details>
+<summary>Как двигать, менять размер и скрывать блоки</summary>
 
-![Создание плейлиста: название, новая папка и выбор существующих папок](docs/images/almavorn-create-playlist.png)
-
-Ищите композиции сразу в нескольких выбранных плейлистах.
-
-![Поиск Theme с результатами из Starbound и выбором плейлистов](docs/images/almavorn-search.png)
-
-## Темы, оформление и удобство
-
-"Блоки" — режим настройки расположения интерфейса. Например, можно поставить проигрыватель снизу, плейлисты справа, а списку композиций отдать большую часть окна.
+"Блоки" - режим настройки расположения интерфейса. Например, можно поставить проигрыватель снизу, плейлисты справа, а списку композиций отдать большую часть окна.
 
 Нажмите "Блоки" или Ctrl+B. На заголовках панелей появятся кнопки управления:
 
-- "[↕]" — перетаскивание. Можно тянуть и за сам заголовок.
-- "[-]" — свернуть блок; "[+]" — развернуть обратно.
-- "[x]" — скрыть блок.
+- "[↕]" - перетаскивание. Можно тянуть и за сам заголовок.
+- "[-]" - свернуть блок; "[+]" - развернуть обратно.
+- "[x]" - скрыть блок.
 
-При перетаскивании место, куда вы отпускаете блок, определяет результат: у края другой панели он встанет рядом с ней, а в центре — поменяется с ней местами. Чтобы изменить размеры соседних панелей, потяните их общую границу.
+При перетаскивании место, куда вы отпускаете блок, определяет результат: у края другой панели он встанет рядом с ней, а в центре - поменяется с ней местами. Чтобы изменить размеры соседних панелей, потяните их общую границу.
 
 Кнопка "Видимость…" открывает список блоков и кнопок. Здесь можно вернуть скрытую панель или убрать отдельные ненужные кнопки. Там же есть "Вернуть исходную раскладку".
 
 С клавиатуры тоже можно: выберите блок через Tab, затем используйте Ctrl+Alt+стрелки для перестановки с соседним блоком или Ctrl+Shift+стрелки для изменения размера. Ctrl+Alt+Space сворачивает блок, Ctrl+Alt+Delete скрывает его.
 
-Раскладка сохраняется автоматически. Нажмите "Готово" или Ctrl+B, чтобы закончить. Esc во время перетаскивания отменяет текущий перенос; вне перетаскивания — выходит из режима.
+Раскладка сохраняется автоматически. Нажмите "Готово" или Ctrl+B, чтобы закончить. Esc во время перетаскивания отменяет текущий перенос; вне перетаскивания - выходит из режима.
 
-## Хочу скачать и установить! Что есть?
+</details>
 
-Готовый выпуск — **0.2.0**, для 64-разрядного Linux на Intel/AMD.
+<a id="install"></a>
+
+## <img src="docs/images/readme/download.svg" width="24" height="24" alt=""> Хочу скачать и установить! Что есть?
+
+Готовый выпуск - **0.2.0**, для 64-разрядного Linux на Intel/AMD.
 
 *(для Windows пока в работе, хе-хе)*
 
 ### GUITUI версия
 
-**GUITUI** — отдельное окно с управлением мышью и клавиатурой:
+**GUITUI** - отдельное окно с управлением мышью и клавиатурой:
 
 [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.tar.gz) - особенно удобно для KDE/Gnome/Cosmic
 
@@ -129,7 +160,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 ### TUI версия
 
-**TUI** — интерфейс прямо в вашем любимом терминале: 
+**TUI** - интерфейс прямо в вашем любимом терминале:
 
 [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.tar.gz)
 
@@ -146,22 +177,24 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 *- Смотри:*
 
-**curl** - это прямая ссылка на скачивание и установку. Берет наш репозиторий и вариант плеера и устанавливает по скрипту! 
+**curl** - это прямая ссылка на скачивание и установку. Берет наш репозиторий и вариант плеера и устанавливает по скрипту!
 Вводи прямо в твою консольку.
 
 <a id="appimage"></a>
 
-**AppImage** — один файл для запуска без установки. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage).
+**AppImage** - один файл для запуска без установки. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage).
 
 <a id="flatpak"></a>
 
-**Flatpak** — установка пакета вместе с нужными компонентами. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak).
+**Flatpak** - установка пакета вместе с нужными компонентами. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak).
 
-**tar.gz** — архив с установщиком и ярлыком в меню.
+**tar.gz** - архив с установщиком и ярлыком в меню.
 
 **Как обновиться:** Если устанавливали плеер командой выше, повторите ее, либо скачайте тот же тип файла, что вы скачивали изначально.
 
-## Первый запуск
+<a id="first-launch"></a>
+
+## <img src="docs/images/readme/keyboard.svg" width="24" height="24" alt=""> Первый запуск
 
 F2 открывает настройки, F1 - полную справку. В настройках F1 объясняет выбранный пункт.
 
@@ -199,3 +232,13 @@ F2 открывает настройки, F1 - полную справку. В �
 Это клавиши по умолчанию. Свои сочетания можно задать в F2 → "Клавиши".
 
 [Все выпуски](https://github.com/Molten-Zharr/Almavorn/releases) · [Горячие клавиши](docs/GLOBAL_SHORTCUTS.md) · [Лицензия MIT](LICENSE)
+
+<p align="center"><img src="docs/images/readme/divider.svg" width="100%" alt=""></p>
+
+<p align="center">
+  <a href="https://github.com/Molten-Zharr"><img src="docs/images/molten-zharr.png" width="112" height="112" alt="Логотип Molten-Zharr"></a>
+  <br>
+  <a href="https://github.com/Molten-Zharr"><b>Molten-Zharr</b></a>
+  <br>
+  <sub>STYLE. USABILITY. COMFORT.<br>We create applications you WANT to use.</sub>
+</p>

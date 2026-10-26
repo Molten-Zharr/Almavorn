@@ -1,19 +1,25 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: light)" srcset="docs/images/almavorn-logo-light.png">
-    <img src="docs/images/almavorn-logo.png" width="192" height="192" alt="Almavorn logo">
+    <img src="docs/images/almavorn-logo.png" width="160" height="160" alt="Almavorn logo">
   </picture>
 </p>
 
-# Almavorn
+<h1 align="center">Almavorn</h1>
 
-[English](README.md) | [Русский](README.ru.md)
+<p align="center">A music player for Linux, inspired by AIMP and Strawberry.<br><sub>Your music. Your shortcuts. Your layout.</sub></p>
 
-### INSTALL: [curl](#curl) - [AppImage](#appimage) - [Flatpak](#flatpak) - [Installation guide](#download-and-install)
+<p align="center"><a href="README.md">English</a> · <a href="README.ru.md">Русский</a></p>
+
+<p align="center"><a href="#install"><img src="docs/images/readme/download.svg" width="16" height="16" alt=""> Install</a> &nbsp; · &nbsp; <a href="#screenshots"><img src="docs/images/readme/gallery.svg" width="16" height="16" alt=""> Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch"><img src="docs/images/readme/keyboard.svg" width="16" height="16" alt=""> Getting started</a></p>
 
 <p align="center">
-A local music player for Linux, inspired by AIMP and Strawberry.
+  <a href="docs/images/almavorn-lyrics.png"><img src="docs/images/almavorn-lyrics.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists."></a>
+  <br>
+  <sub>King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists.</sub>
 </p>
+
+<p align="center"><img src="docs/images/readme/divider.svg" width="100%" alt=""></p>
 
 **Almavorn** is built for comfort and control:
 
@@ -27,9 +33,7 @@ A local music player for Linux, inspired by AIMP and Strawberry.
 
 Suggestions and feedback are welcome. We're only getting started, and we hope you'll enjoy the player!
 
-![Green theme in English, with Starbound tracks above the player](docs/images/almavorn-green.png)
-
-## Order, Chaos, and the sorting desk: what's the difference?
+## <img src="docs/images/readme/folder.svg" width="24" height="24" alt=""> Order, Chaos, and the sorting desk: what's the difference?
 
 - **Order: "my collection, kept intact".** Playlists are protected from accidental changes. Choose "Edit" to make changes, then "Done" to lock the playlist again. Sorting the view preserves the saved track order.
 - **The sorting desk is a key part of Order.** It's a shared playlist available in both modes: add files, correct titles, tags, and artwork, then copy tracks into the playlists you want!
@@ -37,7 +41,7 @@ Suggestions and feedback are welcome. We're only getting started, and we hope yo
 
 The tag editor writes changes to the audio file itself. Those changes affect that file in every playlist.
 
-## What else?
+## <img src="docs/images/readme/music.svg" width="24" height="24" alt=""> What else?
 
 - Find your music with search, filters, and sorting.
 - Build playlists yourself or from folders, with or without subfolders.
@@ -61,37 +65,58 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
   (you can lie back with your head on a pillow and control everything with one hand)
 - Mark just the tracks you want in a playlist and listen only to those!
 
-## Screenshots
+<a id="screenshots"></a>
 
-King Crimson: The Court of the Crimson King, with lyrics found on Genius.
+## <img src="docs/images/readme/gallery.svg" width="24" height="24" alt=""> See the player in action
 
-![King Crimson playback, Genius lyrics and the playlist panel](docs/images/almavorn-lyrics.png)
+<p align="center">
+  <a href="docs/images/almavorn-green.png"><img src="docs/images/almavorn-green.png" width="100%" alt="The Green theme with a custom layout: playlists on the right, the player below the Starbound track list."></a>
+  <br>
+  <sub>The Green theme with a custom layout: playlists on the right, the player below the Starbound track list.</sub>
+</p>
 
-Move, resize and hide panels in the layout editor.
+<p align="center">
+  <a href="docs/images/almavorn-statistics.png"><img src="docs/images/almavorn-statistics.png" width="100%" alt="Listening statistics: time played, starts and play counts for each track."></a>
+  <br>
+  <sub>Listening statistics: time played, starts and play counts for each track.</sub>
+</p>
 
-![Layout controls for the player, tracks, playlists and lyrics](docs/images/almavorn-layout.png)
+<p align="center">
+  <a href="docs/images/almavorn-layout.png"><img src="docs/images/almavorn-layout.png" width="100%" alt="The layout editor: a compact arrangement with playlists and lyrics below the track list."></a>
+  <br>
+  <sub>The layout editor: a compact arrangement with playlists and lyrics below the track list.</sub>
+</p>
 
-Settings for appearance, controls, mods and music services.
+<p align="center">
+  <a href="docs/images/almavorn-settings.png"><img src="docs/images/almavorn-settings.png" width="100%" alt="Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left."></a>
+  <br>
+  <sub>Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left.</sub>
+</p>
 
-![Almavorn settings with Themes, Shortcuts, Mods and Services sections](docs/images/almavorn-settings.png)
+<p align="center">
+  <a href="docs/images/almavorn-help.png"><img src="docs/images/almavorn-help.png" width="100%" alt="Search Help in your own words: &quot;move a window&quot; finds the layout controls and shows your current shortcuts."></a>
+  <br>
+  <sub>Search Help in your own words: "move a window" finds the layout controls and shows your current shortcuts.</sub>
+</p>
 
-Listening statistics: time played, starts and play counts.
+<p align="center">
+  <a href="docs/images/almavorn-create-playlist.png"><img src="docs/images/almavorn-create-playlist.png" width="100%" alt="Create a playlist: enter a name, create a new folder or choose existing music folders."></a>
+  <br>
+  <sub>Create a playlist: enter a name, create a new folder or choose existing music folders.</sub>
+</p>
 
-![Listening statistics for music in the selected playlists](docs/images/almavorn-statistics.png)
+<p align="center">
+  <a href="docs/images/almavorn-search.png"><img src="docs/images/almavorn-search.png" width="100%" alt="Search selected playlists: six matches for &quot;Theme&quot; in Starbound."></a>
+  <br>
+  <sub>Search selected playlists: six matches for "Theme" in Starbound.</sub>
+</p>
 
-Browse help by category, with your current keyboard shortcuts.
+<a id="layout"></a>
 
-![Help categories and keyboard shortcuts for navigation](docs/images/almavorn-help.png)
+## <img src="docs/images/readme/layout.svg" width="24" height="24" alt=""> Themes, appearance, and usability
 
-Create an empty playlist or import folders with music.
-
-![Playlist creation with a name, a new folder and existing music folders](docs/images/almavorn-create-playlist.png)
-
-Search for tracks across several selected playlists.
-
-![Search results for Theme in Starbound, with playlist selection](docs/images/almavorn-search.png)
-
-## Themes, appearance, and usability
+<details>
+<summary>How to move, resize and hide panels</summary>
 
 "Layout" mode lets you rearrange the interface. For example, you can put the player at the bottom, playlists on the right, and give most of the window to the track list.
 
@@ -109,7 +134,11 @@ You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow 
 
 Your layout is saved automatically. Click "Done" or press Ctrl+B to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
 
-## Download and install
+</details>
+
+<a id="install"></a>
+
+## <img src="docs/images/readme/download.svg" width="24" height="24" alt=""> Download and install
 
 The packaged release is **0.2.0**, for 64-bit Linux on Intel/AMD.
 
@@ -162,7 +191,9 @@ Paste the command straight into your terminal.
 
 **How to update:** If you installed the player with the command above, run it again; otherwise, download the same type of file you chose originally.
 
-## First launch
+<a id="first-launch"></a>
+
+## <img src="docs/images/readme/keyboard.svg" width="24" height="24" alt=""> First launch
 
 F2 opens Settings; F1 opens the full help guide. Within Settings, F1 explains the selected option.
 
@@ -200,3 +231,13 @@ The sorting desk helps you organize music before adding it to permanent playlist
 These are the default keys. Set your own shortcuts under F2, "Shortcuts".
 
 [All releases](https://github.com/Molten-Zharr/Almavorn/releases) · [Keyboard shortcuts](docs/GLOBAL_SHORTCUTS.md) · [MIT license](LICENSE)
+
+<p align="center"><img src="docs/images/readme/divider.svg" width="100%" alt=""></p>
+
+<p align="center">
+  <a href="https://github.com/Molten-Zharr"><img src="docs/images/molten-zharr.png" width="112" height="112" alt="Molten-Zharr logo"></a>
+  <br>
+  <a href="https://github.com/Molten-Zharr"><b>Molten-Zharr</b></a>
+  <br>
+  <sub>STYLE. USABILITY. COMFORT.<br>We create applications you WANT to use.</sub>
+</p>
