@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/images/almavorn-logo.png" width="192" height="192" alt="Логотип Almavorn">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/almavorn-logo-light.png">
+    <img src="docs/images/almavorn-logo.png" width="192" height="192" alt="Логотип Almavorn">
+  </picture>
 </p>
 
 # Almavorn
@@ -77,9 +80,15 @@
 
 Раскладка сохраняется автоматически. Нажмите "Готово" или Ctrl+B, чтобы закончить. Esc во время перетаскивания отменяет текущий перенос; вне перетаскивания — выходит из режима.
 
+## Иконки без фона
+
+[Для темной темы](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-icons-dark.zip) · [Для светлой темы](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-icons-light.zip).
+
+В каждом архиве — SVG и прозрачные PNG размером 64, 256, 512 и 1024 пикселя. Светлый вариант темнее, чтобы рисунок лучше читался на белом фоне.
+
 ## Хочу скачать и установить! Что есть?
 
-Готовый выпуск — **0.1.4**, для 64-разрядного Linux на Intel/AMD.
+Готовый выпуск — **0.2.0**, для 64-разрядного Linux на Intel/AMD.
 
 *(для Windows пока в работе, хе-хе)*
 
@@ -87,7 +96,7 @@
 
 **GUITUI** — отдельное окно с управлением мышью и клавиатурой:
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.tar.gz) - особенно удобно для KDE/Gnome/Cosmic
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.tar.gz) - особенно удобно для KDE/Gnome/Cosmic
 
 ---ИЛИ---
 
@@ -101,7 +110,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 **TUI** — интерфейс прямо в вашем любимом терминале: 
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.tar.gz) 
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.tar.gz)
 
 ---ИЛИ---
 
@@ -121,11 +130,11 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 <a id="appimage"></a>
 
-**AppImage** — один файл для запуска без установки. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage).
+**AppImage** — один файл для запуска без установки. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage).
 
 <a id="flatpak"></a>
 
-**Flatpak** — установка пакета вместе с нужными компонентами. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak).
+**Flatpak** — установка пакета вместе с нужными компонентами. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak).
 
 **tar.gz** — архив с установщиком и ярлыком в меню.
 

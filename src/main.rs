@@ -30,6 +30,11 @@ impl<F: FnMut(&mut egui::Ui, &mut eframe::Frame)> eframe::App for PlayerUi<F> {
     }
 }
 
+fn light_palette(app: &App) -> bool {
+    let [r, g, b] = app.settings.current_palette().color("background");
+    299 * u32::from(r) + 587 * u32::from(g) + 114 * u32::from(b) >= 128_000
+}
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("Almavorn: {error:#}");
@@ -52,12 +57,19 @@ fn run() -> Result<()> {
     );
     let backend = gui_fonts::backend(font_settings.0, font_settings.1, 120, 50);
     let mut terminal = Terminal::new(RataguiBackend::new("almavorn", backend))?;
+    let icons = [
+        std::sync::Arc::new(eframe::icon_data::from_png_bytes(include_bytes!(
+            "../packaging/almavorn.png"
+        ))?),
+        std::sync::Arc::new(eframe::icon_data::from_png_bytes(include_bytes!(
+            "../packaging/almavorn-light.png"
+        ))?),
+    ];
+    let mut light_icon = light_palette(&app);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_app_id(std::env::var("FLATPAK_ID").unwrap_or_else(|_| "almavorn".into()))
-            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!(
-                "../packaging/almavorn.png"
-            ))?)
+            .with_icon(icons[usize::from(light_icon)].clone())
             .with_inner_size([1100.0, 760.0])
             .with_min_inner_size([382.0, 420.0]),
         ..Default::default()
@@ -80,6 +92,13 @@ fn run() -> Result<()> {
             }
         }
         app.tick();
+        let requested_icon = light_palette(&app);
+        if requested_icon != light_icon {
+            light_icon = requested_icon;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(
+                icons[usize::from(light_icon)].clone(),
+            )));
+        }
         if app.writing_tags() && ctx.input(|input| input.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }

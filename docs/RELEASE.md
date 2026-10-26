@@ -21,7 +21,7 @@ python3 scripts/package-release.py --variant guitui
 python3 scripts/package-release.py --variant tui
 ```
 
-Файлы появятся в target/dist/ВЕРСИЯ/ИНТЕРФЕЙС.
+Файлы появятся в target/dist/ВЕРСИЯ/ИНТЕРФЕЙС. При упаковке GUITUI также создаются два ZIP-архива прозрачных иконок: для темной и светлой темы. Для их экспорта нужен rsvg-convert из librsvg; установка через --install его не требует.
 
 Для публикации замените X.Y.Z на номер версии:
 
@@ -30,7 +30,7 @@ git tag -a vX.Y.Z -m "Almavorn X.Y.Z"
 git push origin refs/tags/vX.Y.Z
 ```
 
-GitHub Actions соберет оба интерфейса и опубликует пакеты в [Releases](https://github.com/Molten-Zharr/Almavorn/releases). Проверьте завершение сборки и наличие файлов.
+GitHub Actions соберет оба интерфейса и опубликует пакеты в [Releases](https://github.com/Molten-Zharr/Almavorn/releases). Проверьте завершение сборки, наличие шести установочных файлов, двух архивов иконок и SHA256SUMS.
 
 ## Лицензии и пересборка SoundTouch
 

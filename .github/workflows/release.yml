@@ -24,7 +24,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libgl1-mesa-dev libxcursor1 libxrandr2 libxi6 libxinerama1 flatpak zstd
+          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libgl1-mesa-dev libxcursor1 libxrandr2 libxi6 libxinerama1 flatpak zstd librsvg2-bin
           rustup toolchain install stable --profile minimal
           rustup default stable
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -77,6 +77,7 @@ jobs:
           expected = {f'almavorn-{version}-{variant}-linux-x86_64.{extension}'
                       for variant in ('guitui', 'tui')
                       for extension in ('tar.gz', 'AppImage', 'flatpak')}
+          expected.update(f'almavorn-{version}-icons-{theme}.zip' for theme in ('dark', 'light'))
           def artifact(name):
               matches = list(directory.rglob(name))
               if len(matches) != 1 or not matches[0].is_file():
