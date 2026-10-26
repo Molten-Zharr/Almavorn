@@ -16,13 +16,13 @@ fn cells(app: &App, width: u16) -> Vec<(Rect, String, Target, bool)> {
                  target,
                  enabled,
              }| {
-                let size = button_width(app, &label, &target).min(width);
+                let size = button_width(app, &label, &target).saturating_add(4).min(width);
                 if x > 0 && x.saturating_add(size) > width {
                     x = 0;
-                    y += 1;
+                    y += 2;
                 }
-                let rect = Rect::new(x, y, size, 1);
-                x = x.saturating_add(size + 1);
+                let rect = Rect::new(x, y, size, 2);
+                x = x.saturating_add(size + 2);
                 (rect, label, target, enabled)
             },
         )
@@ -32,8 +32,7 @@ fn cells(app: &App, width: u16) -> Vec<(Rect, String, Target, bool)> {
 pub(super) fn height(app: &App, width: u16) -> u16 {
     cells(app, width)
         .last()
-        .map_or(1, |(rect, ..)| rect.bottom())
-        + u16::from(app.scope().is_some())
+        .map_or(2, |(rect, ..)| rect.bottom())
 }
 
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
@@ -53,21 +52,11 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
                 .fg(palette.accent)
                 .add_modifier(Modifier::BOLD),
         ),
-        Rect::new(area.x, area.y, area.width.min(10), 1),
+        Rect::new(area.x, area.y + u16::from(area.height > 1), area.width.min(10), 1),
     );
     for (cell, label, target, enabled) in cells(app, area.width) {
-        let rect = Rect::new(area.x + cell.x, area.y + cell.y, cell.width, 1).intersection(area);
+        let rect = Rect::new(area.x + cell.x, area.y + cell.y, cell.width, cell.height).intersection(area);
         app.view.toolbar_areas.push(rect);
         quiet_button(frame, app, rect, &label, target, enabled, palette);
-    }
-    if app.scope().is_some() && area.height > 0 {
-        frame.render_widget(
-            Paragraph::new(app.text(
-                "Undo history: up to 100 actions",
-                "История отмены: до 100 действий",
-            ))
-            .style(palette.text().fg(palette.muted)),
-            Rect::new(area.x, area.bottom() - 1, area.width, 1),
-        );
     }
 }

@@ -62,7 +62,8 @@ pub(crate) fn player_metrics(app: &App) -> PlayerMetrics {
     .map(|(action, label)| PlayerControl {
         action,
         label,
-        width: button_width(app, label, &player_target(action)),
+        width: button_width(app, label, &player_target(action))
+            .saturating_add(app.settings.preferences.appearance.player_button_size.padding()),
     })
     .collect();
     PlayerMetrics {

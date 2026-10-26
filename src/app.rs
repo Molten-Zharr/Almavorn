@@ -54,7 +54,7 @@ pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
 pub use mods::{ModsState,ModsView,ModAction};
 pub use services::{ServicesState,ServicesView,ServiceAction,ServicePage};
-pub use statistics::{StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
+pub use statistics::{StatisticsControl, StatisticsInfo, StatisticsMenu, StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
 pub use tags::{FileInput, MovePicker, TagAction, TagEdit, TagEditor, TagsTab};
 pub use transfer::MoveFiles;
 

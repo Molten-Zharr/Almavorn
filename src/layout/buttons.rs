@@ -3,9 +3,17 @@ use crate::{
     input::Action,
 };
 use ratatui::text::Span;
+use std::borrow::Cow;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::StatisticsControl(crate::app::StatisticsControl::Menu(menu)) => Some(match menu {
+            crate::app::StatisticsMenu::Page => "M",
+            crate::app::StatisticsMenu::Sort => "S",
+            crate::app::StatisticsMenu::More => "O",
+        }.into()),
+        Target::StatisticsControl(crate::app::StatisticsControl::OpenTrack) => Some("Enter".into()),
+        Target::StatisticsControl(crate::app::StatisticsControl::Dismiss) => Some("Esc".into()),
         Target::Form(crate::app::FormAction::SpotifyDashboard) => Some("Ctrl+1".into()),
         Target::Form(crate::app::FormAction::SpotifyRedirect) => Some("Ctrl+2".into()),
         Target::Form(crate::app::FormAction::SpotifyNext) => Some("Enter".into()),
@@ -106,12 +114,12 @@ pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
 }
 
 pub(crate) fn button_width(app: &App, label: &str, target: &Target) -> u16 {
-    let label = button_caption(label, target);
+    let label = button_caption(app, label, target);
     // Keep room for the repeat mode marker between the two clicks.
     let label_width = if matches!(target, Target::Action(Action::CycleRepeat)) {
-        Span::raw(label).width().max(4)
+        Span::raw(label.as_ref()).width().max(4)
     } else {
-        Span::raw(label).width()
+        Span::raw(label.as_ref()).width()
     };
     let shortcut = if label == "..." {
         None
@@ -143,6 +151,22 @@ fn help_button(target: &Target) -> bool {
     )
 }
 
-pub(crate) fn button_caption<'a>(label: &'a str, target: &Target) -> &'a str {
-    if help_button(target) { "" } else { label }
+pub(crate) fn button_caption<'a>(app: &App, label: &'a str, target: &Target) -> Cow<'a, str> {
+    if help_button(target) { return Cow::Borrowed(""); }
+    if app.settings.preferences.appearance.show_button_shortcuts { return Cow::Borrowed(label); }
+    let shortcut = |key: &str| {
+        matches!(key, "Enter" | "Esc" | "Space" | "Tab" | "Insert" | "Delete" | "Home" | "End")
+            || key.starts_with("Ctrl+") || key.starts_with("Alt+") || key.starts_with("Shift+")
+            || (key.len() == 1 && key.as_bytes()[0].is_ascii_uppercase())
+            || key.strip_prefix('F').is_some_and(|n| n.parse::<u8>().is_ok_and(|n| (1..=12).contains(&n)))
+    };
+    if let Some((caption, key)) = label.rsplit_once(" · ") && shortcut(key) {
+        return Cow::Borrowed(caption);
+    }
+    if let Some((caption, key)) = label.rsplit_once(" [")
+        && let Some(key) = key.strip_suffix(']') && shortcut(key)
+    {
+        return Cow::Borrowed(caption);
+    }
+    Cow::Borrowed(label)
 }

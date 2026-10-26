@@ -146,7 +146,6 @@ impl App {
                     items.push(CommandItem { label, target: Target::CommandMenu(menu), enabled: true });
                 }
             }
-            items.push(CommandItem { label: self.text("More…", "Больше…").into(), target: Target::ToggleExpandedToolbar, enabled: true });
             return items;
         }
         let mut entries = Vec::new();
@@ -481,7 +480,8 @@ impl App {
         let toolbar_selected = self.view.toolbar_selected;
         let toolbar_anchor = toolbar_selected
             .and_then(|index| self.view.toolbar_areas.get(index))
-            .map(|area| area.as_position());
+            .or_else(|| self.view.toolbar_areas.iter().find(|area| area.contains(self.view.pointer)))
+            .map(|area| ratatui::layout::Position::new(area.x, area.bottom().saturating_sub(1)));
         match menu {
             CommandMenu::Playlist => self.focus_panel(Panel::Playlists),
             CommandMenu::Tracks => self.focus_panel(Panel::Tracks),

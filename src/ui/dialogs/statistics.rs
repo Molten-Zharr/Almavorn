@@ -1,14 +1,14 @@
 use super::super::{
     theme::Palette,
-    widgets::{block, buttons, clean, modal_rect, visible_offset},
+    widgets::{block, buttons, button_width, clean, modal_rect, visible_offset},
 };
 use crate::{
-    app::{App, Hit, StatisticsPage, Target},
+    app::{App, Hit, StatisticsControl, StatisticsInfo, StatisticsMenu, StatisticsPage, Target},
     statistics::StatisticsRow,
 };
 use ratatui::{
     Frame,
-    layout::{Constraint, Rect},
+    layout::{Constraint, Margin, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Cell, Clear, Paragraph, Row, Table, Wrap},
@@ -25,7 +25,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         palette,
         app.statistics.view.focused,
     );
-    let inner = outer.inner(rect);
+    let inner = outer.inner(rect).inner(Margin::new(1, 1));
     frame.render_widget(outer, rect);
     if inner.width < 8 || inner.height < 3 {
         return;
@@ -61,229 +61,36 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         return;
     }
     let compact = inner.width < 62;
-    let summary = &app.statistics.view.snapshot.summary;
-    let summary_lines = if compact {
-        vec![
-            format!(
-                "{}: {}",
-                app.text("Time", "Время"),
-                time(summary.listened_ms)
-            ),
-            format!(
-                "{}: {} · {}: {}",
-                app.text("Plays", "Зачтено"),
-                summary.plays,
-                app.text("Starts", "Вкл."),
-                summary.starts
-            ),
-            format!(
-                "{} {} · {} {} · {} {}",
-                app.text("Tr.", "Тр."),
-                summary.tracks,
-                app.text("Art.", "Исп."),
-                summary.artists,
-                app.text("Alb.", "Альб."),
-                summary.albums
-            ),
-        ]
-    } else {
-        vec![
-            format!(
-                "{}: {}    {}: {}    {}: {}",
-                app.text("Listening time", "Время прослушивания"),
-                time(summary.listened_ms),
-                app.text("Plays", "Прослушиваний"),
-                summary.plays,
-                app.text("Starts", "Включений"),
-                summary.starts
-            ),
-            format!(
-                "{}: {}    {}: {}    {}: {}",
-                app.text("Tracks", "Треков"),
-                summary.tracks,
-                app.text("Artists", "Артистов"),
-                summary.artists,
-                app.text("Albums", "Альбомов"),
-                summary.albums
-            ),
-        ]
-    };
-    let mut y = inner.y;
-    for (index, line) in summary_lines.into_iter().enumerate() {
-        frame.render_widget(
-            Paragraph::new(line).style(if index == 0 {
-                palette.text().fg(palette.accent)
-            } else {
-                palette.text()
-            }),
-            Rect::new(inner.x, y, inner.width, 1),
-        );
-        y += 1;
-    }
     frame.render_widget(
-        Paragraph::new(if compact {
-            app.text(
-                "Play: 50% or 4 min.\nPartials add time.",
-                "Зачёт: 50% или 4 мин.\nОтрывки добавляют время.",
-            )
-        } else {
-            app.text(
-                "A play: 50% of the track or 4 min; partial listens add time.",
-                "Прослушивание: 50% трека или 4 мин; отрывки добавляют время.",
-            )
-        })
-        .style(palette.text().fg(palette.muted))
-        .wrap(Wrap { trim: true }),
-        Rect::new(inner.x, y, inner.width, if compact { 2 } else { 1 }),
-    );
-    y += if compact { 2 } else { 1 };
-    let tabs = StatisticsPage::ALL
-        .into_iter()
-        .map(|page| {
-            (
-                format!(
-                    "{}{}",
-                    if app.statistics.view.page == page {
-                        "● "
-                    } else {
-                        ""
-                    },
-                    page.name(app.settings.preferences.language)
-                ),
-                Target::StatisticsPage(page),
-                true,
-            )
-        })
-        .collect();
-    y += buttons(
-        frame,
-        app,
-        Rect::new(inner.x, y, inner.width, 2),
-        tabs,
-        palette,
+        Paragraph::new(format!("{}: {}", app.text("Total listening time", "Всего прослушано"),
+            time(app.statistics.view.snapshot.summary.listened_ms))).style(palette.text().fg(palette.accent)),
+        Rect::new(inner.x, inner.y, inner.width, 1),
     );
     let recent = app.statistics.view.page == StatisticsPage::Recent;
-    let mut controls = Vec::new();
+    let mut entries = vec![(
+        format!("{} ↓", app.statistics.view.page.name(app.settings.preferences.language)),
+        Target::StatisticsControl(StatisticsControl::Menu(StatisticsMenu::Page)), true,
+    )];
     if !recent {
-        controls.push((
-            format!(
-                "{}: {} ↓",
-                app.text("Sort", "Сортировка"),
-                app.statistics
-                    .view
-                    .sort
-                    .name(app.settings.preferences.language)
-            ),
-            Target::StatisticsSort,
-            true,
-        ));
+        entries.push((format!("{}: {} ↓", app.text("Sort", "Сортировка"), app.statistics.view.sort.name(app.settings.preferences.language)),
+            Target::StatisticsControl(StatisticsControl::Menu(StatisticsMenu::Sort)), true));
     }
-    controls.push((
-        app.text("Refresh", "Обновить").into(),
-        Target::StatisticsRefresh,
-        true,
-    ));
-    y += buttons(
-        frame,
-        app,
-        Rect::new(inner.x, y, inner.width, 2),
-        controls,
-        palette,
-    );
-    let footer_y = inner.bottom().saturating_sub(1);
-    buttons(
-        frame,
-        app,
-        Rect::new(inner.x, footer_y, inner.width, 1),
-        vec![(
-            app.text("Close", "Закрыть").into(),
-            Target::CloseDialog,
-            true,
-        )],
-        palette,
-    );
-    if let Some(hit) = app
-        .view
-        .hits
-        .iter()
-        .rev()
-        .find(|hit| matches!(hit.target, Target::CloseDialog))
-    {
-        let x = hit.area.right() + 1;
-        let count = format!(
-            "{}/{}",
-            if app.statistics.view.rows.is_empty() {
-                0
-            } else {
-                app.statistics.view.selected + 1
-            },
-            app.statistics.view.rows.len()
-        );
-        let available = inner.right().saturating_sub(x);
-        let track_page = matches!(
-            app.statistics.view.page,
-            StatisticsPage::Tracks | StatisticsPage::Recent
-        );
-        let hint = if !app.statistics.view.focused {
-            if available >= 32 {
-                app.text(
-                    "Player keys · click here to focus",
-                    "Клавиши: плеер · клик: фокус",
-                )
-                .into()
-            } else if available >= 12 {
-                app.text("Click: focus", "Клик: фокус").into()
-            } else {
-                count
-            }
-        } else if track_page {
-            let hint = format!(
-                "{}   {count}",
-                app.text(
-                    "Enter: track · ←→ tabs · ↑↓ rows · S sort · R refresh",
-                    "Enter: к треку · ←→ вкладки · ↑↓ строки · S сорт. · R обновить",
-                )
-            );
-            let short = format!("{} · {count}", app.text("Enter: track", "Enter: трек"));
-            if Span::raw(&hint).width() <= usize::from(available) {
-                hint
-            } else if Span::raw(&short).width() <= usize::from(available) {
-                short
-            } else {
-                count
-            }
-        } else if compact {
-            count
-        } else {
-            format!(
-                "{}   {count}",
-                app.text(
-                    "←→ tabs · ↑↓ rows · S sort · R refresh",
-                    "←→ вкладки · ↑↓ строки · S сорт. · R обновить"
-                )
-            )
-        };
-        frame.render_widget(
-            Paragraph::new(hint).style(palette.text().fg(palette.muted)),
-            Rect::new(x, footer_y, inner.right().saturating_sub(x), 1),
-        );
+    entries.push((app.text("More ↓", "Еще ↓").into(), Target::StatisticsControl(StatisticsControl::Menu(StatisticsMenu::More)), true));
+    let y = inner.y + 2;
+    let used = controls(frame, app, Rect::new(inner.x, y, inner.width, inner.height.saturating_sub(6)), entries, palette);
+    let y = y + used + 1;
+    let footer_y = inner.bottom().saturating_sub(2);
+    let mut footer = vec![(app.text("Close", "Закрыть").into(), Target::CloseDialog, true)];
+    if inner.width >= 36 {
+        footer.push((app.text("Go to track", "К композиции").into(), Target::StatisticsControl(StatisticsControl::OpenTrack),
+            app.statistics.view.rows.get(app.statistics.view.selected).is_some_and(|row| row.track_id.is_some()) && !app.busy()));
+        footer.push((app.text("Details", "Сведения").into(), Target::StatisticsControl(StatisticsControl::Info(StatisticsInfo::Selection)), !app.statistics.view.rows.is_empty()));
     }
-    let details_height = if inner.height >= 15 { 2 } else { 0 };
-    let body = Rect::new(
-        inner.x,
-        y,
-        inner.width,
-        footer_y.saturating_sub(y + details_height),
-    );
-    if body.height == 0 {
-        return;
-    }
+    controls(frame, app, Rect::new(inner.x, footer_y, inner.width, 2), footer, palette);
+    let body = Rect::new(inner.x, y, inner.width, footer_y.saturating_sub(y + 1));
+    if body.height == 0 { return; }
     let page = app.statistics.view.page;
-    let row_height = if compact && page != StatisticsPage::Artists {
-        2
-    } else {
-        1
-    };
+    let row_height = if body.height >= 12 { 2 } else { 1 };
     let capacity = usize::from(body.height.saturating_sub(1) / row_height);
     app.statistics.view.capacity = capacity;
     app.statistics.view.offset = visible_offset(
@@ -357,7 +164,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             .map(|(index, row)| {
                 let title = row_title(row, page, app);
                 let mut lines = vec![Line::from(clean(title))];
-                if row_height == 2 {
+                if compact && row_height == 2 && page != StatisticsPage::Artists {
                     lines.push(Line::from(Span::styled(
                         clean(artist(row, app)),
                         palette.text().fg(palette.muted),
@@ -416,81 +223,99 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             });
         }
     }
-    if details_height > 0 {
-        let detail = if let Some(row) = app.statistics.view.rows.get(app.statistics.view.selected) {
-            if compact {
-                match page {
-                    StatisticsPage::Recent => format!(
-                        "{} · {}\n{}",
-                        row.date,
-                        if row.plays > 0 {
-                            "✓"
-                        } else {
-                            app.text("Partial", "Отрывок")
-                        },
-                        clean(if row.album.is_empty() {
-                            app.text("No album", "Без альбома")
-                        } else {
-                            &row.album
-                        })
-                    ),
-                    StatisticsPage::Tracks => format!(
-                        "{}\n{}: {}",
-                        clean(if row.album.is_empty() {
-                            app.text("No album", "Без альбома")
-                        } else {
-                            &row.album
-                        }),
-                        app.text("Starts", "Включений"),
-                        row.starts
-                    ),
-                    _ => format!(
-                        "{}: {} · {}: {}\n{}",
-                        app.text("Tr.", "Тр."),
-                        row.tracks,
-                        app.text("Starts", "Вкл."),
-                        row.starts,
-                        row.date
-                    ),
-                }
-            } else {
-                format!(
-                    "{} · {} · {}: {} · {}: {}\n{} · {}: {}",
-                    clean(artist(row, app)),
-                    clean(if page == StatisticsPage::Albums {
-                        row_title(row, page, app)
-                    } else if row.album.is_empty() {
-                        app.text("No album", "Без альбома")
-                    } else {
-                        &row.album
-                    }),
-                    app.text("Starts", "Включений"),
-                    row.starts,
-                    app.text("Tracks", "Треков"),
-                    row.tracks,
-                    row.date,
-                    app.text("Heard", "Звучало"),
-                    time(row.listened_ms)
-                )
-            }
-        } else {
-            app.text(
-                "← →: tabs · ↑ ↓: rows · S: sort · R: refresh",
-                "← →: вкладки · ↑ ↓: строки · S: сортировка · R: обновить",
-            )
-            .into()
-        };
-        frame.render_widget(
-            Paragraph::new(detail).style(palette.text().fg(palette.muted)),
-            Rect::new(
-                inner.x,
-                footer_y - details_height,
-                inner.width,
-                details_height,
-            ),
-        );
+    render_popup(frame, app, inner, palette);
+}
+
+fn controls(frame: &mut Frame, app: &mut App, area: Rect, entries: Vec<(String, Target, bool)>, palette: Palette) -> u16 {
+    let mut x = area.x;
+    let mut y = area.y;
+    for (label, target, enabled) in entries {
+        let width = button_width(app, &label, &target).saturating_add(4).min(area.width);
+        if x > area.x && x.saturating_add(width) > area.right() { x = area.x; y += 2; }
+        if y + 2 > area.bottom() { break; }
+        super::super::buttons::quiet_button(frame, app, Rect::new(x, y, width, 2), &label, target, enabled, palette);
+        x = x.saturating_add(width + 2);
+    }
+    y.saturating_sub(area.y) + 2
+}
+
+fn render_popup(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
+    if let Some(menu) = app.statistics.view.menu {
+        let items = app.statistics_menu_items(menu);
+        let width = items.iter().map(|i| Span::raw(&i.label).width() as u16 + 6).max().unwrap_or(20).min(area.width);
+        let row_height = if area.height >= items.len() as u16 * 2 + 2 { 2 } else { 1 };
+        let height = (items.len() as u16 * row_height + 2).min(area.height);
+        let anchor = app.statistics.view.menu_anchor;
+        let rect = Rect::new(anchor.x.clamp(area.x, area.right().saturating_sub(width)),
+            anchor.y.clamp(area.y, area.bottom().saturating_sub(height)), width, height);
+        app.statistics.view.popup_area = rect;
+        app.view.hits.push(Hit { area: frame.area(), target: Target::StatisticsControl(StatisticsControl::Dismiss), enabled: true });
+        frame.render_widget(Clear, rect);
+        let outer = block(String::new(), palette, true);
+        let inner = outer.inner(rect);
+        frame.render_widget(outer, rect);
+        let capacity = usize::from(inner.height / row_height);
+        let selected = app.statistics.view.menu_selected;
+        let offset = visible_offset(0, selected, capacity, items.len());
+        for (index, item) in items.iter().enumerate().skip(offset).take(capacity) {
+            let row = Rect::new(inner.x, inner.y + (index - offset) as u16 * row_height, inner.width, row_height);
+            let hovered = app.hovered(row);
+            let style = if !item.enabled { palette.text().fg(palette.muted) }
+                else if index == selected || hovered { palette.text().bg(palette.selection).fg(palette.selection_text) }
+                else { palette.text() };
+            frame.render_widget(Paragraph::new("").style(style), row);
+            frame.render_widget(Paragraph::new(format!(" {}", item.label)).style(style), Rect::new(row.x, row.y + row.height / 2, row.width, 1));
+            app.view.hits.push(Hit { area: row, target: Target::StatisticsControl(StatisticsControl::Item(index)), enabled: item.enabled });
+        }
+    } else if let Some(info) = app.statistics.view.info {
+        let (title, text) = information(app, info);
+        let width = area.width.min(72);
+        let text_width = width.saturating_sub(4).max(1);
+        let paragraph = Paragraph::new(text).style(palette.text()).wrap(Wrap { trim: false });
+        let lines = paragraph.line_count(text_width);
+        let height = (lines as u16).saturating_add(6).min(area.height);
+        let rect = Rect::new(area.x + (area.width - width) / 2, area.y + (area.height - height) / 2, width, height);
+        app.statistics.view.popup_area = rect;
+        app.view.hits.push(Hit { area: frame.area(), target: Target::StatisticsControl(StatisticsControl::Dismiss), enabled: true });
+        frame.render_widget(Clear, rect);
+        let outer = block(title.into(), palette, true);
+        let inner = outer.inner(rect).inner(Margin::new(1, 1));
+        frame.render_widget(outer, rect);
+        let body = Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(2));
+        app.statistics.view.info_offset = app.statistics.view.info_offset.min(lines.saturating_sub(usize::from(body.height)));
+        frame.render_widget(paragraph.scroll((app.statistics.view.info_offset.min(u16::MAX as usize) as u16, 0)), body);
+        app.view.hits.push(Hit { area: body, target: Target::StatisticsControl(StatisticsControl::Info(info)), enabled: true });
+        controls(frame, app, Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2), vec![
+            (app.text("Back", "Назад").into(), Target::StatisticsControl(StatisticsControl::Dismiss), true),
+        ], palette);
+    } else { app.statistics.view.popup_area = Rect::default(); }
+}
+
+fn information(app: &App, info: StatisticsInfo) -> (&'static str, String) {
+    match info {
+        StatisticsInfo::Totals => {
+            let s = &app.statistics.view.snapshot.summary;
+            (app.text("Overall totals", "Общие итоги"), format!("{}: {}\n{}: {}\n{}: {}\n\n{}: {}\n{}: {}\n{}: {}",
+                app.text("Listening time", "Время прослушивания"), time(s.listened_ms),
+                app.text("Plays", "Прослушивания"), s.plays, app.text("Starts", "Включения"), s.starts,
+                app.text("Tracks", "Композиции"), s.tracks, app.text("Artists", "Исполнители"), s.artists, app.text("Albums", "Альбомы"), s.albums))
+        }
+        StatisticsInfo::Counting => (app.text("How plays are counted", "Как считаются прослушивания"), app.text(
+            "Start: each playback start.\n\nPlay: at least half of the track or four minutes. Shorter listens add to the listening time.\n\nSelect a track and choose Go to track, or double-click it. S opens sorting, M opens categories, R refreshes the list. Esc closes this panel first.",
+            "Включение: каждый запуск композиции.\n\nПрослушивание: не меньше половины трека или четырех минут. Короткие отрывки добавляются ко времени прослушивания.\n\nВыберите строку и нажмите К композиции или дважды щелкните по ней. S открывает сортировку, M - категории, R обновляет список. Esc сначала закрывает эту панель."
+        ).into()),
+        StatisticsInfo::Selection => {
+            let title = app.text("Selection details", "Сведения о выбранном");
+            let Some(row) = app.statistics.view.rows.get(app.statistics.view.selected) else { return (title, String::new()); };
+            (title, format!("{}\n{}\n{}\n\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+                clean(row_title(row, app.statistics.view.page, app)), clean(artist(row, app)), clean(&row.album),
+                app.text("Starts", "Включения"), row.starts, app.text("Plays", "Прослушивания"), row.plays,
+                app.text("Listening time", "Время прослушивания"), time(row.listened_ms),
+                app.text("Tracks", "Композиции"), row.tracks, app.text("Last played", "Последнее включение"), row.date))
+        }
     }
 }
+
 fn artist<'a>(row: &'a StatisticsRow, app: &'a App) -> &'a str {
     if row.artist.is_empty() {
         app.text("Unknown artist", "Неизвестный артист")

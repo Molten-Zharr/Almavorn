@@ -78,6 +78,7 @@ pub struct Appearance {
     pub borders: BorderWeight,
     pub corners: Corners,
     pub playback_timeline: PlaybackTimeline,
+    pub player_button_size: PlayerButtonSize,
     pub show_button_shortcuts: bool,
     pub show_player_special_buttons: bool,
     pub expanded_toolbar: bool,
@@ -94,12 +95,41 @@ impl Default for Appearance {
             borders: BorderWeight::Single,
             corners: Corners::Square,
             playback_timeline: PlaybackTimeline::default(),
-            show_button_shortcuts: true,
+            player_button_size: PlayerButtonSize::default(),
+            show_button_shortcuts: false,
             show_player_special_buttons: false,
             expanded_toolbar: false,
             visualizer: crate::visualizer::VisualizerKind::default(),
             animation_brightness: 35,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlayerButtonSize {
+    Compact,
+    #[default]
+    Normal,
+    Large,
+}
+
+impl PlayerButtonSize {
+    pub const ALL: [Self; 3] = [Self::Compact, Self::Normal, Self::Large];
+
+    pub fn name(self, language: Language) -> &'static str {
+        match self {
+            Self::Compact => language.text("Compact", "Компактный"),
+            Self::Normal => language.text("Normal", "Обычный"),
+            Self::Large => language.text("Large", "Крупный"),
+        }
+    }
+
+    pub(crate) fn height(self) -> u16 {
+        match self { Self::Compact => 1, Self::Normal => 3, Self::Large => 5 }
+    }
+
+    pub(crate) fn padding(self) -> u16 {
+        match self { Self::Compact => 0, Self::Normal => 4, Self::Large => 8 }
     }
 }
 

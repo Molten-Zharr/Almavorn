@@ -425,6 +425,9 @@ impl App {
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
+        if matches!(self.view.dialog, Some(Dialog::Statistics)) && self.close_statistics_popup() {
+            return true;
+        }
         if self.close_move_files() { return true; }
         if self.mods_close() { return true; }
         if self.services_close() { return true; }
@@ -737,6 +740,14 @@ impl App {
             SettingControl::ButtonShortcuts => {
                 self.settings.preferences.appearance.show_button_shortcuts =
                     !self.settings.preferences.appearance.show_button_shortcuts;
+            }
+            SettingControl::PlayerButtonSize => {
+                self.settings.preferences.appearance.player_button_size = cycle(
+                    self.settings.preferences.appearance.player_button_size,
+                    &crate::preferences::PlayerButtonSize::ALL,
+                    direction,
+                );
+                self.cancel_workspace_drag();
             }
             SettingControl::PlayerSpecialButtons => {
                 self.settings.preferences.appearance.show_player_special_buttons = !self.settings.preferences.appearance.show_player_special_buttons;

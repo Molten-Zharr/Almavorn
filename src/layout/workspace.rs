@@ -1,6 +1,7 @@
 use super::player::PlayerMetrics;
 use crate::{
     model::Placement,
+    preferences::PlayerButtonSize,
     workspace::{Axis, Dock, Edge, Panel, SplitArea},
 };
 use ratatui::layout::Rect;
@@ -63,12 +64,12 @@ pub(crate) struct WorkspaceGeometry {
 
 impl WorkspaceMetrics {
     pub fn arrange(&self, root: Option<&Dock>, area: Rect) -> WorkspaceGeometry {
-        self.arrange_inner(root, area, None)
+        self.arrange_inner(root, area, None, PlayerButtonSize::Compact)
     }
 
     pub fn arrange_with_artwork(&self, root: Option<&Dock>, area: Rect, maximum: u16) -> WorkspaceGeometry {
         for width in (4..=maximum).rev().step_by(2) {
-            let geometry = self.arrange_inner(root, area, Some(width));
+            let geometry = self.arrange_inner(root, area, Some(width), PlayerButtonSize::Compact);
             if geometry.fits {
                 return geometry;
             }
@@ -76,13 +77,23 @@ impl WorkspaceMetrics {
         self.arrange(root, area)
     }
 
-    fn arrange_inner(&self, root: Option<&Dock>, area: Rect, artwork: Option<u16>) -> WorkspaceGeometry {
+    pub fn arrange_sized(&self, root: Option<&Dock>, area: Rect, artwork: Option<u16>, size: PlayerButtonSize) -> WorkspaceGeometry {
+        if let Some(maximum) = artwork {
+            for width in (4..=maximum).rev().step_by(2) {
+                let geometry = self.arrange_inner(root, area, Some(width), size);
+                if geometry.fits { return geometry; }
+            }
+        }
+        self.arrange_inner(root, area, None, size)
+    }
+
+    fn arrange_inner(&self, root: Option<&Dock>, area: Rect, artwork: Option<u16>, size: PlayerButtonSize) -> WorkspaceGeometry {
         let root = root
             .cloned()
             .and_then(Dock::content_only)
-            .unwrap_or_else(|| self.automatic(area, artwork));
-        let compact = self.minimum(&root, area.width, false, artwork) > area.height;
-        let fits = self.minimum(&root, area.width, compact, artwork) <= area.height;
+            .unwrap_or_else(|| self.automatic(area, artwork, size));
+        let compact = self.minimum(&root, area.width, false, artwork, size) > area.height;
+        let fits = self.minimum(&root, area.width, compact, artwork, size) <= area.height;
         let mut geometry = WorkspaceGeometry {
             root,
             compact,
@@ -92,16 +103,20 @@ impl WorkspaceMetrics {
         };
         if fits {
             let root = geometry.root.clone();
-            self.arrange_node(&root, area, compact, artwork, &mut geometry, &mut Vec::new());
+            self.arrange_node(&root, area, compact, artwork, size, &mut geometry, &mut Vec::new());
         }
         geometry
     }
 
     pub fn fits(&self, root: &Dock, area: Rect) -> bool {
-        self.minimum(root, area.width, true, None) <= area.height
+        self.fits_sized(root, area, PlayerButtonSize::Compact)
     }
 
-    fn automatic(&self, area: Rect, artwork: Option<u16>) -> Dock {
+    pub fn fits_sized(&self, root: &Dock, area: Rect, size: PlayerButtonSize) -> bool {
+        self.minimum(root, area.width, true, None, size) <= area.height
+    }
+
+    fn automatic(&self, area: Rect, artwork: Option<u16>, size: PlayerButtonSize) -> Dock {
         let list_horizontal = area.width >= 55
             && matches!(self.playlist_placement, Placement::Left | Placement::Right);
         let list_first = matches!(self.playlist_placement, Placement::Left | Placement::Top);
@@ -132,10 +147,13 @@ impl WorkspaceMetrics {
         let player_ratio = if side_player {
             250
         } else {
-            let height = if let Some(width) = artwork {
-                self.player.content_height_with_artwork(area.width.saturating_sub(2), width) + 2
+            let height = if size == PlayerButtonSize::Compact {
+                if let Some(width) = artwork { self.player.content_height_with_artwork(area.width.saturating_sub(2), width) + 2 }
+                else { self.player.preferred_height(area.width) }
+            } else if let Some(width) = artwork {
+                self.player.content_height_with_artwork_sized(area.width.saturating_sub(2), width, size) + 2
             } else {
-                self.player.preferred_height(area.width)
+                self.player.content_height_sized(area.width.saturating_sub(2), size) + 2
             };
             (u32::from(height) * 1000
                 / u32::from(area.height.max(1))) as u16
@@ -206,7 +224,7 @@ impl WorkspaceMetrics {
         }
     }
 
-    fn minimum(&self, node: &Dock, width: u16, compact: bool, artwork: Option<u16>) -> u16 {
+    fn minimum(&self, node: &Dock, width: u16, compact: bool, artwork: Option<u16>, size: PlayerButtonSize) -> u16 {
         match node {
             Dock::Panel(panel) => {
                 if self.hidden.contains(panel) {
@@ -217,9 +235,9 @@ impl WorkspaceMetrics {
                 }
                 if *panel == Panel::Player {
                     let content = if let Some(cover_width) = artwork {
-                        self.player.content_height_with_artwork(width.saturating_sub(2), cover_width)
+                        self.player.content_height_with_artwork_sized(width.saturating_sub(2), cover_width, size)
                     } else {
-                        self.player.content_height(width.saturating_sub(2))
+                        self.player.content_height_sized(width.saturating_sub(2), size)
                     };
                     return content + if compact { 1 } else { 2 };
                 }
@@ -256,21 +274,22 @@ impl WorkspaceMetrics {
                 second,
             } => {
                 if self.min_width(first) == 0 {
-                    return self.minimum(second, width, compact, artwork);
+                    return self.minimum(second, width, compact, artwork, size);
                 }
                 if self.min_width(second) == 0 {
-                    return self.minimum(first, width, compact, artwork);
+                    return self.minimum(first, width, compact, artwork, size);
                 }
                 if self.axis(*desired, first, second, width) == Axis::Vertical {
-                    self.minimum(first, width, compact, artwork)
-                        .saturating_add(self.minimum(second, width, compact, artwork))
+                    self.minimum(first, width, compact, artwork, size)
+                        .saturating_add(self.minimum(second, width, compact, artwork, size))
                 } else {
                     let cut = self.width_cut(width, *ratio, first, second);
-                    self.minimum(first, cut, compact, artwork).max(self.minimum(
+                    self.minimum(first, cut, compact, artwork, size).max(self.minimum(
                         second,
                         width.saturating_sub(cut),
                         compact,
                         artwork,
+                        size,
                     ))
                 }
             }
@@ -292,6 +311,7 @@ impl WorkspaceMetrics {
         area: Rect,
         compact: bool,
         artwork: Option<u16>,
+        size: PlayerButtonSize,
         geometry: &mut WorkspaceGeometry,
         path: &mut Vec<bool>,
     ) {
@@ -309,13 +329,13 @@ impl WorkspaceMetrics {
             } => {
                 if self.min_width(first) == 0 {
                     path.push(true);
-                    self.arrange_node(second, area, compact, artwork, geometry, path);
+                    self.arrange_node(second, area, compact, artwork, size, geometry, path);
                     path.pop();
                     return;
                 }
                 if self.min_width(second) == 0 {
                     path.push(false);
-                    self.arrange_node(first, area, compact, artwork, geometry, path);
+                    self.arrange_node(first, area, compact, artwork, size, geometry, path);
                     path.pop();
                     return;
                 }
@@ -325,8 +345,8 @@ impl WorkspaceMetrics {
                 } else {
                     (
                         area.height,
-                        self.minimum(first, area.width, compact, artwork),
-                        self.minimum(second, area.width, compact, artwork),
+                        self.minimum(first, area.width, compact, artwork, size),
+                        self.minimum(second, area.width, compact, artwork, size),
                     )
                 };
                 let first_collapsed = self.all_collapsed(first);
@@ -371,10 +391,10 @@ impl WorkspaceMetrics {
                     )
                 };
                 path.push(false);
-                self.arrange_node(first, a, compact, artwork, geometry, path);
+                self.arrange_node(first, a, compact, artwork, size, geometry, path);
                 path.pop();
                 path.push(true);
-                self.arrange_node(second, b, compact, artwork, geometry, path);
+                self.arrange_node(second, b, compact, artwork, size, geometry, path);
                 path.pop();
             }
         }

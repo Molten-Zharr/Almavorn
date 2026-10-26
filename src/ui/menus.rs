@@ -1,5 +1,4 @@
 use super::{
-    buttons::button_shortcut,
     theme::Palette,
     widgets::{block, visible_offset},
 };
@@ -8,6 +7,7 @@ use crate::{
     input::Action,
     model::Mode,
     visualizer::VisualizerKind,
+    layout::buttons::displayed_shortcut,
 };
 use ratatui::{
     Frame,
@@ -124,13 +124,15 @@ pub(super) fn render(
         .iter()
         .map(|item| {
             Span::raw(&item.label).width()
-                + button_shortcut(app, &item.target).map_or(0, |key| Span::raw(key).width() + 3)
+                + displayed_shortcut(app, &item.target).map_or(0, |key| Span::raw(key).width() + 3)
                 + 4
         })
         .max()
         .unwrap_or(24)
         .min(usize::from(area.width.saturating_sub(2))) as u16;
-    let height = (items.len() as u16 + 3).min(area.height.saturating_sub(2));
+    let row_height = if area.height >= 12 { 2 } else { 1 };
+    let hint_height = u16::from(app.settings.preferences.appearance.show_button_shortcuts);
+    let height = (items.len() as u16 * row_height + 2 + hint_height).min(area.height.saturating_sub(2));
     let outer = Rect::new(
         anchor.x.min(area.right().saturating_sub(width)),
         anchor
@@ -156,10 +158,11 @@ pub(super) fn render(
     frame.render_widget(Clear, outer);
     frame.render_widget(block, outer);
     *selected = App::command_selection(&items, *selected, 0);
-    let capacity = inner.height.saturating_sub(1) as usize;
+    let capacity = (inner.height.saturating_sub(hint_height) / row_height) as usize;
     let offset = visible_offset(0, *selected, capacity, items.len());
     for (index, item) in items.iter().enumerate().skip(offset).take(capacity) {
-        let rect = Rect::new(inner.x, inner.y + (index - offset) as u16, inner.width, 1);
+        let rect = Rect::new(inner.x, inner.y + (index - offset) as u16 * row_height, inner.width, row_height);
+        let caption_y = rect.y + row_height / 2;
         let style = if !item.enabled {
             palette.text().fg(palette.muted)
         } else if index == *selected {
@@ -171,7 +174,7 @@ pub(super) fn render(
             palette.text()
         };
         frame.render_widget(Paragraph::new("").style(style), rect);
-        let shortcut = button_shortcut(app, &item.target);
+        let shortcut = displayed_shortcut(app, &item.target);
         let key_width = shortcut
             .as_ref()
             .map_or(0, |key| Span::raw(key).width() as u16)
@@ -196,14 +199,14 @@ pub(super) fn render(
         };
         frame.render_widget(
             Paragraph::new(format!(" {label}")).style(style),
-            Rect::new(rect.x, rect.y, label_width, 1),
+            Rect::new(rect.x, caption_y, label_width, 1),
         );
         if let Some(key) = shortcut {
             frame.render_widget(
                 Paragraph::new(key).style(style.fg(palette.muted)),
                 Rect::new(
                     rect.right().saturating_sub(key_width + 1),
-                    rect.y,
+                    caption_y,
                     key_width,
                     1,
                 ),
@@ -215,11 +218,11 @@ pub(super) fn render(
             enabled: item.enabled,
         });
     }
-    frame.render_widget(
+    if hint_height > 0 { frame.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             app.text("↑↓ · Enter · Esc", "↑↓ · Enter · Esc"),
             palette.text().fg(palette.muted),
         )])),
         Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
-    );
+    ); }
 }

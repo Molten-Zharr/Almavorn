@@ -162,7 +162,7 @@ pub(super) fn render(
             Rect::new(inner.x, footer.y - 5, inner.width, 3),
         );
     }
-    frame.render_widget(
+    if app.settings.preferences.appearance.show_button_shortcuts { frame.render_widget(
         Paragraph::new(app.text(
             "Tab: fields · Ctrl+A: select all · Ctrl+S: save",
             "Tab: поля · Ctrl+A: выделить все · Ctrl+S: сохранить",
@@ -170,7 +170,7 @@ pub(super) fn render(
         .style(palette.text().fg(palette.muted))
         .wrap(Wrap { trim: false }),
         Rect::new(inner.x, footer.y - 2, inner.width, 2),
-    );
+    ); }
     buttons(
         frame,
         app,

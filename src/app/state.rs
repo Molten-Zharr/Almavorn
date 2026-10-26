@@ -68,6 +68,7 @@ pub enum Target {
     StatisticsSort,
     StatisticsRow(usize),
     StatisticsRefresh,
+    StatisticsControl(super::StatisticsControl),
     CommandRow(usize),
     ManagePanels,
     PanelFocus(crate::workspace::Panel),

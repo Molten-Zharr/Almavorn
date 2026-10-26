@@ -202,11 +202,13 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     app.view.tracks_area = Rect::default();
     let metrics = workspace_metrics(app);
     let root = app.settings.preferences.workspace.root.as_ref();
-    let geometry = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
-        metrics.arrange_with_artwork(root, area, app.settings.preferences.artwork.size.columns())
-    } else {
-        metrics.arrange(root, area)
-    };
+    let artwork = (app.settings.preferences.artwork.visible && app.playback.current.is_some())
+        .then_some(app.settings.preferences.artwork.size.columns());
+    let button_size = app.settings.preferences.appearance.player_button_size;
+    let geometry = if button_size == crate::preferences::PlayerButtonSize::Compact {
+        if let Some(maximum) = artwork { metrics.arrange_with_artwork(root, area, maximum) }
+        else { metrics.arrange(root, area) }
+    } else { metrics.arrange_sized(root, area, artwork, button_size) };
     let compact = geometry.compact;
     app.view.workspace.areas = geometry.areas;
     app.view.workspace.splits = geometry.splits;

@@ -34,15 +34,17 @@ pub(super) fn render(
         return;
     }
     frame.render_widget(
-        Paragraph::new(if search.focus == SearchFocus::Playlists {
+        Paragraph::new(if !app.settings.preferences.appearance.show_button_shortcuts {
+            app.text("Search by title, artist or album", "Поиск по названию, исполнителю или альбому")
+        } else if search.focus == SearchFocus::Playlists {
             app.text(
-                "←→: playlist · Ctrl+Space: select · Enter: play",
-                "←→: плейлист · Ctrl+Space: выбрать · Enter: играть",
+                "←→: playlist · Ctrl+Space: select",
+                "←→: плейлист · Ctrl+Space: выбрать",
             )
         } else {
             app.text(
-                "Type to search · ↑↓: tracks · Enter: play",
-                "Ввод: поиск · ↑↓: композиции · Enter: играть",
+                "Type to search · ↑↓: tracks",
+                "Ввод: поиск · ↑↓: композиции",
             )
         })
         .style(palette.text().fg(palette.muted)),

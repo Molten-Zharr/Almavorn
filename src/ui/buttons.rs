@@ -109,7 +109,7 @@ fn standard(
     enabled: bool,
     palette: Palette,
 ) {
-    let label = button_caption(label, &target);
+    let label = button_caption(app, label, &target);
     let mut style = if enabled {
         palette
             .text()
@@ -200,7 +200,7 @@ fn quiet(
     enabled: bool,
     palette: Palette,
 ) {
-    let label = button_caption(label, &target);
+    let label = button_caption(app, label, &target);
     let active = match target {
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
@@ -264,10 +264,28 @@ fn quiet(
         }
     }
     content.push(Span::styled(label, style));
+    frame.render_widget(Block::default().style(style), area);
+    if area.height >= 3 {
+        frame.render_widget(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(match palette.corners {
+                    Corners::Rounded => BorderType::Rounded,
+                    Corners::Square => BorderType::Plain,
+                })
+                .border_style(style.fg(if enabled && (hovered || active || focused) {
+                    palette.accent
+                } else {
+                    palette.inactive_panel_border
+                })),
+            area,
+        );
+    }
+    let caption = Rect::new(area.x, area.y + area.height / 2, area.width, 1);
     frame.render_widget(
         Paragraph::new(Line::from(content))
             .style(style)
             .alignment(Alignment::Center),
-        area,
+        caption,
     );
 }

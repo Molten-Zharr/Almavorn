@@ -1031,8 +1031,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     let q = &mut sections[C::Statistics as usize];
     q.keys(
         &[p(Left), p(Right), p(Tab), s(Tab)],
-        "Switch Tracks, Artists, Albums and Recent tabs.",
-        "Переключить вкладки Треки, Артисты, Альбомы и Недавние.",
+        "Switch between Tracks, Artists, Albums and Recent.",
+        "Переключить списки Треки, Артисты, Альбомы и Недавние.",
     );
     q.keys(
         &[p(Up), p(Down), p(Home), p(End)],
@@ -1046,9 +1046,12 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
     q.keys(
         &[p(Char('s'))],
-        "Cycle statistics sorting, including playback starts.",
-        "Сменить сортировку статистики, включая количество включений.",
+        "Open sorting options. Choose with the arrows and Enter.",
+        "Открыть список сортировки. Выберите пункт стрелками и нажмите Enter.",
     );
+    q.keys(&[p(Char('m'))], "Open the list of statistics categories.", "Открыть список категорий статистики.");
+    q.keys(&[p(Char('o'))], "Open More: selection details, overall totals, counting rules and refresh.", "Открыть меню Еще: сведения о выбранном, общие итоги, правила подсчета и обновление.");
+    q.keys(&[p(F(1))], "Explain how playback starts and plays are counted.", "Открыть объяснение подсчета включений и прослушиваний.");
     q.keys(
         &[p(Char('r'))],
         "Refresh statistics.",
@@ -1061,8 +1064,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
     q.keys(
         &[p(Escape)],
-        "Close Statistics even when the main player has focus.",
-        "Закрыть статистику, даже если перед этим вы нажали на плеер.",
+        "Close the open list or details first, then Statistics, even when the player has focus.",
+        "Сначала закрыть список или сведения, затем статистику, даже если перед этим вы нажали на плеер.",
     );
 
     let q = &mut sections[C::Composition as usize];

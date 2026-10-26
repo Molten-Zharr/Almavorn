@@ -197,6 +197,10 @@ Paste the command straight into your terminal.
 
 F2 opens Settings; F1 opens the full help guide. Within Settings, F1 explains the selected option.
 
+Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. Normal is the default.
+
+In Statistics, choose a category and sorting from the drop-down lists. "More" opens overall totals, details about the selected row and the play-counting rules.
+
 Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results show your current shortcuts; press Enter to open the explanation.
 
 ### Create a playlist from a folder

@@ -24,10 +24,17 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         return;
     }
     let metrics = player_metrics(app);
+    let button_size = app.settings.preferences.appearance.player_button_size;
     let geometry = if app.settings.preferences.artwork.visible && app.playback.current.is_some() {
-        metrics.arrange_with_artwork(area, app.settings.preferences.artwork.size.columns())
-    } else {
+        if button_size == crate::preferences::PlayerButtonSize::Compact {
+            metrics.arrange_with_artwork(area, app.settings.preferences.artwork.size.columns())
+        } else {
+            metrics.arrange_with_artwork_sized(area, app.settings.preferences.artwork.size.columns(), button_size)
+        }
+    } else if button_size == crate::preferences::PlayerButtonSize::Compact {
         metrics.arrange(area)
+    } else {
+        metrics.arrange_sized(area, button_size)
     };
     if let Some(cover) = geometry.artwork {
         app.view.artwork_area = cover;

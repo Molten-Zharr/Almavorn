@@ -271,7 +271,7 @@ pub(super) fn render(
                 .wrap(Wrap { trim: false }),
             Rect::new(inner.x, y, inner.width, remaining),
         );
-    } else {
+    } else if app.settings.preferences.appearance.show_button_shortcuts {
         let hint = if app.view.graphical_keycaps {
             app.text(
                 "Ctrl+V: paste · Ctrl+A: select all · Tab: next field",

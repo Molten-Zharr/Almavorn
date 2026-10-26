@@ -15,7 +15,13 @@ impl App {
         }
     }
     fn workspace_fits(&self, root: &Dock) -> bool {
-        crate::layout::workspace_metrics(self).fits(root, self.view.workspace.bounds)
+        let metrics = crate::layout::workspace_metrics(self);
+        let size = self.settings.preferences.appearance.player_button_size;
+        if size == crate::preferences::PlayerButtonSize::Compact {
+            metrics.fits(root, self.view.workspace.bounds)
+        } else {
+            metrics.fits_sized(root, self.view.workspace.bounds, size)
+        }
     }
 
     pub(super) fn panels_key(&mut self, key: KeyPress) -> Result<()> {

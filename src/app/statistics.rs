@@ -9,7 +9,7 @@ use crate::{
     statistics::{ListeningRecord, ListeningStatistics, ListeningTracker, StatisticsRow},
 };
 use anyhow::{Context, Result};
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -45,6 +45,7 @@ pub enum StatisticsSort {
     Name,
 }
 impl StatisticsSort {
+    pub const ALL: [Self; 4] = [Self::Time, Self::Plays, Self::Starts, Self::Name];
     pub fn name(self, language: Language) -> &'static str {
         match self {
             Self::Time => language.text("Time", "Время"),
@@ -53,6 +54,22 @@ impl StatisticsSort {
             Self::Name => language.text("Name", "Название"),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatisticsMenu { Page, Sort, More }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatisticsInfo { Totals, Selection, Counting }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatisticsControl {
+    Menu(StatisticsMenu),
+    Item(usize),
+    Sort(StatisticsSort),
+    Info(StatisticsInfo),
+    OpenTrack,
+    Dismiss,
 }
 
 #[derive(Default)]
@@ -67,6 +84,12 @@ pub struct StatisticsView {
     pub loading: bool,
     pub error: Option<String>,
     pub focused: bool,
+    pub menu: Option<StatisticsMenu>,
+    pub menu_selected: usize,
+    pub menu_anchor: Position,
+    pub popup_area: Rect,
+    pub info: Option<StatisticsInfo>,
+    pub info_offset: usize,
 }
 impl StatisticsView {
     fn rebuild(&mut self) {
@@ -170,11 +193,17 @@ impl App {
         self.statistics.view.loading = true;
         self.statistics.retry_at = None;
         self.statistics.view.focused = true;
+        self.statistics.view.menu = None;
+        self.statistics.view.info = None;
         self.view.dialog = Some(Dialog::Statistics);
     }
 
     pub(super) fn statistics_background_input(&mut self, input: &Input) -> bool {
         if !matches!(self.view.dialog, Some(Dialog::Statistics)) {
+            return false;
+        }
+        if self.statistics.view.menu.is_some() || self.statistics.view.info.is_some() {
+            self.statistics.view.focused = true;
             return false;
         }
         match input {
@@ -351,9 +380,85 @@ impl App {
         }
         Ok(())
     }
+    pub fn statistics_menu_items(&self, menu: StatisticsMenu) -> Vec<super::CommandItem> {
+        let language = self.settings.preferences.language;
+        let item = |label: String, target: Target, enabled| super::CommandItem { label, target, enabled };
+        match menu {
+            StatisticsMenu::Page => StatisticsPage::ALL.into_iter().map(|page| item(
+                format!("{}{}", if page == self.statistics.view.page { "● " } else { "" }, page.name(language)),
+                Target::StatisticsPage(page), true,
+            )).collect(),
+            StatisticsMenu::Sort => StatisticsSort::ALL.into_iter().map(|sort| item(
+                format!("{}{}", if sort == self.statistics.view.sort { "● " } else { "" }, sort.name(language)),
+                Target::StatisticsControl(StatisticsControl::Sort(sort)), true,
+            )).collect(),
+            StatisticsMenu::More => vec![
+                item(self.text("Selection details", "Сведения о выбранном").into(), Target::StatisticsControl(StatisticsControl::Info(StatisticsInfo::Selection)), !self.statistics.view.rows.is_empty()),
+                item(self.text("Overall totals", "Общие итоги").into(), Target::StatisticsControl(StatisticsControl::Info(StatisticsInfo::Totals)), true),
+                item(self.text("How plays are counted", "Как считаются прослушивания").into(), Target::StatisticsControl(StatisticsControl::Info(StatisticsInfo::Counting)), true),
+                item(self.text("Refresh", "Обновить").into(), Target::StatisticsRefresh, true),
+            ],
+        }
+    }
+
+    pub(super) fn close_statistics_popup(&mut self) -> bool {
+        let closed = self.statistics.view.menu.take().is_some() | self.statistics.view.info.take().is_some();
+        self.statistics.view.popup_area = Rect::default();
+        closed
+    }
+
+    pub(super) fn statistics_control(&mut self, control: StatisticsControl) -> Result<()> {
+        match control {
+            StatisticsControl::Menu(menu) => {
+                let same = self.statistics.view.menu == Some(menu);
+                self.close_statistics_popup();
+                if !same {
+                    self.statistics.view.menu = Some(menu);
+                    self.statistics.view.menu_selected = match menu {
+                        StatisticsMenu::Page => StatisticsPage::ALL.iter().position(|p| *p == self.statistics.view.page).unwrap_or(0),
+                        StatisticsMenu::Sort => StatisticsSort::ALL.iter().position(|s| *s == self.statistics.view.sort).unwrap_or(0),
+                        StatisticsMenu::More => 0,
+                    };
+                    self.statistics.view.menu_anchor = self.view.hits.iter().find_map(|hit| {
+                        matches!(hit.target, Target::StatisticsControl(StatisticsControl::Menu(value)) if value == menu)
+                            .then_some(Position::new(hit.area.x, hit.area.bottom()))
+                    }).unwrap_or(Position::new(self.view.overlay_area.x + 1, self.view.overlay_area.y + 2));
+                }
+            }
+            StatisticsControl::Item(index) => {
+                if let Some(menu) = self.statistics.view.menu {
+                    let items = self.statistics_menu_items(menu);
+                    if let Some(item) = items.get(index).filter(|item| item.enabled) {
+                        let target = item.target.clone();
+                        self.close_statistics_popup();
+                        if let Target::StatisticsControl(control) = target {
+                            self.statistics_control(control)?;
+                        } else { self.statistics_target(target); }
+                    }
+                }
+            }
+            StatisticsControl::Sort(sort) => {
+                self.close_statistics_popup();
+                self.statistics.view.sort = sort;
+                self.statistics.view.rebuild();
+                self.statistics.view.offset = 0;
+            }
+            StatisticsControl::Info(info) => {
+                if self.statistics.view.info == Some(info) { return Ok(()); }
+                self.close_statistics_popup();
+                self.statistics.view.info = Some(info);
+                self.statistics.view.info_offset = 0;
+            }
+            StatisticsControl::OpenTrack => self.open_statistics_track()?,
+            StatisticsControl::Dismiss => { self.close_statistics_popup(); }
+        }
+        Ok(())
+    }
+
     pub(super) fn statistics_target(&mut self, target: Target) {
         match target {
             Target::StatisticsPage(page) => {
+                self.close_statistics_popup();
                 self.statistics.view.page = page;
                 self.statistics.view.rows.clear();
                 self.statistics.view.selected = 0;
@@ -379,6 +484,14 @@ impl App {
         }
     }
     pub(super) fn move_statistics(&mut self, direction: i64) {
+        if let Some(menu) = self.statistics.view.menu {
+            self.statistics.view.menu_selected = Self::command_selection(&self.statistics_menu_items(menu), self.statistics.view.menu_selected, direction);
+            return;
+        }
+        if self.statistics.view.info.is_some() {
+            self.statistics.view.info_offset = self.statistics.view.info_offset.saturating_add_signed(direction as isize);
+            return;
+        }
         self.statistics.view.selected = bounded(
             self.statistics.view.selected,
             direction,
@@ -386,6 +499,33 @@ impl App {
         );
     }
     pub(super) fn statistics_key(&mut self, key: KeyPress) -> Result<()> {
+        let key = key.normalized();
+        if self.statistics.view.info.is_some() {
+            match key.key {
+                Key::Escape | Key::Enter => { self.close_statistics_popup(); }
+                Key::Up => self.move_statistics(-1),
+                Key::Down => self.move_statistics(1),
+                Key::PageUp => self.move_statistics(-8),
+                Key::PageDown => self.move_statistics(8),
+                Key::Home => self.statistics.view.info_offset = 0,
+                Key::End => self.statistics.view.info_offset = usize::MAX,
+                _ => {}
+            }
+            return Ok(());
+        }
+        if let Some(menu) = self.statistics.view.menu {
+            match key.key {
+                Key::Escape => { self.close_statistics_popup(); }
+                Key::Enter => self.statistics_control(StatisticsControl::Item(self.statistics.view.menu_selected))?,
+                Key::Up => self.move_statistics(-1),
+                Key::Down => self.move_statistics(1),
+                Key::Home => self.statistics.view.menu_selected = Self::command_selection(&self.statistics_menu_items(menu), 0, 0),
+                Key::End => self.statistics.view.menu_selected = Self::command_selection(&self.statistics_menu_items(menu), usize::MAX, 0),
+                Key::Tab | Key::Left | Key::Right => { self.close_statistics_popup(); }
+                _ => {}
+            }
+            return Ok(());
+        }
         match key.key {
             Key::Escape => {
                 self.close_dialog();
@@ -412,7 +552,10 @@ impl App {
             Key::End => {
                 self.statistics.view.selected = self.statistics.view.rows.len().saturating_sub(1)
             }
-            Key::Char('s' | 'S') => self.statistics_target(Target::StatisticsSort),
+            Key::Char('s' | 'S') if self.statistics.view.page != StatisticsPage::Recent => self.statistics_control(StatisticsControl::Menu(StatisticsMenu::Sort))?,
+            Key::Char('m' | 'M') => self.statistics_control(StatisticsControl::Menu(StatisticsMenu::Page))?,
+            Key::Char('o' | 'O') => self.statistics_control(StatisticsControl::Menu(StatisticsMenu::More))?,
+            Key::F(1) => self.statistics_control(StatisticsControl::Info(StatisticsInfo::Counting))?,
             Key::Char('r' | 'R') => self.open_statistics(),
             _ => {
                 if let Some(action) = self

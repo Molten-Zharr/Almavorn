@@ -37,6 +37,11 @@ impl App {
             .filter(|(_, hit)| hit.enabled && hit.area.contains(point))
             .filter(|(_, hit)| {
                 !matches!(self.view.dialog, Some(Dialog::Statistics))
+                    || (self.statistics.view.menu.is_none() && self.statistics.view.info.is_none())
+                    || matches!(hit.target, Target::StatisticsControl(_))
+            })
+            .filter(|(_, hit)| {
+                !matches!(self.view.dialog, Some(Dialog::Statistics))
                     || !self.view.overlay_area.contains(point)
                     || matches!(
                         hit.target,
@@ -44,6 +49,7 @@ impl App {
                             | Target::StatisticsSort
                             | Target::StatisticsRow(_)
                             | Target::StatisticsRefresh
+                            | Target::StatisticsControl(_)
                             | Target::CloseDialog
                     )
             })
@@ -125,6 +131,11 @@ impl App {
             Input::Move { x, y } => {
                 self.view.pointer = Position::new(x, y);
                 self.hover_settings();
+                if let Some(Target::StatisticsControl(super::StatisticsControl::Item(index))) = self.target_at(self.view.pointer)
+                    && self.statistics.view.menu.is_some()
+                {
+                    self.statistics.view.menu_selected = *index;
+                }
                 if let Some(Target::CommandRow(index)) = self.target_at(self.view.pointer).cloned()
                     && let Some(Dialog::Commands { selected, .. }) = &mut self.view.dialog
                 {
@@ -230,6 +241,14 @@ impl App {
                     return self.scroll_tuner(position, delta);
                 }
                 if matches!(self.view.dialog, Some(Dialog::Statistics)) {
+                    if self.statistics.view.menu.is_some() || self.statistics.view.info.is_some() {
+                        if self.statistics.view.popup_area.contains(position) {
+                            let step = if ctrl && shift { self.statistics.view.popup_area.height.saturating_sub(4).max(1) as i64 }
+                                else if ctrl { 5 } else { 1 };
+                            self.move_statistics(i64::from(delta) * step);
+                        }
+                        return Ok(());
+                    }
                     let step = self.wheel_step(position, ctrl, shift, 3);
                     let distance = i64::from(delta) * i64::from(step);
                     if ctrl && shift {
@@ -627,6 +646,7 @@ impl App {
             target @ (Target::StatisticsPage(_)
             | Target::StatisticsSort
             | Target::StatisticsRefresh) => self.statistics_target(target),
+            Target::StatisticsControl(control) => self.statistics_control(control)?,
             Target::CommandRow(index) => self.activate_command(index)?,
             Target::ManagePanels => {
                 self.view.dialog = Some(Dialog::Panels {
