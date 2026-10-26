@@ -27,6 +27,7 @@ pub enum SettingsPage {
     Themes,
     Palettes,
     Typography,
+    Animation,
     Shortcuts,
     Mods,
     ModGuide,
@@ -37,13 +38,14 @@ pub enum SettingsPage {
     ServiceGuide,
 }
 impl SettingsPage {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::General,
         Self::Lyrics,
         Self::Profiles,
         Self::Themes,
         Self::Palettes,
         Self::Typography,
+        Self::Animation,
         Self::Shortcuts,
         Self::Mods,
         Self::ModGuide,
@@ -54,13 +56,13 @@ impl SettingsPage {
         Self::ServiceGuide,
     ];
     pub const SECTIONS: [Self; 7] = [Self::General, Self::Lyrics, Self::Profiles, Self::Themes, Self::Shortcuts, Self::Mods, Self::Services];
-    pub const THEME_TABS: [Self; 3] = [Self::Themes, Self::Palettes, Self::Typography];
+    pub const THEME_TABS: [Self; 4] = [Self::Themes, Self::Palettes, Self::Typography, Self::Animation];
     pub const MOD_TABS: [Self; 2] = [Self::Mods, Self::ModGuide];
     pub const SERVICE_TABS: [Self; 5] = [Self::Services, Self::ServiceTracks, Self::ServicePlaylists, Self::ServiceDevices, Self::ServiceGuide];
 
     pub fn section(self) -> Self {
         match self {
-            Self::Palettes | Self::Typography => Self::Themes,
+            Self::Palettes | Self::Typography | Self::Animation => Self::Themes,
             Self::ModGuide => Self::Mods,
             Self::ServiceTracks | Self::ServicePlaylists | Self::ServiceDevices | Self::ServiceGuide => Self::Services,
             page => page,
@@ -94,6 +96,7 @@ impl SettingsPage {
             Self::Themes => language.text("Themes", "Темы"),
             Self::Palettes => language.text("Palettes", "Палитры"),
             Self::Typography => language.text("Font and geometry", "Шрифт и геометрия"),
+            Self::Animation => language.text("Animation", "Анимация"),
             Self::Shortcuts => language.text("Shortcuts", "Клавиши"),
             Self::Mods => language.text("Mods", "Моды"),
             Self::ModGuide => language.text("Create a mod", "Создание модов"),
@@ -880,13 +883,18 @@ impl App {
             .min(self.settings.palettes.len() - 1)]
     }
     pub(crate) fn selected_settings_preset_index(&self) -> usize {
+        let selected = self.settings.preferences.appearance.preset_ids[self.settings.mode.index()]
+            .as_deref();
         self.settings
-            .current_preset()
-            .and_then(|current| {
+            .presets
+            .iter()
+            .position(|preset| Some(preset.id.as_str()) == selected)
+            .or_else(|| {
                 self.settings
-                    .presets
-                    .iter()
-                    .position(|preset| preset.id == current.id)
+                    .current_preset()
+                    .and_then(|current| {
+                        self.settings.presets.iter().position(|preset| preset.id == current.id)
+                    })
             })
             .unwrap_or_else(|| {
                 self.view

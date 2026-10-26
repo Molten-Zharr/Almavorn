@@ -332,6 +332,27 @@ pub struct ThemeStyle {
     pub font_size: u16,
     pub borders: BorderWeight,
     pub corners: Corners,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub animation: Option<ThemeAnimation>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ThemeAnimation {
+    pub visualizer: crate::visualizer::VisualizerKind,
+    pub brightness: u8,
+}
+impl ThemeStyle {
+    fn matches(&self, current: &Self) -> bool {
+        self.palette_id == current.palette_id
+            && self.font == current.font
+            && self.font_size == current.font_size
+            && self.borders == current.borders
+            && self.corners == current.corners
+            // Presets saved before animation support keep the current background.
+            && self
+                .animation
+                .as_ref()
+                .is_none_or(|animation| current.animation.as_ref() == Some(animation))
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThemePreset {
@@ -351,6 +372,7 @@ pub fn default_presets() -> Vec<ThemePreset> {
                 font_size: 16,
                 borders: BorderWeight::Single,
                 corners: Corners::Square,
+                animation: None,
             },
         })
         .collect()
@@ -585,6 +607,10 @@ impl Settings {
             font_size: self.preferences.appearance.font_size,
             borders: self.preferences.appearance.borders,
             corners: self.preferences.appearance.corners,
+            animation: Some(ThemeAnimation {
+                visualizer: self.preferences.appearance.visualizer,
+                brightness: self.preferences.appearance.animation_brightness.clamp(10, 70),
+            }),
         }
     }
     pub fn apply_style(&mut self, style: ThemeStyle) {
@@ -594,14 +620,24 @@ impl Settings {
         self.preferences.appearance.font_size = style.font_size;
         self.preferences.appearance.borders = style.borders;
         self.preferences.appearance.corners = style.corners;
+        if let Some(animation) = style.animation {
+            self.preferences.appearance.visualizer = animation.visualizer;
+            self.preferences.appearance.animation_brightness = animation.brightness.clamp(10, 70);
+        }
     }
     pub fn current_preset(&self) -> Option<&ThemePreset> {
         let style = self.current_style();
         let selected = self.preferences.appearance.preset_ids[self.mode.index()].as_deref();
+        if let Some(preset) = self
+            .presets
+            .iter()
+            .find(|preset| Some(preset.id.as_str()) == selected)
+        {
+            return preset.style.matches(&style).then_some(preset);
+        }
         self.presets
             .iter()
-            .find(|preset| Some(preset.id.as_str()) == selected && preset.style == style)
-            .or_else(|| self.presets.iter().find(|preset| preset.style == style))
+            .find(|preset| preset.style.matches(&style))
     }
     pub fn apply_preset(&mut self, id: &str) -> Result<()> {
         let preset = self

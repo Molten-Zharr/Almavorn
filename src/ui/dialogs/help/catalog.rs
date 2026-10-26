@@ -520,6 +520,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "Open the selected section or change its parameter.",
         "Открыть выбранный раздел или изменить параметр.",
     );
+    q.note("Themes → Animation changes the background scene and brightness. Create or update a theme preset to save them together. Older presets keep the current animation until updated.",
+        "Темы → Анимация: выбор фоновой сцены и яркости. Создайте или обновите пресет темы, чтобы сохранить их вместе. Старые пресеты сохраняют текущую анимацию, пока вы их не обновите.");
     q.keys(
         &[p(Insert)],
         "Create a profile, palette or theme preset in its settings section.",
