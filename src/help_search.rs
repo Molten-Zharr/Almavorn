@@ -218,7 +218,29 @@ fn concept(word: &str) -> Option<usize> {
         ],
         &["отмен", "вернут", "восстанов", "undo", "restore", "recover"],
         &["шрифт", "букв", "font", "textsize"],
-        &["размер", "увелич", "уменьш", "resize", "size"],
+        &["размер", "расшир", "растян", "масштаб", "resize", "size"],
+        &[
+            "увелич",
+            "повыс",
+            "повыш",
+            "прибав",
+            "поднят",
+            "increas",
+            "rais",
+            "boost",
+        ],
+        &[
+            "уменьш",
+            "пониз",
+            "пониж",
+            "убав",
+            "сниз",
+            "decreas",
+            "lower",
+            "reduc",
+        ],
+        &["лист", "прокрут", "скрол", "scroll"],
+        &["страниц", "экран", "page", "screen"],
         &["скач", "загруз", "download"],
         &["тег", "теги", "метадан", "tag", "metadata"],
         &[
@@ -355,10 +377,10 @@ pub(crate) fn aliases(action: Action) -> &'static str {
             "предыдущая песня; вернуть прошлый трек; что играло перед этим; previous last song"
         }
         VolumeUp => {
-            "сделать громче; плохо слышно; прибавить звук; поднять громкость; louder increase volume"
+            "сделать громче; погромче; плохо слышно; повысить звук; прибавить звук; поднять громкость; make it louder; turn it up; louder increase volume"
         }
         VolumeDown => {
-            "сделать тише; слишком громко; убавить звук; уменьшить громкость; quieter lower volume"
+            "сделать тише; потише; слишком громко; понизить звук; убавить звук; уменьшить громкость; make it quieter; turn it down; quieter lower volume"
         }
         SeekForward => {
             "промотать вперед; пропустить вступление; перемотать песню; fast forward seek skip intro"
@@ -457,7 +479,7 @@ pub(crate) fn aliases(action: Action) -> &'static str {
         }
         PlayerPanel => "проигрыватель снизу сверху; переместить плеер; player bottom top position",
         Panels => {
-            "передвинуть окно; подвинуть блок; переставить панели; изменить размеры; вернуть скрытый блок; интерфейс под себя; layout move drag resize panels blocks"
+            "передвинуть окно; подвинуть блок; переставить панели; изменить размеры; вернуть скрытый блок; интерфейс под себя; move a panel; layout move drag resize panels blocks"
         }
         Lyrics => {
             "слова песни; о чем поют; караоке; субтитры; текст не найден; нет интернета; читать офлайн; другая версия текста; lyrics words singing karaoke subtitles offline"
