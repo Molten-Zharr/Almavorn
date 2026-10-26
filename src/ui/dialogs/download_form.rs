@@ -77,14 +77,50 @@ pub(super) fn render(
 ) {
     let new = matches!(form.purpose, FormPurpose::DownloadNew(_));
     let settings = matches!(form.purpose, FormPurpose::DownloadSettings);
-    let inner = file_modal(
-        frame,
-        app,
-        area,
-        form.title.clone(),
-        if new || settings { 28 } else { 13 },
-        palette,
-    );
+    let width = area.width.saturating_sub(4).min(88).saturating_sub(2);
+    let description = if new {
+        app.text(
+            "Paste a track or video link. The audio will appear on the sorting desk.",
+            "Вставьте ссылку на трек или видео. Аудиофайл появится на сортировочном столе.",
+        )
+    } else {
+        &form.description
+    };
+    let description_height = Paragraph::new(description)
+        .wrap(Wrap { trim: false })
+        .line_count(width.max(1))
+        .min(4) as u16
+        + 1;
+    let folder_controls = vec![
+        control(
+            app.text("Choose folder · Ctrl+F", "Выбрать папку · Ctrl+F"),
+            A::DownloadFolder,
+            true,
+        ),
+        control(
+            app.text("Downloads · Ctrl+D", "В Загрузки · Ctrl+D"),
+            A::DownloadDefaultFolder,
+            true,
+        ),
+    ];
+    let cobalt = new && form.fields[3].value == "true";
+    let engine_controls = vec![
+        control(
+            format!("{} yt-dlp · Ctrl+1", if cobalt { "○" } else { "●" }),
+            A::DownloadEngine(Engine::YtDlp),
+            true,
+        ),
+        control(
+            format!("{} Cobalt · Ctrl+2", if cobalt { "●" } else { "○" }),
+            A::DownloadEngine(Engine::Cobalt),
+            true,
+        ),
+        control(
+            app.text("Settings", "Настройки"),
+            A::DownloadSettings,
+            !app.downloads_loading(),
+        ),
+    ];
     let footer_controls = vec![
         control(
             if new {
@@ -99,6 +135,31 @@ pub(super) fn render(
         ),
         control(app.text("Cancel · Esc", "Отмена · Esc"), A::Back, true),
     ];
+    let folder_height = buttons_height(app, width, &folder_controls);
+    let engine_height = buttons_height(app, width, &engine_controls);
+    let required_height = description_height
+        + if new || settings {
+            9 + folder_height
+        } else {
+            3
+        }
+        + if new {
+            3 + engine_height
+        } else if settings {
+            2
+        } else {
+            0
+        }
+        + 3
+        + buttons_height(app, width, &footer_controls);
+    let inner = file_modal(
+        frame,
+        app,
+        area,
+        form.title.clone(),
+        required_height + 2,
+        palette,
+    );
     let footer_height = buttons_height(app, inner.width, &footer_controls).min(inner.height);
     let footer = Rect::new(
         inner.x,
@@ -106,7 +167,7 @@ pub(super) fn render(
         inner.width,
         footer_height,
     );
-    if inner.width < 30 || inner.height < if new || settings { 23 } else { 9 } {
+    if inner.width < 30 || inner.height < required_height {
         frame.render_widget(
             Paragraph::new(app.text(
                 "Enlarge the window. Esc: back.",
@@ -125,21 +186,13 @@ pub(super) fn render(
         );
         return;
     }
-    let description = if new {
-        app.text(
-            "Paste a track or video link. The audio will appear on the sorting desk.",
-            "Вставьте ссылку на трек или видео. Аудиофайл появится на сортировочном столе.",
-        )
-    } else {
-        &form.description
-    };
     frame.render_widget(
         Paragraph::new(description)
             .style(palette.text())
             .wrap(Wrap { trim: false }),
-        Rect::new(inner.x, inner.y, inner.width, 2),
+        Rect::new(inner.x, inner.y, inner.width, description_height),
     );
-    let mut y = inner.y + 2;
+    let mut y = inner.y + description_height;
     for index in 0..if new || settings { 3 } else { 1 } {
         field(
             frame,
@@ -154,25 +207,13 @@ pub(super) fn render(
             y += buttons(
                 frame,
                 app,
-                Rect::new(inner.x, y, inner.width, 2),
-                vec![
-                    control(
-                        app.text("Choose folder · Ctrl+F", "Выбрать папку · Ctrl+F"),
-                        A::DownloadFolder,
-                        true,
-                    ),
-                    control(
-                        app.text("Downloads · Ctrl+D", "В Загрузки · Ctrl+D"),
-                        A::DownloadDefaultFolder,
-                        true,
-                    ),
-                ],
+                Rect::new(inner.x, y, inner.width, folder_height),
+                folder_controls.clone(),
                 palette,
             );
         }
     }
     if new {
-        let cobalt = form.fields[3].value == "true";
         let title = if form.selected == 3 {
             app.text("Service · Enter: change", "Сервис · Enter: сменить")
         } else {
@@ -186,24 +227,8 @@ pub(super) fn render(
         y += buttons(
             frame,
             app,
-            Rect::new(inner.x, y, inner.width, 3),
-            vec![
-                control(
-                    format!("{} yt-dlp · Ctrl+1", if cobalt { "○" } else { "●" }),
-                    A::DownloadEngine(Engine::YtDlp),
-                    true,
-                ),
-                control(
-                    format!("{} Cobalt · Ctrl+2", if cobalt { "●" } else { "○" }),
-                    A::DownloadEngine(Engine::Cobalt),
-                    true,
-                ),
-                control(
-                    app.text("Settings", "Настройки"),
-                    A::DownloadSettings,
-                    !app.downloads_loading(),
-                ),
-            ],
+            Rect::new(inner.x, y, inner.width, engine_height),
+            engine_controls,
             palette,
         );
         let hint = if cobalt && app.downloads.config.cobalt_url.trim().is_empty() {
