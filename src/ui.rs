@@ -33,6 +33,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     app.view.hits.clear();
     app.lyrics.panel.area = Rect::default();
     app.view.keycaps.clear();
+    app.view.overlay_background = (0, 0);
     app.view.dialog_scroll_max = 0;
     app.view.dialog_page_size = 0;
     app.view.waveform_area = Rect::default();

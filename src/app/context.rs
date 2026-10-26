@@ -72,6 +72,8 @@ pub struct UiState {
     pub clipboard_text: Option<String>,
     pub hits: Vec<Hit>,
     pub keycaps: Vec<Keycap>,
+    /// Counts of hit regions and keycaps belonging to the interface below the overlay.
+    pub overlay_background: (usize, usize),
     pub graphical_keycaps: bool,
     pub waveform_area: Rect,
     pub artwork_area: Rect,

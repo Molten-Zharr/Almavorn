@@ -392,6 +392,13 @@ fn run() -> Result<()> {
                     }
                 }
                 playback_painter.paint(ui, image_rect, &app, dimensions);
+                gui_renderer::paint_keycaps(
+                    ui,
+                    image_rect,
+                    &app,
+                    dimensions,
+                    gui_renderer::KeycapLayer::Background,
+                );
                 let overlay = app.view.overlay_area;
                 if !overlay.is_empty() {
                     let area = overlay;
@@ -413,7 +420,13 @@ fn run() -> Result<()> {
                         .image(texture_id, popup, uv, egui::Color32::WHITE);
                 }
                 color_painter.paint(ui, image_rect, &app, dimensions);
-                gui_renderer::paint_keycaps(ui, image_rect, &app, dimensions);
+                gui_renderer::paint_keycaps(
+                    ui,
+                    image_rect,
+                    &app,
+                    dimensions,
+                    gui_renderer::KeycapLayer::Foreground,
+                );
             });
         if let Some(text) = app.view.clipboard_text.take() {
             ctx.copy_text(text);

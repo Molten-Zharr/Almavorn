@@ -16,6 +16,7 @@ use ratatui::{
 
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     let rect = modal_rect(area, area.height);
+    app.view.overlay_background = (app.view.hits.len(), app.view.keycaps.len());
     app.view.overlay_area = rect;
     frame.render_widget(Clear, rect);
     let outer = block(

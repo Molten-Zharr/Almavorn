@@ -307,10 +307,34 @@ pub fn resize<R: RasterBackend>(backend: &mut SoftBackend<R>, columns: u16, rows
     // rasterize the old layout first, only for Terminal to clear it immediately.
 }
 
-pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui::layout::Size) {
+#[derive(Clone, Copy)]
+pub enum KeycapLayer {
+    Background,
+    Foreground,
+}
+
+pub fn paint_keycaps(
+    ui: &egui::Ui,
+    image: egui::Rect,
+    app: &App,
+    size: ratatui::layout::Size,
+    layer: KeycapLayer,
+) {
+    let (hit_count, keycap_count) = app.view.overlay_background;
+    let (background_hits, foreground_hits) =
+        app.view.hits.split_at(hit_count.min(app.view.hits.len()));
+    let (background_keys, foreground_keys) =
+        app.view.keycaps.split_at(keycap_count.min(app.view.keycaps.len()));
+    let (hits, keycaps) = match layer {
+        KeycapLayer::Background => (background_hits, background_keys),
+        KeycapLayer::Foreground => (foreground_hits, foreground_keys),
+    };
+    if hits.is_empty() && keycaps.is_empty() {
+        return;
+    }
     let palette = app.settings.current_palette();
-    for hit in &app.view.hits {
-        if app.view.dialog.is_none()
+    for hit in hits {
+        if (app.view.dialog.is_none() || matches!(layer, KeycapLayer::Background))
             && matches!(hit.target, Target::Action(_) | Target::Mode(_))
             && app
                 .view
@@ -398,7 +422,7 @@ pub fn paint_keycaps(ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui:
         });
         egui::Color32::from_rgb(color[0], color[1], color[2])
     };
-    for cap in &app.view.keycaps {
+    for cap in keycaps {
         let cell_rect = egui::Rect::from_min_size(
             image.min
                 + egui::vec2(
