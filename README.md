@@ -14,7 +14,7 @@
 <p align="center"><a href="#install"><img src="docs/images/readme/download.svg" width="16" height="16" alt="">&nbsp;Install</a> &nbsp; · &nbsp; <a href="#screenshots"><img src="docs/images/readme/gallery.svg" width="16" height="16" alt="">&nbsp;Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch"><img src="docs/images/readme/keyboard.svg" width="16" height="16" alt="">&nbsp;Getting&nbsp;started</a></p>
 
 <p align="center">
-  <a href="docs/images/almavorn-lyrics.png"><img src="docs/images/almavorn-lyrics.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists."></a>
+  <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists."></a>
   <br>
   <sub>King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists.</sub>
 </p>
@@ -70,43 +70,43 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 ## <img src="docs/images/readme/gallery.svg" width="24" height="24" alt=""> See the player in action
 
 <p align="center">
-  <a href="docs/images/almavorn-green.png"><img src="docs/images/almavorn-green.png" width="100%" alt="The Green theme with a custom layout: playlists on the right, the player below the Starbound track list."></a>
+  <a href="docs/images/almavorn-green-layout.png"><img src="docs/images/almavorn-green-layout.png" width="100%" alt="The Green theme with a custom layout: playlists on the right, the player below the Starbound track list."></a>
   <br>
   <sub>The Green theme with a custom layout: playlists on the right, the player below the Starbound track list.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-statistics.png"><img src="docs/images/almavorn-statistics.png" width="100%" alt="Listening statistics: time played, starts and play counts for each track."></a>
+  <a href="docs/images/almavorn-listening-statistics.png"><img src="docs/images/almavorn-listening-statistics.png" width="100%" alt="Listening statistics: time played, starts and play counts for each track."></a>
   <br>
   <sub>Listening statistics: time played, starts and play counts for each track.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-layout.png"><img src="docs/images/almavorn-layout.png" width="100%" alt="The layout editor: a compact arrangement with playlists and lyrics below the track list."></a>
+  <a href="docs/images/almavorn-layout-editor.png"><img src="docs/images/almavorn-layout-editor.png" width="100%" alt="The layout editor: a compact arrangement with playlists and lyrics below the track list."></a>
   <br>
   <sub>The layout editor: a compact arrangement with playlists and lyrics below the track list.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-settings.png"><img src="docs/images/almavorn-settings.png" width="100%" alt="Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left."></a>
+  <a href="docs/images/almavorn-settings-general.png"><img src="docs/images/almavorn-settings-general.png" width="100%" alt="Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left."></a>
   <br>
   <sub>Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-help.png"><img src="docs/images/almavorn-help.png" width="100%" alt="Search Help in your own words: &quot;move a window&quot; finds the layout controls and shows your current shortcuts."></a>
+  <a href="docs/images/almavorn-help-search.png"><img src="docs/images/almavorn-help-search.png" width="100%" alt="Search Help in your own words: &quot;move a window&quot; finds the layout controls and shows your current shortcuts."></a>
   <br>
   <sub>Search Help in your own words: "move a window" finds the layout controls and shows your current shortcuts.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-create-playlist.png"><img src="docs/images/almavorn-create-playlist.png" width="100%" alt="Create a playlist: enter a name, create a new folder or choose existing music folders."></a>
+  <a href="docs/images/almavorn-new-playlist.png"><img src="docs/images/almavorn-new-playlist.png" width="100%" alt="Create a playlist: enter a name, create a new folder or choose existing music folders."></a>
   <br>
   <sub>Create a playlist: enter a name, create a new folder or choose existing music folders.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-search.png"><img src="docs/images/almavorn-search.png" width="100%" alt="Search selected playlists: six matches for &quot;Theme&quot; in Starbound."></a>
+  <a href="docs/images/almavorn-playlist-search.png"><img src="docs/images/almavorn-playlist-search.png" width="100%" alt="Search selected playlists: six matches for &quot;Theme&quot; in Starbound."></a>
   <br>
   <sub>Search selected playlists: six matches for "Theme" in Starbound.</sub>
 </p>

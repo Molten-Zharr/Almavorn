@@ -14,7 +14,7 @@
 <p align="center"><a href="#install"><img src="docs/images/readme/download.svg" width="16" height="16" alt="">&nbsp;Установить</a> &nbsp; · &nbsp; <a href="#screenshots"><img src="docs/images/readme/gallery.svg" width="16" height="16" alt="">&nbsp;Скриншоты</a> &nbsp; · &nbsp; <a href="#first-launch"><img src="docs/images/readme/keyboard.svg" width="16" height="16" alt="">&nbsp;Первый&nbsp;запуск</a></p>
 
 <p align="center">
-  <a href="docs/images/almavorn-lyrics.png"><img src="docs/images/almavorn-lyrics.png" width="100%" alt="King Crimson, The Court of the Crimson King: текст найден в Genius и открыт рядом с композицией и плейлистами."></a>
+  <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: текст найден в Genius и открыт рядом с композицией и плейлистами."></a>
   <br>
   <sub>King Crimson, The Court of the Crimson King: текст найден в Genius и открыт рядом с композицией и плейлистами.</sub>
 </p>
@@ -70,43 +70,43 @@
 ## <img src="docs/images/readme/gallery.svg" width="24" height="24" alt=""> Плеер в действии
 
 <p align="center">
-  <a href="docs/images/almavorn-green.png"><img src="docs/images/almavorn-green.png" width="100%" alt="Тема Green и свое размещение: плейлисты справа, проигрыватель снизу, композиции Starbound сверху."></a>
+  <a href="docs/images/almavorn-green-layout.png"><img src="docs/images/almavorn-green-layout.png" width="100%" alt="Тема Green и свое размещение: плейлисты справа, проигрыватель снизу, композиции Starbound сверху."></a>
   <br>
   <sub>Тема Green и свое размещение: плейлисты справа, проигрыватель снизу, композиции Starbound сверху.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-statistics.png"><img src="docs/images/almavorn-statistics.png" width="100%" alt="Статистика прослушивания: время, включения и прослушивания каждой композиции."></a>
+  <a href="docs/images/almavorn-listening-statistics.png"><img src="docs/images/almavorn-listening-statistics.png" width="100%" alt="Статистика прослушивания: время, включения и прослушивания каждой композиции."></a>
   <br>
   <sub>Статистика прослушивания: время, включения и прослушивания каждой композиции.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-layout.png"><img src="docs/images/almavorn-layout.png" width="100%" alt="Редактор блоков: пример компактной компоновки с плейлистами и текстом песни под списком композиций."></a>
+  <a href="docs/images/almavorn-layout-editor.png"><img src="docs/images/almavorn-layout-editor.png" width="100%" alt="Редактор блоков: пример компактной компоновки с плейлистами и текстом песни под списком композиций."></a>
   <br>
   <sub>Редактор блоков: пример компактной компоновки с плейлистами и текстом песни под списком композиций.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-settings.png"><img src="docs/images/almavorn-settings.png" width="100%" alt="Настройки плеера: управление, обложки и расположение панелей. Темы, клавиши, моды и сервисы доступны в разделах слева."></a>
+  <a href="docs/images/almavorn-settings-general.png"><img src="docs/images/almavorn-settings-general.png" width="100%" alt="Настройки плеера: управление, обложки и расположение панелей. Темы, клавиши, моды и сервисы доступны в разделах слева."></a>
   <br>
   <sub>Настройки плеера: управление, обложки и расположение панелей. Темы, клавиши, моды и сервисы доступны в разделах слева.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-help.png"><img src="docs/images/almavorn-help.png" width="100%" alt="Поиск в помощи своими словами: запрос &quot;передвинуть окно&quot; находит настройку блоков и показывает ваши горячие клавиши."></a>
+  <a href="docs/images/almavorn-help-search.png"><img src="docs/images/almavorn-help-search.png" width="100%" alt="Поиск в помощи своими словами: запрос &quot;передвинуть окно&quot; находит настройку блоков и показывает ваши горячие клавиши."></a>
   <br>
   <sub>Поиск в помощи своими словами: запрос "передвинуть окно" находит настройку блоков и показывает ваши горячие клавиши.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-create-playlist.png"><img src="docs/images/almavorn-create-playlist.png" width="100%" alt="Создание плейлиста: задайте название, создайте новую папку или выберите существующие папки с музыкой."></a>
+  <a href="docs/images/almavorn-new-playlist.png"><img src="docs/images/almavorn-new-playlist.png" width="100%" alt="Создание плейлиста: задайте название, создайте новую папку или выберите существующие папки с музыкой."></a>
   <br>
   <sub>Создание плейлиста: задайте название, создайте новую папку или выберите существующие папки с музыкой.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-search.png"><img src="docs/images/almavorn-search.png" width="100%" alt="Поиск композиций по выбранным плейлистам: шесть совпадений по запросу &quot;Theme&quot; в Starbound."></a>
+  <a href="docs/images/almavorn-playlist-search.png"><img src="docs/images/almavorn-playlist-search.png" width="100%" alt="Поиск композиций по выбранным плейлистам: шесть совпадений по запросу &quot;Theme&quot; в Starbound."></a>
   <br>
   <sub>Поиск композиций по выбранным плейлистам: шесть совпадений по запросу "Theme" в Starbound.</sub>
 </p>
