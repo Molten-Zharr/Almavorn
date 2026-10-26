@@ -135,7 +135,7 @@ Choose "Edit layout" in "More", or press Ctrl+B. Controls will appear on the pan
 
 Where you drop a block determines what happens: drop it at the edge of another panel to place it beside that panel, or in the center to swap them. Drag the shared border between panels to resize them.
 
-"Blocks and buttons…" in the "More" menu opens the list of blocks and buttons. You can bring back a hidden panel or hide individual buttons you don't need. "Restore default layout" is there too.
+"Show blocks/buttons" in the "More" menu opens the list of blocks and buttons. You can bring back a hidden panel or hide individual buttons you don't need. "Restore default layout" is there too.
 
 You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow keys to swap it with a neighboring block, or Ctrl+Shift+arrow keys to resize it. Ctrl+Alt+Space collapses or expands the block; Ctrl+Alt+Delete hides it.
 
@@ -227,7 +227,7 @@ Search Help in your own words: "make it louder", "recover a deleted song", or "m
 2. In Order mode, select it and click "Edit".
 3. Open "Add to desk", choose "Add files", mark the files you want, and click "Add to desk" at the bottom. For a whole folder, choose "Add folder", open that folder, then click "Current folder · Add to desk".
 4. On the sorting desk, mark tracks using their checkboxes or Insert. Press X, choose your playlist, and confirm with Enter. The tracks will be copied into the playlist; the original files stay where they are.
-5. Return to the playlist and click "Done" to protect it from accidental changes again.
+5. Click "Done" or press the editing shortcut again, E by default, to protect the playlist from accidental changes. Esc also finishes editing, first closing an open window or cancelling a drag.
 
 The sorting desk helps you organize music before adding it to permanent playlists. In Chaos, you can add files straight to the open playlist: uncheck "Add to sorting desk" in the add menu.
 

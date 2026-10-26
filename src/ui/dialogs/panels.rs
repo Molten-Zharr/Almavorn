@@ -45,7 +45,7 @@ pub(super) fn render(
         frame,
         app,
         area,
-        app.text("Blocks and buttons", "Блоки и кнопки").into(),
+        app.text("Show blocks/buttons", "Отображение блоков/кнопок").into(),
         (desired_rows + super::help::wrapped_height(hints, width) + 6).min(30),
         palette,
     );

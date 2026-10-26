@@ -204,7 +204,7 @@ fn quiet(
     let active = match target {
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
-        Target::Action(Action::ToggleEdit) => app.selected_playlist_unlocked(),
+        Target::Action(Action::ToggleEdit) => app.view.editing_playlist.is_some(),
         Target::FinishEdit => true,
         Target::ToggleLyricsPanel => app.settings.preferences.lyrics.show_panel,
         Target::TogglePlayerSpecialButtons => app.settings.preferences.appearance.show_player_special_buttons,

@@ -23,6 +23,11 @@ impl App {
 
     pub fn allowed(&self, action: Action) -> bool {
         use Action::*;
+        // Protecting a playlist does not start a database operation and must not
+        // depend on which playlist is selected now.
+        if action == ToggleEdit && self.view.editing_playlist.is_some() {
+            return true;
+        }
         if self.database_busy()
             && matches!(
                 action,
@@ -350,28 +355,16 @@ impl App {
                 Mode::Order
             })?,
             ToggleEdit => {
+                if self.finish_playlist_editing() {
+                    return Ok(());
+                }
                 let id = self
                     .library
                     .selected_playlist
                     .context(AppError::PlaylistSelectionRequired)?;
-                self.view.editing_playlist = if self.playlist_unlocked(id) {
-                    None
-                } else {
-                    Some(id)
-                };
+                self.view.editing_playlist = Some(id);
                 self.message(
-                    self.text(
-                        if self.playlist_unlocked(id) {
-                            "Selected playlist is open for editing"
-                        } else {
-                            "Playlist protected"
-                        },
-                        if self.playlist_unlocked(id) {
-                            "Выбранный плейлист открыт для редактирования"
-                        } else {
-                            "Плейлист защищен"
-                        },
-                    )
+                    self.text("Selected playlist is open for editing", "Выбранный плейлист открыт для редактирования")
                     .into(),
                 );
             }
@@ -619,5 +612,17 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    pub(super) fn finish_playlist_editing(&mut self) -> bool {
+        if self.view.editing_playlist.take().is_none() {
+            return false;
+        }
+        if matches!(self.view.workspace.gesture, Some(crate::workspace::Gesture::Playlist { .. })) {
+            self.cancel_workspace_drag();
+        }
+        self.view.toolbar_selected = None;
+        self.message(self.text("Playlist protected", "Плейлист защищен").into());
+        true
     }
 }

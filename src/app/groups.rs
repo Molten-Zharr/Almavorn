@@ -102,7 +102,7 @@ impl App {
                     )
                     .into(),
                 target: Target::GroupAction(GroupAction::EnableEdit),
-                enabled: self.allowed(Action::ToggleEdit),
+                enabled: !self.busy() && self.allowed(Action::ToggleEdit),
             });
         }
         items.push(CommandItem {
@@ -131,7 +131,8 @@ impl App {
             }
             GroupAction::EnableEdit => {
                 if !editable {
-                    self.action(Action::ToggleEdit)?;
+                    self.view.editing_playlist = Some(context.playlist);
+                    self.message(self.text("Selected playlist is open for editing", "Выбранный плейлист открыт для редактирования").into());
                 }
                 self.view.pointer = context.anchor;
                 self.open_commands(CommandMenu::Group);

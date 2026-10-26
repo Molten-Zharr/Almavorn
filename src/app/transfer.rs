@@ -131,6 +131,9 @@ impl App {
                 .iter()
                 .any(|b| b.action == Action::ToggleEdit && b.key == key.normalized())
             {
+                if self.finish_playlist_editing() {
+                    return Ok(());
+                }
                 return self.edit_transfer_destination();
             }
             if key.ctrl && key.key == Key::Enter {

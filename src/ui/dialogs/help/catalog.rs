@@ -257,6 +257,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.keys(&[p(Tab), s(Tab)], "In Help: next or previous category. The category list also supports clicks and the mouse wheel.", "В помощи: следующая или предыдущая категория. Список категорий также поддерживает клик и колесо мыши.");
 
     let q = &mut sections[C::Playlists as usize];
+    q.keys(&[p(Escape)], "Finish playlist editing when no dialog or drag is active. If layout editing is active, Esc ends that first.",
+        "Завершить правку плейлиста, когда нет открытого окна или перетаскивания. Если включено редактирование блоков, Esc сначала завершает его.");
     q.note("In Order, click Edit before moving a playlist. Chaos allows changes right away. The sorting desk stays first.",
         "Чтобы переместить плейлист в Порядке, сначала нажмите \"Редактировать\". В Хаосе можно менять сразу. Сортировочный стол всегда стоит первым.");
     q.note(

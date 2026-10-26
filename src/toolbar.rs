@@ -46,7 +46,7 @@ impl QuickButton {
             Self::Statistics => ("Listening statistics", "Статистика прослушивания"),
             Self::Help => ("Help", "Помощь"),
             Self::Quit => ("Quit", "Выход"),
-            Self::Visibility => ("Blocks and buttons", "Блоки и кнопки"),
+            Self::Visibility => ("Show blocks/buttons", "Отображение блоков/кнопок"),
             Self::Customize => ("Quick access", "Быстрый доступ"),
         };
         language.text(en, ru)

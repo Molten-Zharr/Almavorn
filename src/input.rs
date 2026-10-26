@@ -273,7 +273,7 @@ impl Action {
             Self::SeekForward => language.text("Seek forward 5 seconds if the file supports seeking.", "Перемотать вперед на 5 секунд, если файл поддерживает перемотку."),
             Self::SeekBackward => language.text("Seek back 5 seconds if the file supports seeking.", "Перемотать назад на 5 секунд, если файл поддерживает перемотку."),
             Self::SwitchMode => language.text("Switch between Order and Chaos.", "Переключить Порядок и Хаос."),
-            Self::ToggleEdit => language.text("Allow changes to the selected Order playlist. Done protects it again.", "Разрешить правку выбранного плейлиста Порядка. Готово снова защищает его."),
+            Self::ToggleEdit => language.text("Enable editing for the selected Order playlist. Press the same shortcut again to finish, even after selecting another playlist. Esc also finishes editing after closing open windows.", "Разрешить правку выбранного плейлиста Порядка. Повторное нажатие завершает текущую правку, даже после выбора другого плейлиста. Esc тоже завершает правку после закрытия открытых окон."),
             Self::ToggleDesk => language.text("In Chaos, send added files to the sorting desk. Order always adds them there.", "В Хаосе добавлять файлы на сортировочный стол. В Порядке они всегда попадают туда."),
             Self::AddFiles => language.text("Add files. Order uses the sorting desk; Chaos uses the open playlist unless Add to desk is checked.", "Добавить файлы. В Порядке — на стол. В Хаосе — в открытый плейлист, если выключена галочка Добавлять на стол."),
             Self::AddFolder => language.text("Add a folder to the sorting desk. Its tracks appear in a group named after the folder.", "Добавить папку на сортировочный стол. Треки появятся группой с названием папки."),
@@ -302,7 +302,7 @@ impl Action {
             Self::PlayWholePlaylist => language.text("Leave the checked-track loop and play the whole playlist. The current track keeps playing.", "Перейти от отмеченных треков ко всему плейлисту. Текущий трек продолжит играть."),
             Self::PlaylistPanel => language.text("Move the playlist panel.", "Переместить панель плейлистов."),
             Self::PlayerPanel => language.text("Move the player panel.", "Переместить панель проигрывателя."),
-            Self::Panels => language.text("Arrange blocks by dragging their titles and borders. More > Blocks and buttons shows or hides panels and controls.", "Настроить расположение блоков: перетащить заголовки и границы. В меню Больше пункт Блоки и кнопки позволяет показать или скрыть панели и элементы управления."),
+            Self::Panels => language.text("Arrange blocks by dragging their titles and borders. The checkbox shows whether layout editing is active. More > Show blocks/buttons controls panel and button visibility.", "Настроить расположение блоков: перетащить заголовки и границы. Галочка показывает, включено ли редактирование. В меню Больше пункт Отображение блоков/кнопок управляет видимостью панелей и кнопок."),
         }
     }
     pub fn name(self, language: Language) -> &'static str {
@@ -371,7 +371,7 @@ impl Action {
                 language.text("Move playlists panel", "Переместить панель плейлистов")
             }
             Self::PlayerPanel => language.text("Move player panel", "Переместить проигрыватель"),
-            Self::Panels => language.text("Workspace blocks", "Блоки приложения"),
+            Self::Panels => language.text("Edit layout", "Редактирование блоков"),
         }
     }
 }

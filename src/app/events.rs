@@ -527,7 +527,6 @@ impl App {
         if self.view.dialog.is_none() && self.view.filter_editing {
             return self.filter_key(key);
         }
-        if self.lyrics_panel_key(key)? { return Ok(()); }
         if key.key == Key::Escape {
             if self.close_equalizer_presets() {
                 return Ok(());
@@ -536,17 +535,22 @@ impl App {
             if self.close_dialog() || cancelled_drag {
                 return Ok(());
             }
-            if self.view.toolbar_selected.take().is_some() {
-                return Ok(());
-            }
             if self.view.layout_editing {
                 self.view.layout_editing = false;
                 return Ok(());
             }
+            if self.finish_playlist_editing() {
+                return Ok(());
+            }
+            if self.view.toolbar_selected.take().is_some() {
+                return Ok(());
+            }
+            if self.lyrics_panel_key(key)? { return Ok(()); }
             self.library.query.clear();
             self.refresh()?;
             return Ok(());
         }
+        if self.lyrics_panel_key(key)? { return Ok(()); }
         let normalized = key.normalized();
         if let Some(action) = self.view.dialog.as_ref().and_then(Dialog::opening_action)
             && (self
@@ -888,9 +892,7 @@ impl App {
             Target::ComposeBack => self.composition_back(),
             Target::ComposeAll(all) => self.composition_all(all),
             Target::FinishEdit => {
-                if !self.busy() {
-                    self.view.editing_playlist = None;
-                }
+                self.finish_playlist_editing();
             }
             Target::FolderRow(index) => {
                 if let Some(Dialog::Folders { selected, .. }) = &mut self.view.dialog {

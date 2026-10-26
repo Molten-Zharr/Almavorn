@@ -73,10 +73,12 @@ impl App {
             Layout => self.text("Edit layout", "Редактирование блоков").into(),
             _ => button.name(language).into(),
         };
-        let label = if self.quick_active(button) { format!("[x] {name}") } else { name };
+        let label = if button == Layout {
+            format!("[{}] {name}", if self.view.layout_editing { 'x' } else { ' ' })
+        } else if self.quick_active(button) { format!("[x] {name}") } else { name };
         let enabled = match target {
             Target::Action(action) => self.allowed(action),
-            Target::FinishEdit => !self.busy(),
+            Target::FinishEdit => true,
             _ => true,
         };
         CommandItem { label, target, enabled }
@@ -128,7 +130,7 @@ impl App {
         let (placed, _, _) = self.quick_layout();
         let mut items = Vec::new();
         for (en, ru, buttons) in [
-            ("Utilities (Application)", "Служебные (Приложение)", &[B::Settings, B::Layout, B::Visibility, B::Customize, B::Mode, B::Statistics, B::Help, B::Quit][..]),
+            ("Utilities (Application)", "Служебные (Приложение)", &[B::Mode, B::Settings, B::Layout, B::Visibility, B::Customize, B::Statistics, B::Help, B::Quit][..]),
             ("Editing (Playlist)", "Редактирование (Плейлист)", &[B::Playlist, B::Edit, B::Compose, B::Undo, B::Redo][..]),
             ("Management (Tracks)", "Управление (Композиции)", &[B::Add, B::Tracks, B::Desk, B::Search, B::Filter, B::Marked, B::Lyrics][..]),
             ("Playback (Player)", "Воспроизведение (Проигрыватель)", &[B::Shuffle, B::Repeat, B::Equalizer, B::Effects, B::Animation, B::SpecialButtons][..]),

@@ -81,6 +81,11 @@ impl App {
             .find(|binding| binding.key == normalized)
             .map(|binding| binding.action)
         {
+            if action == Action::ToggleEdit && self.view.editing_playlist.is_some() {
+                self.view.dialog = None;
+                self.finish_playlist_editing();
+                return Ok(());
+            }
             if matches!(self.view.dialog, Some(Dialog::Commands { menu: CommandMenu::Group, .. })) {
                 let group_action = match action {
                     Action::Delete => super::GroupAction::Remove,
@@ -129,7 +134,7 @@ impl App {
     }
 
     pub fn edit_caption(&self) -> String {
-        if self.selected_playlist_unlocked() {
+        if self.view.editing_playlist.is_some() {
             self.text("Editing · Done", "Редактирование · Готово")
         } else {
             self.text("Protected · Edit", "Защищен · Редактировать")
@@ -293,6 +298,7 @@ impl App {
                         self.marked_playback_playlist().is_some()
                             && self.library.selected_playlist == self.marked_playback_playlist(),
                     ),
+                    Panels => Some(self.view.layout_editing),
                     _ => None,
                 };
                 let name = if *action == CycleRepeat {
@@ -335,7 +341,7 @@ impl App {
                 target: Target::CommandMenu(CommandMenu::More), enabled: true,
             });
             items.push(CommandItem {
-                label: self.text("Blocks and buttons…", "Блоки и кнопки…").into(),
+                label: self.text("Show blocks/buttons", "Отображение блоков/кнопок").into(),
                 target: Target::ManagePanels,
                 enabled: true,
             });
@@ -354,7 +360,7 @@ impl App {
             });
         }
         if menu == CommandMenu::Playlist && let Some(playlist) = self.playlists().iter().find(|p| self.playlist_unlocked(p.id) && Some(p.id) != self.library.selected_playlist) {
-            items.push(CommandItem { label: format!("{}: {}", self.text("Done", "Готово"), playlist.name), target: Target::FinishEdit, enabled: !self.busy() });
+            items.push(CommandItem { label: format!("{}: {}", self.text("Done", "Готово"), playlist.name), target: Target::FinishEdit, enabled: true });
         }
         self.group_commands(menu, items)
     }
