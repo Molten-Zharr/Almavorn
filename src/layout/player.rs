@@ -7,6 +7,12 @@ pub(crate) struct PlayerControl {
     pub width: u16,
 }
 
+impl PlayerControl {
+    fn is_extra(&self) -> bool {
+        matches!(self.action, Action::Equalizer | Action::PlaybackTuner | Action::CycleVisualizer)
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct PlayerMetrics {
     pub controls: Vec<PlayerControl>,
@@ -90,10 +96,19 @@ impl PlayerMetrics {
         geometry
     }
 
+    fn group_gap(&self, index: usize) -> u16 {
+        if index > 0 && self.controls[index].is_extra() && !self.controls[index - 1].is_extra() {
+            (self.controls[index].width / 2).max(2)
+        } else {
+            0
+        }
+    }
+
     fn controls_width(&self) -> u16 {
         self.controls
             .iter()
-            .map(|control| control.width.saturating_add(1))
+            .enumerate()
+            .map(|(index, control)| control.width.saturating_add(1).saturating_add(self.group_gap(index)))
             .fold(0, u16::saturating_add)
     }
 
@@ -116,11 +131,26 @@ impl PlayerMetrics {
         let mut y = 0;
         self.controls
             .iter()
-            .map(|control| {
+            .enumerate()
+            .map(|(index, control)| {
                 let size = control.width.min(width);
-                if x > 0 && x.saturating_add(size) > width {
+                let gap = self.group_gap(index);
+                // Keep the extra controls together when the row can hold the group.
+                let needed = if gap > 0 {
+                    self.controls[index..].iter()
+                        .take_while(|control| control.is_extra())
+                        .map(|control| control.width.saturating_add(1))
+                        .fold(0, u16::saturating_add)
+                        .saturating_sub(1)
+                        .min(width)
+                } else {
+                    size
+                };
+                if x > 0 && x.saturating_add(gap).saturating_add(needed) > width {
                     x = 0;
                     y += button_size.height() + 1;
+                } else if x > 0 {
+                    x = x.saturating_add(gap);
                 }
                 let rect = Rect::new(x, y, size, button_size.height());
                 x = x.saturating_add(size + 1);
