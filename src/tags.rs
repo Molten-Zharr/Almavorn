@@ -299,7 +299,8 @@ impl Document {
             .canonicalize()?
             .join(destination.file_name().context("Укажите имя файла.")?);
         let relocating = destination != self.path;
-        ensure!(self.changed() || relocating, "Нет изменений для записи.");
+        let editing_tags = self.changed();
+        ensure!(editing_tags || relocating, "Нет изменений для записи.");
         ensure!(
             !relocating
                 || std::fs::symlink_metadata(&destination)
@@ -309,7 +310,7 @@ impl Document {
         self.verify_source()?;
         let metadata = std::fs::metadata(&self.path)?;
         ensure!(
-            !metadata.permissions().readonly(),
+            !editing_tags || !metadata.permissions().readonly(),
             "Файл доступен только для чтения."
         );
         #[cfg(unix)]
@@ -321,7 +322,10 @@ impl Document {
             );
         }
         // Check the source's write permission even though replacement uses the directory.
-        std::fs::OpenOptions::new().write(true).open(&self.path)?;
+        // A move without tag edits only reads the source and changes directory entries.
+        if editing_tags {
+            std::fs::OpenOptions::new().write(true).open(&self.path)?;
+        }
         let mut backup = temporary(&self.path)?;
         std::io::copy(&mut File::open(&self.path)?, backup.as_file_mut())?;
         backup.as_file().sync_all()?;
