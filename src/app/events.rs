@@ -171,6 +171,7 @@ impl App {
                 }
             }
             Input::Click { x, y, double } => {
+                self.finish_browser_mark_drag();
                 self.view.mark_drag=None;
                 self.view.pointer = Position::new(x, y);
                 if self.view.dialog.is_none() {
@@ -221,9 +222,17 @@ impl App {
             }
             Input::Drag { x, y } => {
                 self.view.pointer = Position::new(x, y);
-                if !self.drag_track_marks(self.view.pointer)?{self.drag_workspace(self.view.pointer)?;}
+                if !self.drag_browser_marks(self.view.pointer) && !self.drag_track_marks(self.view.pointer)? {
+                    self.drag_workspace(self.view.pointer)?;
+                }
             }
-            Input::Release { x, y } => {self.drag_track_marks(Position::new(x,y))?;self.view.mark_drag=None;self.release_workspace(Position::new(x, y))?;},
+            Input::Release { x, y } => {
+                self.drag_browser_marks(Position::new(x, y));
+                self.finish_browser_mark_drag();
+                self.drag_track_marks(Position::new(x,y))?;
+                self.view.mark_drag=None;
+                self.release_workspace(Position::new(x, y))?;
+            },
             Input::CancelPointer => {
                 self.cancel_workspace_drag();
             }
@@ -235,6 +244,10 @@ impl App {
                     return Ok(());
                 }
                 let position = Position::new(x, y);
+                if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
+                    self.scroll_browser_pages(position, delta, ctrl && !shift);
+                    return Ok(());
+                }
                 if matches!(self.view.dialog, Some(Dialog::Help { .. }))
                     && matches!(self.target_at(position), Some(Target::HelpSection(_)))
                 {
@@ -373,6 +386,7 @@ impl App {
                 }
             }
             Input::Text(text) => {
+                self.finish_browser_mark_drag();
                 self.view.mark_drag=None;
                 if matches!(self.view.dialog, Some(Dialog::Help { .. })) {
                     self.help_search_text(&text);
@@ -405,6 +419,7 @@ impl App {
                 }
             }
             Input::SecondaryClick { x, y } => {
+                self.finish_browser_mark_drag();
                 self.view.pointer = Position::new(x, y);
                 if self.view.dialog.as_ref().is_some_and(Dialog::is_settings) {
                     let target = self
@@ -453,6 +468,7 @@ impl App {
                 }
             }
             Input::Key(key) => {
+                self.finish_browser_mark_drag();
                 self.view.mark_drag=None;
                 if self.view.dialog.is_none()
                     && self.view.toolbar_selected.is_none()
@@ -986,23 +1002,28 @@ impl App {
                 }
             }
             Target::BrowserRow(index) => {
+                if !self.browser_ready() { return Ok(()); }
+                let mut paint = false;
+                let mut index = index;
                 if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+                    if browser.list_area.contains(self.view.pointer) {
+                        index = browser.offset + usize::from(self.view.pointer.y - browser.list_area.y);
+                    }
                     browser.selected = index;
                     browser.selection_explicit = browser.entries.get(index).is_some();
+                    browser.scroll_selected = None;
                     if browser.folder_playlists.is_none() {
-                        browser.toggle_mark(index);
+                        if double { browser.toggle_mark(index); }
+                        else { paint = true; }
                     }
                 }
+                if paint { self.start_browser_mark_drag(index); }
                 if double {
                     self.browser_open()?;
                 }
             }
             Target::BrowserMark(index) => {
-                if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
-                    browser.selected = index;
-                    browser.selection_explicit = browser.entries.get(index).is_some();
-                    browser.toggle_mark(index);
-                }
+                self.start_browser_mark_drag(index);
             }
             Target::BrowserSort|Target::BrowserSortDirection=>{if let Some(Dialog::Browser(browser))=&mut self.view.dialog{browser.change_sort(matches!(target,Target::BrowserSortDirection));}},
             Target::BrowserClearFilter=>{if let Some(Dialog::Browser(browser))=&mut self.view.dialog{browser.clear_filter();}},

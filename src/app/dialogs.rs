@@ -377,6 +377,7 @@ impl App {
                 )
             }
             Some(Dialog::Browser(browser)) => {
+                browser.scroll_selected = None;
                 browser.selected =
                     bounded(browser.selected, direction as i64, browser.entries.len());
                 browser.selection_explicit = !browser.entries.is_empty();

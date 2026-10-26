@@ -3,9 +3,11 @@ use crate::errors::AppError;
 use crate::input::{Key, KeyPress};
 use crate::media;
 use anyhow::{Context, Result, ensure};
+use ratatui::layout::{Position, Rect};
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 pub(super) struct BrowserRequest {
@@ -52,6 +54,15 @@ impl BrowserSort{
 }
 
 #[derive(Clone)]
+struct BrowserMarkDrag {
+    last: usize,
+    marked: bool,
+    origin: Position,
+    moved: bool,
+    scrolled: Instant,
+}
+
+#[derive(Clone)]
 pub struct Browser {
     all_entries: Vec<BrowserEntry>,
     details: HashMap<PathBuf,(Option<std::time::SystemTime>,u64)>,
@@ -61,6 +72,9 @@ pub struct Browser {
     pub entries: Vec<BrowserEntry>,
     pub selected: usize,
     pub offset: usize,
+    pub list_area: Rect,
+    pub(crate) scroll_selected: Option<usize>,
+    mark_drag: Option<BrowserMarkDrag>,
     pub selection_explicit: bool,
     pub marked: HashSet<PathBuf>,
     pub search: String,
@@ -81,6 +95,9 @@ impl Browser {
             entries: Vec::new(),
             selected: 0,
             offset: 0,
+            list_area: Rect::default(),
+            scroll_selected: None,
+            mark_drag: None,
             selection_explicit: false,
             marked: HashSet::new(),
             search: String::new(),
@@ -155,6 +172,8 @@ impl Browser {
     pub fn search_failed(&self)->bool{!self.search.is_empty()&&self.entries.is_empty()}
     fn select_search_match(&mut self){self.rebuild_entries();self.selection_explicit=!self.search.is_empty()&&!self.entries.is_empty();}
     fn rebuild_entries(&mut self){
+        self.mark_drag = None;
+        self.scroll_selected = None;
         let selected=self.entries.get(self.selected).map(|entry|entry.path.clone());
         let details=&self.details;let sort=self.sort;let descending=self.descending;
         self.all_entries.sort_by(|a,b|{
@@ -182,13 +201,103 @@ impl Browser {
             self.marked.remove(&entry.path);
         }
     }
+
+    fn paint_marks(&mut self, point: Position) {
+        let Some(drag) = &mut self.mark_drag else { return; };
+        drag.moved |= point != drag.origin;
+        if !self.list_area.contains(point) || self.entries.is_empty() { return; }
+        let index = self.offset + usize::from(point.y - self.list_area.y);
+        if index >= self.entries.len() { return; }
+        let (last, marked) = (drag.last, drag.marked);
+        for index in last.min(index)..=last.max(index).min(self.entries.len() - 1) {
+            let entry = &self.entries[index];
+            if self.can_mark(entry) {
+                if marked { self.marked.insert(entry.path.clone()); }
+                else { self.marked.remove(&entry.path); }
+            }
+        }
+        self.mark_drag.as_mut().expect("mark gesture exists").last = index;
+        self.selected = index;
+        self.selection_explicit = true;
+        self.scroll_selected = Some(index);
+    }
 }
 
 impl App {
+    pub fn browser_mark_dragging(&self) -> bool {
+        matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.mark_drag.is_some())
+    }
+
+    pub(super) fn finish_browser_mark_drag(&mut self) -> bool {
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            return browser.mark_drag.take().is_some();
+        }
+        false
+    }
+
+    pub(super) fn start_browser_mark_drag(&mut self, index: usize) {
+        if !self.browser_ready() { return; }
+        let origin = self.view.pointer;
+        let Some(Dialog::Browser(browser)) = &mut self.view.dialog else { return; };
+        let index = if browser.list_area.contains(origin) {
+            browser.offset + usize::from(origin.y - browser.list_area.y)
+        } else { index };
+        let Some(entry) = browser.entries.get(index).filter(|entry| browser.can_mark(entry)) else { return; };
+        let marked = !browser.marked.contains(&entry.path);
+        browser.toggle_mark(index);
+        browser.selected = index;
+        browser.selection_explicit = true;
+        browser.scroll_selected = None;
+        browser.mark_drag = Some(BrowserMarkDrag { last: index, marked, origin, moved: false, scrolled: Instant::now() });
+    }
+
+    pub(super) fn drag_browser_marks(&mut self, point: Position) -> bool {
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+            && browser.mark_drag.is_some()
+        {
+            browser.paint_marks(point);
+            return true;
+        }
+        false
+    }
+
+    pub(super) fn scroll_browser_pages(&mut self, point: Position, direction: i16, accelerated: bool) {
+        if !self.browser_ready() { return; }
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
+            && browser.list_area.contains(point)
+        {
+            let page = usize::from(browser.list_area.height).max(1);
+            let step = page * if accelerated { 5 } else { 1 };
+            browser.offset = browser.offset.saturating_add_signed(isize::from(direction.signum()) * step as isize)
+                .min(browser.entries.len().saturating_sub(page));
+            browser.scroll_selected = Some(browser.selected);
+            browser.paint_marks(point);
+        }
+    }
+
+    pub(super) fn tick_browser_mark_drag(&mut self) {
+        if !self.browser_ready() { return; }
+        let point = self.view.pointer;
+        let Some(Dialog::Browser(browser)) = &mut self.view.dialog else { return; };
+        let Some(drag) = &mut browser.mark_drag else { return; };
+        let area = browser.list_area;
+        if !drag.moved || drag.scrolled.elapsed() < Duration::from_millis(100)
+            || area.is_empty() || point.x < area.x || point.x >= area.right() { return; }
+        let direction = if point.y <= area.y { -1 } else if point.y >= area.bottom() - 1 { 1 } else { return; };
+        let offset = browser.offset.saturating_add_signed(direction)
+            .min(browser.entries.len().saturating_sub(usize::from(area.height)));
+        if offset == browser.offset { return; }
+        drag.scrolled = Instant::now();
+        browser.offset = offset;
+        browser.paint_marks(Position::new(point.x, point.y.clamp(area.y, area.bottom() - 1)));
+    }
+
     pub(super) fn browser_text(&mut self, text: &str) -> Result<()> {
         let Some(Dialog::Browser(browser)) = &mut self.view.dialog else {
             return Ok(());
         };
+        browser.mark_drag = None;
+        browser.scroll_selected = None;
         if text == " " && browser.search.is_empty() {
             if browser.folder
                 && browser.folder_playlists.is_none()
@@ -211,6 +320,10 @@ impl App {
     }
 
     pub(super) fn browser_key(&mut self, key: KeyPress) -> Result<()> {
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            browser.mark_drag = None;
+            browser.scroll_selected = None;
+        }
         if key.key == Key::Escape {
             if let Some(Dialog::Browser(browser)) = &mut self.view.dialog
                 && !browser.search.is_empty()
@@ -279,6 +392,13 @@ impl App {
                 } else {
                     i16::MAX
                 });
+                return Ok(());
+            }
+            Key::PageUp | Key::PageDown => {
+                let page = if let Some(Dialog::Browser(browser)) = &self.view.dialog {
+                    browser.list_area.height.max(1).min(i16::MAX as u16) as i16
+                } else { 1 };
+                self.scroll_dialog(if key.key == Key::PageUp { -page } else { page });
                 return Ok(());
             }
             Key::Insert => {
@@ -461,6 +581,8 @@ impl App {
         self.browser_state.ready = false;
         let mut offset = 0;
         if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            browser.mark_drag = None;
+            browser.scroll_selected = None;
             if ready {
                 browser
                     .offsets

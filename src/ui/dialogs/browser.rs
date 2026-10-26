@@ -202,6 +202,8 @@ pub(super) fn browser_dialog(
             .saturating_sub(footer_height)
             .saturating_sub(list_top),
     );
+    browser.list_area = list;
+    app.view.dialog_page_size = usize::from(list.height);
     if app.browser_loading() {
         frame.render_widget(
             Paragraph::new(app.text("Reading folder...", "Чтение папки...")).style(palette.text()),
@@ -233,12 +235,12 @@ pub(super) fn browser_dialog(
             list,
         );
     }
-    browser.offset = visible_offset(
-        browser.offset,
-        browser.selected,
-        list.height as usize,
-        browser.entries.len(),
-    );
+    if browser.scroll_selected != Some(browser.selected) {
+        browser.offset = visible_offset(browser.offset, browser.selected, usize::from(list.height), browser.entries.len());
+        browser.scroll_selected = Some(browser.selected);
+    } else {
+        browser.offset = browser.offset.min(browser.entries.len().saturating_sub(usize::from(list.height).max(1)));
+    }
     for (index, entry) in browser
         .entries
         .iter()
@@ -255,6 +257,8 @@ pub(super) fn browser_dialog(
             }
         } else if entry.directory {
             "DIR"
+        } else if matches!(browser.palette_file, Some(PaletteFilePicker::BackgroundGif)) {
+            "GIF"
         } else if browser.palette_file.is_some() {
             "JSON"
         } else if browser.marked.contains(&entry.path) {
@@ -289,9 +293,9 @@ pub(super) fn browser_dialog(
         app.view.hits.push(Hit {
             area: rect,
             target: Target::BrowserRow(index),
-            enabled: true,
+            enabled: app.browser_ready(),
         });
-        if browser.folder_playlists.is_some() {
+        if browser.can_mark(entry) {
             app.view.hits.push(Hit {
                 area: Rect::new(rect.x, rect.y, rect.width.min(3), 1),
                 target: Target::BrowserMark(index),

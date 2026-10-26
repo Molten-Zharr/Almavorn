@@ -381,7 +381,7 @@ fn run() -> Result<()> {
                         _ => {}
                     }
                 }
-                if app.view.workspace.gesture.is_some() && !down {
+                if (app.view.workspace.gesture.is_some() || app.browser_mark_dragging()) && !down {
                     if let Some(point) = pointer {
                         release_pointer(&mut app, image_rect, dimensions, point);
                     } else {

@@ -205,6 +205,7 @@ impl App {
         self.poll_import()?;
         self.tick_library()?;
         self.tick_mark_drag()?;
+        self.tick_browser_mark_drag();
         self.tick_search()?;
         self.tick_visualizer();
         if !self.preparing_playback()

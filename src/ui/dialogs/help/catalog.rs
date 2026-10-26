@@ -1218,6 +1218,14 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
             "Зажмите галочку композиции и ведите по строкам для отметки или снятия отметок. У края список прокручивается.",
         ),
         (
+            "In file pickers, hold a checkbox and drag across rows to check or uncheck files and folders. The first checkbox sets the action for the whole drag. Holding at the list edge scrolls it.",
+            "В файловом окне зажмите галочку и ведите по строкам для отметки или снятия отметок с файлов и папок. Первая галочка задает действие для всего движения. У края список прокручивается.",
+        ),
+        (
+            "In file pickers, the wheel scrolls one visible page without changing selection or checkboxes. Ctrl+wheel scrolls five pages. PgUp and PgDn move selection by a visible page.",
+            "В файловом окне колесико прокручивает одну видимую страницу, сохраняя выбор и галочки. Ctrl+колесико прокручивает пять страниц. PgUp и PgDn перемещают выбор на видимую страницу.",
+        ),
+        (
             "Click a group checkbox to mark or unmark its tracks matching the filter.",
             "Галочка группы отмечает или снимает отметки с композиций, подходящих под фильтр.",
         ),
