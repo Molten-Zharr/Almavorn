@@ -440,13 +440,13 @@ impl App {
     }
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
-        if self.lyrics_panel_key(key)? { return Ok(()); }
         if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
             return self.browser_key(key);
         }
         if self.view.dialog.is_none() && self.view.filter_editing {
             return self.filter_key(key);
         }
+        if self.lyrics_panel_key(key)? { return Ok(()); }
         if key.key == Key::Escape {
             if self.close_equalizer_presets() {
                 return Ok(());
