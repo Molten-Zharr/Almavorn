@@ -504,7 +504,7 @@ fn handle_pointer_event(
             pos,
             button,
             pressed: true,
-            ..
+            modifiers,
         } if matches!(
             button,
             egui::PointerButton::Primary | egui::PointerButton::Secondary
@@ -514,6 +514,10 @@ fn handle_pointer_event(
                 if button == egui::PointerButton::Secondary {
                     app.handle(Input::SecondaryClick { x, y });
                 } else {
+                    if modifiers.ctrl && app.copy_playing_track_at(x, y) {
+                        *previous_click = None;
+                        return true;
+                    }
                     let double = previous_click.as_ref().is_some_and(|(point, time)| {
                         point.distance(pos) < 5.0 && time.elapsed() < Duration::from_millis(400)
                     });

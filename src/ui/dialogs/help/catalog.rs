@@ -576,8 +576,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
     q.keys(
         &[p(F(1))],
-        "Open help for the selected parameter.",
-        "Открыть пояснение выбранного параметра.",
+        "Open the description of the setting under the pointer, or the setting selected with the keyboard. No click or value change is needed.",
+        "Открыть описание настройки под мышью или выбранной с клавиатуры. Нажимать на значение и менять его не нужно.",
     );
     q.keys(
         &[c(Char('i'))],
@@ -1198,6 +1198,14 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         (
             "Double-click a track: play it. Double-click its title in the player: mark it and go to its playlist.",
             "Двойной клик по композиции: играть. По названию в проигрывателе: отметить ее и перейти к ней в плейлисте.",
+        ),
+        (
+            "Ctrl+left-click the title in the player to copy Artist - Title. If the artist or title is missing, copy the available text.",
+            "Ctrl+ЛКМ по названию в проигрывателе копирует Исполнитель - Название. Если исполнитель или название не указаны, копируется имеющийся текст.",
+        ),
+        (
+            "Hover over a setting to select its description, then press F1 to read it. Hovering does not change the value.",
+            "Наведите мышь на настройку и нажмите F1 для описания. Наведение выбирает пункт без изменения значения.",
         ),
         (
             "Hold a track checkbox and move across rows to mark or unmark tracks. The edge scrolls the list.",

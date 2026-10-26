@@ -183,6 +183,10 @@ fn run() -> Result<()> {
                 match mouse.kind {
                     MouseEventKind::Moved => app.handle(Input::Move { x, y }),
                     MouseEventKind::Down(event::MouseButton::Left) => {
+                        if mouse.modifiers.contains(KeyModifiers::CONTROL) && app.copy_playing_track_at(x, y) {
+                            previous_click = None;
+                            continue;
+                        }
                         let point = Position::new(x, y);
                         let double = previous_click.as_ref().is_some_and(|(previous, time)| {
                             *previous == point && time.elapsed() < Duration::from_millis(400)

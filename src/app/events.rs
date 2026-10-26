@@ -8,6 +8,26 @@ use anyhow::{Result, ensure};
 use ratatui::layout::{Position, Rect};
 
 impl App {
+    pub fn copy_playing_track_at(&mut self, x: u16, y: u16) -> bool {
+        if self.view.dialog.as_ref().is_some_and(|dialog| !matches!(dialog, Dialog::Statistics))
+            || !matches!(self.target_at(Position::new(x, y)), Some(Target::PlayingTrack))
+        {
+            return false;
+        }
+        let Some(track) = self.playback.current.as_ref() else { return false; };
+        let text = [track.artist.trim(), track.title.trim()]
+            .into_iter()
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>()
+            .join(" - ");
+        if text.is_empty() {
+            self.message(self.text("Artist and title are missing", "Исполнитель и название не указаны").into());
+        } else {
+            self.view.clipboard_text = Some(text);
+        }
+        true
+    }
+
     pub fn accepts_text(&self) -> bool {
         matches!(self.view.dialog, Some(Dialog::Help { .. }))
             || matches!(&self.view.dialog,Some(Dialog::Form(form)) if !form.discard)

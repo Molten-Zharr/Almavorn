@@ -200,7 +200,7 @@ Paste the command straight into your terminal.
 
 ## <img src="docs/images/readme/keyboard.svg" width="24" height="24" alt=""> First launch
 
-F2 opens Settings; F1 opens the full help guide. Within Settings, F1 explains the selected option.
+F2 opens Settings; F1 opens the full help guide. In Settings, hover over an option and press F1 to read its description without changing the value. When navigating with the keyboard, F1 explains the selected option.
 
 Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. Normal is the default.
 
@@ -229,6 +229,7 @@ The sorting desk helps you organize music before adding it to permanent playlist
 
 ### Other useful controls
 
+- Ctrl+click the title in the player to copy "Artist - Title".
 - F4 opens the equalizer; F5 opens speed, tempo, and pitch settings.
 - F7 opens statistics, F8 the tag editor, and F9 song lyrics.
 - / searches playlists; Ctrl+F filters the current playlist.

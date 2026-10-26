@@ -422,6 +422,18 @@ impl App {
             if let Some(index) = index {
                 self.select_settings_menu(index);
             }
+        } else if self.view.settings.parameters_area.contains(self.view.pointer)
+            && let Some(
+                Target::SettingSelect(index)
+                | Target::Setting(index)
+                | Target::SettingAdjust(index, _)
+                | Target::SettingsVolume(index, _)
+                | Target::SettingsTimeline(index, _)
+            ) = target
+            && (self.view.settings.selected != index || self.view.settings.focus != SettingsFocus::Parameters)
+        {
+            // Hover selects the explanation and keyboard focus without changing the value.
+            self.select_setting(index);
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
