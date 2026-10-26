@@ -43,6 +43,9 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 
 ## <img src="docs/images/readme/music.svg" width="24" height="24" alt=""> What else?
 
+<details>
+<summary>All features</summary>
+
 - Find your music with search, filters, and sorting.
 - Build playlists yourself or from folders, with or without subfolders.
 - Drag playlists into order and combine them into new mixes!
@@ -64,6 +67,8 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 - Type with the on-screen keyboard and control the player with your mouse!
   (you can lie back with your head on a pillow and control everything with one hand)
 - Mark just the tracks you want in a playlist and listen only to those!
+
+</details>
 
 <a id="screenshots"></a>
 
