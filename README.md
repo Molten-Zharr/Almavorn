@@ -27,7 +27,7 @@ A local music player for Linux, inspired by AIMP and Strawberry.
 
 Suggestions and feedback are welcome. We're only getting started, and we hope you'll enjoy the player!
 
-![Almavorn in English: a protected playlist in Order mode](docs/images/almavorn-order-en.png)
+![Green theme in English, with Starbound tracks above the player](docs/images/almavorn-green.png)
 
 ## Order, Chaos, and the sorting desk: what's the difference?
 
@@ -36,8 +36,6 @@ Suggestions and feedback are welcome. We're only getting started, and we hope yo
 - **Chaos: free-form playlists.** Rearrange tracks and build new playlists from existing ones. History keeps the last 100 actions until you close the player, so you can undo and redo them.
 
 The tag editor writes changes to the audio file itself. Those changes affect that file in every playlist.
-
-![Almavorn in English: a free mix in Chaos mode with sparks in the background](docs/images/almavorn-chaos-en.png)
 
 ## What else?
 
@@ -62,6 +60,36 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 - Type with the on-screen keyboard and control the player with your mouse!
   (you can lie back with your head on a pillow and control everything with one hand)
 - Mark just the tracks you want in a playlist and listen only to those!
+
+## Screenshots
+
+King Crimson: The Court of the Crimson King, with lyrics found on Genius.
+
+![King Crimson playback, Genius lyrics and the playlist panel](docs/images/almavorn-lyrics.png)
+
+Move, resize and hide panels in the layout editor.
+
+![Layout controls for the player, tracks, playlists and lyrics](docs/images/almavorn-layout.png)
+
+Settings for appearance, controls, mods and music services.
+
+![Almavorn settings with Themes, Shortcuts, Mods and Services sections](docs/images/almavorn-settings.png)
+
+Listening statistics: time played, starts and play counts.
+
+![Listening statistics for music in the selected playlists](docs/images/almavorn-statistics.png)
+
+Browse help by category, with your current keyboard shortcuts.
+
+![Help categories and keyboard shortcuts for navigation](docs/images/almavorn-help.png)
+
+Create an empty playlist or import folders with music.
+
+![Playlist creation with a name, a new folder and existing music folders](docs/images/almavorn-create-playlist.png)
+
+Search for tracks across several selected playlists.
+
+![Search results for Theme in Starbound, with playlist selection](docs/images/almavorn-search.png)
 
 ## Themes, appearance, and usability
 
