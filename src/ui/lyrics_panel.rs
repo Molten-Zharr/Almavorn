@@ -1,11 +1,12 @@
 use super::{
     library,
     theme::Palette,
-    widgets::{block, buttons, buttons_height, clean},
+    widgets::{block, buttons, buttons_height, clean, visible_offset},
 };
 use crate::{
-    app::{App, LyricsPanelAction as Action, Target},
+    app::{App, Hit, LyricsPanelAction as Action, Target},
     lyrics::Provider,
+    model::duration_text,
 };
 use ratatui::{
     Frame,
@@ -49,7 +50,11 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         palette,
         false,
     )
-    .border_style(palette.text().fg(palette.separator));
+    .border_style(palette.text().fg(if app.lyrics.panel.focused {
+        palette.accent
+    } else {
+        palette.separator
+    }));
     let inner = border.inner(area);
     frame.render_widget(border, area);
     if inner.width == 0 || inner.height == 0 {
@@ -58,6 +63,7 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     let loading = app.lyrics.panel_loading();
     let query = app.lyrics.panel.query.clone();
     let selected = app.lyrics.panel.lyric().cloned();
+    let choosing = !loading && selected.is_none() && !app.lyrics.panel.results.is_empty();
     let current_provider = selected.as_ref().and_then(|lyric| {
         Provider::ALL
             .into_iter()
@@ -70,7 +76,13 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         })
         .collect();
     let other = enabled.iter().any(|p| Some(*p) != current_provider);
-    let controls = if inner.height < 7 {
+    let mut controls = if inner.height < 7 && choosing {
+        vec![(
+            app.text("Choose", "Выбрать").into(),
+            Target::LyricsPanel(Action::Choose(app.lyrics.panel.cursor)),
+            true,
+        )]
+    } else if inner.height < 7 {
         vec![(
             app.text("Open · F9", "Открыть · F9").into(),
             Target::LyricsPanel(Action::Open),
@@ -105,6 +117,27 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
             ("×".into(), Target::LyricsPanel(Action::Close), true),
         ]
     };
+    if inner.height >= 7 {
+        if choosing && app.lyrics.panel.selected.is_some() {
+            controls.insert(
+                1,
+                (
+                    app.text("Back to lyrics", "К тексту").into(),
+                    Target::LyricsPanel(Action::Content),
+                    true,
+                ),
+            );
+        } else if selected.is_some() && app.lyrics.panel.results.len() > 1 {
+            controls.insert(
+                1,
+                (
+                    app.text("Variants", "Варианты").into(),
+                    Target::LyricsPanel(Action::Variants),
+                    true,
+                ),
+            );
+        }
+    }
     let footer_height = buttons_height(app, inner.width, &controls).min(inner.height);
     let footer = Rect::new(
         inner.x,
@@ -113,11 +146,14 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         footer_height,
     );
     let available = inner.height.saturating_sub(footer_height);
-    let source = selected
-        .as_ref()
-        .map_or(app.text("Song lyrics", "Текст песни"), |lyric| {
-            lyric.provider.as_str()
-        });
+    let source = selected.as_ref().map_or(
+        if choosing {
+            app.text("Found songs", "Найденные варианты")
+        } else {
+            app.text("Song lyrics", "Текст песни")
+        },
+        |lyric| lyric.provider.as_str(),
+    );
     if available > 0 {
         frame.render_widget(
             Paragraph::new(clean(source)).style(palette.text().fg(palette.accent)),
@@ -126,11 +162,11 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     }
     let title = selected
         .as_ref()
-        .map(|lyric| format!("{} — {}", lyric.artist, lyric.title))
+        .map(|lyric| song_title(&lyric.artist, &lyric.title))
         .or_else(|| {
             query
                 .as_ref()
-                .map(|query| format!("{} — {}", query.artist, query.title))
+                .map(|query| song_title(&query.artist, &query.title))
         })
         .unwrap_or_default();
     let heading = Paragraph::new(clean(&title))
@@ -153,7 +189,14 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     app.lyrics.panel.page_size = body.height as usize;
     app.lyrics.panel.scroll_max = 0;
     if body.height > 0 {
-        if let Some(lyric) = selected {
+        app.view.hits.push(Hit {
+            area: body,
+            target: Target::LyricsPanel(Action::Focus),
+            enabled: true,
+        });
+        if choosing {
+            render_choices(frame, app, body, palette);
+        } else if let Some(lyric) = selected {
             let position = app.position_ms();
             let lines = lyric.lines();
             let active = lines
@@ -217,12 +260,6 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
                 .into()
             } else if app.lyrics.network_paused {
                 app.text("Cannot reach lyric sources. Automatic search is paused. Press Search again when connected.", "Нет связи с источниками. Автопоиск приостановлен. После подключения нажмите Найти снова.").into()
-            } else if !app.lyrics.panel.results.is_empty() {
-                app.text(
-                    "Choose the matching song in the full view.",
-                    "Выберите подходящую запись в полном окне.",
-                )
-                .into()
             } else if enabled.is_empty() {
                 app.text(
                     "No sources left. Choose sources in Settings.",
@@ -247,4 +284,99 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         }
     }
     buttons(frame, app, footer, controls, palette);
+}
+
+fn song_title(artist: &str, title: &str) -> String {
+    if artist.trim().is_empty() {
+        title.to_owned()
+    } else if title.trim().is_empty() {
+        artist.to_owned()
+    } else {
+        format!("{artist} - {title}")
+    }
+}
+
+fn render_choices(frame: &mut Frame, app: &mut App, body: Rect, palette: Palette) {
+    let hint = u16::from(body.height >= 4);
+    if hint > 0 {
+        frame.render_widget(
+            Paragraph::new(app.text(
+                "Choose: click or ↑↓ and Enter",
+                "Выбор: мышь или ↑↓ и Enter",
+            ))
+            .style(palette.text().fg(palette.muted)),
+            Rect::new(body.x, body.y, body.width, hint),
+        );
+    }
+    let row_height = body.height.saturating_sub(hint).min(3).max(1);
+    let capacity = (body.height.saturating_sub(hint) / row_height) as usize;
+    let count = app.lyrics.panel.results.len();
+    let cursor = app.lyrics.panel.cursor.min(count.saturating_sub(1));
+    let offset = visible_offset(app.lyrics.panel.offset, cursor, capacity, count);
+    app.lyrics.panel.cursor = cursor;
+    app.lyrics.panel.offset = offset;
+    app.lyrics.panel.page_size = capacity;
+    app.lyrics.panel.scroll_max = count.saturating_sub(capacity);
+    for (index, lyric) in app
+        .lyrics
+        .panel
+        .results
+        .iter()
+        .enumerate()
+        .skip(offset)
+        .take(capacity)
+    {
+        let row = Rect::new(
+            body.x,
+            body.y + hint + ((index - offset) as u16 * row_height),
+            body.width,
+            row_height,
+        );
+        let selected = index == cursor;
+        let style = if selected || app.hovered(row) {
+            palette
+                .text()
+                .bg(palette.selection)
+                .fg(palette.selection_text)
+        } else {
+            palette.text()
+        };
+        let title = format!("{}. {}", index + 1, song_title(&lyric.artist, &lyric.title));
+        let duration = lyric
+            .duration
+            .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+            .map(|seconds| format!(" · {}", duration_text((seconds * 1000.0) as u64)))
+            .unwrap_or_default();
+        let source = format!(
+            "{}{duration}{}",
+            lyric.provider,
+            if lyric.instrumental {
+                app.text(" · instrumental", " · без вокала")
+            } else {
+                ""
+            }
+        );
+        frame.render_widget(Paragraph::new("").style(style), row);
+        frame.render_widget(
+            Paragraph::new(clean(&title))
+                .style(style)
+                .wrap(Wrap { trim: false }),
+            Rect::new(row.x, row.y, row.width, row.height.saturating_sub(1).max(1)),
+        );
+        if row.height > 1 {
+            frame.render_widget(
+                Paragraph::new(clean(&source)).style(if selected {
+                    style
+                } else {
+                    style.fg(palette.muted)
+                }),
+                Rect::new(row.x, row.bottom() - 1, row.width, 1),
+            );
+        }
+        app.view.hits.push(Hit {
+            area: row,
+            target: Target::LyricsPanel(Action::Choose(index)),
+            enabled: true,
+        });
+    }
 }

@@ -141,6 +141,9 @@ impl App {
             Input::Click { x, y, double } => {
                 self.view.mark_drag=None;
                 self.view.pointer = Position::new(x, y);
+                if self.view.dialog.is_none() {
+                    self.lyrics.panel.focused = self.lyrics.panel.area.contains(self.view.pointer);
+                }
                 if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root)
                     && self.view.settings.parameters_area.contains(self.view.pointer)
                 {
@@ -209,6 +212,7 @@ impl App {
                     return Ok(());
                 }
                 if self.view.dialog.is_none() && self.lyrics.panel.area.contains(position) {
+                    self.lyrics.panel.focused = true;
                     let step = if ctrl && shift { self.lyrics.panel.page_size.max(1) as i64 }
                         else if ctrl { 15 } else { 3 };
                     self.scroll_lyrics_panel(i64::from(delta) * step);
@@ -436,6 +440,7 @@ impl App {
     }
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
+        if self.lyrics_panel_key(key)? { return Ok(()); }
         if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
             return self.browser_key(key);
         }

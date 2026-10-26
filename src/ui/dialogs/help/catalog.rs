@@ -780,6 +780,14 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Lyrics as usize];
+    q.note("The panel opens a confident match automatically. Otherwise, click a song in the panel. Variants lets you change your choice.",
+        "Панель сама открывает уверенное совпадение. Иначе выберите вариант прямо в ней. Кнопка \"Варианты\" позволяет сменить выбор.");
+    q.note("Click or scroll inside the panel to use its keyboard controls. ↑↓ selects a result; Page Up/Down moves by a page; Home/End goes to the start/end.",
+        "Нажмите в панели или прокрутите ее колесом для управления с клавиатуры. Стрелки выбирают вариант, Page Up/Down листают страницы, Home/End переходят в начало и конец.");
+    q.keys(&[p(Enter)], "In the panel: open the selected result; while reading, show variants.",
+        "В панели: открыть выбранный вариант; при чтении текста — показать варианты.");
+    q.keys(&[p(Escape)], "In the panel: return from variants to the lyrics, then return keyboard control to the playlist.",
+        "В панели: вернуться от вариантов к тексту, затем вернуть управление клавиатурой плейлисту.");
     q.keys(
         &[p(Enter)],
         "Open the selected lyrics result.",

@@ -83,6 +83,18 @@ pub struct SearchResult {
     pub network_failed: bool,
 }
 
+pub(crate) fn automatic_match(results: &[Lyric]) -> Option<usize> {
+    let (index, best) = results.iter().enumerate()
+        .filter(|(_, lyric)| lyric.score >= 900)
+        .max_by_key(|(index, lyric)| (lyric.score, lyric.provider == "Genius", std::cmp::Reverse(*index)))?;
+    let identity = (normalized(&best.artist), normalized(&best.title));
+    let ambiguous = results.iter().enumerate().any(|(other, lyric)| {
+        other != index && best.score.saturating_sub(lyric.score) < 50
+            && (normalized(&lyric.artist), normalized(&lyric.title)) != identity
+    });
+    (!ambiguous).then_some(index)
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LrcRecord {

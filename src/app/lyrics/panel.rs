@@ -2,7 +2,11 @@ use super::{
     App, Dialog, Lyric, LyricsState, LyricsView, Provider, ProviderReport, Query, Request,
     SearchResult, background, run_request,
 };
-use crate::{app::background::LatestJob, model::Track};
+use crate::{
+    app::background::LatestJob,
+    input::{Key, KeyPress},
+    model::Track,
+};
 use anyhow::{Context, Result};
 use ratatui::layout::Rect;
 use std::{
@@ -40,6 +44,7 @@ struct Cached {
     results: Vec<Lyric>,
     reports: Vec<ProviderReport>,
     excluded: Vec<Provider>,
+    selected: Option<usize>,
 }
 
 #[derive(Default)]
@@ -54,6 +59,10 @@ pub struct LyricsPanel {
     pub scroll_max: usize,
     pub page_size: usize,
     pub follow: bool,
+    pub selected: Option<usize>,
+    pub choosing: bool,
+    pub cursor: usize,
+    pub focused: bool,
     key: Option<TrackKey>,
     due: Option<Instant>,
     cache: VecDeque<Cached>,
@@ -63,6 +72,10 @@ pub struct LyricsPanel {
 }
 #[derive(Clone, Copy)]
 pub enum PanelAction {
+    Choose(usize),
+    Variants,
+    Content,
+    Focus,
     Open,
     Other,
     Retry,
@@ -84,9 +97,22 @@ impl LyricsPanel {
             return;
         };
         self.cache.retain(|entry| entry.key != key);
+        let mut indices: Vec<_> = (0..self.results.len().min(3)).collect();
+        if let Some(selected) = self.selected.filter(|index| *index < self.results.len())
+            && !indices.contains(&selected)
+        {
+            indices.pop();
+            indices.push(selected);
+        }
         self.cache.push_back(Cached {
             key,
-            results: self.results.iter().take(3).cloned().collect(),
+            selected: self
+                .selected
+                .and_then(|selected| indices.iter().position(|index| *index == selected)),
+            results: indices
+                .into_iter()
+                .map(|index| self.results[index].clone())
+                .collect(),
             reports: self.reports.clone(),
             excluded: self.excluded.clone(),
         });
@@ -95,7 +121,11 @@ impl LyricsPanel {
         }
     }
     pub fn lyric(&self) -> Option<&Lyric> {
-        self.results.first().filter(|lyric| lyric.score >= 900)
+        if self.choosing {
+            None
+        } else {
+            self.selected.and_then(|index| self.results.get(index))
+        }
     }
 }
 impl Drop for LyricsPanel {
@@ -166,6 +196,10 @@ impl App {
                         self.lyrics.network_paused = true;
                     }
                     self.lyrics.panel.results = result.matches;
+                    self.lyrics.panel.selected =
+                        crate::lyrics::automatic_match(&self.lyrics.panel.results);
+                    self.lyrics.panel.cursor = self.lyrics.panel.selected.unwrap_or(0);
+                    self.lyrics.panel.choosing = self.lyrics.panel.selected.is_none();
                     self.lyrics.panel.error = if self.lyrics.panel.results.is_empty()
                         && !result.warnings.is_empty()
                     {
@@ -191,6 +225,9 @@ impl App {
             panel.cancel();
             panel.key = key.clone();
             panel.results.clear();
+            panel.selected = None;
+            panel.choosing = false;
+            panel.cursor = 0;
             panel.reports.clear();
             panel.excluded.clear();
             panel.error = None;
@@ -204,6 +241,9 @@ impl App {
             if let Some(key) = key {
                 if let Some(cached) = panel.cache.iter().find(|entry| entry.key == key) {
                     panel.results = cached.results.clone();
+                    panel.selected = cached.selected;
+                    panel.cursor = cached.selected.unwrap_or(0);
+                    panel.choosing = cached.selected.is_none();
                     panel.reports = cached.reports.clone();
                     panel.excluded = cached.excluded.clone();
                 } else {
@@ -245,6 +285,9 @@ impl App {
         let mut preferences = self.settings.preferences.lyrics.clone();
         preferences.enabled &= !self.lyrics.network_paused;
         self.lyrics.panel.results.clear();
+        self.lyrics.panel.selected = None;
+        self.lyrics.panel.choosing = false;
+        self.lyrics.panel.cursor = 0;
         self.lyrics.panel.reports.clear();
         self.lyrics.panel.error = None;
         self.lyrics.panel.offset = 0;
@@ -282,6 +325,11 @@ impl App {
         self.lyrics.error = self.lyrics.panel.error.clone();
         self.view.dialog = Some(Dialog::Lyrics(LyricsView {
             content: self.lyrics.panel.lyric().is_some(),
+            selected: if self.lyrics.panel.choosing {
+                self.lyrics.panel.cursor
+            } else {
+                self.lyrics.panel.selected.unwrap_or(0)
+            },
             panel_result: self.lyrics.panel_loading(),
             follow: true,
             ..LyricsView::default()
@@ -306,10 +354,12 @@ impl App {
             Some(Dialog::Lyrics(view)) => view.selected,
             _ => 0,
         };
-        if let Some(mut lyric) = self.lyrics.results.get(index).cloned() {
-            lyric.score = 1000;
+        if index < self.lyrics.results.len() {
             self.lyrics.panel.cancel();
-            self.lyrics.panel.results = vec![lyric];
+            self.lyrics.panel.results = self.lyrics.results.clone();
+            self.lyrics.panel.selected = Some(index);
+            self.lyrics.panel.cursor = index;
+            self.lyrics.panel.choosing = false;
             self.lyrics.panel.excluded = self.lyrics.excluded.clone();
             self.lyrics.panel.reports = self.lyrics.reports.clone();
             self.lyrics.panel.error = None;
@@ -320,17 +370,40 @@ impl App {
     }
 
     pub(in crate::app) fn lyrics_panel_action(&mut self, action: PanelAction) -> Result<()> {
+        self.lyrics.panel.focused = true;
         match action {
+            PanelAction::Focus => {}
+            PanelAction::Choose(index) => {
+                if index < self.lyrics.panel.results.len() && !self.lyrics.panel_loading() {
+                    self.lyrics.panel.selected = Some(index);
+                    self.lyrics.panel.cursor = index;
+                    self.lyrics.panel.choosing = false;
+                    self.lyrics.panel.offset = 0;
+                    self.lyrics.panel.follow = true;
+                    self.lyrics.panel.remember();
+                }
+            }
+            PanelAction::Variants => {
+                self.lyrics.panel.choosing = true;
+                self.lyrics.panel.cursor = self.lyrics.panel.selected.unwrap_or(0);
+                self.lyrics.panel.offset = 0;
+            }
+            PanelAction::Content => {
+                self.lyrics.panel.choosing = false;
+                self.lyrics.panel.offset = 0;
+                self.lyrics.panel.follow = true;
+            }
             PanelAction::Open => self.open_panel_lyrics()?,
             PanelAction::Settings => self.open_settings_page(crate::app::SettingsPage::Lyrics),
             PanelAction::Close => {
+                self.lyrics.panel.focused = false;
                 self.settings.preferences.lyrics.show_panel = false;
                 self.save_settings()?;
             }
             PanelAction::Retry | PanelAction::Other => {
                 if matches!(action, PanelAction::Retry) {
                     self.lyrics.panel.excluded.clear();
-                } else if let Some(lyric) = self.lyrics.panel.results.first()
+                } else if let Some(lyric) = self.lyrics.panel.lyric()
                     && let Some(provider) = Provider::ALL
                         .into_iter()
                         .find(|p| p.name() == lyric.provider)
@@ -346,7 +419,54 @@ impl App {
     }
     pub(in crate::app) fn scroll_lyrics_panel(&mut self, delta: i64) {
         let panel = &mut self.lyrics.panel;
+        if panel.choosing && !panel.results.is_empty() {
+            panel.cursor = super::super::bounded(panel.cursor, delta, panel.results.len());
+            return;
+        }
         panel.follow = false;
         panel.offset = super::super::bounded(panel.offset, delta, panel.scroll_max + 1);
+    }
+
+    pub(in crate::app) fn lyrics_panel_key(&mut self, key: KeyPress) -> Result<bool> {
+        if self.view.dialog.is_some()
+            || !self.lyrics.panel.focused
+            || self.lyrics.panel.area.is_empty()
+        {
+            return Ok(false);
+        }
+        let delta = match key.key {
+            Key::Up => -1,
+            Key::Down => 1,
+            Key::PageUp => -(self.lyrics.panel.page_size.max(1) as i64),
+            Key::PageDown => self.lyrics.panel.page_size.max(1) as i64,
+            Key::Home => i64::MIN,
+            Key::End => i64::MAX,
+            Key::Enter => {
+                if self.lyrics.panel.choosing {
+                    self.lyrics_panel_action(PanelAction::Choose(self.lyrics.panel.cursor))?;
+                } else if self.lyrics.panel.results.len() > 1 {
+                    self.lyrics_panel_action(PanelAction::Variants)?;
+                }
+                return Ok(true);
+            }
+            Key::Escape => {
+                if self.lyrics.panel.choosing && self.lyrics.panel.selected.is_some() {
+                    self.lyrics_panel_action(PanelAction::Content)?;
+                } else {
+                    self.lyrics.panel.focused = false;
+                }
+                return Ok(true);
+            }
+            Key::Tab => {
+                self.lyrics.panel.focused = false;
+                return Ok(false);
+            }
+            _ => return Ok(false),
+        };
+        if key.ctrl || key.alt {
+            return Ok(false);
+        }
+        self.scroll_lyrics_panel(delta);
+        Ok(true)
     }
 }

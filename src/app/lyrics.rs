@@ -177,6 +177,7 @@ impl App {
                 if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
                     view.panel_result = false;
                     view.content = self.lyrics.panel.lyric().is_some();
+                    view.selected = self.lyrics.panel.selected.unwrap_or(0);
                 }
             }
         }
@@ -236,22 +237,11 @@ impl App {
                     lyrics::cache_path(&self.data_directory(), completed.request.query.track.id)
                         .exists();
                 if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
-                    view.selected = 0;
+                    let selected = lyrics::automatic_match(&self.lyrics.results);
+                    view.selected = selected.unwrap_or(0);
                     view.offset = 0;
-                    if self.lyrics.results.len() == 1 && self.lyrics.results[0].score >= 900
-                        || self.lyrics.results.first().is_some_and(|first| {
-                            first.score >= 980
-                                && self.lyrics.results.get(1).is_none_or(|second| {
-                                    first.score.saturating_sub(second.score) >= 50
-                                })
-                        })
-                    {
-                        view.content = true;
-                        view.follow = true;
-                    }
-                }
-                if matches!(&self.view.dialog, Some(Dialog::Lyrics(view)) if view.content) {
-                    self.update_panel_from_dialog();
+                    view.content = selected.is_some();
+                    view.follow = true;
                 }
             }
             Err(error) => self.lyrics.error = Some(format!("{error:#}")),
@@ -266,6 +256,14 @@ impl App {
             self.lyrics.panel.cancel();
             self.lyrics.panel.query = self.lyrics.query.clone();
             self.lyrics.panel.results = self.lyrics.results.clone();
+            self.lyrics.panel.selected = match &self.view.dialog {
+                Some(Dialog::Lyrics(view)) if view.content => Some(view.selected),
+                _ => lyrics::automatic_match(&self.lyrics.panel.results),
+            };
+            self.lyrics.panel.cursor = self.lyrics.panel.selected.unwrap_or(0);
+            self.lyrics.panel.choosing = self.lyrics.panel.selected.is_none();
+            self.lyrics.panel.offset = 0;
+            self.lyrics.panel.follow = true;
             self.lyrics.panel.reports = self.lyrics.reports.clone();
             self.lyrics.panel.excluded = self.lyrics.excluded.clone();
             self.lyrics.panel.error = self.lyrics.error.clone();
