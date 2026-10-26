@@ -93,6 +93,7 @@ pub struct UiState {
     pub editing_playlist: Option<i64>,
     pub layout_editing: bool,
     pub toolbar_selected: Option<usize>,
+    pub toolbar_width: u16,
     pub(crate) toolbar_areas: Vec<Rect>,
     pub(crate) dialog_scroll_max: usize,
     pub(crate) dialog_page_size: usize,

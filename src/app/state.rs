@@ -63,6 +63,7 @@ pub enum Target {
     HelpMatch(usize),
     Tags(super::TagAction),
     CommandMenu(super::CommandMenu),
+    MenuSection,
     Visualizer(crate::visualizer::VisualizerKind),
     StatisticsPage(super::StatisticsPage),
     StatisticsSort,

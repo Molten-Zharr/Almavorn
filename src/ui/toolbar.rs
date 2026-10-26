@@ -7,7 +7,7 @@ use ratatui::{Frame, layout::Rect, style::Modifier, widgets::Paragraph};
 
 fn cells(app: &App, width: u16) -> Vec<(Rect, String, Target, bool)> {
     let mut x = 11u16.min(width);
-    let mut y = 0;
+    let y = 0;
     app.toolbar_items()
         .into_iter()
         .map(
@@ -16,23 +16,17 @@ fn cells(app: &App, width: u16) -> Vec<(Rect, String, Target, bool)> {
                  target,
                  enabled,
              }| {
-                let size = button_width(app, &label, &target).saturating_add(4).min(width);
-                if x > 0 && x.saturating_add(size) > width {
-                    x = 0;
-                    y += 2;
-                }
-                let rect = Rect::new(x, y, size, 2);
-                x = x.saturating_add(size + 2);
+                let size = button_width(app, &label, &target).min(width.saturating_sub(x));
+                let rect = Rect::new(x, y, size, 1);
+                x = x.saturating_add(size + 1);
                 (rect, label, target, enabled)
             },
         )
         .collect()
 }
 
-pub(super) fn height(app: &App, width: u16) -> u16 {
-    cells(app, width)
-        .last()
-        .map_or(2, |(rect, ..)| rect.bottom())
+pub(super) fn height(_app: &App, _width: u16) -> u16 {
+    1
 }
 
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {

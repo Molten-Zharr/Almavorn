@@ -1,7 +1,7 @@
 use super::{App, Dialog, Target};
 use crate::{
     input::{Action, Key, KeyPress},
-    model::{Mode, PlaylistKind},
+    model::Mode,
     workspace::{Control, Panel},
 };
 use anyhow::Result;
@@ -14,6 +14,7 @@ pub enum CommandMenu {
     Player,
     Application,
     Visualizer,
+    More,
 }
 
 impl CommandMenu {
@@ -23,6 +24,7 @@ impl CommandMenu {
             Self::Playlist => Some(Action::OpenPlaylistMenu),
             Self::Tracks => Some(Action::OpenTracksMenu),
             Self::Application => Some(Action::OpenApplicationMenu),
+            Self::More => Some(Action::ToggleToolbar),
             Self::Player | Self::Visualizer => None,
         }
     }
@@ -34,6 +36,7 @@ impl CommandMenu {
             Self::Player => language.text("Player", "Проигрыватель"),
             Self::Application => language.text("Application", "Приложение"),
             Self::Visualizer => language.text("Background animation", "Анимация фона"),
+            Self::More => language.text("More", "Больше"),
         }
     }
 }
@@ -134,141 +137,80 @@ impl App {
     }
 
     pub fn toolbar_items(&self) -> Vec<CommandItem> {
-        if !self.settings.preferences.appearance.expanded_toolbar && !self.view.layout_editing {
-            let mut items = Vec::new();
-            for (menu, label) in [
-                (CommandMenu::Add, format!("{} ↓", self.import_caption())),
-                (CommandMenu::Playlist, self.text("Playlist ↓", "Плейлист ↓").into()),
-                (CommandMenu::Tracks, self.text("Tracks ↓", "Композиции ↓").into()),
-                (CommandMenu::Application, format!("Almavorn · {} ↓", self.settings.mode.name(self.settings.preferences.language))),
-            ] {
-                if !self.command_items(menu).is_empty() {
-                    items.push(CommandItem { label, target: Target::CommandMenu(menu), enabled: true });
+        let mut items = Vec::new();
+        for (menu, label) in [
+            (CommandMenu::Add, format!("{} ↓", self.import_caption())),
+            (CommandMenu::Playlist, self.text("Playlist ↓", "Плейлист ↓").into()),
+            (CommandMenu::Tracks, self.text("Tracks ↓", "Композиции ↓").into()),
+            (CommandMenu::Application, format!("Almavorn · {} ↓", self.settings.mode.name(self.settings.preferences.language))),
+            (CommandMenu::More, self.text("More ↓", "Больше ↓").into()),
+        ] {
+            if menu == CommandMenu::More || !self.command_items(menu).is_empty() {
+                items.push(CommandItem { label, target: Target::CommandMenu(menu), enabled: true });
+            }
+        }
+        let available = self.view.toolbar_width.saturating_sub(11);
+        while items.len() > 1 && items.iter().map(|item| {
+            u32::from(crate::layout::buttons::button_width(self, &item.label, &item.target)) + 1
+        }).sum::<u32>() > u32::from(available) {
+            items.remove(items.len() - 2);
+        }
+        items
+    }
+
+    fn more_items(&self) -> Vec<CommandItem> {
+        use Action::*;
+        let mut items = vec![CommandItem {
+            label: self.text("Menus", "Меню").into(), target: Target::MenuSection, enabled: false,
+        }];
+        for menu in [CommandMenu::Add, CommandMenu::Playlist, CommandMenu::Tracks, CommandMenu::Application] {
+            if !self.command_items(menu).is_empty() {
+                items.push(CommandItem {
+                    label: format!("{} ›", menu.title(self.settings.preferences.language)),
+                    target: Target::CommandMenu(menu), enabled: true,
+                });
+            }
+        }
+        for (title, actions) in [
+            (self.text("Library", "Библиотека"), &[ToggleEdit, ComposePlaylists, Undo, Redo, Search, Filter][..]),
+            (self.text("Music services", "Музыкальные сервисы"), &[Services, Downloads, Mods][..]),
+            (self.text("Appearance", "Оформление"), &[Settings, Panels][..]),
+            (self.text("Information", "Информация"), &[Statistics, Help, Quit][..]),
+        ] {
+            items.push(CommandItem { label: String::new(), target: Target::MenuSection, enabled: false });
+            items.push(CommandItem { label: title.into(), target: Target::MenuSection, enabled: false });
+            for &action in actions {
+                if action == ComposePlaylists && self.settings.mode != Mode::Chaos { continue; }
+                let panel = match action {
+                    ToggleEdit | ComposePlaylists | Search | Filter => Panel::PlaylistActions,
+                    Undo | Redo => Panel::Add,
+                    _ => Panel::Application,
+                };
+                if self.control_visible(panel, action) {
+                    items.push(CommandItem {
+                        label: if action == Panels && self.view.layout_editing {
+                            self.text("Finish arranging blocks", "Завершить перемещение блоков").into()
+                        } else { self.action_caption(action) },
+                        target: Target::Action(action), enabled: self.allowed(action),
+                    });
                 }
             }
-            return items;
-        }
-        let mut entries = Vec::new();
-        if !self.command_items(CommandMenu::Add).is_empty() {
-            entries.push((
-                format!("{} ↓", self.import_caption()),
-                Target::CommandMenu(CommandMenu::Add),
-                true,
-            ));
-        }
-        if !self.command_items(CommandMenu::Playlist).is_empty() {
-            entries.push((
-                self.text("Playlist ↓", "Плейлист ↓").into(),
-                Target::CommandMenu(CommandMenu::Playlist),
-                true,
-            ));
-        }
-        if self.settings.mode == Mode::Chaos
-            && self.control_visible(Panel::PlaylistActions, Action::ComposePlaylists)
-        {
-            entries.insert(
-                0,
-                (
-                    self.text("Build mix", "Собрать подборку").into(),
-                    Target::Action(Action::ComposePlaylists),
-                    self.allowed(Action::ComposePlaylists),
-                ),
-            );
-        }
-        // Saving a reorder disables the button but must not change its caption,
-        // shortcut or width: those determine the height of the whole toolbar.
-        if self.playlist().is_some_and(|playlist| {
-            playlist.mode == Mode::Order && playlist.kind == PlaylistKind::Normal
-        }) {
-            entries.push((
-                self.edit_caption(),
-                Target::Action(Action::ToggleEdit),
-                self.allowed(Action::ToggleEdit),
-            ));
-        } else if let Some(playlist) = self
-            .playlists()
-            .iter()
-            .find(|p| self.playlist_unlocked(p.id))
-        {
-            entries.push((
-                format!("{}: {}", self.text("Done", "Готово"), playlist.name),
-                Target::FinishEdit,
-                !self.busy(),
-            ));
-        }
-        for (action, panel) in [(Action::Undo, Panel::Add), (Action::Redo, Panel::Add)] {
-            if self.control_visible(panel, action) {
-                entries.push((
-                    self.history_caption(action == Action::Redo),
-                    Target::Action(action),
-                    self.allowed(action),
-                ));
+            if actions.contains(&Panels) {
+                items.push(CommandItem {
+                    label: self.text("Blocks and buttons…", "Блоки и кнопки…").into(),
+                    target: Target::ManagePanels, enabled: true,
+                });
+            }
+            if actions.contains(&ToggleEdit)
+                && let Some(playlist) = self.playlists().iter().find(|p| self.playlist_unlocked(p.id))
+            {
+                items.push(CommandItem {
+                    label: format!("{}: {}", self.text("Done", "Готово"), playlist.name),
+                    target: Target::FinishEdit, enabled: !self.busy(),
+                });
             }
         }
-        if self.control_visible(Panel::PlaylistActions, Action::Search) {
-            entries.push((
-                self.text("Search…", "Поиск…").into(),
-                Target::Action(Action::Search),
-                true,
-            ));
-        }
-        if self.control_visible(Panel::PlaylistActions, Action::Filter) {
-            entries.push((
-                self.text("Filter", "Фильтр").into(),
-                Target::Action(Action::Filter),
-                self.allowed(Action::Filter),
-            ));
-        }
-        if self.control_visible(Panel::Application, Action::Statistics) {
-            entries.push((
-                self.text("Statistics", "Статистика").into(),
-                Target::Action(Action::Statistics),
-                true,
-            ));
-        }
-        if self.control_visible(Panel::Application, Action::Settings) {
-            entries.push((
-                self.text("Settings", "Настройки").into(),
-                Target::Action(Action::Settings),
-                true,
-            ));
-        }
-        entries.push((
-            if self.view.layout_editing {
-                self.text("Done", "Готово")
-            } else {
-                self.text("Layout", "Блоки")
-            }
-            .into(),
-            Target::Action(Action::Panels),
-            true,
-        ));
-        if self.view.layout_editing {
-            entries.push((
-                self.text("Visibility…", "Видимость…").into(),
-                Target::ManagePanels,
-                true,
-            ));
-        }
-        entries.push((
-            format!(
-                "{} ↓",
-                self.settings
-                    .mode
-                    .caption(self.settings.preferences.language)
-            ),
-            Target::CommandMenu(CommandMenu::Application),
-            true,
-        ));
-        entries.push(("−".into(), Target::ToggleExpandedToolbar, true));
-        entries
-            .into_iter()
-            .map(|(label, target, enabled)| CommandItem {
-                label,
-                target,
-                enabled,
-            })
-            .collect()
+        items
     }
 
     pub fn control_visible(&self, panel: Panel, action: Action) -> bool {
@@ -283,6 +225,7 @@ impl App {
 
     pub fn command_items(&self, menu: CommandMenu) -> Vec<CommandItem> {
         use Action::*;
+        if menu == CommandMenu::More { return self.more_items(); }
         if menu == CommandMenu::Visualizer {
             return crate::visualizer::VisualizerKind::ALL
                 .into_iter()
@@ -302,7 +245,7 @@ impl App {
                 .collect();
         }
         let (panel, actions): (Panel, &[Action]) = match menu {
-            CommandMenu::Visualizer => unreachable!("Animation choices are built above"),
+            CommandMenu::Visualizer | CommandMenu::More => unreachable!("Menu choices are built above"),
             CommandMenu::Add => (
                 Panel::Add,
                 &[ToggleDesk, AddFiles, AddFolder, AddFolderPlaylists, AddNew],
@@ -448,8 +391,8 @@ impl App {
         }
         if menu == CommandMenu::Application {
             items.push(CommandItem {
-                label: format!("[{}] {}", if self.settings.preferences.appearance.expanded_toolbar { 'x' } else { ' ' }, self.text("Show all toolbar buttons", "Показывать все верхние кнопки")),
-                target: Target::ToggleExpandedToolbar, enabled: true,
+                label: self.text("More…", "Больше…").into(),
+                target: Target::CommandMenu(CommandMenu::More), enabled: true,
             });
             items.push(CommandItem {
                 label: self.text("Blocks and buttons…", "Блоки и кнопки…").into(),

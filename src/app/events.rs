@@ -656,6 +656,7 @@ impl App {
                 self.action(Action::ToggleToolbar)?;
             }
             Target::CommandMenu(menu) => self.open_commands(menu),
+            Target::MenuSection => {},
             Target::Visualizer(kind) => self.set_visualizer(kind)?,
             Target::StatisticsRow(row) => {
                 self.statistics_target(Target::StatisticsRow(row));

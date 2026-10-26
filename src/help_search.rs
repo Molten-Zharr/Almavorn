@@ -507,7 +507,7 @@ pub(crate) fn aliases(action: Action) -> &'static str {
             "порядок хаос; защищенная коллекция; свободная подборка; режим редактирования; order chaos mode collection mix"
         }
         ToggleToolbar => {
-            "слишком много кнопок; больше меньше; спрятать верхние кнопки; toolbar clutter hide more less"
+            "слишком много кнопок; больше меньше; спрятать верхние кнопки; меню больше; библиотека сервисы оформление; toolbar clutter hide more less menu"
         }
         OpenAddMenu => "меню добавления музыки; add music menu",
         OpenPlaylistMenu => "кнопки плейлиста; playlist menu commands",

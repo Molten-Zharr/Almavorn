@@ -290,9 +290,9 @@ impl App {
                 self.open_commands(menu);
             }
             ToggleToolbar => {
-                self.settings.preferences.appearance.expanded_toolbar = !self.settings.preferences.appearance.expanded_toolbar;
-                self.view.toolbar_selected = None;
-                self.save_settings()?;
+                self.view.toolbar_selected = self.toolbar_items().iter().position(|item| matches!(item.target, super::Target::CommandMenu(super::CommandMenu::More)));
+                self.view.pointer = ratatui::layout::Position::new(u16::MAX, u16::MAX);
+                self.open_commands(super::CommandMenu::More);
             }
             Quit => self.view.quit = true,
             Help => {

@@ -30,6 +30,7 @@ use ratatui::{
 
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
+    app.view.toolbar_width = area.width;
     let palette = Palette::new(app);
     let command_hint = menus::hint(app);
     app.view.hits.clear();

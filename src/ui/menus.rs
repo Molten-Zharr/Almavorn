@@ -48,8 +48,8 @@ pub(super) fn hint(app: &App) -> Option<String> {
             "Открыть подборки для свободного смешивания и редактирования.",
         ),
         Target::ToggleExpandedToolbar => app.text(
-            "Show or hide extra toolbar buttons.",
-            "Показать или скрыть дополнительные верхние кнопки.",
+            "Open More: library tools, services, appearance and help.",
+            "Открыть меню Больше: библиотека, сервисы, оформление и справка.",
         ),
         Target::TogglePlayerSpecialButtons => app.text(
             "Show or hide the EQ, FX and VIS buttons.",
@@ -130,7 +130,7 @@ pub(super) fn render(
         .max()
         .unwrap_or(24)
         .min(usize::from(area.width.saturating_sub(2))) as u16;
-    let row_height = if area.height >= 12 { 2 } else { 1 };
+    let row_height = if area.height >= 12 && menu != CommandMenu::More { 2 } else { 1 };
     let hint_height = u16::from(app.settings.preferences.appearance.show_button_shortcuts);
     let height = (items.len() as u16 * row_height + 2 + hint_height).min(area.height.saturating_sub(2));
     let outer = Rect::new(
@@ -163,6 +163,14 @@ pub(super) fn render(
     for (index, item) in items.iter().enumerate().skip(offset).take(capacity) {
         let rect = Rect::new(inner.x, inner.y + (index - offset) as u16 * row_height, inner.width, row_height);
         let caption_y = rect.y + row_height / 2;
+        if matches!(item.target, Target::MenuSection) {
+            frame.render_widget(
+                Paragraph::new(format!(" {}", item.label)).style(palette.text().fg(palette.accent)),
+                rect,
+            );
+            app.view.hits.push(Hit { area: rect, target: Target::MenuSection, enabled: true });
+            continue;
+        }
         let style = if !item.enabled {
             palette.text().fg(palette.muted)
         } else if index == *selected {
