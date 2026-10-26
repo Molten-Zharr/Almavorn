@@ -780,6 +780,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Lyrics as usize];
+    q.note("A word is underlined only when extended LRC provides explicit start and end markers for it. Plain text, line-only timing and incomplete word timing keep the line highlight.",
+        "Слово подчеркивается только при явных метках его начала и конца в расширенном LRC. При обычной или неполной разметке остается подсветка строки.");
     q.note("The panel opens a confident match automatically. Otherwise, click a song in the panel. Variants lets you change your choice.",
         "Панель сама открывает уверенное совпадение. Иначе выберите вариант прямо в ней. Кнопка \"Варианты\" позволяет сменить выбор.");
     q.note("Click or scroll inside the panel to use its keyboard controls. ↑↓ selects a result; Page Up/Down moves by a page; Home/End goes to the start/end.",

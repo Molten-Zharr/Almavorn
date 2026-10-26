@@ -221,22 +221,13 @@ pub(super) fn render(
             lines
                 .iter()
                 .enumerate()
-                .filter_map(|(i, (time, _))| time.filter(|t| *t <= position).map(|_| i))
+                .filter_map(|(i, line)| line.time.filter(|t| *t <= position).map(|_| i))
                 .last()
         });
         let rendered = lines
             .iter()
             .enumerate()
-            .map(|(i, (_, line))| {
-                Line::styled(
-                    clean(line),
-                    if Some(i) == active {
-                        palette.text().fg(palette.accent).bg(palette.selection)
-                    } else {
-                        palette.text()
-                    },
-                )
-            })
+            .map(|(i, line)| crate::ui::lyrics_panel::render_lyric_line(line, position, Some(i) == active, palette))
             .collect::<Vec<_>>();
         let paragraph = Paragraph::new(rendered.clone()).wrap(Wrap { trim: false });
         let count = paragraph.line_count(body.width.max(1));

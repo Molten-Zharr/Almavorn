@@ -11,7 +11,8 @@ use crate::{
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    text::Line,
+    style::Modifier,
+    text::{Line, Span},
     widgets::{Paragraph, Wrap},
 };
 
@@ -202,21 +203,12 @@ fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
             let active = lines
                 .iter()
                 .enumerate()
-                .filter_map(|(i, (time, _))| time.filter(|t| *t <= position).map(|_| i))
+                .filter_map(|(i, line)| line.time.filter(|t| *t <= position).map(|_| i))
                 .last();
             let rendered: Vec<_> = lines
                 .iter()
                 .enumerate()
-                .map(|(i, (_, text))| {
-                    Line::styled(
-                        clean(text),
-                        if Some(i) == active {
-                            palette.text().fg(palette.accent).bg(palette.selection)
-                        } else {
-                            palette.text()
-                        },
-                    )
-                })
+                .map(|(i, line)| render_lyric_line(line, Some(position), Some(i) == active, palette))
                 .collect();
             let paragraph = Paragraph::new(rendered.clone()).wrap(Wrap { trim: false });
             app.lyrics.panel.scroll_max = paragraph
@@ -294,6 +286,17 @@ fn song_title(artist: &str, title: &str) -> String {
     } else {
         format!("{artist} - {title}")
     }
+}
+
+pub(super) fn render_lyric_line(line: &crate::lyrics::LyricLine, position: Option<u64>, active: bool, palette: Palette) -> Line<'static> {
+    let style = if active { palette.text().fg(palette.accent).bg(palette.selection) } else { palette.text() };
+    if active && let Some(word) = position.and_then(|position| line.word_at(position)) {
+        Line::from(vec![
+            Span::styled(clean(&line.text[..word.start]), style),
+            Span::styled(clean(&line.text[word.clone()]), style.fg(palette.selection_text).add_modifier(Modifier::UNDERLINED | Modifier::BOLD)),
+            Span::styled(clean(&line.text[word.end..]), style),
+        ])
+    } else { Line::styled(clean(&line.text), style) }
 }
 
 fn render_choices(frame: &mut Frame, app: &mut App, body: Rect, palette: Palette) {

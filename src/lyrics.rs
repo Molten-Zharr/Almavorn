@@ -1,7 +1,9 @@
 use crate::{model::Track, network};
 mod providers;
+mod timing;
 use anyhow::{Context, Result, ensure};
 pub use providers::{Provider, ProviderReport, search, set_key};
+pub use timing::LyricLine;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -31,41 +33,8 @@ impl Lyric {
             &self.synced
         }
     }
-    pub fn lines(&self) -> Vec<(Option<u64>, String)> {
-        self.content()
-            .lines()
-            .flat_map(|line| {
-                let mut rest = line;
-                let mut times = Vec::new();
-                while let Some(tail) = rest.strip_prefix('[') {
-                    let Some(end) = tail.find(']') else {
-                        break;
-                    };
-                    let Some((minutes, seconds)) = tail[..end].split_once(':') else {
-                        break;
-                    };
-                    let Some(ms) = minutes.parse::<u64>().ok().and_then(|m| {
-                        seconds
-                            .parse::<f64>()
-                            .ok()
-                            .filter(|s| s.is_finite() && *s >= 0.0 && *s < 60.0)
-                            .map(|s| m.saturating_mul(60_000).saturating_add((s * 1000.0) as u64))
-                    }) else {
-                        break;
-                    };
-                    times.push(ms);
-                    rest = &tail[end + 1..];
-                }
-                if times.is_empty() {
-                    vec![(None, line.to_owned())]
-                } else {
-                    times
-                        .into_iter()
-                        .map(|time| (Some(time), rest.trim().to_owned()))
-                        .collect()
-                }
-            })
-            .collect()
+    pub fn lines(&self) -> Vec<LyricLine> {
+        timing::lines(self.content())
     }
 }
 
