@@ -11,7 +11,7 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.ru.md">Русский</a></p>
 
-<p align="center"><a href="#install">Install</a> &nbsp; · &nbsp; <a href="#screenshots">Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch">Getting&nbsp;started</a></p>
+<p align="center"><a href="#install">Install</a> &nbsp; · &nbsp; <a href="#screenshots">Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch">Getting&nbsp;started</a> &nbsp; · &nbsp; <a href="#help">Contribute</a></p>
 
 <p align="center">
   <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists."></a>
@@ -239,6 +239,19 @@ The sorting desk helps you organize music before adding it to permanent playlist
 - Tab switches panels; right-click opens the action menu. Esc closes the open window; in the file picker, it clears the filter first.
 
 These are the default keys. Set your own shortcuts under F2, "Shortcuts".
+
+<a id="help"></a>
+
+## Help build Almavorn
+
+**ATTENTION!** External music services and account login are still being tested. We need help integrating Spotify, Yandex Music, and YouTube Music.
+
+- Mods: create extensions, share examples, and help improve the mod system. [Getting started](docs/MODS.md).
+- Themes: help expand the design options with custom frames, new control shapes, animations, and 2D or 3D graphics. Share your mockups and implementation ideas!
+- Integrations: help Almavorn work with other window managers, panels, widgets, and music control tools.
+- Testing: try TUI and GUITUI on other distributions, in different terminals, window managers, and desktop environments. We especially need feedback on installation, audio, display, and keyboard shortcuts.
+
+Share ideas and test results in [Issues](https://github.com/Molten-Zharr/Almavorn/issues), and send code changes as pull requests. For a bug report, include the player version, TUI or GUITUI, your distribution, window manager, and the steps that trigger the problem.
 
 [All releases](https://github.com/Molten-Zharr/Almavorn/releases) · [Keyboard shortcuts](docs/GLOBAL_SHORTCUTS.md) · [MIT license](LICENSE)
 
