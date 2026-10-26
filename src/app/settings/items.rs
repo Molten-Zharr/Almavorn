@@ -19,6 +19,7 @@ pub(crate) enum SettingControl {
     ButtonShortcuts,
     PlayerButtonSize,
     PlayerSpecialButtons,
+    QuickAccess,
     ArtworkVisible,
     ArtworkSize,
     ArtworkShared,
@@ -125,6 +126,7 @@ impl App {
                 rows
             }
             SettingsPage::General => vec![
+                make(lang.text("Quick access", "Панель быстрого доступа"), lang.text("Customize…", "Настроить…").into(), lang.text("Choose the buttons above the library. Unpinned commands stay in More. You can show all buttons, hide them all or display active modes automatically.", "Выберите кнопки над библиотекой. Остальные команды останутся в Больше. Можно показать все кнопки, убрать все или автоматически показывать включенные режимы."), SettingControl::QuickAccess, false),
                 make(lang.text("Language", "Язык"), if lang == crate::model::Language::English { "English" } else { "Русский" }.into(), lang.text("Language of menus, descriptions, notices and keyboard hints.", "Язык меню, описаний, уведомлений и подсказок клавиш."), SettingControl::Language, true),
                 make(lang.text("Volume", "Громкость"), format!("{}%", (self.settings.preferences.volume*100.0).round() as u32), lang.text("Playback volume. Changes immediately; step: 5%.", "Громкость воспроизведения. Меняется сразу; шаг: 5%."), SettingControl::Volume, true),
                 make(lang.text("Sorting desk", "Сортировочный стол"), lang.text(if self.settings.preferences.sorting_desk { "On" } else { "Off" }, if self.settings.preferences.sorting_desk { "Включён" } else { "Выключен" }).into(), lang.text("In Chaos, route added music to the sorting desk instead of the selected playlist. In Order, music always goes to the desk, even with editing off.", "В Хаосе направлять добавляемую музыку в сортировочный стол вместо выбранного плейлиста. В Порядке музыка всегда добавляется в стол, даже без включения правки."), SettingControl::Desk, true),

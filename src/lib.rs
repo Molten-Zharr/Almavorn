@@ -24,6 +24,7 @@ pub mod tags;
 pub mod store;
 mod track_query;
 pub mod tuner;
+pub mod toolbar;
 pub mod ui;
 pub mod visualizer;
 pub mod workspace;

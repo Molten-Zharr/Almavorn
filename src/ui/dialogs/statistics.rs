@@ -241,32 +241,17 @@ fn controls(frame: &mut Frame, app: &mut App, area: Rect, entries: Vec<(String, 
 
 fn render_popup(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     if let Some(menu) = app.statistics.view.menu {
-        let items = app.statistics_menu_items(menu);
+        let items: Vec<_> = app.statistics_menu_items(menu).into_iter().enumerate().map(|(index, item)| crate::app::CommandItem {
+            label: item.label, target: Target::StatisticsControl(StatisticsControl::Item(index)), enabled: item.enabled,
+        }).collect();
         let width = items.iter().map(|i| Span::raw(&i.label).width() as u16 + 6).max().unwrap_or(20).min(area.width);
-        let row_height = if area.height >= items.len() as u16 * 2 + 2 { 2 } else { 1 };
-        let height = (items.len() as u16 * row_height + 2).min(area.height);
+        let height = super::super::dropdown::height(app, &items, false).min(area.height);
         let anchor = app.statistics.view.menu_anchor;
         let rect = Rect::new(anchor.x.clamp(area.x, area.right().saturating_sub(width)),
             anchor.y.clamp(area.y, area.bottom().saturating_sub(height)), width, height);
         app.statistics.view.popup_area = rect;
         app.view.hits.push(Hit { area: frame.area(), target: Target::StatisticsControl(StatisticsControl::Dismiss), enabled: true });
-        frame.render_widget(Clear, rect);
-        let outer = block(String::new(), palette, true);
-        let inner = outer.inner(rect);
-        frame.render_widget(outer, rect);
-        let capacity = usize::from(inner.height / row_height);
-        let selected = app.statistics.view.menu_selected;
-        let offset = visible_offset(0, selected, capacity, items.len());
-        for (index, item) in items.iter().enumerate().skip(offset).take(capacity) {
-            let row = Rect::new(inner.x, inner.y + (index - offset) as u16 * row_height, inner.width, row_height);
-            let hovered = app.hovered(row);
-            let style = if !item.enabled { palette.text().fg(palette.muted) }
-                else if index == selected || hovered { palette.text().bg(palette.selection).fg(palette.selection_text) }
-                else { palette.text() };
-            frame.render_widget(Paragraph::new("").style(style), row);
-            frame.render_widget(Paragraph::new(format!(" {}", item.label)).style(style), Rect::new(row.x, row.y + row.height / 2, row.width, 1));
-            app.view.hits.push(Hit { area: row, target: Target::StatisticsControl(StatisticsControl::Item(index)), enabled: item.enabled });
-        }
+        super::super::dropdown::render(frame, app, rect, String::new(), &items, app.statistics.view.menu_selected, None, palette, |_, item| item.target.clone());
     } else if let Some(info) = app.statistics.view.info {
         let (title, text) = information(app, info);
         let width = area.width.min(72);

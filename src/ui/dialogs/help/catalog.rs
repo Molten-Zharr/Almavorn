@@ -526,6 +526,13 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Settings as usize];
+    q.topic("Quick access: Settings > General > Quick access. Check the buttons you want above the library. Other commands stay in More. Show all moves them to the toolbar; Hide all leaves only More. Active modes can appear automatically. Choices are saved in the profile.",
+        "Панель быстрого доступа: Настройки > Общие > Панель быстрого доступа. Отметьте нужные кнопки, остальные останутся в Больше. Показать все переносит команды наверх; Убрать все оставляет только Больше. Включенные режимы можно показывать автоматически. Выбор сохраняется в профиле.",
+        "верхнее меню быстрые кнопки закрепить убрать скрыть показать все больше панель quick access pin toolbar buttons overflow");
+    q.keys(&[c(Char('a')), c(Char('d'))], "Inside Quick access: show all buttons / hide all buttons.", "В окне быстрого доступа: показать все кнопки / убрать все кнопки.");
+    q.keys(&[p(Enter), p(Char(' '))], "Inside Quick access: pin or unpin the selected button.", "В окне быстрого доступа: закрепить или убрать выбранную кнопку.");
+    q.keys(&[c(Char(' '))], "Inside Quick access: toggle automatic display of active modes.", "В окне быстрого доступа: включить или выключить автоматический показ активных режимов.");
+    q.keys(&[c(Char('r'))], "Inside Quick access: restore default toolbar buttons.", "В окне быстрого доступа: вернуть исходный набор кнопок.");
     q.topic("Larger text: Settings > Themes > Font and geometry > Font size. In TUI, change the font size in your terminal's settings.",
         "Увеличить буквы: Настройки > Темы > Шрифт и геометрия > Размер шрифта. В TUI размер шрифта меняется в настройках терминала.",
         "мелко плохо видно увеличить буквы масштаб зум размер текста zoom tiny text bigger letters font size");

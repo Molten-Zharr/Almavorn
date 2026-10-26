@@ -512,6 +512,6 @@ pub(crate) fn aliases(action: Action) -> &'static str {
         OpenAddMenu => "меню добавления музыки; add music menu",
         OpenPlaylistMenu => "кнопки плейлиста; playlist menu commands",
         OpenTracksMenu => "кнопки композиции; контекстное меню песни; track song menu commands",
-        OpenApplicationMenu => "главное меню; меню программы; application main menu",
+        OpenApplicationMenu => "настройки; верхняя панель; settings toolbar",
     }
 }

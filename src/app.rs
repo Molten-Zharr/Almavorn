@@ -37,6 +37,7 @@ mod mods;
 mod tags;
 mod transfer;
 mod tuner;
+mod toolbar;
 mod visualizer;
 mod workspace;
 

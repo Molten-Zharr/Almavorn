@@ -151,6 +151,7 @@ fn run() -> Result<()> {
                     ) / pixels_per_point,
                 );
                 if let Some(movement) = pointer_movement(&ctx, image_rect, columns, rows) {
+                    app.view.pointer_fraction_y = ctx.input(|input| input.pointer.hover_pos()).map_or(0.0, |point| ((point.y - image_rect.top()) / image_rect.height() * f32::from(rows)).fract().max(0.0));
                     app.handle(movement);
                 }
                 if let Err(error) = terminal.draw(|frame| ui::render(&mut app, frame)) {
@@ -221,6 +222,7 @@ fn run() -> Result<()> {
                         .image(texture_id, popup, uv, egui::Color32::WHITE);
                 }
                 color_painter.paint(ui, image_rect, &app, dimensions);
+                gui_renderer::paint_dropdown(ui, image_rect, texture_id, &app, dimensions);
                 gui_renderer::paint_keycaps(
                     ui,
                     image_rect,
@@ -277,6 +279,7 @@ fn run() -> Result<()> {
                             | Target::Action(_)
                             | Target::Mode(_)
                             | Target::CommandMenu(_)
+                            | Target::QuickAccess(_)
                             | Target::CommandRow(_)
                             | Target::StatisticsControl(_)
                             | Target::StatisticsPage(_)
@@ -518,6 +521,7 @@ fn handle_pointer_event(
         ) =>
         {
             if let Some((x, y)) = pointer_cell(image, size, pos) {
+                app.view.pointer_fraction_y = ((pos.y - image.top()) / image.height() * f32::from(size.height)).fract().max(0.0);
                 if button == egui::PointerButton::Secondary {
                     app.handle(Input::SecondaryClick { x, y });
                 } else {

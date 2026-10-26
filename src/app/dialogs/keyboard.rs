@@ -59,6 +59,7 @@ impl App {
             Some(Dialog::Search(_)) => self.search_key(key),
             Some(Dialog::Commands { .. }) => self.commands_key(key),
             Some(Dialog::Panels { .. }) => self.panels_key(key),
+            Some(Dialog::QuickAccess { .. }) => self.quick_access_key(key),
             Some(Dialog::Browser(_)) => self.browser_key(key),
             Some(Dialog::Transfer { .. } | Dialog::MoveFiles(_)) => self.transfer_key(key),
             Some(

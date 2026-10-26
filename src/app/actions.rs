@@ -278,7 +278,8 @@ impl App {
         }
         use Action::*;
         match action {
-            OpenAddMenu | OpenPlaylistMenu | OpenTracksMenu | OpenApplicationMenu => {
+            OpenApplicationMenu => self.open_settings_page(super::SettingsPage::General),
+            OpenAddMenu | OpenPlaylistMenu | OpenTracksMenu => {
                 let menu = match action {
                     OpenAddMenu => super::CommandMenu::Add,
                     OpenPlaylistMenu => super::CommandMenu::Playlist,

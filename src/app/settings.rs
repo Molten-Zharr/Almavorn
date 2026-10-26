@@ -631,6 +631,7 @@ impl App {
         }
         self.select_setting(row);
         match item.control {
+            SettingControl::QuickAccess => self.quick_access_action(crate::toolbar::QuickAction::Open)?,
             SettingControl::ProfileCreate => self.settings_text(
                 SettingsEdit::CreateProfile,
                 self.text("New profile", "Новый профиль").into(),

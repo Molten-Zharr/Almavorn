@@ -205,6 +205,11 @@ fn quiet(
         Target::Mode(mode) => app.settings.mode == mode,
         Target::Action(Action::Panels) => app.view.layout_editing,
         Target::Action(Action::ToggleEdit) => app.selected_playlist_unlocked(),
+        Target::FinishEdit => true,
+        Target::ToggleLyricsPanel => app.settings.preferences.lyrics.show_panel,
+        Target::TogglePlayerSpecialButtons => app.settings.preferences.appearance.show_player_special_buttons,
+        Target::Action(Action::PlayWholePlaylist) => app.quick_active(crate::toolbar::QuickButton::Marked),
+        Target::Action(Action::SwitchMode) => app.settings.mode == crate::model::Mode::Chaos,
         Target::Action(Action::ToggleDesk) => app.settings.preferences.sorting_desk,
         Target::Action(Action::CycleRepeat) => {
             app.settings.preferences.repeat != crate::model::RepeatMode::Off

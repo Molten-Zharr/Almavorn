@@ -1,6 +1,8 @@
 mod buttons;
 mod dialogs;
 mod keycaps;
+mod dropdown;
+pub use dropdown::{Dropdown, DropdownRow};
 mod library;
 mod lyrics_panel;
 mod menus;
@@ -31,12 +33,14 @@ use ratatui::{
 pub fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     app.view.toolbar_width = area.width;
+    app.view.toolbar_max_rows = area.height.saturating_sub(14).max(1);
     let palette = Palette::new(app);
     let command_hint = menus::hint(app);
     app.view.hits.clear();
     app.lyrics.panel.area = Rect::default();
     app.view.keycaps.clear();
     app.view.player_buttons.clear();
+    app.view.dropdown = None;
     app.view.overlay_background = (0, 0);
     app.view.dialog_scroll_max = 0;
     app.view.dialog_page_size = 0;

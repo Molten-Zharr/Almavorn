@@ -50,6 +50,14 @@ impl App {
     }
 
     pub fn target_at(&self, point: Position) -> Option<&Target> {
+        if self.view.dialog.is_some()
+            && let Some(dropdown) = &self.view.dropdown
+            && dropdown.area.contains(point)
+        {
+            let y = f32::from(point.y) + self.view.pointer_fraction_y;
+            return dropdown.rows.iter().find(|row| y >= row.top && y < row.top + row.height)
+                .map(|row| &row.target).or(Some(&Target::MenuSection));
+        }
         self.view
             .hits
             .iter()
@@ -622,6 +630,7 @@ impl App {
     }
 
     pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
+        self.view.dropdown = None;
         match target {
             Target::HelpSection(index) => self.select_help_section(index),
             Target::HelpSearch => self.focus_help_search(),
@@ -677,6 +686,7 @@ impl App {
             }
             Target::CommandMenu(menu) => self.open_commands(menu),
             Target::MenuSection => {},
+            Target::QuickAccess(action) => self.quick_access_action(action)?,
             Target::Visualizer(kind) => self.set_visualizer(kind)?,
             Target::StatisticsRow(row) => {
                 self.statistics_target(Target::StatisticsRow(row));

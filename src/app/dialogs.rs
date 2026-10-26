@@ -81,6 +81,7 @@ pub enum Dialog {
         selected: usize,
         expanded: Vec<crate::workspace::Panel>,
     },
+    QuickAccess { selected: usize },
     Text(TextDialog),
     Search(super::search::SearchDialog),
     Browser(Browser),
@@ -179,7 +180,7 @@ impl Dialog {
         use crate::input::Action;
         match self {
             Self::Commands { menu, .. } => menu.opening_action(),
-            Self::Form(_) | Self::ScanFolders(_) => None,
+            Self::Form(_) | Self::ScanFolders(_) | Self::QuickAccess { .. } => None,
             Self::Lyrics(_) => Some(Action::Lyrics),
             Self::Downloads(_) => Some(Action::Downloads),
             Self::Services(_) => Some(Action::Services),
@@ -360,6 +361,9 @@ impl App {
             return;
         }
         match &mut self.view.dialog {
+            Some(Dialog::QuickAccess { selected }) => {
+                *selected = bounded(*selected, i64::from(direction), crate::toolbar::QuickButton::ALL.len());
+            }
             Some(Dialog::ComposeTracks {
                 selected, entries, ..
             }) => *selected = bounded(*selected, i64::from(direction), entries.len()),
@@ -493,6 +497,10 @@ impl App {
                     },
                     name,
                 );
+            }
+            Some(Dialog::QuickAccess { selected }) => {
+                self.view.dialog = Some(Dialog::QuickAccess { selected });
+                self.quick_access_action(crate::toolbar::QuickAction::Toggle(selected))?;
             }
             Some(Dialog::Panels { selected, expanded }) => {
                 self.view.dialog = Some(Dialog::Panels { selected, expanded });

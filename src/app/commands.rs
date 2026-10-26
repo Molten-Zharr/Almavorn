@@ -152,83 +152,6 @@ impl App {
         }
     }
 
-    pub fn toolbar_items(&self) -> Vec<CommandItem> {
-        let mut items = Vec::new();
-        for (menu, label) in [
-            (CommandMenu::Add, format!("{} ↓", self.import_caption())),
-            (CommandMenu::Playlist, self.text("Playlist ↓", "Плейлист ↓").into()),
-            (CommandMenu::Tracks, self.text("Tracks ↓", "Композиции ↓").into()),
-            (CommandMenu::Application, format!("Almavorn · {} ↓", self.settings.mode.name(self.settings.preferences.language))),
-            (CommandMenu::More, self.text("More ↓", "Больше ↓").into()),
-        ] {
-            if menu == CommandMenu::More || !self.command_items(menu).is_empty() {
-                items.push(CommandItem { label, target: Target::CommandMenu(menu), enabled: true });
-            }
-        }
-        let available = self.view.toolbar_width.saturating_sub(11);
-        while items.len() > 1 && items.iter().map(|item| {
-            u32::from(crate::layout::buttons::button_width(self, &item.label, &item.target)) + 1
-        }).sum::<u32>() > u32::from(available) {
-            items.remove(items.len() - 2);
-        }
-        items
-    }
-
-    fn more_items(&self) -> Vec<CommandItem> {
-        use Action::*;
-        let mut items = vec![CommandItem {
-            label: self.text("Menus", "Меню").into(), target: Target::MenuSection, enabled: false,
-        }];
-        for menu in [CommandMenu::Add, CommandMenu::Playlist, CommandMenu::Tracks, CommandMenu::Application] {
-            if !self.command_items(menu).is_empty() {
-                items.push(CommandItem {
-                    label: format!("{} ›", menu.title(self.settings.preferences.language)),
-                    target: Target::CommandMenu(menu), enabled: true,
-                });
-            }
-        }
-        for (title, actions) in [
-            (self.text("Library", "Библиотека"), &[ToggleEdit, ComposePlaylists, Undo, Redo, Search, Filter][..]),
-            (self.text("Music services", "Музыкальные сервисы"), &[Services, Downloads, Mods][..]),
-            (self.text("Appearance", "Оформление"), &[Settings, Panels][..]),
-            (self.text("Information", "Информация"), &[Statistics, Help, Quit][..]),
-        ] {
-            items.push(CommandItem { label: String::new(), target: Target::MenuSection, enabled: false });
-            items.push(CommandItem { label: title.into(), target: Target::MenuSection, enabled: false });
-            for &action in actions {
-                if action == ComposePlaylists && self.settings.mode != Mode::Chaos { continue; }
-                let panel = match action {
-                    ToggleEdit | ComposePlaylists | Search | Filter => Panel::PlaylistActions,
-                    Undo | Redo => Panel::Add,
-                    _ => Panel::Application,
-                };
-                if self.control_visible(panel, action) {
-                    items.push(CommandItem {
-                        label: if action == Panels && self.view.layout_editing {
-                            self.text("Finish arranging blocks", "Завершить перемещение блоков").into()
-                        } else { self.action_caption(action) },
-                        target: Target::Action(action), enabled: self.allowed(action),
-                    });
-                }
-            }
-            if actions.contains(&Panels) {
-                items.push(CommandItem {
-                    label: self.text("Blocks and buttons…", "Блоки и кнопки…").into(),
-                    target: Target::ManagePanels, enabled: true,
-                });
-            }
-            if actions.contains(&ToggleEdit)
-                && let Some(playlist) = self.playlists().iter().find(|p| self.playlist_unlocked(p.id))
-            {
-                items.push(CommandItem {
-                    label: format!("{}: {}", self.text("Done", "Готово"), playlist.name),
-                    target: Target::FinishEdit, enabled: !self.busy(),
-                });
-            }
-        }
-        items
-    }
-
     pub fn control_visible(&self, panel: Panel, action: Action) -> bool {
         !self.settings.preferences.workspace.hidden.contains(&panel)
             && !self
@@ -433,10 +356,59 @@ impl App {
         if menu == CommandMenu::Playlist && let Some(playlist) = self.playlists().iter().find(|p| self.playlist_unlocked(p.id) && Some(p.id) != self.library.selected_playlist) {
             items.push(CommandItem { label: format!("{}: {}", self.text("Done", "Готово"), playlist.name), target: Target::FinishEdit, enabled: !self.busy() });
         }
-        items
+        self.group_commands(menu, items)
+    }
+
+    fn group_commands(&self, menu: CommandMenu, items: Vec<CommandItem>) -> Vec<CommandItem> {
+        use Action::*;
+        let groups: &[(&str, &str)] = match menu {
+            CommandMenu::Add => &[("Destination", "Куда добавлять"), ("Add music", "Добавление музыки"), ("Playlists", "Плейлисты"), ("Update", "Обновление")],
+            CommandMenu::Playlist => &[("Create", "Создание"), ("Edit", "Редактирование"), ("Order", "Порядок"), ("Folders", "Папки")],
+            CommandMenu::Tracks => &[("Playback", "Прослушивание"), ("Selection", "Отметки"), ("Edit", "Редактирование"), ("Information", "Сведения"), ("Update", "Обновление"), ("Lyrics", "Текст песни"), ("Navigation", "Навигация")],
+            CommandMenu::Player => &[("Playback", "Воспроизведение"), ("Modes", "Режимы"), ("Sound", "Звук"), ("Lyrics", "Текст песни"), ("Appearance", "Оформление")],
+            CommandMenu::Application => &[("Mode", "Режим"), ("Music services", "Музыкальные сервисы"), ("Appearance", "Оформление"), ("Information", "Информация")],
+            _ => return items,
+        };
+        let category = |target: &Target| match (menu, target) {
+            (CommandMenu::Add, Target::Action(ToggleDesk)) => 0,
+            (CommandMenu::Add, Target::Action(AddFolderPlaylists)) => 2,
+            (CommandMenu::Add, Target::ChooseScanFolders) => 3,
+            (CommandMenu::Add, _) => 1,
+            (CommandMenu::Playlist, Target::Action(NewPlaylist | CopyPlaylist | ComposePlaylists)) => 0,
+            (CommandMenu::Playlist, Target::Action(MoveUp | MoveDown)) => 2,
+            (CommandMenu::Playlist, Target::Action(PlaylistFolders)) => 3,
+            (CommandMenu::Playlist, _) => 1,
+            (CommandMenu::Tracks, Target::Action(TogglePlay | PlayMarked | PlayWholePlaylist)) => 0,
+            (CommandMenu::Tracks, Target::Action(Mark)) => 1,
+            (CommandMenu::Tracks, Target::Action(Metadata)) => 3,
+            (CommandMenu::Tracks, Target::Action(AddNew)) => 4,
+            (CommandMenu::Tracks, Target::Action(Lyrics) | Target::ToggleLyricsPanel) => 5,
+            (CommandMenu::Tracks, Target::Action(Sort | Search | Filter)) => 6,
+            (CommandMenu::Tracks, _) => 2,
+            (CommandMenu::Player, Target::Action(Previous | TogglePlay | Stop | Next)) => 0,
+            (CommandMenu::Player, Target::Action(CycleRepeat | PlayWholePlaylist | ToggleShuffle)) => 1,
+            (CommandMenu::Player, Target::Action(Equalizer | PlaybackTuner | VolumeDown | VolumeUp)) => 2,
+            (CommandMenu::Player, Target::Action(Lyrics)) => 3,
+            (CommandMenu::Player, _) => 4,
+            (CommandMenu::Application, Target::Mode(_)) => 0,
+            (CommandMenu::Application, Target::Action(Services | Downloads | Mods)) => 1,
+            (CommandMenu::Application, Target::Action(Settings | Panels) | Target::ManagePanels | Target::QuickAccess(_)) => 2,
+            _ => 3,
+        };
+        let mut buckets: Vec<Vec<CommandItem>> = groups.iter().map(|_| Vec::new()).collect();
+        for item in items { buckets[category(&item.target)].push(item); }
+        let mut result = Vec::new();
+        for ((en, ru), bucket) in groups.iter().zip(buckets) {
+            if bucket.is_empty() { continue; }
+            if !result.is_empty() { result.push(CommandItem { label: String::new(), target: Target::MenuSection, enabled: false }); }
+            result.push(CommandItem { label: self.text(en, ru).into(), target: Target::MenuSection, enabled: false });
+            result.extend(bucket);
+        }
+        result
     }
 
     pub(crate) fn open_commands(&mut self, menu: CommandMenu) {
+        self.view.dropdown = None;
         let toolbar_selected = self.view.toolbar_selected;
         let toolbar_anchor = toolbar_selected
             .and_then(|index| self.view.toolbar_areas.get(index))

@@ -1,6 +1,6 @@
 use super::super::{
     theme::Palette,
-    widgets::{block, button_width, buttons, modal, visible_offset},
+    widgets::{button_width, buttons, modal, visible_offset},
 };
 use crate::{
     app::{App, Hit, Target},
@@ -9,7 +9,7 @@ use crate::{
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    widgets::{Clear, Paragraph},
+    widgets::Paragraph,
 };
 
 pub(super) fn render(
@@ -286,70 +286,15 @@ fn horizontal(frame: &mut Frame, app: &mut App, selected: usize, area: Rect, pal
 }
 
 fn dropdown(frame: &mut Frame, app: &mut App, selected: &mut usize, inner: Rect, palette: Palette) {
-    // Clicking outside the list dismisses it without touching sliders below.
-    app.view.hits.push(Hit {
-        area: inner,
-        target: Target::EqualizerPresets,
-        enabled: true,
-    });
+    app.view.hits.push(Hit { area: inner, target: Target::EqualizerPresets, enabled: true });
     *selected = (*selected).min(PRESETS.len() - 1);
-    let outer = Rect::new(
-        inner.x + inner.width.saturating_sub(32) / 2,
-        inner.y + 2,
-        inner.width.min(32),
-        inner.height.saturating_sub(4).min(PRESETS.len() as u16 + 3),
-    );
-    frame.render_widget(Clear, outer);
-    let block = block(app.text("Presets", "Пресеты").into(), palette, true);
-    let body = block.inner(outer);
-    frame.render_widget(block, outer);
-    let capacity = usize::from(body.height.saturating_sub(1));
-    let offset = visible_offset(0, *selected, capacity, PRESETS.len());
     let current = app.settings.preferences.equalizer.preset();
-    for (index, preset) in PRESETS.iter().enumerate().skip(offset).take(capacity) {
-        let row = Rect::new(body.x, body.y + (index - offset) as u16, body.width, 1);
-        let style = if index == *selected {
-            palette
-                .text()
-                .bg(palette.selection)
-                .fg(palette.selection_text)
-        } else {
-            palette.text()
-        };
-        frame.render_widget(
-            Paragraph::new(format!(
-                "{} {}",
-                if current == Some(index) { "●" } else { " " },
-                preset.name(app.settings.preferences.language)
-            ))
-            .style(style),
-            row,
-        );
-        let shortcut = match index {
-            0..=8 => (index + 1).to_string(),
-            9 => "0".into(),
-            _ => String::new(),
-        };
-        frame.render_widget(
-            Paragraph::new(shortcut)
-                .alignment(Alignment::Right)
-                .style(style),
-            row,
-        );
-        app.view.hits.push(Hit {
-            area: row,
-            target: Target::EqualizerPreset(index),
-            enabled: true,
-        });
-    }
-    frame.render_widget(
-        Paragraph::new(format!("↑↓ · {}/{}", *selected + 1, PRESETS.len()))
-            .style(palette.text().fg(palette.muted)),
-        Rect::new(
-            body.x,
-            body.bottom().saturating_sub(1),
-            body.width,
-            body.height.min(1),
-        ),
-    );
+    let items: Vec<_> = PRESETS.iter().enumerate().map(|(index, preset)| crate::app::CommandItem {
+        label: format!("{} {}", if current == Some(index) { "●" } else { " " }, preset.name(app.settings.preferences.language)),
+        target: Target::EqualizerPreset(index), enabled: true,
+    }).collect();
+    let height = super::super::dropdown::height(app, &items, true).min(inner.height.saturating_sub(2));
+    let outer = Rect::new(inner.x + inner.width.saturating_sub(34) / 2, inner.y + 1, inner.width.min(34), height);
+    let footer = format!("↑↓ · {}/{}", *selected + 1, PRESETS.len());
+    super::super::dropdown::render(frame, app, outer, app.text("Presets", "Пресеты").into(), &items, *selected, Some(&footer), palette, |_, item| item.target.clone());
 }

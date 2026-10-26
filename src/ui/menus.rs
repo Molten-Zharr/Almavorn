@@ -1,7 +1,4 @@
-use super::{
-    theme::Palette,
-    widgets::{block, visible_offset},
-};
+use super::theme::Palette;
 use crate::{
     app::{App, CommandMenu, Dialog, Hit, Target},
     input::Action,
@@ -12,8 +9,7 @@ use crate::{
 use ratatui::{
     Frame,
     layout::{Position, Rect},
-    text::{Line, Span},
-    widgets::{Clear, Paragraph},
+    text::Span,
 };
 
 pub(super) fn hint(app: &App) -> Option<String> {
@@ -22,10 +18,7 @@ pub(super) fn hint(app: &App) -> Option<String> {
     };
     // Read the previous frame's menu regions before the main view rebuilds them.
     // Disabled rows still explain their action when the pointer is over them.
-    let hovered = app.view.hits.iter().rev().find_map(|hit| match hit.target {
-        Target::CommandRow(index) if app.hovered(hit.area) => Some(index),
-        _ => None,
-    });
+    let hovered = match app.hovered_target() { Some(Target::CommandRow(index)) => Some(*index), _ => None };
     let items = app.command_items(*menu);
     let item = hovered
         .and_then(|index| items.get(index))
@@ -123,121 +116,17 @@ pub(super) fn render(
     palette: Palette,
 ) {
     let items = app.command_items(menu);
-    let area = Rect {
-        height: frame.area().height.saturating_sub(1),
-        ..frame.area()
-    };
-    let width = items
-        .iter()
-        .map(|item| {
-            Span::raw(&item.label).width()
-                + displayed_shortcut(app, &item.target).map_or(0, |key| Span::raw(key).width() + 3)
-                + 4
-        })
-        .max()
-        .unwrap_or(24)
-        .min(usize::from(area.width.saturating_sub(2))) as u16;
-    let row_height = if area.height >= 12 && menu != CommandMenu::More { 2 } else { 1 };
-    let hint_height = u16::from(app.settings.preferences.appearance.show_button_shortcuts);
-    let height = (items.len() as u16 * row_height + 2 + hint_height).min(area.height.saturating_sub(2));
-    let outer = Rect::new(
-        anchor.x.min(area.right().saturating_sub(width)),
-        anchor
-            .y
-            .saturating_add(1)
-            .min(area.bottom().saturating_sub(height)),
-        width,
-        height,
-    );
-    let block = block(
-        menu.title(app.settings.preferences.language).into(),
-        palette,
-        false,
-    )
-    .border_style(palette.text().fg(palette.separator));
-    let inner = block.inner(outer);
+    let area = Rect { height: frame.area().height.saturating_sub(1), ..frame.area() };
+    let width = items.iter().map(|item| Span::raw(&item.label).width()
+        + displayed_shortcut(app, &item.target).map_or(0, |key| Span::raw(key).width() + 3) + 6)
+        .max().unwrap_or(24).min(usize::from(area.width.saturating_sub(2))) as u16;
+    let hints = app.settings.preferences.appearance.show_button_shortcuts;
+    let height = super::dropdown::height(app, &items, hints).min(area.height.saturating_sub(2));
+    let outer = Rect::new(anchor.x.min(area.right().saturating_sub(width)),
+        anchor.y.saturating_add(1).min(area.bottom().saturating_sub(height)), width, height);
     app.view.overlay_area = outer;
-    app.view.hits.push(Hit {
-        area: frame.area(),
-        target: Target::CloseDialog,
-        enabled: true,
-    });
-    frame.render_widget(Clear, outer);
-    frame.render_widget(block, outer);
+    app.view.hits.push(Hit { area: frame.area(), target: Target::CloseDialog, enabled: true });
     *selected = App::command_selection(&items, *selected, 0);
-    let capacity = (inner.height.saturating_sub(hint_height) / row_height) as usize;
-    let offset = visible_offset(0, *selected, capacity, items.len());
-    for (index, item) in items.iter().enumerate().skip(offset).take(capacity) {
-        let rect = Rect::new(inner.x, inner.y + (index - offset) as u16 * row_height, inner.width, row_height);
-        let caption_y = rect.y + row_height / 2;
-        if matches!(item.target, Target::MenuSection) {
-            frame.render_widget(
-                Paragraph::new(format!(" {}", item.label)).style(palette.text().fg(palette.accent)),
-                rect,
-            );
-            app.view.hits.push(Hit { area: rect, target: Target::MenuSection, enabled: true });
-            continue;
-        }
-        let style = if !item.enabled {
-            palette.text().fg(palette.muted)
-        } else if index == *selected {
-            palette
-                .text()
-                .bg(palette.selection)
-                .fg(palette.selection_text)
-        } else {
-            palette.text()
-        };
-        frame.render_widget(Paragraph::new("").style(style), rect);
-        let shortcut = displayed_shortcut(app, &item.target);
-        let key_width = shortcut
-            .as_ref()
-            .map_or(0, |key| Span::raw(key).width() as u16)
-            .min(rect.width.saturating_sub(1));
-        let label_width =
-            rect.width
-                .saturating_sub(if shortcut.is_some() { key_width + 2 } else { 0 });
-        let label = if matches!(&item.target, Target::Action(Action::PlayMarked))
-            && Span::raw(&item.label).width() + 1 > usize::from(label_width)
-        {
-            format!(
-                "[{}] {}",
-                if item.label.starts_with("[x]") {
-                    'x'
-                } else {
-                    ' '
-                },
-                app.text("Checked tracks only", "Только отмеченные")
-            )
-        } else {
-            item.label.clone()
-        };
-        frame.render_widget(
-            Paragraph::new(format!(" {label}")).style(style),
-            Rect::new(rect.x, caption_y, label_width, 1),
-        );
-        if let Some(key) = shortcut {
-            frame.render_widget(
-                Paragraph::new(key).style(style.fg(palette.muted)),
-                Rect::new(
-                    rect.right().saturating_sub(key_width + 1),
-                    caption_y,
-                    key_width,
-                    1,
-                ),
-            );
-        }
-        app.view.hits.push(Hit {
-            area: rect,
-            target: Target::CommandRow(index),
-            enabled: item.enabled,
-        });
-    }
-    if hint_height > 0 { frame.render_widget(
-        Paragraph::new(Line::from(vec![Span::styled(
-            app.text("↑↓ · Enter · Esc", "↑↓ · Enter · Esc"),
-            palette.text().fg(palette.muted),
-        )])),
-        Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
-    ); }
+    super::dropdown::render(frame, app, outer, menu.title(app.settings.preferences.language).into(),
+        &items, *selected, hints.then_some("↑↓ · Enter · Esc"), palette, |index, _| Target::CommandRow(index));
 }

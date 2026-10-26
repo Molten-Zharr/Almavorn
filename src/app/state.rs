@@ -64,6 +64,7 @@ pub enum Target {
     Tags(super::TagAction),
     CommandMenu(super::CommandMenu),
     MenuSection,
+    QuickAccess(crate::toolbar::QuickAction),
     Visualizer(crate::visualizer::VisualizerKind),
     StatisticsPage(super::StatisticsPage),
     StatisticsSort,

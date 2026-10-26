@@ -127,7 +127,7 @@ Choose a GIF background under F2, "Themes", "Animation", "Background GIF". "Back
 
 "Layout" mode lets you rearrange the interface. For example, you can put the player at the bottom, playlists on the right, and give most of the window to the track list.
 
-Open "More", "Workspace blocks", or press Ctrl+B. Controls will appear on the panel headers:
+Choose "Arrange blocks" in "More", or press Ctrl+B. Controls will appear on the panel headers:
 
 - "[↕]" lets you drag a block. You can also drag its title.
 - "[-]" collapses a block; "[+]" expands it again.
@@ -139,7 +139,7 @@ Where you drop a block determines what happens: drop it at the edge of another p
 
 You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow keys to swap it with a neighboring block, or Ctrl+Shift+arrow keys to resize it. Ctrl+Alt+Space collapses or expands the block; Ctrl+Alt+Delete hides it.
 
-Your layout is saved automatically. Press Ctrl+B or choose "Finish arranging blocks" in "More" to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
+Your layout is saved automatically. Press Ctrl+B or click "Arrange blocks" again to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
 
 </details>
 
@@ -204,7 +204,7 @@ Paste the command straight into your terminal.
 
 F2 opens Settings; F1 opens the full help guide. In Settings, hover over an option and press F1 to read its description without changing the value. When navigating with the keyboard, F1 explains the selected option.
 
-The top menu stays on one line. "More" groups library tools, services, appearance and help. On narrow windows, it also contains menus that do not fit at the top. Alt+5 opens "More" by default.
+Choose your toolbar buttons in "Settings > General > Quick access": pin individual buttons, show all or hide all. Other commands stay in "More", opened with Alt+5 by default. When every button fits on the toolbar, "More" disappears. Active modes can appear automatically. Your choices are saved in the profile.
 
 Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. The square buttons and their icons grow together; shortcut labels appear below. Normal is the default.
 

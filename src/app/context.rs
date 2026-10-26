@@ -75,6 +75,8 @@ pub struct UiState {
     pub keycaps: Vec<Keycap>,
     pub player_buttons: Vec<crate::ui::PlayerButton>,
     pub cell_pixels: Option<(u16, u16)>,
+    pub dropdown: Option<crate::ui::Dropdown>,
+    pub pointer_fraction_y: f32,
     /// Counts of hit regions and keycaps belonging to the interface below the overlay.
     pub overlay_background: (usize, usize),
     pub graphical_keycaps: bool,
@@ -96,6 +98,7 @@ pub struct UiState {
     pub layout_editing: bool,
     pub toolbar_selected: Option<usize>,
     pub toolbar_width: u16,
+    pub toolbar_max_rows: u16,
     pub(crate) toolbar_areas: Vec<Rect>,
     pub(crate) dialog_scroll_max: usize,
     pub(crate) dialog_page_size: usize,

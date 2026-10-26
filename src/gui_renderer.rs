@@ -3,12 +3,37 @@ use almavorn::{
     preferences::Corners,
 };
 use eframe::egui;
+use egui::emath::GuiRounding;
 use egui_ratatui::RataguiBackend;
 use ratatui::{buffer::Buffer, layout::Rect};
 use soft_ratatui::{RasterBackend, RgbPixmap, SoftBackend};
 use std::sync::Arc;
 
 type WaveformKey = (usize, usize, egui::Rect, egui::Color32, egui::Color32);
+
+/// Reposition existing raster glyphs without stretching the font. Menu rows use
+/// fractional cell spacing while the rest of the terminal grid remains intact.
+pub fn paint_dropdown(ui: &egui::Ui, image: egui::Rect, texture: egui::TextureId, app: &App, size: ratatui::layout::Size) {
+    let Some(dropdown) = &app.view.dropdown else { return };
+    let scale = egui::vec2(image.width() / f32::from(size.width.max(1)), image.height() / f32::from(size.height.max(1)));
+    let map = |x: f32, y: f32, width: f32, height: f32| egui::Rect::from_min_size(image.min + egui::vec2(x, y) * scale, egui::vec2(width, height) * scale);
+    let color = |value| match value { ratatui::style::Color::Rgb(r, g, b) => egui::Color32::from_rgb(r, g, b), _ => egui::Color32::BLACK };
+    let area = dropdown.area;
+    let body = map(f32::from(area.x), f32::from(area.y), f32::from(area.width), f32::from(area.height));
+    let painter = ui.painter().with_clip_rect(body.intersect(ui.clip_rect()));
+    painter.rect_filled(body, 0, color(dropdown.background));
+    for row in &dropdown.rows {
+        let rect = map(f32::from(row.source.x), row.top, f32::from(row.source.width), row.height);
+        painter.rect_filled(rect, 0, color(row.background));
+        if row.source.is_empty() { continue; }
+        let uv = egui::Rect::from_min_max(
+            egui::pos2(f32::from(row.source.x) / f32::from(size.width), f32::from(row.source.y) / f32::from(size.height)),
+            egui::pos2(f32::from(row.source.right()) / f32::from(size.width), f32::from(row.source.bottom()) / f32::from(size.height)),
+        );
+        let text = map(f32::from(row.source.x), row.top + (row.height - 1.0) / 2.0, f32::from(row.source.width), 1.0);
+        painter.image(texture, text.round_to_pixels(ui.painter().pixels_per_point()), uv, egui::Color32::WHITE);
+    }
+}
 
 #[derive(Default)]
 pub struct GifPainter {

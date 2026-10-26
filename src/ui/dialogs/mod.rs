@@ -11,6 +11,7 @@ pub(super) mod services;
 pub(super) mod mods;
 pub(super) mod help;
 mod panels;
+mod quick_access;
 mod playlists;
 mod search;
 mod scan_folders;
@@ -107,6 +108,7 @@ pub(super) fn render_dialog(
         Dialog::Panels { selected, expanded } => {
             panels::render(frame, app, selected, expanded, area, palette);
         }
+        Dialog::QuickAccess { selected } => quick_access::render(frame, app, selected, area, palette),
         Dialog::Text(dialog) => text_dialog(frame, app, dialog, area, palette),
         Dialog::Search(search) => self::search::render(frame, app, search, area, palette),
         Dialog::Browser(browser) => browser_dialog(frame, app, browser, area, palette),
