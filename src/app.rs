@@ -11,6 +11,7 @@ mod downloads;
 mod equalizer;
 mod events;
 mod forms;
+mod help;
 mod history;
 mod import;
 mod library;

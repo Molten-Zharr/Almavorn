@@ -73,19 +73,38 @@ const CATEGORIES: &[(Category, &str, &str)] = &[
 
 pub(super) struct Section {
     pub name: &'static str,
-    pub entries: Vec<(Option<KeyPress>, String)>,
+    pub search_name: String,
+    pub entries: Vec<Entry>,
     language: Language,
+}
+
+pub(super) struct Entry {
+    pub key: Option<KeyPress>,
+    pub text: String,
+    pub search: String,
+    pub aliases: &'static str,
+}
+
+impl Entry {
+    fn new(key: Option<KeyPress>, text: String, search: String) -> Self {
+        Self { key, text, search, aliases: "" }
+    }
+    fn heading(text: String) -> Self { Self::new(None, text, String::new()) }
 }
 
 impl Section {
     fn keys(&mut self, keys: &[KeyPress], en: &'static str, ru: &'static str) {
         for &key in keys {
             self.entries
-                .push((Some(key), self.language.text(en, ru).into()));
+                .push(Entry::new(Some(key), self.language.text(en, ru).into(), format!("{en} {ru}")));
         }
     }
     fn note(&mut self, en: &'static str, ru: &'static str) {
-        self.entries.push((None, self.language.text(en, ru).into()));
+        self.entries.push(Entry::new(None, self.language.text(en, ru).into(), format!("{en} {ru}")));
+    }
+    fn topic(&mut self, en: &'static str, ru: &'static str, aliases: &'static str) {
+        self.note(en, ru);
+        self.entries.last_mut().expect("topic entry").aliases = aliases;
     }
 }
 
@@ -160,16 +179,21 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         .iter()
         .map(|(_, en, ru)| Section {
             name: language.text(en, ru),
+            search_name: format!("{en} {ru}"),
             entries: Vec::new(),
             language,
         })
         .collect();
     for binding in &app.settings.preferences.bindings {
         for category in categories(binding.action) {
-            sections[*category as usize].entries.push((
-                Some(binding.key),
-                binding.action.description(language).into(),
-            ));
+            sections[*category as usize].entries.push(Entry {
+                key: Some(binding.key),
+                text: binding.action.description(language).into(),
+                search: format!("{} {} {} {}", binding.action.name(Language::English),
+                    binding.action.name(Language::Russian), binding.action.description(Language::English),
+                    binding.action.description(Language::Russian)),
+                aliases: crate::help_search::aliases(binding.action),
+            });
         }
     }
     let configured: Vec<_> = sections
@@ -178,6 +202,10 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         .collect();
 
     let q = &mut sections[C::Navigation as usize];
+    q.note("In Help, type a question or a shortcut. Search understands synonyms and common typos. Up/Down chooses a result; Enter opens its section. Esc clears the search first, then closes Help.",
+        "В справке введите вопрос или сочетание клавиш. Поиск учитывает синонимы и небольшие опечатки. Стрелки вверх и вниз выбирают результат, Enter открывает его раздел. Esc сначала очищает поиск, затем закрывает справку.");
+    q.keys(&[c(Char('f'))], "In Help, select the search query to replace it.",
+        "В справке выделить поисковый запрос для замены.");
     q.note("These shortcuts follow your settings. Letter shortcuts also work with a Russian keyboard layout. Each window's keys are listed in its own section.",
         "Здесь показаны клавиши из ваших настроек. Буквенные команды работают и в русской раскладке. Клавиши каждого окна — в его разделе справки.");
     q.keys(&[p(Escape)], "Close the open window, even after clicking the player. In an editor, go back. In a file picker, clear the filter first.", "Закрыть открытое окно, даже после клика по плееру. В редакторе — вернуться назад. В выборе файлов — сначала очистить фильтр.");
@@ -495,6 +523,15 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Settings as usize];
+    q.topic("Larger text: Settings > Themes > Font and geometry > Font size. In TUI, change the font size in your terminal's settings.",
+        "Увеличить буквы: Настройки > Темы > Шрифт и геометрия > Размер шрифта. В TUI размер шрифта меняется в настройках терминала.",
+        "мелко плохо видно увеличить буквы масштаб зум размер текста zoom tiny text bigger letters font size");
+    q.topic("Background animation: Settings > Themes > Animation. Choose a style, turn animation off or change its brightness.",
+        "Анимация фона: Настройки > Темы > Анимация. Здесь можно выбрать вид, выключить анимацию или изменить ее яркость.",
+        "фон мешает мигает раздражает слишком ярко выключить искры background distracting flashing disable brightness");
+    q.topic("Button shortcuts and EQ/FX/VIS: Settings > General. You can hide shortcut labels or the player's special buttons.",
+        "Клавиши на кнопках и EQ/FX/VIS: Настройки > Общие. Можно скрыть подписи клавиш или специальные кнопки проигрывателя.",
+        "слишком много кнопок убрать буквы загроможден интерфейс special buttons clutter labels shortcuts");
     q.keys(
         &[p(Tab)],
         "Switch between settings categories and parameters.",
@@ -845,6 +882,9 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     }
 
     let q = &mut sections[C::Downloads as usize];
+    q.topic("Where downloads go: Downloads > Settings sets the default folder. When adding a link, Choose folder opens a folder picker with sorting and filtering; Downloads saves directly to the system Downloads folder.",
+        "Куда скачивается музыка: Загрузки > Настройки задают папку по умолчанию. При добавлении ссылки кнопка Выбрать папку открывает список с сортировкой и фильтром; В Загрузки сохраняет в системную папку загрузок.",
+        "куда сохранилось где скачанная музыка найти скачанный файл путь сохранения saved downloaded files location destination");
     q.note("Paste a link, choose a folder and a downloader, then press Enter. A missing folder is created automatically; if unavailable, Downloads is used.",
         "Вставьте ссылку, выберите папку и способ скачивания, затем нажмите Enter. Новая папка создается автоматически; если она недоступна, файл попадет в Загрузки.");
     q.keys(&[c(Char('f'))], "In the download form: choose a folder. Type its name to filter the folder list.",
@@ -1114,7 +1154,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "GUITUI: paste into the active text input. In TUI, use the terminal's paste command.",
         "В версии с окном — вставить текст в выбранное поле. В терминале используйте его клавиши вставки.",
     );
-    q.keys(&[c(Char('c'))], "Copyable help and system-control windows: copy the text. In TUI outside these windows or HEX, Ctrl+C exits the player.", "В справке с копированием и окне MPRIS — скопировать текст. В терминальной версии вне этих окон и поля HEX — закрыть плеер.");
+    q.keys(&[c(Char('c'))], "Copy selected text in Help search or a form. In copyable help and system-control windows, copy the displayed text. TUI: outside these inputs, windows and HEX, Ctrl+C exits the player.", "Скопировать выделенный запрос в справке или текст поля формы. В справке с копированием и окне MPRIS скопировать показанный текст. В TUI вне этих полей, окон и HEX сочетание Ctrl+C закрывает плеер.");
     q.keys(
         &[p(Enter)],
         "In copyable help and system-control windows, copy all displayed text.",
@@ -1200,9 +1240,7 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.note("To control music from another window, set shortcuts in Settings > Keys, then add the generated bindings to your desktop settings. Media keys use MPRIS, the system media controls.",
         "Чтобы управлять плеером без переключения окна, задайте сочетания в Настройки → Клавиши. Затем добавьте готовые назначения в настройки рабочего стола. Медиаклавиши работают через MPRIS — системное управление музыкой.");
     for binding in &app.settings.preferences.global_shortcuts {
-        q.entries.push((
-            None,
-            format!(
+        let text = format!(
                 "{} — {} ({})",
                 binding.key,
                 binding.action.name(language),
@@ -1218,8 +1256,10 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
                         "выключено"
                     }
                 )
-            ),
-        ));
+            );
+        let mut entry = Entry::new(None, text.clone(), text);
+        entry.aliases = crate::help_search::aliases(binding.action);
+        q.entries.push(entry);
     }
     if app.settings.preferences.global_shortcuts.is_empty() {
         q.note(
@@ -1231,15 +1271,14 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         guide
             .into_iter()
             .filter(|text| !text.is_empty())
-            .map(|text| (None, text)),
+            .map(|text| Entry::new(None, text.clone(), text)),
     );
     for (index, section) in sections.iter_mut().enumerate() {
         if configured[index] > 0 {
             if section.entries.len() > configured[index] {
                 section.entries.insert(
                     configured[index],
-                    (
-                        None,
+                    Entry::heading(
                         language
                             .text(
                                 "Window controls — fixed shortcuts:",
@@ -1251,18 +1290,16 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
             }
             section.entries.insert(
                 0,
-                (
-                    None,
+                Entry::heading(
                     language
                         .text("Your shortcuts:", "Ваши горячие клавиши:")
                         .into(),
                 ),
             );
-        } else if section.entries.iter().any(|(key, _)| key.is_some()) {
+        } else if section.entries.iter().any(|entry| entry.key.is_some()) {
             section.entries.insert(
                 0,
-                (
-                    None,
+                Entry::heading(
                     language
                         .text(
                             "Window controls — fixed shortcuts:",

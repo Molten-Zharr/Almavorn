@@ -74,6 +74,7 @@ impl App {
     }
 
     pub(in crate::app) fn select_help_section(&mut self, index: usize) {
+        if self.view.help_search.active() { self.clear_help_search(); }
         if let Some(Dialog::Help { offset }) = &mut self.view.dialog
             && let Some(start) = self.view.help_sections.get(index)
         {

@@ -297,6 +297,7 @@ impl App {
             Quit => self.view.quit = true,
             Help => {
                 self.view.help_sections.clear();
+                self.view.help_search = Default::default();
                 self.view.dialog = Some(Dialog::Help { offset: 0 });
             }
             Settings => self.open_settings_page(super::SettingsPage::General),

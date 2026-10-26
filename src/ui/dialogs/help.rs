@@ -1,5 +1,6 @@
 use super::super::{keycaps, theme::Palette};
 mod catalog;
+mod find;
 use crate::{
     app::{App, Hit, Target},
     input::{Key, KeyPress},
@@ -106,13 +107,23 @@ pub(super) fn help_dialog(
     palette: Palette,
 ) {
     let sections = catalog::sections(app, guide);
+    let inner = find::input(frame, app, inner, palette);
+    if app.view.help_search.active() {
+        find::results(frame, app, offset, inner, &sections, palette);
+        return;
+    }
     let names: Vec<_> = sections.iter().map(|section| section.name).collect();
     let mut entries = Vec::new();
     let mut headings = Vec::new();
-    for section in sections {
+    let mut identities = Vec::new();
+    for (section_index, section) in sections.into_iter().enumerate() {
         headings.push(entries.len());
         entries.push((None, section.name.to_owned()));
-        entries.extend(section.entries);
+        identities.push(None);
+        for (entry_index, entry) in section.entries.into_iter().enumerate() {
+            entries.push((entry.key, entry.text));
+            identities.push(Some((section_index, entry_index)));
+        }
     }
     let header_height = inner.height.saturating_sub(3).min(2);
     let sidebar_width = if inner.width >= 74 { 22 } else { 0 };
@@ -147,6 +158,11 @@ pub(super) fn help_dialog(
         .saturating_sub(1);
     app.view.dialog_page_size = usize::from(body.height);
     app.view.dialog_scroll_max = total_height.saturating_sub(usize::from(body.height));
+    if let Some(target) = app.view.help_search.pending_entry.take()
+        && let Some(index) = identities.iter().position(|identity| *identity == Some(target))
+    {
+        *offset = layouts[..index].iter().map(|(.., height)| usize::from(*height) + 1).sum();
+    }
     *offset = (*offset).min(app.view.dialog_scroll_max);
     app.view.help_sections.clear();
     let mut section_start = 0usize;
@@ -169,8 +185,8 @@ pub(super) fn help_dialog(
             app.view.hits.push(Hit { area: rect, target: Target::HelpSection(index), enabled: true });
         }
         frame.render_widget(Paragraph::new(app.text(
-            "Left/Right or Tab: section · PgUp/PgDn: page · Home/End: start/end",
-            "←→ или Tab: раздел · PgUp/PgDn: страница · Home/End: начало/конец"))
+            "Type to search · Tab: section · PgUp/PgDn: page",
+            "Введите запрос для поиска · Tab: раздел · PgUp/PgDn: страница"))
             .style(palette.text().fg(palette.muted)).wrap(Wrap { trim: true }),
             Rect::new(body.x, inner.y, body.width, header_height));
     } else if header_height > 0 {

@@ -95,6 +95,7 @@ pub struct UiState {
     pub(crate) dialog_scroll_max: usize,
     pub(crate) dialog_page_size: usize,
     pub(crate) help_sections: Vec<usize>,
+    pub(crate) help_search: crate::help_search::HelpSearch,
     pub filter_editing: bool,
     pub filter_keyboard: bool,
     pub(crate) filter_field: Rect,

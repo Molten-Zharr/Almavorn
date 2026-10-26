@@ -9,7 +9,8 @@ use ratatui::layout::{Position, Rect};
 
 impl App {
     pub fn accepts_text(&self) -> bool {
-        matches!(&self.view.dialog,Some(Dialog::Form(form)) if !form.discard)
+        matches!(self.view.dialog, Some(Dialog::Help { .. }))
+            || matches!(&self.view.dialog,Some(Dialog::Form(form)) if !form.discard)
             || matches!(&self.view.dialog, Some(Dialog::Tags(editor)) if editor.accepts_text() && !self.writing_tags())
             || matches!(self.view.dialog, Some(Dialog::Text(_)))
             || matches!(self.view.dialog, Some(Dialog::Search(_)))
@@ -334,6 +335,10 @@ impl App {
             }
             Input::Text(text) => {
                 self.view.mark_drag=None;
+                if matches!(self.view.dialog, Some(Dialog::Help { .. })) {
+                    self.help_search_text(&text);
+                    return Ok(());
+                }
                 if matches!(self.view.dialog,Some(Dialog::Form(_))) { self.form_text(&text); return Ok(()); }
                 if matches!(self.view.dialog, Some(Dialog::Tags(_))) {
                     self.tags_text(&text);
@@ -440,6 +445,15 @@ impl App {
     }
 
     fn key(&mut self, key: KeyPress) -> Result<()> {
+        if key.key == Key::Escape && matches!(self.view.dialog, Some(Dialog::Help { .. }))
+            && self.view.help_search.active()
+        {
+            self.clear_help_search();
+            return Ok(());
+        }
+        if matches!(self.view.dialog, Some(Dialog::Help { .. })) && self.help_search_key(key) {
+            return Ok(());
+        }
         if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
             return self.browser_key(key);
         }
@@ -551,6 +565,9 @@ impl App {
     pub(super) fn target(&mut self, target: Target, double: bool) -> Result<()> {
         match target {
             Target::HelpSection(index) => self.select_help_section(index),
+            Target::HelpSearch => self.focus_help_search(),
+            Target::HelpClearSearch => self.clear_help_search(),
+            Target::HelpMatch(index) => self.open_help_match(index),
             Target::ChooseScanFolders => self.choose_scan_folders()?,
             Target::ScanFolders(action) => self.scan_folders_action(action)?,
             Target::CopyHelp(line) => {

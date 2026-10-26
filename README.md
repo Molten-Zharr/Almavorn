@@ -166,6 +166,8 @@ Paste the command straight into your terminal.
 
 F2 opens Settings; F1 opens the full help guide. Within Settings, F1 explains the selected option.
 
+Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results show your current shortcuts; press Enter to open the explanation.
+
 ### Create a playlist from a folder
 
 1. At the top, open "Add to desk" and choose "Folders to playlists".

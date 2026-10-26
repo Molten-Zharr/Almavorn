@@ -301,6 +301,10 @@ impl App {
     }
 
     pub(super) fn scroll_dialog(&mut self, direction: i16) {
+        if matches!(self.view.dialog, Some(Dialog::Help { .. })) && self.view.help_search.active() {
+            self.move_help_match(i64::from(direction));
+            return;
+        }
         if self.view.dialog.as_ref().is_some_and(Dialog::is_settings_root) {
             self.settings_scroll(i64::from(direction));
             return;

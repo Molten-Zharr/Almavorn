@@ -6,6 +6,7 @@ pub mod equalizer;
 pub mod errors;
 pub mod input;
 mod layout;
+pub(crate) mod help_search;
 pub mod media;
 pub mod lyrics;
 pub(crate) mod network;
