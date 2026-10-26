@@ -72,6 +72,7 @@ pub(super) fn hint(app: &App) -> Option<String> {
             "Выбрать анимацию фона или отключить ее.",
         ),
         Target::Visualizer(kind) => match kind {
+            VisualizerKind::Gif => app.text("Show a GIF file in the background.", "Показать GIF-файл на фоне."),
             VisualizerKind::Off => app.text(
                 "Turn off background animation.",
                 "Отключить фоновую анимацию.",

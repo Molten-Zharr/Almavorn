@@ -302,7 +302,7 @@ impl Action {
             Self::PlayWholePlaylist => language.text("Leave the checked-track loop and play the whole playlist. The current track keeps playing.", "Перейти от отмеченных треков ко всему плейлисту. Текущий трек продолжит играть."),
             Self::PlaylistPanel => language.text("Move the playlist panel.", "Переместить панель плейлистов."),
             Self::PlayerPanel => language.text("Move the player panel.", "Переместить панель проигрывателя."),
-            Self::Panels => language.text("Arrange blocks by dragging their titles and borders. Use the top bar to show or hide blocks and buttons.", "Настроить расположение блоков: перетащить заголовки и границы. Верхняя строка позволяет показать или скрыть блоки и кнопки."),
+            Self::Panels => language.text("Arrange blocks by dragging their titles and borders. More > Blocks and buttons shows or hides panels and controls.", "Настроить расположение блоков: перетащить заголовки и границы. В меню Больше пункт Блоки и кнопки позволяет показать или скрыть панели и элементы управления."),
         }
     }
     pub fn name(self, language: Language) -> &'static str {

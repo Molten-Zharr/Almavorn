@@ -398,6 +398,10 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             volume(frame, app, value, index, style, palette);
             continue;
         }
+        if matches!(item.control, SettingControl::GifOpacity) {
+            gif_opacity(frame, app, value, index, style, palette);
+            continue;
+        }
         let mut middle = value;
         if middle.width >= Span::raw(&item.value).width() as u16 + 8 {
             if item.adjustable {
@@ -733,6 +737,91 @@ fn volume(
         &format!(
             "{}%",
             (app.settings.preferences.volume * 100.0).round() as u16
+        ),
+        style,
+        palette,
+    );
+}
+
+fn gif_opacity(
+    frame: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    index: usize,
+    style: Style,
+    palette: Palette,
+) {
+    if area.width < 12 {
+        setting_value(
+            frame,
+            app,
+            Hit {
+                area,
+                target: Target::Setting(index),
+                enabled: true,
+            },
+            &format!(
+                "{}%",
+                app.settings.preferences.appearance.gif_background.opacity.min(30)
+            ),
+            style,
+            palette,
+        );
+        return;
+    }
+    quiet_button(
+        frame,
+        app,
+        Rect::new(area.x, area.y, 3, 1),
+        "<",
+        Target::SettingAdjust(index, -1),
+        true,
+        palette,
+    );
+    quiet_button(
+        frame,
+        app,
+        Rect::new(area.right() - 3, area.y, 3, 1),
+        ">",
+        Target::SettingAdjust(index, 1),
+        true,
+        palette,
+    );
+    let scale = Rect::new(area.x + 3, area.y, area.width.saturating_sub(12).min(24), 1);
+    if scale.width > 0 {
+        let point = ((f32::from(app.settings.preferences.appearance.gif_background.opacity.min(30)) / 30.0)
+            * f32::from(scale.width.saturating_sub(1)))
+        .round() as u16;
+        let spans: Vec<_> = (0..scale.width)
+            .map(|column| {
+                Span::styled(
+                    if column == point { "●" } else { "─" },
+                    style.fg(if column <= point {
+                        palette.accent
+                    } else {
+                        palette.separator
+                    }),
+                )
+            })
+            .collect();
+        frame.render_widget(Paragraph::new(Line::from(spans)), scale);
+        app.view.hits.push(Hit {
+            area: scale,
+            target: Target::GifOpacity(index, scale),
+            enabled: true,
+        });
+    }
+    setting_value(
+        frame,
+        app,
+        Hit {
+            area: Rect::new(area.right() - 8, area.y, 5, 1),
+            target: Target::Setting(index),
+            enabled: true,
+        },
+        &format!(
+            "{}%",
+            app.settings.preferences.appearance.gif_background.opacity.min(30)
         ),
         style,
         palette,

@@ -80,6 +80,7 @@ pub struct UiState {
     pub waveform_area: Rect,
     pub artwork_area: Rect,
     pub progress_area: Rect,
+    pub background_area: Rect,
     pub playlist_area: Rect,
     pub tracks_area: Rect,
     pub playlist_offset: usize,

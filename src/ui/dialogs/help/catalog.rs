@@ -529,6 +529,9 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.topic("Background animation: Settings > Themes > Animation. Choose a style, turn animation off or change its brightness.",
         "Анимация фона: Настройки > Темы > Анимация. Здесь можно выбрать вид, выключить анимацию или изменить ее яркость.",
         "фон мешает мигает раздражает слишком ярко выключить искры background distracting flashing disable brightness");
+    q.topic("GIF background: Settings > Themes > Animation > Background GIF. Choose a file and set visibility from 0 to 30% (default 15%). Text and buttons stay opaque. Update or create a theme preset to save the GIF settings. Remove background GIF leaves the original file on disk.",
+        "GIF-фон: Настройки > Темы > Анимация > GIF-фон. Выберите файл и задайте видимость от 0 до 30%, по умолчанию 15%. Текст и кнопки остаются непрозрачными. Обновите или создайте пресет темы, чтобы сохранить настройки GIF. Кнопка Убрать GIF-фон оставляет исходный файл на диске.",
+        "gif гиф гифка живые обои свой фон картинка прозрачность видимость анимация animation wallpaper background opacity image file");
     q.topic("Button shortcuts and EQ/FX/VIS: Settings > General. You can hide shortcut labels or the player's special buttons.",
         "Клавиши на кнопках и EQ/FX/VIS: Настройки > Общие. Можно скрыть подписи клавиш или специальные кнопки проигрывателя.",
         "слишком много кнопок убрать буквы загроможден интерфейс special buttons clutter labels shortcuts");

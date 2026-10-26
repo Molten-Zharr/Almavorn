@@ -77,6 +77,7 @@ fn run() -> Result<()> {
     let mut previous_click: Option<(egui::Pos2, Instant)> = None;
     let mut image_cache = gui_renderer::ImageCache::default();
     let mut playback_painter = gui_renderer::PlaybackPainter::default();
+    let mut gif_painter = gui_renderer::GifPainter::default();
     let mut color_painter = gui_color_picker::ColorPickerPainter::default();
     #[cfg(target_os = "linux")]
     let (mut wayland_drop, mut drop_initialized) = (None, false);
@@ -160,6 +161,7 @@ fn run() -> Result<()> {
                     app.view.notice_error = true;
                 }
                 let backend = terminal.backend_mut();
+                image_cache.set_background(&app, ratatui::layout::Size::new(columns, rows));
                 let image_size = image_cache.update(&ctx, backend);
                 let texture_id = backend
                     .text_handle
@@ -176,6 +178,7 @@ fn run() -> Result<()> {
                 // Keep physical font pixels 1:1. Only the sub-cell remainder is background.
                 ui.painter()
                     .rect_filled(canvas, 0, egui::Color32::from_rgb(r, g, b));
+                gif_painter.paint(ui, image_rect, &app, ratatui::layout::Size::new(columns, rows));
                 ui.painter().image(
                     texture_id,
                     image_rect,
@@ -217,6 +220,7 @@ fn run() -> Result<()> {
                             Target::PlaybackVolume(_)
                             | Target::Seek(_)
                             | Target::SettingsVolume(_, _)
+                            | Target::GifOpacity(_, _)
                             | Target::ColorSlider(_, _),
                         ) => egui::CursorIcon::ResizeHorizontal,
                         Some(Target::ColorWheel(_)) => egui::CursorIcon::Crosshair,
@@ -650,6 +654,7 @@ fn slider_pointer(
         Some(Gesture::TunerSlider(index, area)) => Target::TunerSlider(index, area),
         Some(Gesture::PlaybackVolume(area)) => Target::PlaybackVolume(area),
         Some(Gesture::Volume(index, area)) => Target::SettingsVolume(index, area),
+        Some(Gesture::GifOpacity(index, area)) => Target::GifOpacity(index, area),
         None if begin && image.contains(point) => {
             let position = Position::new(
                 ((point.x - image.left()) / cell_width).floor() as u16,
@@ -658,7 +663,8 @@ fn slider_pointer(
             let Some(
                 target @ (Target::TunerSlider(_, _)
                 | Target::PlaybackVolume(_)
-                | Target::SettingsVolume(_, _)),
+                | Target::SettingsVolume(_, _)
+                | Target::GifOpacity(_, _)),
             ) = app.target_at(position)
             else {
                 return false;
@@ -671,6 +677,7 @@ fn slider_pointer(
         Target::TunerSlider(_, area)
         | Target::PlaybackVolume(area)
         | Target::SettingsVolume(_, area) => area,
+        Target::GifOpacity(_, area) => area,
         _ => return false,
     };
     // Retain the fractional position between the centers of the endpoint cells.
@@ -679,6 +686,8 @@ fn slider_pointer(
     let ratio = f64::from((point.x - left) / width);
     if let Target::TunerSlider(index, _) = target {
         app.drag_tuner(index, area, ratio, release);
+    } else if let Target::GifOpacity(index, _) = target {
+        app.drag_gif_opacity(index, area, ratio, release);
     } else {
         app.drag_volume(target, ratio, release);
     }

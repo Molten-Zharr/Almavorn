@@ -397,7 +397,7 @@ pub(crate) fn aliases(action: Action) -> &'static str {
             "ускорить песню; замедлить музыку; высокий голос; низкий голос; тональность; басы; питч; найткор; наоборот; speed tempo pitch nightcore slowed reverse bass"
         }
         CycleVisualizer => {
-            "фон мешает; убрать анимацию; выключить искры; мигает фон; чтобы фон не горел; фон раздражает; заставка; визуализация; animation background flashing sparks visualizer"
+            "фон мешает; убрать анимацию; выключить искры; мигает фон; чтобы фон не горел; фон раздражает; заставка; визуализация; гиф гифка прозрачность обои видимость; gif animation background opacity wallpaper flashing sparks visualizer"
         }
         NewPlaylist => {
             "создать сборник; новый список музыки; собрать альбом; название папки; куда создается папка; create name new playlist folder"

@@ -15,6 +15,10 @@ impl App {
     }
 
     pub fn set_visualizer(&mut self, kind: VisualizerKind) -> Result<()> {
+        if kind == VisualizerKind::Gif && self.settings.preferences.appearance.gif_background.path.is_none() {
+            self.choose_background_gif();
+            return Ok(());
+        }
         self.settings.preferences.appearance.visualizer = kind;
         self.tick_visualizer();
         self.message(format!(
@@ -35,7 +39,7 @@ impl App {
             .visualizer_tick
             .replace(now)
             .map_or(0.0, |previous| now.duration_since(previous).as_secs_f32());
-        let enabled = self.settings.preferences.appearance.visualizer != VisualizerKind::Off;
+        let enabled = !matches!(self.settings.preferences.appearance.visualizer, VisualizerKind::Off | VisualizerKind::Gif);
         let Some(audio) = &mut self.playback.audio else {
             self.playback.visualizer.reset();
             return;

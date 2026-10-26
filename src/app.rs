@@ -1,5 +1,6 @@
 mod actions;
 mod artwork;
+mod gif_background;
 mod background;
 mod browser;
 mod color_picker;
@@ -76,6 +77,7 @@ pub struct App {
     pub mods: ModsState,
     pub view: UiState,
     artwork: artwork::ArtworkState,
+    gif_background: gif_background::GifBackgroundState,
     browser_state: BrowserState,
     persistence: SettingsPersistence,
     session: session::SessionPersistence,
@@ -118,6 +120,7 @@ impl App {
             library,
             view,
             artwork: Default::default(),
+            gif_background: Default::default(),
             playback: Default::default(),
             statistics: Default::default(),
             lyrics: Default::default(),
@@ -195,6 +198,7 @@ impl App {
         self.tick_playback()?;
         self.tick_seek()?;
         self.tick_artwork();
+        self.tick_gif_background();
         self.tick_waveform();
         self.poll_import()?;
         self.tick_library()?;

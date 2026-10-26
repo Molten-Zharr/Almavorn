@@ -428,6 +428,7 @@ impl App {
                 | Target::Setting(index)
                 | Target::SettingAdjust(index, _)
                 | Target::SettingsVolume(index, _)
+                | Target::GifOpacity(index, _)
                 | Target::SettingsTimeline(index, _)
             ) = target
             && (self.view.settings.selected != index || self.view.settings.focus != SettingsFocus::Parameters)
@@ -667,6 +668,16 @@ impl App {
                 self.save_settings()?;
             }
             SettingControl::PaletteImport => self.choose_palette_import(),
+            SettingControl::GifFile => self.choose_background_gif(),
+            SettingControl::GifClear => {
+                self.settings.preferences.appearance.gif_background.path = None;
+                if self.settings.preferences.appearance.visualizer == crate::visualizer::VisualizerKind::Gif {
+                    self.settings.preferences.appearance.visualizer = crate::visualizer::VisualizerKind::Off;
+                }
+                self.reload_background_gif();
+                self.save_settings()?;
+                self.message(self.text("GIF background removed", "GIF-фон убран").into());
+            }
             SettingControl::PaletteExport => self.export_selected_palette(),
             SettingControl::PresetCreate => self.settings_text(
                 SettingsEdit::CreatePreset,
@@ -748,6 +759,10 @@ impl App {
                     (i128::from(self.settings.preferences.appearance.animation_brightness)
                         + i128::from(direction) * 5)
                         .clamp(10, 70) as u8;
+            }
+            SettingControl::GifOpacity => {
+                self.settings.preferences.appearance.gif_background.opacity =
+                    (i128::from(self.settings.preferences.appearance.gif_background.opacity.min(30)) + i128::from(direction)).clamp(0, 30) as u8;
             }
             SettingControl::ButtonShortcuts => {
                 self.settings.preferences.appearance.show_button_shortcuts =

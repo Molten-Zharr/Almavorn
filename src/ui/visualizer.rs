@@ -307,6 +307,10 @@ fn mix(a: [u8; 3], b: [u8; 3], amount: f32) -> [u8; 3] {
 pub(super) fn render(frame: &mut Frame, app: &App, palette: Palette) {
     let state = &app.playback.visualizer;
     let kind = app.settings.preferences.appearance.visualizer;
+    if kind == VisualizerKind::Gif {
+        if !app.view.graphical_keycaps { render_gif(frame, app, palette); }
+        return;
+    }
     if !state.available || kind == VisualizerKind::Off {
         return;
     }
@@ -314,7 +318,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, palette: Palette) {
     let accent = rgb(palette.accent);
     let hot = rgb(palette.error);
     match kind {
-        VisualizerKind::Off => return,
+        VisualizerKind::Off | VisualizerKind::Gif => return,
         VisualizerKind::Spectrum => canvas.spectrum(state, accent, hot),
         VisualizerKind::Wave => canvas.wave(state, accent),
         VisualizerKind::Rings => canvas.rings(state, accent, hot),
@@ -347,6 +351,39 @@ pub(super) fn render(frame: &mut Frame, app: &App, palette: Palette) {
             cell.set_char(char::from_u32(0x2800 + u32::from(dot.bits)).unwrap_or(' '));
             let [r, g, b] = mix(background, dot.rgb, intensity);
             cell.set_fg(Color::Rgb(r, g, b));
+        }
+    }
+}
+
+fn render_gif(frame: &mut Frame, app: &App, palette: Palette) {
+    let Some((animation, index)) = app.background_gif_frame() else { return; };
+    let area = app.view.background_area.intersection(frame.area());
+    if area.is_empty() { return; }
+    let image = &animation.frames[index];
+    let width = f32::from(area.width);
+    let height = f32::from(area.height) * 2.0;
+    let zoom = (width / image.width as f32).max(height / image.height as f32);
+    let left = (image.width as f32 * zoom - width) * 0.5;
+    let top = (image.height as f32 * zoom - height) * 0.5;
+    let background = rgb(palette.background);
+    let opacity = f32::from(app.settings.preferences.appearance.gif_background.opacity.min(30)) / 100.0;
+    let sample = |x: u16, y: u16| {
+        let px = (((f32::from(x) + left) / zoom) as u32).min(image.width - 1);
+        let py = (((f32::from(y) + top) / zoom) as u32).min(image.height - 1);
+        let start = ((py * image.width + px) * 4) as usize;
+        let alpha = f32::from(image.rgba[start + 3]) / 255.0 * opacity;
+        let [r, g, b] = mix(background, [image.rgba[start], image.rgba[start + 1], image.rgba[start + 2]], alpha);
+        Color::Rgb(r, g, b)
+    };
+    for y in area.y..area.bottom() {
+        for x in area.x..area.right() {
+            if app.view.player_buttons.iter().any(|button| button.area.contains((x, y).into())) { continue; }
+            let cell = &mut frame.buffer_mut()[(x, y)];
+            if cell.bg != palette.background || cell.diff_option == CellDiffOption::Skip { continue; }
+            if cell.symbol() == " " {
+                cell.set_symbol("▀").set_fg(sample(x - area.x, (y - area.y) * 2));
+            }
+            cell.set_bg(sample(x - area.x, (y - area.y) * 2 + 1));
         }
     }
 }

@@ -1,5 +1,6 @@
 pub mod app;
 pub mod artwork;
+pub mod background_gif;
 pub mod audio;
 pub mod color_picker;
 pub mod equalizer;

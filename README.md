@@ -120,12 +120,14 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 
 ## <img src="docs/images/readme/layout.svg" width="24" height="24" alt=""> Themes, appearance, and usability
 
+Choose a GIF background under F2, "Themes", "Animation", "Background GIF". "Background visibility" ranges from 0 to 30%, with 15% as the default. Text and buttons stay opaque. Create or update a theme preset to save the file and its visibility. "Remove background GIF" turns it off without deleting the file.
+
 <details>
 <summary>How to move, resize and hide panels</summary>
 
 "Layout" mode lets you rearrange the interface. For example, you can put the player at the bottom, playlists on the right, and give most of the window to the track list.
 
-Click "Layout" or press Ctrl+B. Controls will appear on the panel headers:
+Open "More", "Workspace blocks", or press Ctrl+B. Controls will appear on the panel headers:
 
 - "[↕]" lets you drag a block. You can also drag its title.
 - "[-]" collapses a block; "[+]" expands it again.
@@ -133,11 +135,11 @@ Click "Layout" or press Ctrl+B. Controls will appear on the panel headers:
 
 Where you drop a block determines what happens: drop it at the edge of another panel to place it beside that panel, or in the center to swap them. Drag the shared border between panels to resize them.
 
-"Visibility…" opens the list of blocks and buttons. You can bring back a hidden panel or hide individual buttons you don't need. "Restore default layout" is there too.
+"Blocks and buttons…" in the "More" menu opens the list of blocks and buttons. You can bring back a hidden panel or hide individual buttons you don't need. "Restore default layout" is there too.
 
 You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow keys to swap it with a neighboring block, or Ctrl+Shift+arrow keys to resize it. Ctrl+Alt+Space collapses or expands the block; Ctrl+Alt+Delete hides it.
 
-Your layout is saved automatically. Click "Done" or press Ctrl+B to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
+Your layout is saved automatically. Press Ctrl+B or choose "Finish arranging blocks" in "More" to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
 
 </details>
 
@@ -201,6 +203,8 @@ Paste the command straight into your terminal.
 ## <img src="docs/images/readme/keyboard.svg" width="24" height="24" alt=""> First launch
 
 F2 opens Settings; F1 opens the full help guide. In Settings, hover over an option and press F1 to read its description without changing the value. When navigating with the keyboard, F1 explains the selected option.
+
+The top menu stays on one line. "More" groups library tools, services, appearance and help. On narrow windows, it also contains menus that do not fit at the top. Alt+5 opens "More" by default.
 
 Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. The square buttons and their icons grow together; shortcut labels appear below. Normal is the default.
 

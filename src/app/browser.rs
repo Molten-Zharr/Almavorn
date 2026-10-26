@@ -12,6 +12,7 @@ pub(super) struct BrowserRequest {
     directory: PathBuf,
     folder: bool,
     palette: bool,
+    gif: bool,
     initial: bool,
     focus: Option<PathBuf>,
     offset: usize,
@@ -20,6 +21,7 @@ pub(super) struct BrowserRequest {
 #[derive(Clone)]
 pub enum PaletteFilePicker {
     Import,
+    BackgroundGif,
     Export { id: String, filename: String },
 }
 
@@ -91,11 +93,14 @@ impl Browser {
         }
     }
     fn open(directory: PathBuf, folder: bool, palette: bool) -> Result<Self> {
+        Self::open_extension(directory, folder, palette.then_some("json"))
+    }
+    fn open_extension(directory: PathBuf, folder: bool, extension: Option<&str>) -> Result<Self> {
         let mut browser = Self::unloaded(directory, folder);
-        browser.refresh(palette)?;
+        browser.refresh(extension)?;
         Ok(browser)
     }
-    fn refresh(&mut self, palette: bool) -> Result<()> {
+    fn refresh(&mut self, extension: Option<&str>) -> Result<()> {
         self.entries.clear();
         self.details.clear();
         for entry in std::fs::read_dir(&self.directory)
@@ -103,11 +108,11 @@ impl Browser {
             .collect::<std::io::Result<Vec<_>>>()?
         {
             let directory = entry.path().is_dir();
-            let selectable = if palette {
+            let selectable = if let Some(wanted) = extension {
                 entry
                     .path()
                     .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
             } else {
                 media::is_audio(&entry.path())
             };
@@ -313,6 +318,13 @@ impl App {
         self.show_palette_browser(PaletteFilePicker::Import, None);
     }
 
+    pub(super) fn choose_background_gif(&mut self) {
+        self.view.settings.page = super::SettingsPage::Animation;
+        let directory = self.settings.preferences.appearance.gif_background.path.as_ref()
+            .and_then(|path| path.parent().map(Path::to_owned)).or_else(dirs::picture_dir);
+        self.show_palette_browser(PaletteFilePicker::BackgroundGif, directory);
+    }
+
     pub(super) fn choose_palette_export_folder(&mut self) {
         let Some(Dialog::Text(dialog)) = &self.view.dialog else {
             return;
@@ -469,6 +481,7 @@ impl App {
             directory,
             folder,
             palette: matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.palette_file.is_some()),
+            gif: matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if matches!(browser.palette_file, Some(PaletteFilePicker::BackgroundGif))),
             initial,
             focus,
             offset,
@@ -483,6 +496,7 @@ impl App {
                 directory,
                 folder,
                 palette,
+                gif,
                 initial,
                 focus,
                 offset,
@@ -490,13 +504,15 @@ impl App {
             let (directory, folder, palette, initial) =
                 (directory.clone(), *folder, *palette, *initial);
             let (focus, offset) = (focus.clone(), *offset);
+            let gif = *gif;
             background(runtime, move || {
                 let directory = if initial && !directory.is_dir() {
                     dirs::home_dir().unwrap_or(directory)
                 } else {
                     directory
                 };
-                let mut browser = Browser::open(directory, folder, palette)?;
+                let mut browser = if gif { Browser::open_extension(directory, folder, Some("gif"))? }
+                    else { Browser::open(directory, folder, palette)? };
                 if let Some(focus) = focus
                     && let Some(index) =
                         browser.entries.iter().position(|entry| entry.path == focus)
@@ -651,6 +667,17 @@ impl App {
             && let Some(purpose) = browser.palette_file.clone()
         {
             match purpose {
+                PaletteFilePicker::BackgroundGif => {
+                    let path = browser.entries.get(browser.selected).filter(|entry| !entry.directory)
+                        .context(self.text("Choose a GIF file", "Выберите GIF-файл"))?.path.clone();
+                    self.settings.preferences.appearance.gif_background.path = Some(path.clone());
+                    self.settings.preferences.appearance.visualizer = crate::visualizer::VisualizerKind::Gif;
+                    self.reload_background_gif();
+                    self.save_settings()?;
+                    self.view.settings.file_directory = path.parent().map(Path::to_owned);
+                    self.cancel_browser();
+                    self.show_settings();
+                }
                 PaletteFilePicker::Import => {
                     let path = browser
                         .entries

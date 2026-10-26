@@ -43,6 +43,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     app.view.waveform_area = Rect::default();
     app.view.artwork_area = Rect::default();
     app.view.progress_area = Rect::default();
+    app.view.background_area = Rect::default();
     app.view.filter_field = Rect::default();
     app.view.filter_keyboard_area = Rect::default();
     app.view.overlay_area = Rect::default();
@@ -87,6 +88,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     .split(area);
     toolbar::render(frame, app, parts[0], palette);
     workspace::render(frame, app, parts[1], palette);
+    app.view.background_area = parts[1];
     let notice = if app.view.notice_error {
         app.view.notice.clone()
     } else if app.importing() {

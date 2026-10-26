@@ -14,20 +14,23 @@ pub enum VisualizerKind {
     Particles,
     #[default]
     Bombardment,
+    Gif,
     Off,
 }
 impl VisualizerKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Spectrum,
         Self::Wave,
         Self::Rings,
         Self::Particles,
         Self::Bombardment,
+        Self::Gif,
         Self::Off,
     ];
     pub fn name(self, language: Language) -> &'static str {
         match self {
             Self::Off => language.text("No animation", "Без анимации"),
+            Self::Gif => language.text("GIF from file", "GIF из файла"),
             Self::Spectrum => language.text("Spectrum", "Спектр"),
             Self::Wave => language.text("Wave", "Аудиоволна"),
             Self::Rings => language.text("Pulse rings", "Пульсирующие кольца"),

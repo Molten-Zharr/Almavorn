@@ -309,6 +309,11 @@ impl App {
                 );
                 self.target(super::Target::SettingsVolume(index, area), false)?;
             }
+            Some(Gesture::GifOpacity(index, area)) => {
+                let (index, area) = (*index, *area);
+                let offset = point.x.saturating_sub(area.x);
+                self.drag_gif_opacity(index, area, f64::from(offset) / f64::from(area.width.saturating_sub(1).max(1)), false);
+            }
             Some(Gesture::EqualizerGain {
                 index,
                 area,

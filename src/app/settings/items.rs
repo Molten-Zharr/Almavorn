@@ -25,6 +25,9 @@ pub(crate) enum SettingControl {
     ArtworkPath,
     Visualizer,
     AnimationBrightness,
+    GifFile,
+    GifOpacity,
+    GifClear,
     ProfilePick,
     ProfileCreate,
     ProfileApply,
@@ -186,10 +189,18 @@ impl App {
                 }
                 rows
             }
-            SettingsPage::Animation => vec![
-                make(lang.text("Background animation", "Анимация фона"), self.settings.preferences.appearance.visualizer.name(lang).into(), lang.text("Choose a scene or No animation. The background moves with the music and freezes on pause. Colors follow the current palette.", "Выберите сцену или пункт Без анимации. Фон движется под музыку и замирает на паузе. Цвета берутся из текущей палитры."), SettingControl::Visualizer, true),
-                make(lang.text("Animation brightness", "Яркость анимации"), format!("{}%", self.settings.preferences.appearance.animation_brightness.clamp(10, 70)), lang.text("Change the brightness from 10 to 70%, in steps of 5%. Save or update a theme preset to keep its scene and brightness together.", "Яркость от 10 до 70%, шаг 5%. Создайте или обновите пресет темы, чтобы сохранить в нем сцену и яркость."), SettingControl::AnimationBrightness, true),
-            ],
+            SettingsPage::Animation => {
+                let mut rows = vec![
+                make(lang.text("Background animation", "Анимация фона"), self.settings.preferences.appearance.visualizer.name(lang).into(), lang.text("Choose a built-in scene, a GIF file, or No animation. Built-in scenes follow the music and pause with it. GIF playback loops independently.", "Выберите встроенную сцену, GIF из файла или пункт Без анимации. Встроенные сцены реагируют на музыку и замирают на паузе. GIF повторяется независимо от музыки."), SettingControl::Visualizer, true),
+                make(lang.text("Built-in animation brightness", "Яркость встроенных анимаций"), format!("{}%", self.settings.preferences.appearance.animation_brightness.clamp(10, 70)), lang.text("Change the brightness from 10 to 70%, in steps of 5%. Save or update a theme preset to keep its scene and brightness together.", "Яркость от 10 до 70%, шаг 5%. Создайте или обновите пресет темы, чтобы сохранить в нем сцену и яркость."), SettingControl::AnimationBrightness, true),
+                make(lang.text("Background GIF", "GIF-фон"), self.background_gif_status(), lang.text("Choose or replace a local GIF. The file picker supports filtering and sorting. GIF playback loops independently of music. Save or update a theme preset to keep the file and its visibility.", "Выберите или замените GIF на устройстве. В окне выбора есть фильтр и сортировка. GIF повторяется независимо от музыки. Создайте или обновите пресет темы, чтобы сохранить файл и видимость фона."), SettingControl::GifFile, false),
+                make(lang.text("Background visibility", "Видимость фона"), format!("{}%", self.settings.preferences.appearance.gif_background.opacity.min(30)), lang.text("GIF visibility from 0 to 30%; default 15%. Text and controls remain opaque. Drag the slider or use the arrows.", "Видимость GIF от 0 до 30%, по умолчанию 15%. Текст и кнопки остаются непрозрачными. Перетащите ползунок или используйте стрелки."), SettingControl::GifOpacity, true),
+                make(lang.text("Remove background GIF", "Убрать GIF-фон"), action, lang.text("Remove the GIF from these settings. The original file stays on disk.", "Убрать GIF из этих настроек. Исходный файл останется на диске."), SettingControl::GifClear, false),
+                ];
+                rows[1].enabled = self.settings.preferences.appearance.visualizer != crate::visualizer::VisualizerKind::Gif;
+                rows[4].enabled = self.settings.preferences.appearance.gif_background.path.is_some();
+                rows
+            },
             SettingsPage::Typography => {
                 let appearance = &self.settings.preferences.appearance;
                 let mut rows = vec![

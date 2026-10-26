@@ -84,6 +84,7 @@ pub struct Appearance {
     pub expanded_toolbar: bool,
     pub visualizer: crate::visualizer::VisualizerKind,
     pub animation_brightness: u8,
+    pub gif_background: crate::background_gif::GifBackgroundSettings,
 }
 impl Default for Appearance {
     fn default() -> Self {
@@ -101,6 +102,7 @@ impl Default for Appearance {
             expanded_toolbar: false,
             visualizer: crate::visualizer::VisualizerKind::default(),
             animation_brightness: 35,
+            gif_background: Default::default(),
         }
     }
 }
@@ -372,6 +374,8 @@ pub struct ThemeStyle {
 pub struct ThemeAnimation {
     pub visualizer: crate::visualizer::VisualizerKind,
     pub brightness: u8,
+    #[serde(default)]
+    pub gif_background: crate::background_gif::GifBackgroundSettings,
 }
 impl ThemeStyle {
     fn matches(&self, current: &Self) -> bool {
@@ -495,6 +499,7 @@ impl Default for ProfilePreferences {
 }
 impl ProfilePreferences {
     pub(crate) fn normalize(&mut self) {
+        self.appearance.gif_background.opacity = self.appearance.gif_background.opacity.min(30);
         self.volume = self.volume.clamp(0.0, 1.0);
         self.workspace.normalize();
         self.ensure_bindings();
@@ -643,6 +648,7 @@ impl Settings {
             animation: Some(ThemeAnimation {
                 visualizer: self.preferences.appearance.visualizer,
                 brightness: self.preferences.appearance.animation_brightness.clamp(10, 70),
+                gif_background: self.preferences.appearance.gif_background.clone(),
             }),
         }
     }
@@ -656,6 +662,8 @@ impl Settings {
         if let Some(animation) = style.animation {
             self.preferences.appearance.visualizer = animation.visualizer;
             self.preferences.appearance.animation_brightness = animation.brightness.clamp(10, 70);
+            self.preferences.appearance.gif_background = animation.gif_background;
+            self.preferences.appearance.gif_background.opacity = self.preferences.appearance.gif_background.opacity.min(30);
         }
     }
     pub fn current_preset(&self) -> Option<&ThemePreset> {

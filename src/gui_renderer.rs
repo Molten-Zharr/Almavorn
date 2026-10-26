@@ -11,6 +11,42 @@ use std::sync::Arc;
 type WaveformKey = (usize, usize, egui::Rect, egui::Color32, egui::Color32);
 
 #[derive(Default)]
+pub struct GifPainter {
+    texture: Option<(Arc<almavorn::background_gif::GifAnimation>, usize, egui::TextureHandle)>,
+}
+
+impl GifPainter {
+    pub fn paint(&mut self, ui: &egui::Ui, image: egui::Rect, app: &App, size: ratatui::layout::Size) {
+        let Some((animation, index)) = app.background_gif_frame().filter(|_| !app.view.background_area.is_empty()) else {
+            self.texture = None;
+            return;
+        };
+        let frame = &animation.frames[index];
+        if self.texture.as_ref().is_none_or(|(old, old_index, _)| !Arc::ptr_eq(old, animation) || *old_index != index) {
+            let pixels = egui::ColorImage::from_rgba_unmultiplied([frame.width as usize, frame.height as usize], &frame.rgba);
+            if let Some((old, old_index, texture)) = &mut self.texture {
+                texture.set(pixels, egui::TextureOptions::LINEAR);
+                *old = animation.clone();
+                *old_index = index;
+            } else {
+                self.texture = Some((animation.clone(), index, ui.ctx().load_texture("background-gif", pixels, egui::TextureOptions::LINEAR)));
+            }
+        }
+        let scale = egui::vec2(image.width() / f32::from(size.width.max(1)), image.height() / f32::from(size.height.max(1)));
+        let area = app.view.background_area;
+        let rect = egui::Rect::from_min_size(image.min + egui::vec2(f32::from(area.x), f32::from(area.y)) * scale,
+            egui::vec2(f32::from(area.width), f32::from(area.height)) * scale);
+        let dimensions = egui::vec2(frame.width as f32, frame.height as f32);
+        let zoom = (rect.width() / dimensions.x).max(rect.height() / dimensions.y);
+        let destination = egui::Rect::from_center_size(rect.center(), dimensions * zoom);
+        let alpha = (u16::from(app.settings.preferences.appearance.gif_background.opacity.min(30)) * 255 / 100) as u8;
+        ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())).image(
+            self.texture.as_ref().expect("GIF texture exists").2.id(), destination,
+            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), egui::Color32::from_white_alpha(alpha));
+    }
+}
+
+#[derive(Default)]
 pub struct PlaybackPainter {
     waveform_key: Option<WaveformKey>,
     waveform_meshes: Option<(Arc<egui::Mesh>, Arc<egui::Mesh>)>,
@@ -256,9 +292,44 @@ pub struct ImageCache {
     buffer: Option<Buffer>,
     cursor: Option<(u16, u16)>,
     blink: (bool, bool),
+    background_mask: Option<BackgroundMask>,
+}
+
+#[derive(PartialEq, Eq)]
+struct BackgroundMask {
+    color: [u8; 3],
+    width: u16,
+    cells: Vec<bool>,
 }
 
 impl ImageCache {
+    pub fn set_background(&mut self, app: &App, size: ratatui::layout::Size) {
+        let mask = app.background_gif_frame().filter(|_| !app.view.background_area.is_empty()).map(|_| {
+            let bounds = Rect::new(0, 0, size.width, size.height);
+            let mut cells = vec![false; usize::from(size.width) * usize::from(size.height)];
+            let area = app.view.background_area.intersection(bounds);
+            for y in area.y..area.bottom() {
+                for x in area.x..area.right() { cells[usize::from(y) * usize::from(size.width) + usize::from(x)] = true; }
+            }
+            let buttons = app.view.hits.iter().filter(|hit| matches!(hit.target,
+                Target::Action(_) | Target::CommandMenu(_) | Target::LyricsPanel(_) | Target::Submit));
+            for area in std::iter::once(app.view.overlay_area)
+                .chain(app.view.player_buttons.iter().map(|button| button.area))
+                .chain(buttons.map(|hit| hit.area))
+            {
+                let area = area.intersection(bounds);
+                for y in area.y..area.bottom() {
+                    for x in area.x..area.right() { cells[usize::from(y) * usize::from(size.width) + usize::from(x)] = false; }
+                }
+            }
+            BackgroundMask { color: app.settings.current_palette().color("background"), width: size.width, cells }
+        });
+        if self.background_mask != mask {
+            self.background_mask = mask;
+            self.invalidate();
+        }
+    }
+
     pub fn invalidate(&mut self) {
         self.buffer = None;
     }
@@ -270,6 +341,23 @@ impl ImageCache {
     ) -> egui::Vec2 {
         let soft = &backend.soft_backend;
         let size = [soft.get_pixmap_width(), soft.get_pixmap_height()];
+        let pixel = |rgb: [u8; 3], x: usize, y: usize| {
+            if let Some(mask) = &self.background_mask
+                && rgb == mask.color
+            {
+                let column = x / soft.char_width.max(1);
+                let row = y / soft.char_height.max(1);
+                let cell_index = row * usize::from(mask.width) + column;
+                if mask.cells.get(cell_index) == Some(&true)
+                    && soft.buffer.content.get(cell_index).is_some_and(|cell| {
+                        cell.bg == ratatui::style::Color::Rgb(rgb[0], rgb[1], rgb[2])
+                    })
+                {
+                    return egui::Color32::TRANSPARENT;
+                }
+            }
+            egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2])
+        };
         let blink = (
             soft.blink_config.fast.is_hidden(),
             soft.blink_config.slow.is_hidden(),
@@ -283,7 +371,13 @@ impl ImageCache {
                 .as_ref()
                 .is_none_or(|texture| texture.size() != size);
         if full {
-            let image = backend.to_egui_image();
+            let mut image = backend.to_egui_image();
+            if self.background_mask.is_some() {
+                for (index, value) in image.pixels.iter_mut().enumerate() {
+                    let [r, g, b, _] = value.to_array();
+                    *value = pixel([r, g, b], index % size[0], index / size[0]);
+                }
+            }
             if let Some(texture) = &mut backend.text_handle {
                 texture.set(image, egui::TextureOptions::NEAREST);
             } else {
@@ -330,8 +424,8 @@ impl ImageCache {
                         data[start..start + width * 3]
                             .as_chunks::<3>()
                             .0
-                            .iter()
-                            .map(|rgb| egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2])),
+                            .iter().enumerate()
+                            .map(|(x, rgb)| pixel(*rgb, left + x, y)),
                     );
                 }
                 backend
