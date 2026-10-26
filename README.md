@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/almavorn-logo.png" width="192" height="192" alt="Almavorn logo">
+</p>
+
 # Almavorn
 
 [English](README.md) | [Русский](README.ru.md)

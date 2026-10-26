@@ -54,7 +54,10 @@ fn run() -> Result<()> {
     let mut terminal = Terminal::new(RataguiBackend::new("almavorn", backend))?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_app_id("almavorn")
+            .with_app_id(std::env::var("FLATPAK_ID").unwrap_or_else(|_| "almavorn".into()))
+            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!(
+                "../packaging/almavorn.png"
+            ))?)
             .with_inner_size([1100.0, 760.0])
             .with_min_inner_size([382.0, 420.0]),
         ..Default::default()

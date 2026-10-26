@@ -67,6 +67,8 @@ def main():
         shutil.copy2(ROOT / "scripts/install-user.py", package / "install.py")
         shutil.copy2(ROOT / "docs/RELEASE.md", package / "RELEASE.md")
         (package / "docs").mkdir()
+        (package / "docs/images").mkdir()
+        shutil.copy2(ROOT / "docs/images/almavorn-logo.png", package / "docs/images/almavorn-logo.png")
         for filename in ("RELEASE.md", "GLOBAL_SHORTCUTS.md", "MODS.md", "MODS.ru.md", "ONLINE_MUSIC.md", "ONLINE_MUSIC.ru.md"):
             shutil.copy2(ROOT / "docs" / filename, package / "docs" / filename)
         for relative in (f"applications/{binary}.desktop", f"icons/hicolor/scalable/apps/{binary}.svg"):
