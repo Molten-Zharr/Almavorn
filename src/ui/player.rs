@@ -3,7 +3,7 @@ use super::{
     theme::Palette,
     widgets::clean,
 };
-use crate::layout::{player_metrics, player_target};
+use crate::layout::player_metrics;
 use crate::{
     app::{App, Hit, Target},
     input::Action,
@@ -114,16 +114,8 @@ pub(super) fn player(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         target: Target::PlayingTrack,
         enabled: app.playback.current.is_some() && !app.busy(),
     });
-    for (rect, action, label) in geometry.controls {
-        quiet_button(
-            frame,
-            app,
-            rect,
-            label,
-            player_target(action),
-            app.allowed(action),
-            palette,
-        );
+    for (rect, action, _) in geometry.controls {
+        super::player_buttons::render(frame, app, rect, area, action, palette);
     }
     volume(frame, app, geometry.volume, palette);
     let progress = geometry.progress;

@@ -5,6 +5,8 @@ mod library;
 mod lyrics_panel;
 mod menus;
 mod player;
+mod player_buttons;
+pub use player_buttons::PlayerButton;
 mod settings;
 mod theme;
 mod toolbar;
@@ -33,6 +35,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     app.view.hits.clear();
     app.lyrics.panel.area = Rect::default();
     app.view.keycaps.clear();
+    app.view.player_buttons.clear();
     app.view.overlay_background = (0, 0);
     app.view.dialog_scroll_max = 0;
     app.view.dialog_page_size = 0;

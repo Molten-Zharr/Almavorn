@@ -132,6 +132,7 @@ fn run() -> Result<()> {
                 // Resize before drawing: rendered hit areas and mouse coordinates must use the same grid.
                 let available = ui.available_size();
                 let backend = &mut terminal.backend_mut().soft_backend;
+                app.view.cell_pixels = Some((backend.char_width as u16, backend.char_height as u16));
                 let columns = (available.x * pixels_per_point / backend.char_width.max(1) as f32)
                     .clamp(1.0, f32::from(u16::MAX)) as u16;
                 let rows = (available.y * pixels_per_point / backend.char_height.max(1) as f32)

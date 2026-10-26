@@ -125,11 +125,14 @@ impl PlayerButtonSize {
     }
 
     pub(crate) fn height(self) -> u16 {
-        match self { Self::Compact => 1, Self::Normal => 3, Self::Large => 5 }
+        match self { Self::Compact => 2, Self::Normal => 3, Self::Large => 5 }
     }
 
-    pub(crate) fn padding(self) -> u16 {
-        match self { Self::Compact => 0, Self::Normal => 4, Self::Large => 8 }
+    pub(crate) fn width(self, cell_pixels: Option<(u16, u16)>) -> u16 {
+        let (width, height) = cell_pixels.unwrap_or((1, 2));
+        ((u32::from(self.height()) * u32::from(height) + u32::from(width) / 2)
+            / u32::from(width.max(1)))
+            .clamp(2, u32::from(u16::MAX)) as u16
     }
 }
 

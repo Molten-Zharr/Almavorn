@@ -120,7 +120,7 @@ impl PlayerMetrics {
                 let size = control.width.min(width);
                 if x > 0 && x.saturating_add(size) > width {
                     x = 0;
-                    y += button_size.height();
+                    y += button_size.height() + 1;
                 }
                 let rect = Rect::new(x, y, size, button_size.height());
                 x = x.saturating_add(size + 1);
@@ -132,7 +132,7 @@ impl PlayerMetrics {
     fn control_rows(&self, width: u16, size: PlayerButtonSize) -> u16 {
         self.control_cells(width, size)
             .last()
-            .map_or(1, |(area, ..)| area.bottom())
+            .map_or(1, |(area, ..)| area.bottom() + 1)
     }
 
     fn loop_rows(&self, width: u16) -> u16 {
@@ -143,7 +143,7 @@ impl PlayerMetrics {
         let height = if self.stack_volume(width) {
             self.control_rows(width, size).saturating_add(3)
         } else {
-            size.height() + 1
+            size.height() + 2
         };
         height + self.loop_rows(width) + u16::from(size != PlayerButtonSize::Compact)
     }

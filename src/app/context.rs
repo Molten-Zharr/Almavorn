@@ -72,6 +72,8 @@ pub struct UiState {
     pub clipboard_text: Option<String>,
     pub hits: Vec<Hit>,
     pub keycaps: Vec<Keycap>,
+    pub player_buttons: Vec<crate::ui::PlayerButton>,
+    pub cell_pixels: Option<(u16, u16)>,
     /// Counts of hit regions and keycaps belonging to the interface below the overlay.
     pub overlay_background: (usize, usize),
     pub graphical_keycaps: bool,

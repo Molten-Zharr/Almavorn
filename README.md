@@ -202,7 +202,7 @@ Paste the command straight into your terminal.
 
 F2 opens Settings; F1 opens the full help guide. In Settings, hover over an option and press F1 to read its description without changing the value. When navigating with the keyboard, F1 explains the selected option.
 
-Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. Normal is the default.
+Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. The square buttons and their icons grow together; shortcut labels appear below. Normal is the default.
 
 In Statistics, choose a category and sorting from the drop-down lists. "More" opens overall totals, details about the selected row and the play-counting rules.
 

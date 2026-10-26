@@ -41,6 +41,7 @@ impl PlaybackPainter {
                 ),
             )
         };
+        paint_player_buttons(ui, image, app, &map);
         if !app.view.artwork_area.is_empty() {
             self.paint_artwork(ui, image, map(app.view.artwork_area), app);
         }
@@ -184,6 +185,69 @@ impl PlaybackPainter {
         let [r, g, b] = app.settings.current_palette().color("background");
         painter.rect_filled(area, 0, egui::Color32::from_rgb(r, g, b));
         painter.image(texture.id(), destination, egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+    }
+}
+
+fn paint_player_buttons(
+    ui: &egui::Ui,
+    image: egui::Rect,
+    app: &App,
+    map: &impl Fn(Rect) -> egui::Rect,
+) {
+    let painter = ui.painter().with_clip_rect(image.intersect(ui.clip_rect()));
+    let color = |value| match value {
+        ratatui::style::Color::Rgb(r, g, b) => egui::Color32::from_rgb(r, g, b),
+        _ => egui::Color32::WHITE,
+    };
+    for button in &app.view.player_buttons {
+        let cell_rect = map(button.area);
+        let side = cell_rect.width().min(cell_rect.height());
+        let rect = egui::Rect::from_center_size(cell_rect.center(), egui::vec2(side, side))
+            .shrink(1.0 / painter.pixels_per_point());
+        let rounding = if app.settings.preferences.appearance.corners == Corners::Rounded {
+            4
+        } else {
+            0
+        };
+        painter.rect_filled(rect, rounding, color(button.background));
+        painter.rect_stroke(
+            rect,
+            rounding,
+            egui::Stroke::new(1.0_f32, color(button.border)),
+            egui::StrokeKind::Inside,
+        );
+        let icon_side = rect.width() * 0.76;
+        let origin = rect.center() - egui::vec2(icon_side, icon_side) * 0.5;
+        for polygon in &button.polygons {
+            painter.add(egui::Shape::convex_polygon(
+                polygon.iter()
+                    .map(|[x, y]| origin + egui::vec2(*x, *y) * (icon_side / 24.0))
+                    .collect(),
+                color(button.foreground),
+                egui::Stroke::NONE,
+            ));
+        }
+        if let Some(shortcut) = &button.shortcut
+            && !button.shortcut_area.is_empty()
+        {
+            let caption = map(button.shortcut_area).shrink2(egui::vec2(1.0, 0.0));
+            let font_size = caption.height() * 0.75;
+            let mut galley = painter.layout_no_wrap(
+                shortcut.clone(),
+                egui::FontId::monospace(font_size),
+                color(button.foreground),
+            );
+            if galley.size().x > caption.width() {
+                galley = painter.layout_no_wrap(
+                    shortcut.clone(),
+                    egui::FontId::monospace(font_size * caption.width() / galley.size().x),
+                    color(button.foreground),
+                );
+            }
+            let origin = caption.center() - galley.size() * 0.5;
+            painter.with_clip_rect(caption.intersect(painter.clip_rect()))
+                .galley(origin, galley, color(button.foreground));
+        }
     }
 }
 
