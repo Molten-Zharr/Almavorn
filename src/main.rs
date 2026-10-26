@@ -190,6 +190,44 @@ fn run() -> Result<()> {
                 let Some(dimensions) = dimensions else {
                     return;
                 };
+                // Paint every layer from the same state as the terminal texture.
+                // Input below may open or close a dialog before the next frame is laid out.
+                playback_painter.paint(ui, image_rect, &app, dimensions);
+                gui_renderer::paint_keycaps(
+                    ui,
+                    image_rect,
+                    &app,
+                    dimensions,
+                    gui_renderer::KeycapLayer::Background,
+                );
+                let overlay = app.view.overlay_area;
+                if !overlay.is_empty() {
+                    let area = overlay;
+                    let uv = egui::Rect::from_min_max(
+                        egui::pos2(
+                            f32::from(area.x) / f32::from(dimensions.width),
+                            f32::from(area.y) / f32::from(dimensions.height),
+                        ),
+                        egui::pos2(
+                            f32::from(area.right()) / f32::from(dimensions.width),
+                            f32::from(area.bottom()) / f32::from(dimensions.height),
+                        ),
+                    );
+                    let popup = egui::Rect::from_min_max(
+                        image_rect.min + uv.min.to_vec2() * image_rect.size(),
+                        image_rect.min + uv.max.to_vec2() * image_rect.size(),
+                    );
+                    ui.painter()
+                        .image(texture_id, popup, uv, egui::Color32::WHITE);
+                }
+                color_painter.paint(ui, image_rect, &app, dimensions);
+                gui_renderer::paint_keycaps(
+                    ui,
+                    image_rect,
+                    &app,
+                    dimensions,
+                    gui_renderer::KeycapLayer::Foreground,
+                );
                 if let Some(point) = ctx.input(|input| input.pointer.hover_pos()) {
                     let x = ((point.x - image_rect.min.x) / image_rect.width()
                         * f32::from(dimensions.width))
@@ -420,42 +458,6 @@ fn run() -> Result<()> {
                         }
                     }
                 }
-                playback_painter.paint(ui, image_rect, &app, dimensions);
-                gui_renderer::paint_keycaps(
-                    ui,
-                    image_rect,
-                    &app,
-                    dimensions,
-                    gui_renderer::KeycapLayer::Background,
-                );
-                let overlay = app.view.overlay_area;
-                if !overlay.is_empty() {
-                    let area = overlay;
-                    let uv = egui::Rect::from_min_max(
-                        egui::pos2(
-                            f32::from(area.x) / f32::from(dimensions.width),
-                            f32::from(area.y) / f32::from(dimensions.height),
-                        ),
-                        egui::pos2(
-                            f32::from(area.right()) / f32::from(dimensions.width),
-                            f32::from(area.bottom()) / f32::from(dimensions.height),
-                        ),
-                    );
-                    let popup = egui::Rect::from_min_max(
-                        image_rect.min + uv.min.to_vec2() * image_rect.size(),
-                        image_rect.min + uv.max.to_vec2() * image_rect.size(),
-                    );
-                    ui.painter()
-                        .image(texture_id, popup, uv, egui::Color32::WHITE);
-                }
-                color_painter.paint(ui, image_rect, &app, dimensions);
-                gui_renderer::paint_keycaps(
-                    ui,
-                    image_rect,
-                    &app,
-                    dimensions,
-                    gui_renderer::KeycapLayer::Foreground,
-                );
             });
         if let Some(text) = app.view.clipboard_text.take() {
             ctx.copy_text(text);
