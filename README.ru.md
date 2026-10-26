@@ -7,7 +7,7 @@
 
 <h1 align="center">Almavorn</h1>
 
-<p align="center">Музыкальный плеер для Linux, вдохновленный AIMP и Strawberry.<br><sub>Своя музыка. Свои клавиши. Свое расположение блоков.</sub></p>
+<p align="center">Музыкальный плеер для Linux, вдохновленный AIMP и Strawberry.<br><sub>Своя музыка. Свои клавиши. Свое расположение. Полный кастом.</sub></p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.ru.md">Русский</a></p>
 
