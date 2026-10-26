@@ -189,6 +189,7 @@ impl Dialog {
             Self::Settings { .. } => Some(Action::Settings),
             Self::Browser(browser) if browser.palette_file.is_some() => None,
             Self::Browser(browser) if browser.playlist_name.is_some() => None,
+            Self::Browser(browser) if browser.download_form.is_some() => None,
             Self::Browser(browser) => Some(if browser.folder {
                 Action::AddFolder
             } else {

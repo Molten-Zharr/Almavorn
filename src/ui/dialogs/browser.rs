@@ -20,6 +20,7 @@ pub(super) fn browser_dialog(
         app.text("Add to desk", "Добавить на стол").to_owned()
     } else { app.import_caption() };
     let title = match &browser.palette_file {
+        None if browser.download_form.is_some() => app.text("Choose download folder", "Куда скачать музыку"),
         Some(PaletteFilePicker::Import) => {
             app.text("Import palette · JSON", "Импорт палитры · JSON")
         }
@@ -62,7 +63,7 @@ pub(super) fn browser_dialog(
             browser.directory.parent().is_some(),
         ),
         (
-            if browser.palette_file.is_some() || browser.folder_playlists.is_some() {
+            if browser.palette_file.is_some() || browser.folder_playlists.is_some() || browser.download_form.is_some() {
                 app.text("Open", "Открыть")
             } else {
                 app.text("Select / open", "Выбрать / открыть")
@@ -72,7 +73,7 @@ pub(super) fn browser_dialog(
             !browser.entries.is_empty() && !browser.search_failed(),
         ),
     ];
-    if browser.palette_file.is_some() {
+    if browser.palette_file.is_some() || browser.download_form.is_some() {
         controls.extend([
             (
                 app.text("Home", "Домой").into(),
@@ -108,7 +109,7 @@ pub(super) fn browser_dialog(
                 !app.busy(),
             ),
         ]);
-    } else if browser.playlist_name.is_none() && browser.palette_file.is_none() {
+    } else if browser.playlist_name.is_none() && browser.palette_file.is_none() && browser.download_form.is_none() {
         controls.push((
             if browser.folder {
                 format!(
@@ -323,7 +324,7 @@ pub(super) fn browser_dialog(
             app.text("Create playlists", "Создать плейлисты"),
             browser.marked.len()
         )
-    } else if browser.playlist_name.is_some() {
+    } else if browser.playlist_name.is_some() || browser.download_form.is_some() {
         if browser.selection_explicit {
             app.text("Selected folder", "Выбранную папку").into()
         } else {
@@ -353,7 +354,7 @@ pub(super) fn browser_dialog(
     )];
     if current_choice {
         footer.push((
-            if browser.playlist_name.is_some() {
+            if browser.playlist_name.is_some() || browser.download_form.is_some() {
                 app.text("Current folder", "Текущую папку").into()
             } else {
                 format!(

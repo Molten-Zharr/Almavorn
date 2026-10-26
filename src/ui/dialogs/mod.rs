@@ -6,6 +6,7 @@ mod forms;
 mod spotify;
 mod lyrics;
 mod downloads;
+mod download_form;
 pub(super) mod services;
 pub(super) mod mods;
 pub(super) mod help;

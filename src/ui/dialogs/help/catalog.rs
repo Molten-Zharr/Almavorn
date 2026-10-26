@@ -845,6 +845,14 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     }
 
     let q = &mut sections[C::Downloads as usize];
+    q.note("Paste a link, choose a folder and a downloader, then press Enter. A missing folder is created automatically; if unavailable, Downloads is used.",
+        "Вставьте ссылку, выберите папку и способ скачивания, затем нажмите Enter. Новая папка создается автоматически; если она недоступна, файл попадет в Загрузки.");
+    q.keys(&[c(Char('f'))], "In the download form: choose a folder. Type its name to filter the folder list.",
+        "В форме загрузки: выбрать папку. Введите имя, чтобы отфильтровать список папок.");
+    q.keys(&[c(Char('d'))], "In the download form: save directly to Downloads.",
+        "В форме загрузки: сохранять прямо в Загрузки.");
+    q.keys(&[c(Char('1'))], "In the download form: use yt-dlp.", "В форме загрузки: выбрать yt-dlp.");
+    q.keys(&[c(Char('2'))], "In the download form: use Cobalt.", "В форме загрузки: выбрать Cobalt.");
     for (key, en, ru) in [
         ('a', "Add a download link.", "Добавить ссылку для загрузки."),
         ('f', "Open music search.", "Открыть поиск музыки."),

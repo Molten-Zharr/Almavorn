@@ -469,6 +469,8 @@ impl App {
                 self.cancel_browser();
                 if browser.palette_file.is_some() {
                     self.show_settings();
+                } else if let Some(form) = browser.download_form {
+                    self.view.dialog = Some(Dialog::Form(form));
                 } else {
                     self.view.dialog = browser.playlist_name.map(|picker| Dialog::Text(picker.into_dialog()));
                 }

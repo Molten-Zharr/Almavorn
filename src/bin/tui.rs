@@ -145,8 +145,13 @@ fn run() -> Result<()> {
         }
         match input {
             Event::Key(key) if key.kind != KeyEventKind::Release => {
+                if key.code == KeyCode::Char('x') && key.modifiers.contains(KeyModifiers::CONTROL)
+                    && app.copy_form_text(true)
+                {
+                    continue;
+                }
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                    if app.copy_color_hex(false) || app.copy_help(None) {
+                    if app.copy_form_text(false) || app.copy_color_hex(false) || app.copy_help(None) {
                         continue;
                     }
                     if !app.writing_tags() {

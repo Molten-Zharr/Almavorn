@@ -18,6 +18,10 @@ pub(super) fn render(
     area: Rect,
     palette: Palette,
 ) {
+    if matches!(form.purpose, crate::app::FormPurpose::DownloadNew(_) | crate::app::FormPurpose::DownloadSettings | crate::app::FormPurpose::DownloadSearch) && !form.discard {
+        super::download_form::render(frame, app, form, area, palette);
+        return;
+    }
     if matches!(form.purpose, crate::app::FormPurpose::SpotifyConnect(..)) && !form.discard {
         super::spotify::render(frame, app, form, area, palette);
         return;

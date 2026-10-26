@@ -67,6 +67,7 @@ pub struct Browser {
     pub folder_playlists: Option<bool>,
     pub playlist_name: Option<PlaylistFolderPicker>,
     pub palette_file: Option<PaletteFilePicker>,
+    pub download_form: Option<Box<super::Form>>,
     offsets: HashMap<PathBuf, usize>,
 }
 
@@ -85,6 +86,7 @@ impl Browser {
             folder_playlists: None,
             playlist_name: None,
             palette_file: None,
+            download_form: None,
             offsets: HashMap::new(),
         }
     }
@@ -187,6 +189,7 @@ impl App {
                 && browser.folder_playlists.is_none()
                 && browser.playlist_name.is_none()
                 && browser.palette_file.is_none()
+                && browser.download_form.is_none()
             {
                 return self.target(Target::ScanSubfolders, false);
             }
@@ -218,7 +221,7 @@ impl App {
             return self.target(Target::BrowserParent, false);
         }
         if key.ctrl && !key.alt && key.key == Key::Char(' ') {
-            if matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.playlist_name.is_none() && browser.palette_file.is_none())
+            if matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.folder && browser.folder_playlists.is_none() && browser.playlist_name.is_none() && browser.palette_file.is_none() && browser.download_form.is_none())
             {
                 return self.target(Target::ScanSubfolders, false);
             }
@@ -418,6 +421,23 @@ impl App {
         )));
         self.queue_browser(directory, folder, true, None);
     }
+
+    pub(super) fn choose_download_folder(&mut self) {
+        let Some(Dialog::Form(form)) = &self.view.dialog else { return; };
+        let index = match form.purpose {
+            super::FormPurpose::DownloadNew(_) => 1,
+            super::FormPurpose::DownloadSettings => 0,
+            _ => return,
+        };
+        let path = PathBuf::from(form.fields[index].value.trim());
+        let directory = path.ancestors().find(|folder| folder.is_dir()).map(Path::to_owned)
+            .or_else(dirs::download_dir).or_else(dirs::home_dir).unwrap_or_else(|| self.data_directory());
+        let form = form.clone();
+        self.show_browser(directory, true);
+        if let Some(Dialog::Browser(browser)) = &mut self.view.dialog {
+            browser.download_form = Some(form);
+        }
+    }
     fn queue_browser(
         &mut self,
         directory: PathBuf,
@@ -614,6 +634,19 @@ impl App {
         } else {
             return Ok(());
         };
+        if let Some(Dialog::Browser(browser)) = &self.view.dialog
+            && let Some(mut form) = browser.download_form.clone()
+        {
+            let index = if matches!(form.purpose, super::FormPurpose::DownloadSettings) { 0 } else { 1 };
+            form.fields[index].value = folder.display().to_string();
+            form.selected = index;
+            form.cursor = form.fields[index].value.chars().count();
+            form.selected_all = true;
+            form.error = None;
+            self.cancel_browser();
+            self.view.dialog = Some(Dialog::Form(form));
+            return Ok(());
+        }
         if let Some(Dialog::Browser(browser)) = &self.view.dialog
             && let Some(purpose) = browser.palette_file.clone()
         {

@@ -66,6 +66,10 @@ pub struct Form {
 
 #[derive(Clone, Copy)]
 pub enum FormAction {
+    DownloadFolder,
+    DownloadDefaultFolder,
+    DownloadEngine(crate::downloads::Engine),
+    DownloadSettings,
     SpotifyDashboard,
     SpotifyRedirect,
     SpotifyNext,
@@ -77,6 +81,21 @@ pub enum FormAction {
 }
 
 impl App {
+    pub fn copy_form_text(&mut self, cut: bool) -> bool {
+        let Some(Dialog::Form(form)) = &mut self.view.dialog else { return false; };
+        if form.discard { return true; }
+        let field = &mut form.fields[form.selected];
+        if !field.secret && !field.checkbox && form.selected_all {
+            self.view.clipboard_text = Some(field.value.clone());
+            if cut {
+                field.value.clear();
+                form.cursor = 0;
+                form.selected_all = false;
+            }
+        }
+        true
+    }
+
     pub(super) fn open_form(
         &mut self,
         title: &str,
@@ -177,6 +196,24 @@ impl App {
                 Key::Enter => self.form_action(FormAction::Back),
                 _ => Ok(()),
             };
+        }
+        if matches!(form.purpose, FormPurpose::DownloadNew(_) | FormPurpose::DownloadSettings) {
+            if key.ctrl && key.key == Key::Char('f') {
+                return self.form_action(FormAction::DownloadFolder);
+            }
+            if key.ctrl && key.key == Key::Char('d') {
+                return self.form_action(FormAction::DownloadDefaultFolder);
+            }
+        }
+        if matches!(form.purpose, FormPurpose::DownloadNew(_)) {
+            if key.ctrl && matches!(key.key, Key::Char('1' | '2')) {
+                return self.form_action(FormAction::DownloadEngine(if key.key == Key::Char('2') {
+                    crate::downloads::Engine::Cobalt
+                } else { crate::downloads::Engine::YtDlp }));
+            }
+            if key.key == Key::Enter && !form.fields[form.selected].checkbox {
+                return self.form_action(FormAction::Save);
+            }
         }
         if let FormPurpose::SpotifyConnect(_, step) = form.purpose {
             if key.ctrl {
@@ -294,6 +331,14 @@ impl App {
     }
 
     pub(super) fn form_action(&mut self, action: FormAction) -> Result<()> {
+        if matches!(action, FormAction::DownloadFolder) {
+            self.choose_download_folder();
+            return Ok(());
+        }
+        if matches!(action, FormAction::DownloadSettings) {
+            self.open_download_settings();
+            return Ok(());
+        }
         if matches!(action, FormAction::Back) {
             self.form_close();
             return Ok(());
@@ -302,6 +347,27 @@ impl App {
             return Ok(());
         };
         match action {
+            FormAction::DownloadDefaultFolder => {
+                let index = match form.purpose {
+                    FormPurpose::DownloadNew(_) => 1,
+                    FormPurpose::DownloadSettings => 0,
+                    _ => return Ok(()),
+                };
+                match crate::downloads::destination_folder(std::path::Path::new("")) {
+                    Ok(folder) => {
+                        form.fields[index].value = folder.display().to_string();
+                        form.selected = index;
+                        form.cursor = form.fields[index].value.chars().count();
+                        form.selected_all = true;
+                        form.error = None;
+                    }
+                    Err(error) => form.error = Some(error.to_string()),
+                }
+            }
+            FormAction::DownloadEngine(engine) if matches!(form.purpose, FormPurpose::DownloadNew(_)) => {
+                form.fields[3].value = (engine == crate::downloads::Engine::Cobalt).to_string();
+                form.error = None;
+            }
             FormAction::SpotifyDashboard if matches!(form.purpose, FormPurpose::SpotifyConnect(..)) => {
                 form.error = None;
                 if let Err(error) = super::services::open_service_page("https://developer.spotify.com/dashboard") {
@@ -435,15 +501,22 @@ impl App {
                 self.search_downloads(form.fields[0].value.trim().into())
             }
             FormPurpose::DownloadNew(previous) => {
+                anyhow::ensure!(!self.downloads_loading(), "Дождитесь сохранения настроек загрузок.");
+                let engine = if form.fields[3].value == "true" {
+                    anyhow::ensure!(!self.downloads.config.cobalt_url.trim().is_empty(),
+                        "Укажите адрес сервиса Cobalt в настройках загрузок или выберите yt-dlp.");
+                    crate::downloads::Engine::Cobalt
+                } else { crate::downloads::Engine::YtDlp };
                 let job = crate::downloads::Download::new(
                     form.fields[0].value.trim().into(),
                     form.fields[2].value.trim().into(),
                     std::path::PathBuf::from(form.fields[1].value.trim()),
-                    self.downloads.config.engine,
+                    engine,
                 )?;
                 self.queue_download(job, previous.as_deref())?;
             }
             FormPurpose::DownloadSettings => {
+                anyhow::ensure!(!self.downloads_loading(), "Дождитесь завершения текущей операции загрузок.");
                 let mut config = self.downloads.config.clone();
                 config.directory = crate::downloads::destination_folder(
                     std::path::Path::new(form.fields[0].value.trim()),
@@ -452,6 +525,7 @@ impl App {
                 let key = (!form.fields[2].value.trim().is_empty())
                     .then(|| form.fields[2].value.trim().to_owned());
                 self.configure_downloads(config, key);
+                self.view.dialog = form.back.clone().map(|dialog| *dialog);
             }
             FormPurpose::LyricsQuery(track) => {
                 self.start_lyrics(

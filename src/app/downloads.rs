@@ -117,6 +117,23 @@ pub enum DownloadAction {
 }
 
 impl App {
+    pub(super) fn open_download_settings(&mut self) {
+        let mut key = FormField::new(
+            self.text("Cobalt API key (optional)", "Ключ Cobalt (необязательно)"), "",
+        );
+        key.secret = true;
+        self.open_form(
+            self.text("Download settings", "Настройки загрузок"),
+            self.text("Choose the default folder. Cobalt requires an API address; yt-dlp is ready to use.",
+                "Выберите папку по умолчанию. Для Cobalt нужен адрес API; yt-dlp готов к работе."),
+            vec![
+                FormField::new(self.text("Download folder", "Папка загрузки"), self.downloads.config.directory.display().to_string()),
+                FormField::new(self.text("Cobalt API address", "Адрес API Cobalt"), self.downloads.config.cobalt_url.clone()),
+                key,
+            ], FormPurpose::DownloadSettings,
+        );
+    }
+
     pub(super) fn initialize_downloads(&mut self) {
         self.downloads_request(Auxiliary::Load);
     }
@@ -262,7 +279,15 @@ impl App {
                         )
                         .into(),
                     ),
-                    Err(error) => self.downloads.error = Some(format!("{error:#}")),
+                    Err(error) => {
+                        let message = format!("{error:#}");
+                        if let Some(Dialog::Form(form)) = &mut self.view.dialog
+                            && matches!(form.purpose, FormPurpose::DownloadNew(_) | FormPurpose::DownloadSettings)
+                        {
+                            form.error = Some(message.clone());
+                        }
+                        self.downloads.error = Some(message);
+                    }
                 }
             }
         }
@@ -534,6 +559,9 @@ impl App {
                     || self.downloads.config.directory.clone(),
                     |r| r.folder.clone(),
                 );
+                let engine = old.as_ref().map_or(self.downloads.config.engine, |row| row.engine);
+                let mut cobalt = FormField::new("Cobalt", (engine == Engine::Cobalt).to_string());
+                cobalt.checkbox = true;
                 self.open_form(
                     self.text("Download music", "Скачать музыку"),
                     self.text(
@@ -550,23 +578,13 @@ impl App {
                             ),
                             name,
                         ),
+                        cobalt,
                     ],
                     FormPurpose::DownloadNew(old.map(|r| r.id)),
                 );
             }
             DownloadAction::Settings => {
-                let mut key = FormField::new(
-                    self.text(
-                        "Cobalt API key (empty keeps saved)",
-                        "Ключ Cobalt (пустое поле сохраняет прежний)",
-                    ),
-                    "",
-                );
-                key.secret = true;
-                self.open_form(self.text("Download settings", "Настройки загрузок"),self.text("Missing folders are created automatically. If a folder is unavailable, music goes to Downloads/Almavorn or Downloads. Leave the folder empty to use Downloads directly.", "Папка будет создана автоматически. Если она недоступна, музыка попадет в Загрузки/Almavorn или в Загрузки. Пустое поле означает сохранение прямо в Загрузки."),vec![
-                    FormField::new(self.text("Download folder", "Папка загрузки"),self.downloads.config.directory.display().to_string()),
-                    FormField::new(self.text("Cobalt API address (optional)", "Адрес API Cobalt (необязательно)"),self.downloads.config.cobalt_url.clone()),key,
-                ],FormPurpose::DownloadSettings);
+                self.open_download_settings();
             }
             DownloadAction::Engine => {
                 let mut config = self.downloads.config.clone();

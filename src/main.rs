@@ -313,12 +313,12 @@ fn run() -> Result<()> {
                     }
                     match event {
                         egui::Event::Copy => {
-                            if !app.copy_color_hex(false) {
+                            if !app.copy_form_text(false) && !app.copy_color_hex(false) {
                                 app.copy_help(None);
                             }
                         }
                         egui::Event::Cut => {
-                            app.copy_color_hex(true);
+                            if !app.copy_form_text(true) { app.copy_color_hex(true); }
                         }
                         egui::Event::Key {
                             key,

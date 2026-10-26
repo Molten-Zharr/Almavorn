@@ -822,7 +822,7 @@ impl App {
                 ensure!(!self.busy(), AppError::LibraryBusy);
                 ensure!(
                     matches!(self.view.dialog, Some(Dialog::Folders { .. } | Dialog::ScanFolders(_)))
-                        || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none()),
+                        || matches!(self.view.dialog, Some(Dialog::Browser(ref browser)) if browser.folder && browser.playlist_name.is_none() && browser.palette_file.is_none() && browser.download_form.is_none()),
                     AppError::FolderNotReady
                 );
                 let recursive = if matches!(
