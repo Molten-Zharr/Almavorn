@@ -20,7 +20,7 @@ impl App {
             Some(Dialog::Downloads(_)) => self.downloads_key(key),
             Some(Dialog::Services(_)) => self.services_key(key),
             Some(Dialog::Mods(_)) => self.mods_key(key),
-            Some(Dialog::CopyableHelp { .. })
+            Some(Dialog::CopyableHelp { .. } | Dialog::FileMoveReport { .. })
                 if key.ctrl && key.key == Key::Char('c') || key.key == Key::Enter =>
             {
                 self.copy_help(None);
@@ -60,12 +60,13 @@ impl App {
             Some(Dialog::Commands { .. }) => self.commands_key(key),
             Some(Dialog::Panels { .. }) => self.panels_key(key),
             Some(Dialog::Browser(_)) => self.browser_key(key),
+            Some(Dialog::Transfer { .. } | Dialog::MoveFiles(_)) => self.transfer_key(key),
             Some(
                 Dialog::RemoveEntry { .. }
-                | Dialog::Transfer { .. }
                 | Dialog::ConfirmSettings { .. }
                 | Dialog::SettingsHelp { .. }
                 | Dialog::CopyableHelp { .. }
+                | Dialog::FileMoveReport { .. }
                 | Dialog::Metadata { .. },
             ) => self.dialog_navigation_key(key),
             None => Ok(()),

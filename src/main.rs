@@ -246,7 +246,7 @@ fn run() -> Result<()> {
                             | Target::TunerSelect(_)
                             | Target::SettingsTimeline(_, _),
                         ) => egui::CursorIcon::PointingHand,
-                        Some(Target::Artwork | Target::PlayingTrack | Target::Mark(_) | Target::MarkGroup(_) | Target::CopyHelp(_)) => egui::CursorIcon::PointingHand,
+                        Some(Target::Artwork | Target::PlayingTrack | Target::Mark(_) | Target::MarkGroup(_) | Target::GroupHeader(_) | Target::CollapseGroup(_) | Target::CopyHelp(_)) => egui::CursorIcon::PointingHand,
                         Some(Target::SearchInput | Target::FilterInput | Target::Tags(almavorn::app::TagAction::Input(_))) => egui::CursorIcon::Text,
                         Some(Target::Tags(_)) => egui::CursorIcon::PointingHand,
                         Some(Target::PanelMove(_)) => egui::CursorIcon::Grab,

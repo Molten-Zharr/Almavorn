@@ -32,6 +32,7 @@ mod statistics;
 mod services;
 mod mods;
 mod tags;
+mod transfer;
 mod tuner;
 mod visualizer;
 mod workspace;
@@ -54,6 +55,7 @@ pub use mods::{ModsState,ModsView,ModAction};
 pub use services::{ServicesState,ServicesView,ServiceAction,ServicePage};
 pub use statistics::{StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
 pub use tags::{FileInput, MovePicker, TagAction, TagEdit, TagEditor, TagsTab};
+pub use transfer::MoveFiles;
 
 use crate::{audio::Audio, model::Settings, store::Store};
 use anyhow::{Context, Result};

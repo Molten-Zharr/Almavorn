@@ -21,6 +21,7 @@ enum TrackTableRow<'a> {
         folder: &'a Path,
         count: usize,
         marked: usize,
+        collapsed: bool,
     },
     Track(&'a Entry),
 }
@@ -275,22 +276,29 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             display.push(TrackTableRow::Group {
                 folder,
                 count: end - index,
+                collapsed: app.track_group_collapsed(folder),
                 marked: entries[index..end]
                     .iter()
                     .filter(|e| app.library.marked.contains(&e.id))
                     .count(),
             });
         }
-        display.extend(
-            entries[index..end]
-                .iter()
-                .map(|entry| TrackTableRow::Track(entry)),
-        );
+        if !grouped || !app.track_group_collapsed(folder) {
+            display.extend(
+                entries[index..end]
+                    .iter()
+                    .map(|entry| TrackTableRow::Track(entry)),
+            );
+        }
         index = end;
     }
     let selected = display
         .iter()
         .position(|row| matches!(row, TrackTableRow::Track(entry) if Some(entry.id) == app.library.selected_entry))
+        .or_else(|| {
+            let folder = entries.iter().find(|entry| Some(entry.id) == app.library.selected_entry)?.track.path.parent()?;
+            display.iter().position(|row| matches!(row, TrackTableRow::Group { folder: group, .. } if *group == folder))
+        })
         .unwrap_or(0);
     let offset = if app.view.track_scroll_selected.is_some()
         && app.view.track_scroll_selected == app.library.selected_entry
@@ -320,13 +328,14 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
                 folder,
                 count,
                 marked,
+                collapsed,
             } = item
             {
                 let name = app
                     .playlist()
                     .map(|playlist| playlist.folder_group_name(folder))
                     .unwrap_or_default();
-                Some((row, clean(&name), *count, *marked, folder.to_path_buf()))
+                Some((row, clean(&name), *count, *marked, *collapsed, folder.to_path_buf()))
             } else {
                 None
             }
@@ -492,10 +501,13 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
             ),
         );
     }
-    for (row, name, count, marked, folder) in groups {
+    for (row, name, count, marked, collapsed, folder) in groups {
         let rect = Rect::new(inner.x, inner.y + 1 + row as u16, inner.width, 1);
-        let counter = format!(" · {count}");
-        let count_width = (Span::raw(&counter).width() as u16).min(rect.width);
+        let toggle_width = 3.min(rect.width);
+        let toggle = Rect::new(rect.right().saturating_sub(toggle_width), rect.y, toggle_width, 1);
+        let content = Rect::new(rect.x, rect.y, rect.width.saturating_sub(toggle_width), 1);
+        let counter = format!(" · {count} ");
+        let count_width = (Span::raw(&counter).width() as u16).min(content.width);
         let style = palette
             .text()
             .fg(palette.accent)
@@ -512,23 +524,29 @@ pub(super) fn tracks_table(frame: &mut Frame, app: &mut App, area: Rect, palette
                 },
                 ellipsize_name(
                     &name,
-                    usize::from(rect.width.saturating_sub(count_width + 4))
+                    usize::from(content.width.saturating_sub(count_width + 4))
                 )
             ))
             .style(style),
-            Rect::new(rect.x, rect.y, rect.width - count_width, 1),
+            Rect::new(content.x, content.y, content.width - count_width, 1),
         );
         frame.render_widget(
             Paragraph::new(counter)
                 .style(style)
                 .alignment(Alignment::Right),
-            Rect::new(rect.right() - count_width, rect.y, count_width, 1),
+            Rect::new(content.right() - count_width, content.y, count_width, 1),
         );
         app.view.hits.push(Hit {
-            area: rect,
-            target: Target::MarkGroup(folder),
+            area: content,
+            target: Target::GroupHeader(folder.clone()),
             enabled: true,
         });
+        app.view.hits.push(Hit {
+            area: Rect::new(content.x, content.y, 3.min(content.width), 1),
+            target: Target::MarkGroup(folder.clone()), enabled: true,
+        });
+        super::buttons::quiet_button(frame, app, toggle, if collapsed { "+" } else { "−" },
+            Target::CollapseGroup(folder), true, palette);
     }
     for (row, id) in ids.into_iter().enumerate() {
         let Some(id) = id else {

@@ -32,6 +32,28 @@ fn sort_rows<T: Ord>(
 }
 
 impl App {
+    pub(crate) fn track_group_collapsed(&self, folder: &std::path::Path) -> bool {
+        self.library.selected_playlist.is_some_and(|playlist| {
+            self.view.collapsed_track_groups.contains(&(playlist, folder.to_path_buf()))
+        })
+    }
+
+    pub(super) fn visible_track_rows(&self) -> Vec<&Entry> {
+        let grouped = self.playlist().is_some_and(Playlist::groups_by_folder);
+        self.rows().into_iter().filter(|entry| !grouped || !self.track_group_collapsed(
+            entry.track.path.parent().unwrap_or(std::path::Path::new("")))).collect()
+    }
+
+    pub(super) fn toggle_track_group(&mut self, folder: &std::path::Path) {
+        let Some(playlist) = self.playlist().filter(|p| p.groups_by_folder()) else { return; };
+        let key = (playlist.id, folder.to_path_buf());
+        if !self.view.collapsed_track_groups.remove(&key) {
+            self.view.collapsed_track_groups.insert(key);
+        }
+        self.view.track_scroll_selected = self.library.selected_entry;
+        self.view.focus = Focus::Tracks;
+    }
+
     pub fn playlist(&self) -> Option<&Playlist> {
         self.library
             .playlists
@@ -226,14 +248,26 @@ impl App {
                 self.select_playlist(id);
             }
         } else {
-            let rows = self.rows();
+            let all = self.rows();
+            let current = all.iter().position(|entry| Some(entry.id) == self.library.selected_entry).unwrap_or(0);
+            let rows = self.visible_track_rows();
             let position = rows
                 .iter()
-                .position(|entry| Some(entry.id) == self.library.selected_entry)
-                .unwrap_or(0);
-            if !rows.is_empty() {
-                self.library.selected_entry =
-                    Some(rows[bounded(position, direction, rows.len())].id);
+                .position(|entry| Some(entry.id) == self.library.selected_entry);
+            if rows.is_empty() {
+                let groups = all.iter().map(|entry| entry.track.path.parent()).collect::<HashSet<_>>().len();
+                self.view.track_offset = bounded(self.view.track_offset, direction, groups);
+                self.view.track_scroll_selected = self.library.selected_entry;
+            } else {
+                let next = if let Some(position) = position {
+                    bounded(position, direction, rows.len())
+                } else {
+                    let insertion = all[..current].iter().filter(|entry| !self.track_group_collapsed(
+                        entry.track.path.parent().unwrap_or(std::path::Path::new("")))).count();
+                    if direction > 0 { bounded(insertion.min(rows.len() - 1), direction - 1, rows.len()) }
+                    else { bounded(insertion.saturating_sub(1), direction + 1, rows.len()) }
+                };
+                self.library.selected_entry = Some(rows[next].id);
             }
         }
     }
@@ -284,6 +318,11 @@ impl App {
         self.view.filter_keyboard = false;
         self.select_playlist(playlist);
         self.library.selected_entry = Some(entry);
+        if let Some(folder) = self.playlist().and_then(|p| p.entries.iter().find(|e| e.id == entry))
+            .and_then(|e| e.track.path.parent()).map(std::path::Path::to_path_buf)
+        {
+            self.view.collapsed_track_groups.remove(&(playlist, folder));
+        }
         self.view.track_scroll_selected = None;
         self.view.playlist_scroll_selected = None;
         self.focus_panel(crate::workspace::Panel::Tracks);

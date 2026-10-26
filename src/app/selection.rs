@@ -61,7 +61,7 @@ impl App {
             self.view.mark_drag = None;
             return Ok(());
         }
-        let rows = self.rows();
+        let rows = self.visible_track_rows();
         let Some(end) = rows.iter().position(|e| e.id == id) else {
             return Ok(());
         };
@@ -121,7 +121,7 @@ impl App {
         } else {
             return Ok(());
         };
-        let entries = self.rows();
+        let entries = self.visible_track_rows();
         let Some(index) = entries.iter().position(|e| e.id == stroke.last) else {
             return Ok(());
         };

@@ -269,8 +269,17 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "В окне папок обычного плейлиста: включить или выключить поиск в подпапках.",
     );
 
-    sections[C::Tracks as usize].note("Use checkboxes to select tracks for copying, looping or editing tags together. Click a group heading to check its visible tracks.",
-        "Отметьте треки галочками, чтобы скопировать их, слушать по кругу или вместе изменить теги. Клик по заголовку группы отмечает все ее видимые треки.");
+    sections[C::Tracks as usize].note("Use checkboxes to select tracks for copying, moving, looping or editing tags together. A group checkbox selects its tracks matching the filter, even when collapsed.",
+        "Отметьте треки галочками для копирования, переноса или правки тегов. Галочка группы отмечает подходящие под фильтр треки, даже если группа свернута.");
+    sections[C::Tracks as usize].keys(&[p(Enter)],
+        "In Tracks to playlist: unlock the selected playlist, then copy the tracks.",
+        "В окне выбора плейлиста: открыть выбранный для правки, затем скопировать треки.");
+    sections[C::Tracks as usize].keys(&[c(Enter)],
+        "In Tracks to playlist, from the desk: choose a folder to move the selected files.",
+        "В окне выбора плейлиста, со стола: выбрать папку для переноса отмеченных файлов.");
+    sections[C::Tracks as usize].keys(&[c(Char('f'))],
+        "In the file move window: enter another destination folder.",
+        "В окне переноса файлов: указать другую папку назначения.");
     sections[C::Tracks as usize].note("In Order, click Edit before changing a playlist. The sorting desk is always editable.",
         "Для изменения плейлиста в Порядке нажмите \"Редактировать\". Сортировочный стол можно править всегда.");
     sections[C::Tracks as usize].note(
@@ -1122,8 +1131,12 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
             "Зажмите галочку композиции и ведите по строкам для отметки или снятия отметок. У края список прокручивается.",
         ),
         (
-            "Click a group heading to mark its visible tracks; click again to unmark them.",
-            "Клик по заголовку группы отмечает видимые композиции; повторный клик снимает отметки.",
+            "Click a group checkbox to mark or unmark its tracks matching the filter.",
+            "Галочка группы отмечает или снимает отметки с композиций, подходящих под фильтр.",
+        ),
+        (
+            "Double-click a group title or separator to collapse or expand it. The + and − buttons on the right need one click.",
+            "Двойное нажатие по названию или линии группы сворачивает и раскрывает ее. Кнопкам + и − справа достаточно одного нажатия.",
         ),
         (
             "Drag a regular playlist row to another playlist to change its position. Order requires Edit. Wheel scrolls while dragging; Esc cancels.",

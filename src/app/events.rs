@@ -676,6 +676,12 @@ impl App {
                 self.start_mark_drag(id)?;
             }
             Target::MarkGroup(folder)=>{if !double{self.mark_folder_group(&folder)?;}},
+            Target::GroupHeader(folder) => {
+                if double { self.toggle_track_group(&folder); }
+            }
+            Target::CollapseGroup(folder) => {
+                if !double { self.toggle_track_group(&folder); }
+            }
             Target::SortColumn(sort) => {
                 self.view.track_scroll_selected = None;
                 self.library.sort_descending =
@@ -984,6 +990,15 @@ impl App {
                     self.submit()?;
                 }
             }
+            Target::TransferEdit => self.edit_transfer_destination()?,
+            Target::TransferMove => self.open_move_files()?,
+            Target::MoveFilesFolder => self.choose_move_folder(),
+            Target::MoveFilesRow(index) => {
+                if let Some(Dialog::MoveFiles(view)) = &mut self.view.dialog {
+                    view.selected = index;
+                }
+                if double { self.submit_move_files()?; }
+            }
             Target::DialogScroll(delta) => self.scroll_dialog(delta),
             Target::Setting(index) => self.setting(index)?,
             Target::SettingSelect(index) => {
@@ -1167,7 +1182,7 @@ impl App {
                 } else if self.view.playlist_area.contains(position) {
                     usize::from(self.view.playlist_area.height)
                 } else if self.view.tracks_area.contains(position) {
-                    count(|target| matches!(target, Target::Track(_)))
+                    count(|target| matches!(target, Target::Track(_) | Target::GroupHeader(_)))
                 } else {
                     1
                 }
@@ -1204,6 +1219,7 @@ impl App {
                 Target::BrowserRow(_)
                     | Target::FolderRow(_)
                     | Target::TransferRow(_)
+                    | Target::MoveFilesRow(_)
                     | Target::ComposeRow(_)
                     | Target::PanelRow(_)
                     | Target::CommandRow(_)

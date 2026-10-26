@@ -12,6 +12,12 @@ pub(super) enum DatabaseOutcome {
     Created(Change),
     Renamed,
     FileEdited(crate::store::FileEditOutcome),
+    FilesMoved {
+        destination: i64,
+        outcomes: Vec<crate::store::FileEditOutcome>,
+        failures: Vec<String>,
+        remaining: usize,
+    },
     FilesEdited {
         outcomes: Vec<crate::store::FileEditOutcome>,
         failures: Vec<String>,
@@ -124,6 +130,38 @@ impl App {
                 }
             }
             Ok(DatabaseOutcome::Renamed) => {}
+            Ok(DatabaseOutcome::FilesMoved { destination, outcomes, mut failures, remaining }) => {
+                let moved = outcomes.len();
+                for outcome in outcomes {
+                    self.update_file_references(&outcome.old_path, &outcome.track);
+                    if let Some(warning) = outcome.warning { failures.push(super::tags::batch_file_error(&outcome.track.path, &warning)); }
+                }
+                self.tags.recovery_required = crate::tags::recovery_path(&self.store.path).exists();
+                let summary = format!("{}: {moved}. {}: {}. {}: {remaining}.",
+                    self.text("Moved", "Перенесено"), self.text("Errors", "Ошибок"), failures.len(),
+                    self.text("Not processed", "Не обработано"));
+                file_warning = !failures.is_empty() || remaining > 0 || self.tags.recovery_required;
+                if file_warning {
+                    let mut description = format!("{summary}\n\n{}", failures.join("\n\n"));
+                    if self.tags.recovery_required { description.push_str(self.text(
+                        "\n\nRestart the player to finish file recovery.", "\n\nПерезапустите плеер для восстановления записи файла.")); }
+                    self.view.dialog = Some(Dialog::FileMoveReport {
+                        title: self.text("File move results", "Результат переноса файлов").into(), description, offset: 0,
+                    });
+                } else {
+                    self.view.dialog = None;
+                    if let Some(playlist) = self.library.playlists.iter().find(|p| p.id == destination) {
+                        self.settings.mode = playlist.mode;
+                        self.library.pending_selection = Some((destination, playlist.mode));
+                        self.library.sort = super::Sort::Position;
+                        self.library.sort_descending = false;
+                        self.library.query.clear();
+                        self.view.track_offset = 0;
+                    }
+                }
+                file_message = Some(summary);
+                self.save_settings()?;
+            }
             Ok(DatabaseOutcome::FilesEdited { outcomes, mut failures, unchanged, remaining }) => {
                 let saved = outcomes.len();
                 for outcome in outcomes {

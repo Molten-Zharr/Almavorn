@@ -6,6 +6,10 @@ use ratatui::text::Span;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::TransferEdit => app.settings.preferences.bindings.iter()
+            .find(|binding| binding.action == Action::ToggleEdit).map(|binding| binding.key.label()),
+        Target::TransferMove => Some("Ctrl+Enter".into()),
+        Target::MoveFilesFolder => Some("Ctrl+F".into()),
         Target::ChooseScanFolders => app.settings.preferences.bindings.iter()
             .find(|binding| binding.action == Action::AddNew).map(|binding| binding.key.label()),
         Target::ScanFolders(crate::app::ScanFolderAction::Start) => Some("Enter".into()),

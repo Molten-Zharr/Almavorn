@@ -422,6 +422,7 @@ impl App {
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
+        if self.close_move_files() { return true; }
         if self.mods_close() { return true; }
         if self.services_close() { return true; }
         if self.downloads_close() { return true; }

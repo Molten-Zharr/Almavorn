@@ -113,6 +113,12 @@ pub enum Dialog {
         ids: Vec<i64>,
         selected: usize,
     },
+    MoveFiles(super::MoveFiles),
+    FileMoveReport {
+        title: String,
+        description: String,
+        offset: usize,
+    },
     Help {
         offset: usize,
     },
@@ -193,7 +199,8 @@ impl Dialog {
             Self::ComposePlaylists { .. } | Self::ComposeTracks { .. } => {
                 Some(Action::ComposePlaylists)
             }
-            Self::Transfer { .. } => Some(Action::Transfer),
+            Self::Transfer { .. } | Self::MoveFiles(_) => Some(Action::Transfer),
+            Self::FileMoveReport { .. } => None,
             Self::RemoveEntry { .. }
             | Self::RemovePlaylist { .. }
             | Self::ConfirmSettings { .. } => Some(Action::Delete),
@@ -230,7 +237,7 @@ impl Dialog {
 impl App {
     pub fn copy_help(&mut self, line: Option<usize>) -> bool {
         let description = match &self.view.dialog {
-            Some(Dialog::CopyableHelp { description, .. }) => description.as_str(),
+            Some(Dialog::CopyableHelp { description, .. } | Dialog::FileMoveReport { description, .. }) => description.as_str(),
             Some(Dialog::Settings { .. }) => match self.settings_guide() {
                 Some(text) => text,
                 None => return false,
@@ -372,9 +379,13 @@ impl App {
             Some(Dialog::Transfer { selected, .. }) => {
                 *selected = bounded(*selected, direction as i64, transfer_length)
             }
+            Some(Dialog::MoveFiles(view)) if !view.confirm => {
+                view.selected = bounded(view.selected, direction as i64, view.folders.len());
+            }
             Some(Dialog::Help { offset })
             | Some(Dialog::Metadata { offset, .. })
             | Some(Dialog::CopyableHelp { offset, .. })
+            | Some(Dialog::FileMoveReport { offset, .. })
             | Some(Dialog::SettingsHelp { offset, .. }) => {
                 *offset = bounded(
                     *offset,
@@ -392,12 +403,19 @@ impl App {
             .iter()
             .filter(|playlist| {
                 Some(playlist.id) != self.library.selected_playlist
-                    && self.playlist_editable(playlist)
             })
             .collect()
     }
 
     pub(super) fn submit(&mut self) -> Result<()> {
+        if matches!(self.view.dialog, Some(Dialog::MoveFiles(_))) {
+            return self.submit_move_files();
+        }
+        if let Some(Dialog::Transfer { selected, .. }) = &self.view.dialog
+            && self.transfer_destinations().get(*selected).is_some_and(|p| !self.playlist_editable(p))
+        {
+            return self.edit_transfer_destination();
+        }
         if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref()
             && let Some(selected) = self.view.settings.binding_global_focus
         {

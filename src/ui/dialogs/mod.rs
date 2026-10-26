@@ -14,6 +14,7 @@ mod search;
 mod scan_folders;
 mod statistics;
 mod tags;
+mod transfer;
 mod text;
 mod tuner;
 pub(crate) use text::keyboard;
@@ -21,10 +22,10 @@ pub(crate) use text::keyboard;
 use self::{bindings::binding_dialog, browser::browser_dialog, text::text_dialog};
 use super::{
     theme::Palette,
-    widgets::{button, buttons, clean, dialog_footer, modal, visible_offset},
+    widgets::{button, buttons, clean, dialog_footer, modal},
 };
 use crate::{
-    app::{App, Dialog, Hit, Target},
+    app::{App, Dialog, Target},
     model::duration_text,
 };
 use ratatui::{
@@ -228,75 +229,8 @@ pub(super) fn render_dialog(
                 palette,
             );
         }
-        Dialog::Transfer { selected, .. } => {
-            let inner = modal(
-                frame,
-                app,
-                area,
-                app.text("Copy tracks to playlist", "Копировать в плейлист")
-                    .into(),
-                24,
-                palette,
-            );
-            let entries: Vec<String> = app
-                .transfer_destinations()
-                .iter()
-                .map(|playlist| {
-                    format!(
-                        "{} · {}",
-                        playlist.display_name(app.settings.preferences.language),
-                        playlist.mode.name(app.settings.preferences.language)
-                    )
-                })
-                .collect();
-            let capacity = inner.height.saturating_sub(3) as usize;
-            let offset = visible_offset(0, *selected, capacity, entries.len());
-            if entries.is_empty() {
-                frame.render_widget(
-                    Paragraph::new(app.text(
-                        "Create a playlist or unlock Order editing.",
-                        "Создайте плейлист или включите редактирование Порядка.",
-                    ))
-                    .style(palette.text())
-                    .wrap(Wrap { trim: false }),
-                    inner,
-                );
-            }
-            for (row, label) in entries.iter().enumerate().skip(offset).take(capacity) {
-                let rect = Rect::new(inner.x, inner.y + (row - offset) as u16, inner.width, 1);
-                frame.render_widget(
-                    Paragraph::new(label.clone()).style(if row == *selected {
-                        palette.text().bg(palette.selection)
-                    } else {
-                        palette.text()
-                    }),
-                    rect,
-                );
-                app.view.hits.push(Hit {
-                    area: rect,
-                    target: Target::TransferRow(row),
-                    enabled: true,
-                });
-            }
-            buttons(
-                frame,
-                app,
-                Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2),
-                vec![
-                    (
-                        app.text("Copy", "Копировать").into(),
-                        Target::Submit,
-                        !entries.is_empty(),
-                    ),
-                    (
-                        app.text("Cancel", "Отмена").into(),
-                        Target::CloseDialog,
-                        true,
-                    ),
-                ],
-                palette,
-            );
-        }
+        Dialog::Transfer { selected, .. } => transfer::render(frame, app, *selected, area, palette),
+        Dialog::MoveFiles(view) => transfer::move_files(frame, app, view, area, palette),
         Dialog::Settings { .. } => super::settings::render_settings(frame, app, palette),
         Dialog::ConfirmResetBindings { confirm } => {
             let body = app.text(
@@ -430,6 +364,10 @@ pub(super) fn render_dialog(
             dialog_footer(frame, app, inner, palette);
         }
         Dialog::CopyableHelp {
+            title,
+            description,
+            offset,
+        } | Dialog::FileMoveReport {
             title,
             description,
             offset,

@@ -8,6 +8,7 @@ use anyhow::Result;
 
 #[derive(Clone)]
 pub enum FormPurpose {
+    MoveFilesFolder(super::MoveFiles),
     ModNew,
     ModInstall,
     ModCode(crate::mods::Mod),
@@ -309,6 +310,16 @@ impl App {
 
     fn apply_form(&mut self, form: &Form) -> Result<()> {
         match &form.purpose {
+            FormPurpose::MoveFilesFolder(view) => {
+                let folder = std::path::PathBuf::from(form.fields[0].value.trim()).canonicalize()?;
+                anyhow::ensure!(folder.is_dir(), "Выберите существующую папку.");
+                let mut view = view.clone();
+                view.selected = view.folders.iter().position(|p| *p == folder).unwrap_or_else(|| {
+                    view.folders.push(folder);
+                    view.folders.len() - 1
+                });
+                self.view.dialog = Some(Dialog::MoveFiles(view));
+            }
             FormPurpose::ModFields(previous, keys) => {
                 let mut value = previous.clone();
                 for (key, field) in keys.iter().zip(&form.fields) {
