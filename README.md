@@ -2,144 +2,164 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
+### INSTALL: [curl](#curl) - [AppImage](#appimage) - [Flatpak](#flatpak) - [Installation guide](#download-and-install)
+
+<p align="center">
 A local music player for Linux, inspired by AIMP and Strawberry.
-Keep your collection organized and build new mixes freely.
+</p>
+
+**Almavorn** is built for comfort and control:
+
+- Use your keyboard, your mouse, or both at once!
+- An equalizer, playback settings, and background animations!
+- Tooltips, action descriptions, and customizable shortcut highlighting!
+- Remap keys, move panels, choose your own colors, and edit track titles and metadata.
+  **It's all built in!**
+- Two modes: **Order** protects playlists from accidental edits.
+  Switch to **Chaos** to add tracks straight to playlists and folders!
+
+Suggestions and feedback are welcome. We're only getting started, and we hope you'll enjoy the player!
 
 ![Almavorn in English: a protected playlist in Order mode](docs/images/almavorn-order-en.png)
 
-## Order, Chaos, and the sorting desk
+## Order, Chaos, and the sorting desk: what's the difference?
 
-- **Order — my collection.** Playlists are protected from accidental changes. Choose "Edit" to make changes, then "Done" to lock the playlist again. Sorting the view preserves the saved track order.
-- **Chaos — free mixes.** Rearrange tracks and build new playlists from existing ones. History keeps the last 100 actions until you close the player, so you can undo and redo them. A new action after undo clears the redo history.
-- **Sorting desk — organize new music.** A shared playlist available in both modes. Add files, correct titles, tags, and artwork, then copy tracks into the playlists you want.
-
-Shuffle is a separate playback option available in both modes.
+- **Order: "my collection, kept intact".** Playlists are protected from accidental changes. Choose "Edit" to make changes, then "Done" to lock the playlist again. Sorting the view preserves the saved track order.
+- **The sorting desk is a key part of Order.** It's a shared playlist available in both modes: add files, correct titles, tags, and artwork, then copy tracks into the playlists you want!
+- **Chaos: free-form playlists.** Rearrange tracks and build new playlists from existing ones. History keeps the last 100 actions until you close the player, so you can undo and redo them.
 
 The tag editor writes changes to the audio file itself. Those changes affect that file in every playlist.
 
 ![Almavorn in English: a free mix in Chaos mode with sparks in the background](docs/images/almavorn-chaos-en.png)
 
-## Features
+## What else?
 
 - Find your music with search, filters, and sorting.
-- Shape your sound with equalizer, tempo, and pitch.
-- Control playback with media keys while the window is minimized.
-- Choose themes, fonts, and a comfortable panel layout.
-- Add cover artwork and animations to the player background.
+- Build playlists yourself or from folders, with or without subfolders.
+- Drag playlists into order and combine them into new mixes!
+- Use "Add new files" to find new tracks in linked folders.
+- Listening statistics for every track! Double-click an entry to find that song in its playlist.
+- Tune your sound with an equalizer and ten presets to choose from.
+- Play tracks in reverse, adjust speed, tempo, pitch, and bass, and save different settings for every track!
+  (now you can turn your track into that version from a hardstyle mix)
+- Control playback with media keys while the window is minimized. Set global shortcuts in Settings.
+- Choose themes, waveform styles, background animations, and settings profiles with your own shortcuts.
+- Arrange blocks your way: drag their titles, resize them, and hide what you don't need!
+- Read lyrics in the player and save them for offline listening.
+- Edit titles, tags, and artwork for several tracks at once.
+- Choose a cover thumbnail size and open the original with one click.
+- Drag files straight from your file manager into the GUITUI window.
+- Find and download music by name or link through "Downloads".
+- Connect music services and listen online in the same window!
 - Open keyboard help while your music keeps playing.
+- Type with the on-screen keyboard and control the player with your mouse!
+  (you can lie back with your head on a pillow and control everything with one hand)
+- Mark just the tracks you want in a playlist and listen only to those!
 
-## Choose a download
+## Themes, appearance, and usability
+
+"Layout" mode lets you rearrange the interface. For example, you can put the player at the bottom, playlists on the right, and give most of the window to the track list.
+
+Click "Layout" or press Ctrl+B. Controls will appear on the panel headers:
+
+- "[↕]" lets you drag a block. You can also drag its title.
+- "[-]" collapses a block; "[+]" expands it again.
+- "[x]" hides a block.
+
+Where you drop a block determines what happens: drop it at the edge of another panel to place it beside that panel, or in the center to swap them. Drag the shared border between panels to resize them.
+
+"Visibility…" opens the list of blocks and buttons. You can bring back a hidden panel or hide individual buttons you don't need. "Restore default layout" is there too.
+
+You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow keys to swap it with a neighboring block, or Ctrl+Shift+arrow keys to resize it. Ctrl+Alt+Space collapses or expands the block; Ctrl+Alt+Delete hides it.
+
+Your layout is saved automatically. Click "Done" or press Ctrl+B to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
+
+## Download and install
 
 The packaged release is **0.1.4**, for 64-bit Linux on Intel/AMD.
 
-- **GUITUI** — a desktop window with mouse and keyboard controls: [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.tar.gz) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) · [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak).
-- **TUI** — the interface in your terminal: [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.tar.gz) · [AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage) · [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak).
+*(Windows support is in the works, hehe)*
 
-Choose one interface and one format:
+### GUITUI version
 
-- **tar.gz** — an archive with an installer and menu shortcut.
-- **AppImage** — a single file you run without installing.
-- **Flatpak** — install the app with its required components.
+**GUITUI** runs in its own window with mouse and keyboard controls:
 
-If Almavorn is already installed, keep using the same format. Flatpak has separate libraries and settings for TUI and GUITUI; these are also separate from the other installation methods.
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.tar.gz) - especially handy on KDE/GNOME/COSMIC
 
-## Install
+---OR---
 
-### tar.gz — install with a menu shortcut
-
-The installer needs Python 3.
-
-1. Download and extract the archive for your chosen interface.
-2. Open the extracted folder containing "install.py".
-3. Open a terminal in that folder and run:
-
-   ```sh
-   python3 install.py
-   ```
-
-4. Open "Almavorn" or "Almavorn TUI" from your application menu.
-
-You can also start TUI from a terminal:
-
-```sh
-~/.local/bin/almavorn-tui
-```
-
-### AppImage — run a single file
-
-1. Download the AppImage for your chosen interface.
-2. Allow execution as a program in the file's properties.
-3. For GUITUI, double-click the file to launch it.
-
-For TUI, open a terminal in the folder containing the file and run:
-
-```sh
-./almavorn-0.1.4-tui-linux-x86_64.AppImage
-```
-
-Keep the AppImage in a convenient folder: you will use that same file to launch the player again.
-
-### Flatpak — install a package
-
-1. If you have not set up Flatpak, follow the [instructions for your distribution](https://flathub.org/en/setup).
-2. Download the ".flatpak" file for your chosen interface. The first installation needs an internet connection.
-3. Open a terminal in the download folder and run the commands for your interface.
-
-GUITUI:
-
-```sh
-flatpak install --user --or-update ./almavorn-0.1.4-guitui-linux-x86_64.flatpak
-flatpak run io.github.MoltenZharr.Almavorn
-```
-
-TUI:
-
-```sh
-flatpak install --user --or-update ./almavorn-0.1.4-tui-linux-x86_64.flatpak
-flatpak run io.github.MoltenZharr.Almavorn.TUI
-```
-
-Confirm installation and the requested downloads. The player will then appear in your application menu.
-
-### Build and install the current source
-
-The automatic installer supports Ubuntu, Debian, Arch Linux, and Artix on Intel/AMD x86_64. It downloads the source and installs the required components along with the player.
-
-1. Open a terminal.
-2. Run one command for your chosen interface.
-
-GUITUI:
+<a id="curl"></a>
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant guitui
 ```
 
-TUI:
+### TUI version
+
+**TUI** runs right inside your favorite terminal:
+
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.tar.gz)
+
+---OR---
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh | bash -s -- --variant tui
 ```
 
-3. Enter your administrator password if requested. Password characters are not displayed in the terminal.
-4. Wait for installation to finish, then open the player from your application menu.
+---
 
-If "curl" is unavailable, download the [installer](https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.sh) in your browser. Open a terminal in its folder and run "bash install.sh --variant guitui" or "bash install.sh --variant tui".
+*- Psst, which one should I pick?*
+
+*- Here's the difference:*
+
+**curl** downloads and runs the installer from our repository for your chosen interface!
+Paste the command straight into your terminal.
+
+<a id="appimage"></a>
+
+**AppImage** is a single file you can run without installing. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.AppImage).
+
+<a id="flatpak"></a>
+
+**Flatpak** installs the app with its required components. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.1.4/almavorn-0.1.4-tui-linux-x86_64.flatpak).
+
+**tar.gz** is an archive with an installer and an application menu shortcut.
+
+**How to update:** If you installed the player with the command above, run it again; otherwise, download the same type of file you chose originally.
 
 ## First launch
 
-1. Choose "Add to desk" and select files or a folder.
-2. Select a track and press Space to start playback.
-3. Press F2 for settings or F1 for the full help guide.
+F2 opens Settings; F1 opens the full help guide. Within Settings, F1 explains the selected option.
 
-Use the sorting desk to organize new music before adding it to permanent playlists.
+### Create a playlist from a folder
 
-## Update
+1. At the top, open "Add to desk" and choose "Folders to playlists".
+2. Find your music folder. Double-click or press Enter to open a folder; "Parent" takes you up one level. The current path appears at the top of the window, for example "/home/anna/Music".
+3. Check the box next to a folder, or select it and press Insert. You can mark several folders at once: each becomes its own playlist!
+4. Enable "Subfolders as groups" to include music from nested folders. Without it, only files directly inside the marked folders are added.
+5. Click "Create playlists" or press Ctrl+Enter. The playlists will appear in the list, named after the folders you selected.
+6. Open a playlist and double-click a track, or select it and press Enter. Space pauses and resumes playback.
 
-Close the running player and update **the same interface using the same method**:
+### Build a playlist yourself
 
-- **tar.gz:** extract the new archive and run its "install.py".
-- **AppImage:** download the new file, allow execution, and launch it.
-- **Flatpak:** download the new package from [Releases](https://github.com/Molten-Zharr/Almavorn/releases) and repeat the install command with its filename.
-- **Source build:** repeat your installation command.
+1. Open "Playlist" and choose "New playlist", or press C. Enter a name and press Enter to create an empty playlist.
+2. In Order mode, select it and click "Edit".
+3. Open "Add to desk", choose "Add files", mark the files you want, and click "Add to desk" at the bottom. For a whole folder, choose "Add folder", open that folder, then click "Current folder · Add to desk".
+4. On the sorting desk, mark tracks using their checkboxes or Insert. Press X, choose your playlist, and confirm with Enter. The tracks will be copied into the playlist; the original files stay where they are.
+5. Return to the playlist and click "Done" to protect it from accidental changes again.
+
+The sorting desk helps you organize music before adding it to permanent playlists. In Chaos, you can add files straight to the open playlist: uncheck "Add to sorting desk" in the add menu.
+
+### Other useful controls
+
+- F4 opens the equalizer; F5 opens speed, tempo, and pitch settings.
+- F7 opens statistics, F8 the tag editor, and F9 song lyrics.
+- / searches playlists; Ctrl+F filters the current playlist.
+- Ctrl+B enables layout editing. Drag a block by its title, drag a border to resize it, then click "Done".
+- Insert marks tracks, Ctrl+Enter plays only the marked tracks, and Ctrl+U returns to the whole playlist.
+- Ctrl+Z undoes an action; Ctrl+Y redoes it, in Chaos and on the sorting desk.
+- Tab switches panels; right-click opens the action menu. Esc closes the open window; in the file picker, it clears the filter first.
+
+These are the default keys. Set your own shortcuts under F2, "Shortcuts".
 
 [All releases](https://github.com/Molten-Zharr/Almavorn/releases) · [Keyboard shortcuts](docs/GLOBAL_SHORTCUTS.md) · [MIT license](LICENSE)
