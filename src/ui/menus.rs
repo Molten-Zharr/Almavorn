@@ -31,6 +31,12 @@ pub(super) fn hint(app: &App) -> Option<String> {
         .and_then(|index| items.get(index))
         .or_else(|| items.get(*selected))?;
     let description = match item.target {
+        Target::GroupAction(action) => match action {
+            crate::app::GroupAction::Collapse => app.text("Expand or collapse this group.", "Развернуть или свернуть эту группу."),
+            crate::app::GroupAction::Mark => app.text("Check or uncheck every track in this group, including tracks hidden by the filter.", "Отметить или снять отметки со всей группы, включая скрытые фильтром композиции."),
+            crate::app::GroupAction::Remove => app.text("Remove this group's tracks from the playlist after confirmation. Music files stay on disk.", "После подтверждения убрать композиции этой группы из плейлиста. Музыкальные файлы останутся на диске."),
+            crate::app::GroupAction::EnableEdit => app.text("Allow changes to this playlist and return to the group menu.", "Разрешить изменения этого плейлиста и вернуться в меню группы."),
+        },
         Target::Action(Action::Undo | Action::Redo) => {
             return Some(app.history_caption(matches!(item.target, Target::Action(Action::Undo))));
         }

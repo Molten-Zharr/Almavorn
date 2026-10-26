@@ -16,7 +16,7 @@ pub(super) struct MarkDrag {
 }
 
 impl App {
-    fn set_track_marks(&mut self, ids: &[i64], marked: bool) -> Result<()> {
+    pub(super) fn set_track_marks(&mut self, ids: &[i64], marked: bool) -> Result<()> {
         let mut changed = false;
         for id in ids {
             changed |= if marked {

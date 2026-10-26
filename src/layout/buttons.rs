@@ -7,6 +7,16 @@ use std::borrow::Cow;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::GroupAction(action) => {
+            let action = match action {
+                crate::app::GroupAction::Remove => Action::Delete,
+                crate::app::GroupAction::Mark => Action::Mark,
+                crate::app::GroupAction::EnableEdit => Action::ToggleEdit,
+                crate::app::GroupAction::Collapse => return None,
+            };
+            app.settings.preferences.bindings.iter().find(|binding| binding.action == action)
+                .map(|binding| binding.key.label())
+        }
         Target::StatisticsControl(crate::app::StatisticsControl::Menu(menu)) => Some(match menu {
             crate::app::StatisticsMenu::Page => "M",
             crate::app::StatisticsMenu::Sort => "S",

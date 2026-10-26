@@ -63,6 +63,7 @@ impl App {
             Some(Dialog::Transfer { .. } | Dialog::MoveFiles(_)) => self.transfer_key(key),
             Some(
                 Dialog::RemoveEntry { .. }
+                | Dialog::RemoveGroup { .. }
                 | Dialog::ConfirmSettings { .. }
                 | Dialog::SettingsHelp { .. }
                 | Dialog::CopyableHelp { .. }

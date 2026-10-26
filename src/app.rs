@@ -1,6 +1,7 @@
 mod actions;
 mod artwork;
 mod gif_background;
+mod groups;
 mod background;
 mod browser;
 mod color_picker;
@@ -53,6 +54,7 @@ pub use scan_folders::{ScanFolders, ScanFolderAction};
 pub(crate) use settings::{SettingControl, SettingGroup};
 pub use settings::{SettingsCatalog, SettingsEdit, SettingsFocus, SettingsPage};
 pub use state::{Focus, Hit, Keycap, Sort, Target};
+pub use groups::GroupAction;
 pub use mods::{ModsState,ModsView,ModAction};
 pub use services::{ServicesState,ServicesView,ServiceAction,ServicePage};
 pub use statistics::{StatisticsControl, StatisticsInfo, StatisticsMenu, StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};

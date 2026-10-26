@@ -12,6 +12,7 @@ pub enum AppError {
     InvalidTrackName,
     PlaylistMissing,
     EntryMissing,
+    GroupChanged,
     MusicSelectionRequired,
     FolderSelectionRequired,
     FolderNotReady,
@@ -100,6 +101,10 @@ impl AppError {
             Self::EntryMissing => language.text(
                 "Track no longer exists in this playlist",
                 "Композиции больше нет в этом плейлисте.",
+            ),
+            Self::GroupChanged => language.text(
+                "The group changed. Open its menu and confirm removal again.",
+                "Состав группы изменился. Откройте ее меню и подтвердите удаление заново.",
             ),
             Self::MusicSelectionRequired => language.text(
                 "Select music files first",

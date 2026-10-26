@@ -63,6 +63,7 @@ pub struct PlaybackState {
 
 #[derive(Default)]
 pub struct UiState {
+    pub(super) group_context: Option<super::groups::GroupContext>,
     pub(crate) collapsed_track_groups: HashSet<(i64, PathBuf)>,
     pub(super) mark_drag: Option<super::selection::MarkDrag>,
     pub(crate) settings: super::settings::SettingsView,

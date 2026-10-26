@@ -231,6 +231,24 @@ pub(super) fn render_dialog(
                 palette,
             );
         }
+        Dialog::RemoveGroup { name, entries, playlist, .. } => {
+            let inner = modal(frame, app, area, app.text("Remove group?", "Убрать группу?").into(), 13, palette);
+            let playlist_name = app.playlists().iter().find(|item| item.id == *playlist)
+                .map_or("", |item| item.display_name(app.settings.preferences.language));
+            frame.render_widget(
+                Paragraph::new(format!("{}\n{}: {}\n{}: {}\n\n{}", name,
+                    app.text("Playlist", "Плейлист"), playlist_name,
+                    app.text("Tracks", "Композиции"), entries.len(),
+                    app.text("Remove every track in this group, including tracks hidden by the filter? Music files, tags and other playlists are kept.",
+                        "Убрать все композиции группы, включая скрытые фильтром? Музыкальные файлы, теги и остальные плейлисты сохранятся.")))
+                    .style(palette.text()).wrap(Wrap { trim: false }),
+                Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(2)),
+            );
+            buttons(frame, app, Rect::new(inner.x, inner.bottom().saturating_sub(2), inner.width, 2), vec![
+                (app.text("Remove group", "Убрать группу").into(), Target::Submit, !app.busy()),
+                (app.text("Cancel", "Отмена").into(), Target::CloseDialog, true),
+            ], palette);
+        }
         Dialog::Transfer { selected, .. } => transfer::render(frame, app, *selected, area, palette),
         Dialog::MoveFiles(view) => transfer::move_files(frame, app, view, area, palette),
         Dialog::Settings { .. } => super::settings::render_settings(frame, app, palette),

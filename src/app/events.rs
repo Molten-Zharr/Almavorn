@@ -420,6 +420,10 @@ impl App {
                 } else if self.view.dialog.is_none() {
                     let target = self.target_at(self.view.pointer).cloned();
                     let menu = match target {
+                        Some(Target::GroupHeader(folder) | Target::MarkGroup(folder) | Target::CollapseGroup(folder)) => {
+                            self.open_group_menu(folder);
+                            None
+                        }
                         Some(Target::Playlist(id)) => {
                             self.select_playlist(id);
                             Some(super::CommandMenu::Playlist)
@@ -741,6 +745,7 @@ impl App {
             Target::GroupHeader(folder) => {
                 if double { self.toggle_track_group(&folder); }
             }
+            Target::GroupAction(action) => self.group_action(action)?,
             Target::CollapseGroup(folder) => {
                 if !double { self.toggle_track_group(&folder); }
             }

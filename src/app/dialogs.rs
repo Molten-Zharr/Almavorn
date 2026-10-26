@@ -104,6 +104,12 @@ pub enum Dialog {
         entry: i64,
         title: String,
     },
+    RemoveGroup {
+        playlist: i64,
+        folder: std::path::PathBuf,
+        name: String,
+        entries: Vec<i64>,
+    },
     RemovePlaylist {
         playlist: i64,
         name: String,
@@ -203,6 +209,7 @@ impl Dialog {
             Self::Transfer { .. } | Self::MoveFiles(_) => Some(Action::Transfer),
             Self::FileMoveReport { .. } => None,
             Self::RemoveEntry { .. }
+            | Self::RemoveGroup { .. }
             | Self::RemovePlaylist { .. }
             | Self::ConfirmSettings { .. } => Some(Action::Delete),
             Self::Text(_)
@@ -655,6 +662,16 @@ impl App {
                     Ok(DatabaseOutcome::Changed(
                         store.remove_entry(playlist, entry, unlocked)?,
                     ))
+                }) {
+                    self.view.dialog = Some(recovery);
+                    return Err(error);
+                }
+            }
+            Some(Dialog::RemoveGroup { playlist, folder, name, entries }) => {
+                let recovery = Dialog::RemoveGroup { playlist, folder: folder.clone(), name, entries: entries.clone() };
+                let unlocked = self.playlist_unlocked(playlist);
+                if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
+                    Ok(DatabaseOutcome::Changed(store.remove_group(playlist, &folder, &entries, unlocked)?))
                 }) {
                     self.view.dialog = Some(recovery);
                     return Err(error);

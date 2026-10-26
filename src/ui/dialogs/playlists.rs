@@ -66,8 +66,8 @@ pub(super) fn folders(
     }
     let footer_rows = action_rows(app, inner.width, &actions).min(inner.height);
     let hint = if desk {
-        app.text("These are the current desk group folders. Find new checks files directly in these folders. To remove a group, move or remove its tracks from the desk.",
-            "Это папки текущих групп стола. Поиск проверяет файлы непосредственно в этих папках. Чтобы убрать группу, перенесите или уберите ее композиции со стола.")
+        app.text("These are the current desk group folders. Find new checks files directly in these folders. To remove a group, right-click its heading and choose Remove group from playlist.",
+            "Это папки текущих групп стола. Поиск проверяет файлы непосредственно в этих папках. Чтобы убрать группу, нажмите ПКМ по ее заголовку и выберите Убрать группу из плейлиста.")
     } else { app.text("Find new music in linked folders. The checkbox includes subfolders; otherwise only files directly in each folder are checked. Unlinking keeps tracks.", "Поиск новых треков идет в связанных папках. Галочка включает подпапки; без нее проверяются только файлы в каждой папке. Отключение сохраняет композиции.") };
     let hints = super::help::wrapped_height(hint, inner.width)
         .min(inner.height.saturating_sub(footer_rows + 6));

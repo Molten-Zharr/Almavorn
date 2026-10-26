@@ -15,6 +15,7 @@ pub enum CommandMenu {
     Application,
     Visualizer,
     More,
+    Group,
 }
 
 impl CommandMenu {
@@ -25,7 +26,7 @@ impl CommandMenu {
             Self::Tracks => Some(Action::OpenTracksMenu),
             Self::Application => Some(Action::OpenApplicationMenu),
             Self::More => Some(Action::ToggleToolbar),
-            Self::Player | Self::Visualizer => None,
+            Self::Player | Self::Visualizer | Self::Group => None,
         }
     }
     pub fn title(self, language: crate::model::Language) -> &'static str {
@@ -37,6 +38,7 @@ impl CommandMenu {
             Self::Application => language.text("Application", "Приложение"),
             Self::Visualizer => language.text("Background animation", "Анимация фона"),
             Self::More => language.text("More", "Больше"),
+            Self::Group => language.text("Track group", "Группа композиций"),
         }
     }
 }
@@ -79,6 +81,20 @@ impl App {
             .find(|binding| binding.key == normalized)
             .map(|binding| binding.action)
         {
+            if matches!(self.view.dialog, Some(Dialog::Commands { menu: CommandMenu::Group, .. })) {
+                let group_action = match action {
+                    Action::Delete => super::GroupAction::Remove,
+                    Action::Mark => super::GroupAction::Mark,
+                    Action::ToggleEdit => super::GroupAction::EnableEdit,
+                    _ => return Ok(()),
+                };
+                let recovery = self.view.dialog.take();
+                if let Err(error) = self.group_action(group_action) {
+                    self.view.dialog = recovery;
+                    return Err(error);
+                }
+                return Ok(());
+            }
             let scan_picker = action == Action::AddNew
                 && matches!(self.view.dialog, Some(Dialog::Commands { menu: CommandMenu::Add, .. }));
             self.view.dialog = None;
@@ -226,6 +242,7 @@ impl App {
     pub fn command_items(&self, menu: CommandMenu) -> Vec<CommandItem> {
         use Action::*;
         if menu == CommandMenu::More { return self.more_items(); }
+        if menu == CommandMenu::Group { return self.group_items(); }
         if menu == CommandMenu::Visualizer {
             return crate::visualizer::VisualizerKind::ALL
                 .into_iter()
@@ -245,7 +262,7 @@ impl App {
                 .collect();
         }
         let (panel, actions): (Panel, &[Action]) = match menu {
-            CommandMenu::Visualizer | CommandMenu::More => unreachable!("Menu choices are built above"),
+            CommandMenu::Visualizer | CommandMenu::More | CommandMenu::Group => unreachable!("Menu choices are built above"),
             CommandMenu::Add => (
                 Panel::Add,
                 &[ToggleDesk, AddFiles, AddFolder, AddFolderPlaylists, AddNew],
@@ -427,7 +444,7 @@ impl App {
             .map(|area| ratatui::layout::Position::new(area.x, area.bottom().saturating_sub(1)));
         match menu {
             CommandMenu::Playlist => self.focus_panel(Panel::Playlists),
-            CommandMenu::Tracks => self.focus_panel(Panel::Tracks),
+            CommandMenu::Tracks | CommandMenu::Group => self.focus_panel(Panel::Tracks),
             CommandMenu::Player | CommandMenu::Visualizer => self.focus_panel(Panel::Player),
             _ => {}
         }

@@ -476,6 +476,29 @@ impl Store {
         })
     }
 
+    pub fn remove_group(&mut self, playlist: i64, folder: &Path, entries: &[i64], unlocked: bool) -> Result<Change> {
+        self.mutate(Some(playlist), Mode::Order, unlocked, |connection| {
+            let (kind, grouped): (String, bool) = connection.query_row(
+                "SELECT kind,group_folders FROM playlists WHERE id=?1", [playlist], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            ensure!(kind == "desk" || grouped, AppError::GroupChanged);
+            let mut statement = connection.prepare(
+                "SELECT e.id,t.path FROM entries e JOIN tracks t ON t.id=e.track_id WHERE e.playlist_id=?1 ORDER BY e.id")?;
+            let rows = statement.query_map([playlist], |row| Ok((row.get::<_, i64>(0)?, PathBuf::from(row.get::<_, String>(1)?))))?;
+            let mut current = Vec::new();
+            for row in rows {
+                let (id, path) = row?;
+                if path.parent().unwrap_or(Path::new("")) == folder { current.push(id); }
+            }
+            let mut expected = entries.to_vec();
+            expected.sort_unstable();
+            ensure!(!expected.is_empty() && current == expected, AppError::GroupChanged);
+            let mut remove = connection.prepare("DELETE FROM entries WHERE id=?1 AND playlist_id=?2")?;
+            for entry in expected { ensure!(remove.execute(params![entry, playlist])? == 1, AppError::GroupChanged); }
+            // Only playlist membership changes. Track metadata and music files remain intact.
+            Ok(())
+        })
+    }
+
     pub fn move_entry(
         &mut self,
         playlist: i64,

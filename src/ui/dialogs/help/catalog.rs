@@ -299,6 +299,9 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
 
     sections[C::Tracks as usize].note("Use checkboxes to select tracks for copying, moving, looping or editing tags together. A group checkbox selects its tracks matching the filter, even when collapsed.",
         "Отметьте треки галочками для копирования, переноса или правки тегов. Галочка группы отмечает подходящие под фильтр треки, даже если группа свернута.");
+    sections[C::Tracks as usize].topic("Right-click a group heading to open its own menu. Collapse the group, check all its tracks or remove the whole group from the playlist after confirmation. These group commands include tracks hidden by the filter. Music files stay on disk. Protected playlists can be unlocked from the same menu.",
+        "ПКМ по заголовку группы открывает ее меню. Можно свернуть группу, отметить все ее композиции или убрать группу из плейлиста с подтверждением. Команды группы учитывают и скрытые фильтром треки. Музыкальные файлы остаются на диске. Редактирование защищенного плейлиста можно включить в том же меню.",
+        "удалить убрать всю группу папку альбом контекстное меню пкм remove delete folder group album right click context menu");
     sections[C::Tracks as usize].keys(&[p(Enter)],
         "In Tracks to playlist: unlock the selected playlist, then copy the tracks.",
         "В окне выбора плейлиста: открыть выбранный для правки, затем скопировать треки.");

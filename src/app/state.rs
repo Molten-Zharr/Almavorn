@@ -88,6 +88,7 @@ pub enum Target {
     Mark(i64),
     MarkGroup(std::path::PathBuf),
     GroupHeader(std::path::PathBuf),
+    GroupAction(super::GroupAction),
     CollapseGroup(std::path::PathBuf),
     SortColumn(Sort),
     FilterInput,
