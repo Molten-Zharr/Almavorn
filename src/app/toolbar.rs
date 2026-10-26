@@ -124,22 +124,29 @@ impl App {
     }
 
     pub(super) fn more_items(&self) -> Vec<CommandItem> {
+        use QuickButton as B;
         let (placed, _, _) = self.quick_layout();
         let mut items = Vec::new();
-        let mut category = "";
-        for button in QuickButton::ALL {
-            if placed.iter().any(|(value, _)| *value == button) { continue; }
-            let next = button.category(self.settings.preferences.language);
-            if category != next {
-                if !items.is_empty() { items.push(CommandItem { label: String::new(), target: Target::MenuSection, enabled: false }); }
-                items.push(CommandItem { label: next.into(), target: Target::MenuSection, enabled: false });
-                category = next;
+        for (en, ru, buttons) in [
+            ("Utilities (Application)", "Служебные (Приложение)", &[B::Settings, B::Layout, B::Visibility, B::Customize, B::Mode, B::Statistics, B::Help, B::Quit][..]),
+            ("Editing (Playlist)", "Редактирование (Плейлист)", &[B::Playlist, B::Edit, B::Compose, B::Undo, B::Redo][..]),
+            ("Management (Tracks)", "Управление (Композиции)", &[B::Add, B::Tracks, B::Desk, B::Search, B::Filter, B::Marked, B::Lyrics][..]),
+            ("Playback (Player)", "Воспроизведение (Проигрыватель)", &[B::Shuffle, B::Repeat, B::Equalizer, B::Effects, B::Animation, B::SpecialButtons][..]),
+            ("Services (Application)", "Сервисы (Приложение)", &[B::Services, B::Downloads, B::Mods][..]),
+        ] {
+            let mut group = Vec::new();
+            for &button in buttons {
+                if placed.iter().any(|(value, _)| *value == button) { continue; }
+                if button == B::Mode {
+                    for mode in Mode::ALL {
+                        group.push(CommandItem { label: format!("{} {}", if self.settings.mode == mode { "●" } else { " " }, mode.caption(self.settings.preferences.language)), target: Target::Mode(mode), enabled: !self.busy() });
+                    }
+                } else { group.push(self.quick_item(button)); }
             }
-            if button == QuickButton::Mode {
-                for mode in Mode::ALL {
-                    items.push(CommandItem { label: format!("{} {}", if self.settings.mode == mode { "●" } else { " " }, mode.caption(self.settings.preferences.language)), target: Target::Mode(mode), enabled: !self.busy() });
-                }
-            } else { items.push(self.quick_item(button)); }
+            if group.is_empty() { continue; }
+            if !items.is_empty() { items.push(CommandItem { label: String::new(), target: Target::MenuSection, enabled: false }); }
+            items.push(CommandItem { label: self.text(en, ru).into(), target: Target::MenuSection, enabled: false });
+            items.extend(group);
         }
         if items.is_empty() { items.push(self.quick_item(QuickButton::Customize)); }
         items
