@@ -2,29 +2,11 @@
 import json
 import shutil
 import subprocess
-import zipfile
 from xml.sax.saxutils import escape
 
 
 def run(*args, cwd=None):
     subprocess.run([str(arg) for arg in args], cwd=cwd, check=True)
-
-
-def build_icon_pack(root, version, theme, stage):
-    name = f"almavorn-{version}-icons-{theme}"
-    source = root / "packaging" / ("almavorn-light.svg" if theme == "light" else "almavorn.svg")
-    folder = stage / name
-    folder.mkdir()
-    shutil.copy2(source, folder / "Almavorn.svg")
-    for size in (64, 256, 512, 1024):
-        run("rsvg-convert", "--width", size, "--height", size,
-            "--output", folder / f"Almavorn-{size}.png", source)
-    shutil.copy2(root / "LICENSE", folder / "LICENSE")
-    artifact = stage / f"{name}.zip"
-    with zipfile.ZipFile(artifact, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(folder.iterdir()):
-            archive.write(path, f"{name}/{path.name}")
-    return artifact
 
 
 def build_appimage(package, binary, stage, linuxdeploy, appimagetool):

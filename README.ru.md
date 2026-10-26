@@ -4,7 +4,6 @@
     <img src="docs/images/almavorn-logo.png" width="192" height="192" alt="Логотип Almavorn">
   </picture>
 </p>
-
 # Almavorn
 
 [English](README.md) | [Русский](README.ru.md)
@@ -79,12 +78,6 @@
 С клавиатуры тоже можно: выберите блок через Tab, затем используйте Ctrl+Alt+стрелки для перестановки с соседним блоком или Ctrl+Shift+стрелки для изменения размера. Ctrl+Alt+Space сворачивает блок, Ctrl+Alt+Delete скрывает его.
 
 Раскладка сохраняется автоматически. Нажмите "Готово" или Ctrl+B, чтобы закончить. Esc во время перетаскивания отменяет текущий перенос; вне перетаскивания — выходит из режима.
-
-## Иконки без фона
-
-[Для темной темы](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-icons-dark.zip) · [Для светлой темы](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-icons-light.zip).
-
-В каждом архиве — SVG и прозрачные PNG размером 64, 256, 512 и 1024 пикселя. Светлый вариант темнее, чтобы рисунок лучше читался на белом фоне.
 
 ## Хочу скачать и установить! Что есть?
 

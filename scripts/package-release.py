@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from release_formats import build_appimage, build_flatpak, build_icon_pack
+from release_formats import build_appimage, build_flatpak
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -132,8 +132,6 @@ def main():
             artifacts.append(build_appimage(package, binary, stage, options.linuxdeploy.resolve(), options.appimagetool.resolve()))
         if options.format in ("flatpak", "all"):
             artifacts.append(build_flatpak(package, binary, stage))
-        if options.variant == "guitui":
-            artifacts.extend(build_icon_pack(ROOT, version, theme, stage) for theme in ("dark", "light"))
         checksums = stage / f"SHA256SUMS-{options.variant}"
         checksums.write_text("".join(f"{sha256(path)}  {path.name}\n" for path in artifacts))
         dist.mkdir(parents=True)

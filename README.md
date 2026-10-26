@@ -81,12 +81,6 @@ You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow 
 
 Your layout is saved automatically. Click "Done" or press Ctrl+B to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
 
-## Icons with transparent backgrounds
-
-[For dark themes](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-icons-dark.zip) · [For light themes](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-icons-light.zip).
-
-Each archive includes SVG and transparent PNG files at 64, 256, 512 and 1024 pixels. The light-theme version uses a darker red for white backgrounds.
-
 ## Download and install
 
 The packaged release is **0.2.0**, for 64-bit Linux on Intel/AMD.

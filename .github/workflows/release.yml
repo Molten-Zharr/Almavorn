@@ -24,7 +24,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libgl1-mesa-dev libxcursor1 libxrandr2 libxi6 libxinerama1 flatpak zstd librsvg2-bin
+          sudo apt-get install -y build-essential libclang-dev libasound2-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libgl1-mesa-dev libxcursor1 libxrandr2 libxi6 libxinerama1 flatpak zstd
           rustup toolchain install stable --profile minimal
           rustup default stable
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -77,7 +77,6 @@ jobs:
           expected = {f'almavorn-{version}-{variant}-linux-x86_64.{extension}'
                       for variant in ('guitui', 'tui')
                       for extension in ('tar.gz', 'AppImage', 'flatpak')}
-          expected.update(f'almavorn-{version}-icons-{theme}.zip' for theme in ('dark', 'light'))
           def artifact(name):
               matches = list(directory.rglob(name))
               if len(matches) != 1 or not matches[0].is_file():
@@ -122,4 +121,36 @@ jobs:
                   subprocess.run([
                       'gh', 'release', 'edit', tag, '--notes-file', str(notes)
                   ], check=True)
+          PY
+      - name: Remove standalone icon downloads from v0.2.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, subprocess
+          tag = 'v0.2.0'
+          release = json.loads(subprocess.check_output([
+              'gh', 'api', 'repos/{owner}/{repo}/releases/tags/' + tag
+          ]))
+          assets = {asset['name']: asset for asset in release['assets']}
+          expected = {f'almavorn-0.2.0-{variant}-linux-x86_64.{extension}'
+                      for variant in ('guitui', 'tui')
+                      for extension in ('tar.gz', 'AppImage', 'flatpak')}
+          lines = []
+          for name in sorted(expected):
+              digest = assets.get(name, {}).get('digest', '')
+              if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+                  raise SystemExit(f'Missing release checksum: {name}')
+              lines.append(f'{digest[7:]}  {name}\n')
+          content = ''.join(lines).encode()
+          checksum_digest = 'sha256:' + hashlib.sha256(content).hexdigest()
+          if assets.get('SHA256SUMS', {}).get('digest') != checksum_digest:
+              directory = pathlib.Path('target/release-metadata')
+              directory.mkdir(parents=True, exist_ok=True)
+              checksums = directory / 'SHA256SUMS'
+              checksums.write_bytes(content)
+              subprocess.run(['gh', 'release', 'upload', tag, str(checksums), '--clobber'], check=True)
+          for name in ('almavorn-0.2.0-icons-dark.zip', 'almavorn-0.2.0-icons-light.zip'):
+              if name in assets:
+                  subprocess.run(['gh', 'release', 'delete-asset', tag, name, '--yes'], check=True)
           PY
