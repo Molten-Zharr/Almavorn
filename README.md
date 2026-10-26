@@ -44,7 +44,7 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 ## <img src="docs/images/readme/music.svg" width="24" height="24" alt=""> What else?
 
 <details>
-<summary>All features</summary>
+<summary>Some Features</summary>
 
 - Find your music with search, filters, and sorting.
 - Build playlists yourself or from folders, with or without subfolders.
