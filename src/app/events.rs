@@ -874,7 +874,9 @@ impl App {
             Target::CloseDialog => {
                 self.close_dialog();
             }
-            Target::Submit => self.submit()?,
+            Target::Submit => {
+                if !double || !matches!(&self.view.dialog, Some(Dialog::Transfer(view)) if view.confirm.is_some()) { self.submit()?; }
+            }
             Target::DeletePlaylistAnswer(answer) => {
                 if let Some(Dialog::RemovePlaylist { confirm, .. }) = &mut self.view.dialog {
                     *confirm = answer;
@@ -1083,11 +1085,16 @@ impl App {
                 }
             }
             Target::TransferRow(index) => {
-                if let Some(Dialog::Transfer { selected, .. }) = &mut self.view.dialog {
-                    *selected = index;
+                if let Some(Dialog::Transfer(view)) = &mut self.view.dialog
+                    && view.confirm.is_none()
+                {
+                    view.selected = index;
+                    if double { self.submit()?; }
                 }
-                if double {
-                    self.submit()?;
+            }
+            Target::TransferConfirm => {
+                if !double && matches!(&self.view.dialog, Some(Dialog::Transfer(view)) if view.confirm.is_some()) {
+                    self.submit_transfer()?;
                 }
             }
             Target::TransferEdit => self.edit_transfer_destination()?,
@@ -1122,6 +1129,9 @@ impl App {
             }
             Target::SettingsTab(page) => self.select_settings_tab(page),
             Target::SettingsGuideTopic(index) => self.select_settings_guide_topic(index),
+            Target::CopyGuideCode(index) => {
+                if let Some(code) = self.settings_guide_code().get(index) { self.view.clipboard_text = Some(code.clone()); }
+            }
             Target::SettingsVolume(index, area) => {
                 if area.width > 0 {
                     if self.view.workspace.gesture.is_none() {

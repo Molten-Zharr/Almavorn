@@ -8,6 +8,15 @@ use anyhow::{Context, Result, ensure};
 use std::{collections::HashSet, path::PathBuf};
 
 #[derive(Clone)]
+pub struct TransferView {
+    pub source: i64,
+    pub ids: Vec<i64>,
+    pub selected: usize,
+    pub confirm: Option<i64>,
+    pub offset: usize,
+}
+
+#[derive(Clone)]
 pub struct MoveFiles {
     pub desk: i64,
     pub ids: Vec<i64>,
@@ -21,12 +30,16 @@ pub struct MoveFiles {
 impl App {
     pub(super) fn edit_transfer_destination(&mut self) -> Result<()> {
         ensure!(!self.busy(), "Дождитесь завершения текущей операции.");
-        let Some(Dialog::Transfer { selected, .. }) = &self.view.dialog else {
+        let Some(Dialog::Transfer(view)) = &self.view.dialog else {
             return Ok(());
         };
+        ensure!(
+            view.confirm.is_none(),
+            "Сначала вернитесь к выбору плейлиста."
+        );
         let playlist = self
-            .transfer_destinations()
-            .get(*selected)
+            .transfer_destinations(view.source)
+            .get(view.selected)
             .copied()
             .context("Выберите плейлист назначения.")?;
         if playlist.mode == crate::model::Mode::Order && playlist.kind == PlaylistKind::Normal {
@@ -40,17 +53,26 @@ impl App {
             !self.busy() && !self.writing_tags(),
             "Дождитесь завершения текущей операции."
         );
-        let Some(Dialog::Transfer { ids, selected }) = &self.view.dialog else {
+        let Some(Dialog::Transfer(view)) = &self.view.dialog else {
             return Ok(());
         };
-        let desk = self.playlist().context("Выберите сортировочный стол.")?;
+        ensure!(
+            view.confirm.is_none(),
+            "Сначала вернитесь к выбору плейлиста."
+        );
+        let desk = self
+            .library
+            .playlists
+            .iter()
+            .find(|p| p.id == view.source)
+            .context("Выберите сортировочный стол.")?;
         ensure!(
             desk.kind == PlaylistKind::SortingDesk,
             "Перенос файлов доступен на сортировочном столе."
         );
         let destination = self
-            .transfer_destinations()
-            .get(*selected)
+            .transfer_destinations(view.source)
+            .get(view.selected)
             .copied()
             .context("Выберите плейлист назначения.")?;
         ensure!(
@@ -66,7 +88,7 @@ impl App {
         folders.dedup();
         self.view.dialog = Some(Dialog::MoveFiles(MoveFiles {
             desk: desk.id,
-            ids: ids.clone(),
+            ids: view.ids.clone(),
             playlist: destination.id,
             name: destination.name.clone(),
             folders,
@@ -107,13 +129,19 @@ impl App {
         if view.confirm {
             view.confirm = false;
         } else {
-            let (ids, playlist) = (view.ids.clone(), view.playlist);
+            let (ids, playlist, source) = (view.ids.clone(), view.playlist, view.desk);
             let selected = self
-                .transfer_destinations()
+                .transfer_destinations(source)
                 .iter()
                 .position(|p| p.id == playlist)
                 .unwrap_or(0);
-            self.view.dialog = Some(Dialog::Transfer { ids, selected });
+            self.view.dialog = Some(Dialog::Transfer(TransferView {
+                source,
+                ids,
+                selected,
+                confirm: None,
+                offset: 0,
+            }));
         }
         true
     }
@@ -123,7 +151,7 @@ impl App {
             return Ok(());
         }
         let key = key.normalized();
-        if matches!(self.view.dialog, Some(Dialog::Transfer { .. })) {
+        if matches!(&self.view.dialog, Some(Dialog::Transfer(view)) if view.confirm.is_none()) {
             if self
                 .settings
                 .preferences
@@ -153,6 +181,84 @@ impl App {
             _ => self.dialog_navigation_key(key)?,
         }
         Ok(())
+    }
+
+    pub(super) fn close_transfer_confirmation(&mut self) -> bool {
+        if let Some(Dialog::Transfer(view)) = &mut self.view.dialog
+            && view.confirm.take().is_some()
+        {
+            view.offset = 0;
+            return true;
+        }
+        false
+    }
+
+    pub(super) fn submit_transfer(&mut self) -> Result<()> {
+        ensure!(!self.busy(), "Дождитесь завершения текущей операции.");
+        let Some(Dialog::Transfer(view)) = &self.view.dialog else {
+            return Ok(());
+        };
+        let mut recovery = view.clone();
+        let destination = view
+            .confirm
+            .or_else(|| {
+                self.transfer_destinations(view.source)
+                    .get(view.selected)
+                    .map(|p| p.id)
+            })
+            .context("Выберите плейлист назначения.")?;
+        let source = self
+            .library
+            .playlists
+            .iter()
+            .find(|p| p.id == view.source)
+            .context("Исходный плейлист больше не существует.")?;
+        let target = self
+            .library
+            .playlists
+            .iter()
+            .find(|p| p.id == destination)
+            .context("Плейлист назначения больше не существует.")?;
+        ensure!(source.id != target.id, "Выберите другой плейлист.");
+        let source_ids: HashSet<_> = source.entries.iter().map(|entry| entry.track.id).collect();
+        let existing_ids: HashSet<_> = target.entries.iter().map(|entry| entry.track.id).collect();
+        ensure!(
+            !view.ids.is_empty()
+                && view
+                    .ids
+                    .iter()
+                    .all(|id| source_ids.contains(id)),
+            "Состав исходного плейлиста изменился. Выберите композиции заново."
+        );
+        let mut seen = HashSet::new();
+        let ids: Vec<_> = view
+            .ids
+            .iter()
+            .copied()
+            .filter(|id| {
+                seen.insert(*id) && !existing_ids.contains(id)
+            })
+            .collect();
+        ensure!(
+            !ids.is_empty(),
+            "Все выбранные композиции уже есть в этом плейлисте."
+        );
+        if view.confirm.is_none() {
+            recovery.confirm = Some(destination);
+            recovery.offset = 0;
+            self.view.dialog = Some(Dialog::Transfer(recovery));
+            return Ok(());
+        }
+        // Confirmation grants this copy only; it never unlocks the playlist UI.
+        recovery.confirm = None;
+        recovery.offset = 0;
+        self.start_database(Some(Dialog::Transfer(recovery)), move |store| {
+            Ok(DatabaseOutcome::Changed(store.copy_tracks(
+                destination,
+                &ids,
+                true,
+            )?))
+        })
     }
 
     pub(super) fn submit_move_files(&mut self) -> Result<()> {

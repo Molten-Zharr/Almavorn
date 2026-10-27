@@ -3,12 +3,12 @@ use super::super::{
     widgets::{block, buttons, button_width, clean, modal_rect, visible_offset},
 };
 use crate::{
-    app::{App, Hit, StatisticsControl, StatisticsInfo, StatisticsMenu, StatisticsPage, Target},
+    app::{App, Hit, StatisticsControl, StatisticsInfo, StatisticsMenu, StatisticsPage, StatisticsSort, Target},
     statistics::StatisticsRow,
 };
 use ratatui::{
     Frame,
-    layout::{Constraint, Margin, Rect},
+    layout::{Constraint, Flex, Layout, Margin, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Cell, Clear, Paragraph, Row, Table, Wrap},
@@ -71,10 +71,8 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         format!("{} ↓", app.statistics.view.page.name(app.settings.preferences.language)),
         Target::StatisticsControl(StatisticsControl::Menu(StatisticsMenu::Page)), true,
     )];
-    if !recent {
-        entries.push((format!("{}: {} ↓", app.text("Sort", "Сортировка"), app.statistics.view.sort.name(app.settings.preferences.language)),
-            Target::StatisticsControl(StatisticsControl::Menu(StatisticsMenu::Sort)), true));
-    }
+    entries.push((format!("{}: {} {}", app.text("Sort", "Сортировка"), app.statistics.view.sort.name(app.settings.preferences.language), app.statistics.view.sort_arrow()),
+        Target::StatisticsControl(StatisticsControl::Menu(StatisticsMenu::Sort)), true));
     entries.push((app.text("More ↓", "Еще ↓").into(), Target::StatisticsControl(StatisticsControl::Menu(StatisticsMenu::More)), true));
     let y = inner.y + 2;
     let used = controls(frame, app, Rect::new(inner.x, y, inner.width, inner.height.saturating_sub(6)), entries, palette);
@@ -134,28 +132,36 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         let show_artist = !compact && page != StatisticsPage::Artists;
         let show_date = recent && inner.width >= 80;
         let mut widths = vec![Constraint::Min(8)];
-        let mut header = vec![Cell::from(page.name(app.settings.preferences.language))];
+        let mut headings = vec![(page.name(app.settings.preferences.language), StatisticsSort::Name)];
         if show_artist {
             widths.push(Constraint::Percentage(22));
-            header.push(Cell::from(app.text("Artist", "Артист")));
+            headings.push((app.text("Artist", "Артист"), StatisticsSort::Artist));
         }
         if show_date {
             widths.push(Constraint::Length(16));
-            header.push(Cell::from(app.text("Date", "Дата")));
+            headings.push((app.text("Date", "Дата"), StatisticsSort::Date));
         }
-        if !recent{widths.push(Constraint::Length(if compact{4}else{6}));header.push(Cell::from(app.text("Starts","Вкл")));}
+        if !recent{widths.push(Constraint::Length(if compact{4}else{6}));headings.push((app.text("Starts","Вкл"), StatisticsSort::Starts));}
         widths.extend([
             Constraint::Length(if compact { 3 } else { 7 }),
             Constraint::Length(if compact { 8 } else { 10 }),
         ]);
-        header.push(Cell::from(if recent {
-            app.text("Play", "Зачёт")
-        } else if compact {
+        headings.push((if compact {
             "#"
+        } else if recent {
+            app.text("Play", "Зачет")
         } else {
             app.text("Plays", "Просл.")
-        }));
-        header.push(Cell::from(app.text("Time", "Время")));
+        }, StatisticsSort::Plays));
+        headings.push((app.text("Time", "Время"), StatisticsSort::Time));
+        let columns = Layout::horizontal(widths.clone()).flex(Flex::Start).spacing(1)
+            .split(Rect::new(body.x, body.y, body.width, 1));
+        let header: Vec<_> = headings.iter().zip(columns.iter()).map(|((label, sort), rect)| {
+            let active = *sort == app.statistics.view.sort;
+            let style = if app.hovered(*rect) { palette.text().fg(palette.selection_text).bg(palette.selection).add_modifier(Modifier::UNDERLINED) }
+                else { palette.text().fg(palette.accent) };
+            Cell::from(format!("{}{label}", if active { app.statistics.view.sort_arrow() } else { "" })).style(style.add_modifier(Modifier::BOLD))
+        }).collect();
         let table_rows = rows
             .iter()
             .enumerate()
@@ -200,7 +206,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
                     })
             });
         frame.render_widget(
-            Table::new(table_rows, widths).column_spacing(1).header(
+            Table::new(table_rows, widths).flex(Flex::Start).column_spacing(1).header(
                 Row::new(header).style(
                     palette
                         .text()
@@ -210,6 +216,9 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             ),
             body,
         );
+        for ((_, sort), rect) in headings.iter().zip(columns.iter()) {
+            app.view.hits.push(Hit { area: *rect, target: Target::StatisticsControl(StatisticsControl::Sort(*sort)), enabled: true });
+        }
         for index in offset..(offset + capacity).min(rows.len()) {
             app.view.hits.push(Hit {
                 area: Rect::new(

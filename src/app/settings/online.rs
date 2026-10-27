@@ -120,29 +120,67 @@ impl App {
     }
 
     pub(crate) fn settings_guide(&self) -> Option<&'static str> {
-        match self.view.settings.page {
-            SettingsPage::ModGuide => Some(self.text(
-                include_str!("../../../docs/MODS.md"),
-                include_str!("../../../docs/MODS.ru.md"),
-            )),
-            SettingsPage::ServiceGuide => self.service_guide_topics().get(self.view.settings.guide_topic).map(|(_, text)| *text),
-            _ => None,
-        }
+        let topics = self.settings_guide_topics();
+        topics
+            .get(self.view.settings.guide_topic.min(topics.len().saturating_sub(1)))
+            .map(|(_, text)| *text)
     }
 
-    pub(crate) fn service_guide_topics(&self) -> Vec<(&'static str, &'static str)> {
-        let document = self.text(include_str!("../../../docs/ONLINE_MUSIC.md"), include_str!("../../../docs/ONLINE_MUSIC.ru.md"));
-        document.split("\n## ").enumerate().map(|(index, section)| {
-            let (title, text) = section.split_once('\n').unwrap_or((section, ""));
-            (if index == 0 { self.text("Overview", "Обзор") } else { title }, text.trim())
-        }).collect()
+    pub(crate) fn settings_guide_topics(&self) -> Vec<(&'static str, &'static str)> {
+        let document = match self.view.settings.page {
+            SettingsPage::ServiceGuide => self.text(
+                include_str!("../../../docs/ONLINE_MUSIC.md"),
+                include_str!("../../../docs/ONLINE_MUSIC.ru.md"),
+            ),
+            SettingsPage::ModGuide => self.text(
+                include_str!("../../../docs/MODS.md"),
+                include_str!("../../../docs/MODS.ru.md"),
+            ),
+            _ => return Vec::new(),
+        };
+        document
+            .split("\n## ")
+            .enumerate()
+            .map(|(index, section)| {
+                let (title, text) = section.split_once('\n').unwrap_or((section, ""));
+                (
+                    if index == 0 {
+                        self.text("Overview", "Обзор")
+                    } else {
+                        title
+                    },
+                    text.trim(),
+                )
+            })
+            .collect()
     }
 
     pub(in crate::app) fn select_settings_guide_topic(&mut self, index: usize) {
-        if self.view.settings.page != SettingsPage::ServiceGuide { return; }
-        self.view.settings.guide_topic = index.min(self.service_guide_topics().len().saturating_sub(1));
+        if self.settings_guide().is_none() {
+            return;
+        }
+        self.view.settings.guide_topic =
+            index.min(self.settings_guide_topics().len().saturating_sub(1));
         self.view.settings.offset = 0;
         self.view.settings.focus = SettingsFocus::Parameters;
+    }
+
+    pub(crate) fn settings_guide_code(&self) -> Vec<String> {
+        let mut blocks = Vec::new();
+        let mut code = None::<String>;
+        for line in self.settings_guide().unwrap_or_default().lines() {
+            if line.trim_start().starts_with("```") {
+                if let Some(block) = code.take() {
+                    blocks.push(block);
+                } else {
+                    code = Some(String::new());
+                }
+            } else if let Some(block) = &mut code {
+                block.push_str(line);
+                block.push('\n');
+            }
+        }
+        blocks
     }
 
     pub(super) fn scroll_online_settings(&mut self, direction: i64) -> bool {
@@ -162,9 +200,13 @@ impl App {
     }
 
     pub(super) fn settings_guide_key(&mut self, key: KeyPress) {
-        if self.view.settings.page == SettingsPage::ServiceGuide && matches!(key.key, Key::Left | Key::Right) {
-            let count = self.service_guide_topics().len();
-            let index = crate::app::bounded(self.view.settings.guide_topic, if key.key == Key::Left { -1 } else { 1 }, count);
+        if self.settings_guide().is_some() && matches!(key.key, Key::Left | Key::Right) {
+            let count = self.settings_guide_topics().len();
+            let index = crate::app::bounded(
+                self.view.settings.guide_topic,
+                if key.key == Key::Left { -1 } else { 1 },
+                count,
+            );
             self.select_settings_guide_topic(index);
             return;
         }

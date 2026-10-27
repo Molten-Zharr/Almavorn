@@ -60,7 +60,7 @@ pub use mods::{ModsState,ModsView,ModAction};
 pub use services::{ServicesState,ServicesView,ServiceAction,ServicePage};
 pub use statistics::{StatisticsControl, StatisticsInfo, StatisticsMenu, StatisticsPage, StatisticsSort, StatisticsState, StatisticsView};
 pub use tags::{FileInput, MovePicker, TagAction, TagEdit, TagEditor, TagsTab};
-pub use transfer::MoveFiles;
+pub use transfer::{MoveFiles, TransferView};
 
 use crate::{audio::Audio, model::Settings, store::Store};
 use anyhow::{Context, Result};

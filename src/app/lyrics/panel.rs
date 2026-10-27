@@ -3,7 +3,7 @@ use super::{
     SearchResult, background, run_request,
 };
 use crate::{
-    app::background::LatestJob,
+    app::background::{Background, LatestJob, poll},
     input::{Key, KeyPress},
     model::Track,
 };
@@ -68,6 +68,7 @@ pub struct LyricsPanel {
     key: Option<TrackKey>,
     due: Option<Instant>,
     cache: VecDeque<Cached>,
+    local_job: Option<Background<Option<Lyric>>>,
     job: LatestJob<Request, SearchResult>,
     cancel: Option<Arc<AtomicBool>>,
     progress: Option<mpsc::Receiver<ProviderReport>>,
@@ -89,6 +90,7 @@ pub enum PanelAction {
 
 impl LyricsPanel {
     pub(super) fn cancel(&mut self) {
+        self.local_job = None;
         if let Some(cancel) = self.cancel.take() {
             cancel.store(true, Ordering::Relaxed);
         }
@@ -156,7 +158,7 @@ impl Drop for LyricsPanel {
 }
 impl LyricsState {
     pub fn panel_loading(&self) -> bool {
-        self.panel.job.requested().is_some() || self.panel.due.is_some()
+        self.panel.local_job.is_some() || self.panel.job.requested().is_some() || self.panel.due.is_some()
     }
 }
 
@@ -274,6 +276,34 @@ impl App {
                     panel.excluded = cached.excluded.clone();
                 } else {
                     panel.due = Some(Instant::now() + Duration::from_millis(450));
+                    // Local lyrics must not wait for the network debounce or an
+                    // older provider request that is still finishing.
+                    let store = self.store.try_clone();
+                    panel.local_job = Some(background(self.runtime.as_ref().expect("runtime is alive"), move || {
+                        store?.saved_lyrics(key.id)
+                    }));
+                }
+            }
+        }
+        if let Some(result) = self.lyrics.panel.local_job.as_mut().and_then(poll) {
+            self.lyrics.panel.local_job = None;
+            match result {
+                Ok(Some(mut lyric)) => {
+                    lyric.score = 1000;
+                    let panel = &mut self.lyrics.panel;
+                    panel.cancel();
+                    panel.results = vec![lyric];
+                    panel.saved = true;
+                    panel.selected = Some(0);
+                    panel.cursor = 0;
+                    panel.choosing = false;
+                    panel.error = None;
+                    panel.remember();
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    self.lyrics.panel.due = None;
+                    self.lyrics.panel.error = Some(error.to_string());
                 }
             }
         }
@@ -282,6 +312,7 @@ impl App {
             .panel
             .due
             .is_some_and(|due| Instant::now() >= due)
+            && self.lyrics.panel.local_job.is_none()
             && !(self.lyrics.job.requested().is_some()
                 && self
                     .lyrics

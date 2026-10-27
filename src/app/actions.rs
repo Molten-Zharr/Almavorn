@@ -513,6 +513,7 @@ impl App {
                 }
             }
             Transfer => {
+                let source = self.playlist().context("Выберите исходный плейлист.")?.id;
                 let ids = self
                     .playlist()
                     .into_iter()
@@ -524,7 +525,7 @@ impl App {
                     })
                     .map(|entry| entry.track.id)
                     .collect();
-                self.view.dialog = Some(Dialog::Transfer { ids, selected: 0 });
+                self.view.dialog = Some(Dialog::Transfer(super::TransferView { source, ids, selected: 0, confirm: None, offset: 0 }));
             }
             Search => self.open_search(),
             Filter => self.edit_filter()?,

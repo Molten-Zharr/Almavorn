@@ -305,8 +305,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "ПКМ по заголовку группы открывает ее меню. Можно свернуть группу, отметить все ее композиции или убрать группу из плейлиста с подтверждением. Команды группы учитывают и скрытые фильтром треки. Музыкальные файлы остаются на диске. Редактирование защищенного плейлиста можно включить в том же меню.",
         "удалить убрать всю группу папку альбом контекстное меню пкм remove delete folder group album right click context menu");
     sections[C::Tracks as usize].keys(&[p(Enter)],
-        "In Tracks to playlist: unlock the selected playlist, then copy the tracks.",
-        "В окне выбора плейлиста: открыть выбранный для правки, затем скопировать треки.");
+        "In Copy to playlist: first review the source, destination and track list, then confirm copying. Esc returns to destination selection. Existing tracks are skipped; protected playlists remain protected.",
+        "В окне копирования: сначала проверить исходный и целевой плейлисты и список треков, затем подтвердить копирование. Esc возвращает к выбору назначения. Повторы пропускаются, защита плейлиста сохраняется.");
     sections[C::Tracks as usize].keys(&[c(Enter)],
         "In Tracks to playlist, from the desk: choose a folder to move the selected files.",
         "В окне выбора плейлиста, со стола: выбрать папку для переноса отмеченных файлов.");
@@ -1050,6 +1050,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     }
 
     let q = &mut sections[C::Statistics as usize];
+    q.note("Click a column heading to sort. Click it again to reverse the order; the arrow shows the direction. This also works in Recent.",
+        "Нажмите заголовок столбца для сортировки. Повторное нажатие меняет направление, стрелка показывает порядок. Работает и в разделе Недавние.");
     q.keys(
         &[p(Left), p(Right), p(Tab), s(Tab)],
         "Switch between Tracks, Artists, Albums and Recent.",

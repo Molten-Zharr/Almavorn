@@ -251,7 +251,7 @@ pub(super) fn render_dialog(
                 (app.text("Cancel", "Отмена").into(), Target::CloseDialog, true),
             ], palette);
         }
-        Dialog::Transfer { selected, .. } => transfer::render(frame, app, *selected, area, palette),
+        Dialog::Transfer(view) => transfer::render(frame, app, view, area, palette),
         Dialog::MoveFiles(view) => transfer::move_files(frame, app, view, area, palette),
         Dialog::Settings { .. } => super::settings::render_settings(frame, app, palette),
         Dialog::ConfirmResetBindings { confirm } => {

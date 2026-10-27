@@ -116,10 +116,7 @@ pub enum Dialog {
         name: String,
         confirm: bool,
     },
-    Transfer {
-        ids: Vec<i64>,
-        selected: usize,
-    },
+    Transfer(super::TransferView),
     MoveFiles(super::MoveFiles),
     FileMoveReport {
         title: String,
@@ -207,7 +204,7 @@ impl Dialog {
             Self::ComposePlaylists { .. } | Self::ComposeTracks { .. } => {
                 Some(Action::ComposePlaylists)
             }
-            Self::Transfer { .. } | Self::MoveFiles(_) => Some(Action::Transfer),
+            Self::Transfer(_) | Self::MoveFiles(_) => Some(Action::Transfer),
             Self::FileMoveReport { .. } => None,
             Self::RemoveEntry { .. }
             | Self::RemoveGroup { .. }
@@ -346,7 +343,10 @@ impl App {
             self.view.pointer = ratatui::layout::Position::new(u16::MAX, u16::MAX);
             return;
         }
-        let transfer_length = self.transfer_destinations().len();
+        let transfer_length = match &self.view.dialog {
+            Some(Dialog::Transfer(view)) => self.transfer_destinations(view.source).len(),
+            _ => 0,
+        };
         let compose_length = self.compose_choices().len();
         let folder_length = if let Some(Dialog::Folders { playlist, .. }) = &self.view.dialog {
             self.library
@@ -394,8 +394,10 @@ impl App {
                     crate::input::Key::shortcut_choices().count(),
                 );
             }
-            Some(Dialog::Transfer { selected, .. }) => {
-                *selected = bounded(*selected, direction as i64, transfer_length)
+            Some(Dialog::Transfer(view)) => {
+                if view.confirm.is_some() {
+                    view.offset = bounded(view.offset, direction as i64, self.view.dialog_scroll_max + 1);
+                } else { view.selected = bounded(view.selected, direction as i64, transfer_length); }
             }
             Some(Dialog::MoveFiles(view)) if !view.confirm => {
                 view.selected = bounded(view.selected, direction as i64, view.folders.len());
@@ -415,12 +417,12 @@ impl App {
         }
     }
 
-    pub fn transfer_destinations(&self) -> Vec<&Playlist> {
+    pub fn transfer_destinations(&self, source: i64) -> Vec<&Playlist> {
         self.library
             .playlists
             .iter()
             .filter(|playlist| {
-                Some(playlist.id) != self.library.selected_playlist
+                playlist.id != source
             })
             .collect()
     }
@@ -429,11 +431,7 @@ impl App {
         if matches!(self.view.dialog, Some(Dialog::MoveFiles(_))) {
             return self.submit_move_files();
         }
-        if let Some(Dialog::Transfer { selected, .. }) = &self.view.dialog
-            && self.transfer_destinations().get(*selected).is_some_and(|p| !self.playlist_editable(p))
-        {
-            return self.edit_transfer_destination();
-        }
+        if matches!(self.view.dialog, Some(Dialog::Transfer(_))) { return self.submit_transfer(); }
         if let Some(Dialog::CaptureBinding { index }) = self.view.dialog.as_ref()
             && let Some(selected) = self.view.settings.binding_global_focus
         {
@@ -682,28 +680,6 @@ impl App {
                 let unlocked = self.playlist_unlocked(playlist);
                 if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
                     Ok(DatabaseOutcome::Changed(store.remove_group(playlist, &folder, &entries, unlocked)?))
-                }) {
-                    self.view.dialog = Some(recovery);
-                    return Err(error);
-                }
-            }
-            Some(Dialog::Transfer { ids, selected }) => {
-                let destination = self
-                    .transfer_destinations()
-                    .get(selected)
-                    .map(|playlist| playlist.id)
-                    .context("No editable destination playlist. Enable Order editing if needed")?;
-                let recovery = Dialog::Transfer {
-                    ids: ids.clone(),
-                    selected,
-                };
-                let unlocked = self.playlist_unlocked(destination);
-                if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
-                    Ok(DatabaseOutcome::Changed(store.copy_tracks(
-                        destination,
-                        &ids,
-                        unlocked,
-                    )?))
                 }) {
                     self.view.dialog = Some(recovery);
                     return Err(error);

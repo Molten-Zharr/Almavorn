@@ -1,7 +1,7 @@
 use crate::{
     app::{App, Dialog, SettingsPage, Target},
     ui::{
-        dialogs::{help, mods, services},
+        dialogs::{mods, services},
         theme::Palette,
         widgets::{buttons, buttons_height, clean},
     },
@@ -15,14 +15,8 @@ use ratatui::{
 };
 
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    if app.settings_page() == SettingsPage::ServiceGuide {
-        service_guide(frame, app, area, palette);
-        return;
-    }
-    if let Some(text) = app.settings_guide() {
-        let mut offset = app.view.settings.offset;
-        help::copyable_text(frame, app, &mut offset, area, text, palette);
-        app.view.settings.offset = offset;
+    if app.settings_guide().is_some() {
+        guide(frame, app, area, palette);
         return;
     }
     // Dialogs retain selection and operation state; their content now lives in
@@ -57,8 +51,8 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
     }
 }
 
-fn service_guide(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
-    let topics = app.service_guide_topics();
+fn guide(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
+    let topics = app.settings_guide_topics();
     let selected = app
         .view
         .settings
@@ -83,24 +77,50 @@ fn service_guide(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette)
         controls,
         palette,
     );
-    let footer_controls = vec![
-        (
-            app.text("Connections", "Подключения").into(),
-            Target::SettingsPage(SettingsPage::Services),
+    let mut footer_controls = if app.settings_page() == SettingsPage::ModGuide {
+        vec![
+            (
+                app.text("Installed mods", "Установленные моды").into(),
+                Target::SettingsPage(SettingsPage::Mods),
+                true,
+            ),
+            (
+                app.text("Copy section", "Копировать раздел").into(),
+                Target::CopyHelp(None),
+                true,
+            ),
+        ]
+    } else {
+        vec![
+            (
+                app.text("Connections", "Подключения").into(),
+                Target::SettingsPage(SettingsPage::Services),
+                true,
+            ),
+            (
+                app.text("Lyrics settings", "Настройки текстов песен")
+                    .into(),
+                Target::SettingsPage(SettingsPage::Lyrics),
+                true,
+            ),
+            (
+                app.text("Copy section", "Копировать раздел").into(),
+                Target::CopyHelp(None),
+                true,
+            ),
+        ]
+    };
+    for index in 0..app.settings_guide_code().len() {
+        footer_controls.push((
+            format!(
+                "{} {}",
+                app.text("Copy example", "Копировать пример"),
+                index + 1
+            ),
+            Target::CopyGuideCode(index),
             true,
-        ),
-        (
-            app.text("Lyrics settings", "Настройки текстов песен")
-                .into(),
-            Target::SettingsPage(SettingsPage::Lyrics),
-            true,
-        ),
-        (
-            app.text("Copy section", "Копировать раздел").into(),
-            Target::CopyHelp(None),
-            true,
-        ),
-    ];
+        ));
+    }
     let remaining = area.height.saturating_sub(tabs_height);
     let footer_height = buttons_height(app, area.width, &footer_controls).min(remaining);
     let gap = u16::from(remaining > footer_height);
@@ -122,7 +142,29 @@ fn service_guide(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette)
         ),
         Line::raw(""),
     ];
+    let mut code = false;
+    let mut example = 0;
     for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            code = !code;
+            if code {
+                example += 1;
+                lines.push(Line::styled(
+                    format!("{} {example}", app.text("Example", "Пример")),
+                    palette.text().fg(palette.sidebar_title),
+                ));
+            } else {
+                lines.push(Line::raw(""));
+            }
+            continue;
+        }
+        if code {
+            lines.push(Line::styled(
+                line.to_owned(),
+                palette.text().bg(palette.selection),
+            ));
+            continue;
+        }
         let heading = line.strip_prefix("### ");
         lines.push(Line::styled(
             guide_text(heading.unwrap_or(line)),

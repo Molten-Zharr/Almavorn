@@ -43,15 +43,19 @@ pub enum StatisticsSort {
     Plays,
     Starts,
     Name,
+    Artist,
+    Date,
 }
 impl StatisticsSort {
-    pub const ALL: [Self; 4] = [Self::Time, Self::Plays, Self::Starts, Self::Name];
+    pub const ALL: [Self; 6] = [Self::Time, Self::Plays, Self::Starts, Self::Name, Self::Artist, Self::Date];
     pub fn name(self, language: Language) -> &'static str {
         match self {
             Self::Time => language.text("Time", "Время"),
             Self::Plays => language.text("Plays", "Прослушивания"),
             Self::Starts => language.text("Starts", "Включения"),
             Self::Name => language.text("Name", "Название"),
+            Self::Artist => language.text("Artist", "Исполнитель"),
+            Self::Date => language.text("Last played", "Последнее включение"),
         }
     }
 }
@@ -78,6 +82,7 @@ pub struct StatisticsView {
     pub rows: Vec<StatisticsRow>,
     pub page: StatisticsPage,
     pub sort: StatisticsSort,
+    pub sort_reversed: bool,
     pub selected: usize,
     pub offset: usize,
     pub capacity: usize,
@@ -92,6 +97,10 @@ pub struct StatisticsView {
     pub info_offset: usize,
 }
 impl StatisticsView {
+    pub fn sort_arrow(&self) -> &'static str {
+        let ascending = matches!(self.sort, StatisticsSort::Name | StatisticsSort::Artist) ^ self.sort_reversed;
+        if ascending { "↑" } else { "↓" }
+    }
     fn rebuild(&mut self) {
         let selected = self
             .rows
@@ -104,7 +113,7 @@ impl StatisticsView {
             StatisticsPage::Recent => &self.snapshot.recent,
         }
         .clone();
-        if self.page != StatisticsPage::Recent {
+        {
             let sort = self.sort;
             self.rows.sort_by_cached_key(|row| match sort {
                 StatisticsSort::Time => (
@@ -119,7 +128,10 @@ impl StatisticsView {
                 ),
                 StatisticsSort::Starts => (u64::MAX-row.starts,u64::MAX-row.listened_ms,row.title.to_lowercase()),
                 StatisticsSort::Name => (0, 0, row.title.to_lowercase()),
+                StatisticsSort::Artist => (0, 0, format!("{}\0{}", row.artist.to_lowercase(), row.title.to_lowercase())),
+                StatisticsSort::Date => (i64::MAX.saturating_sub(row.last_at_ms).max(0) as u64, 0, row.title.to_lowercase()),
             });
+            if self.sort_reversed { self.rows.reverse(); }
         }
         self.selected = selected
             .and_then(|(id, date)| {
@@ -389,7 +401,7 @@ impl App {
                 Target::StatisticsPage(page), true,
             )).collect(),
             StatisticsMenu::Sort => StatisticsSort::ALL.into_iter().map(|sort| item(
-                format!("{}{}", if sort == self.statistics.view.sort { "● " } else { "" }, sort.name(language)),
+                format!("{}{}{}", if sort == self.statistics.view.sort { "● " } else { "" }, sort.name(language), if sort == self.statistics.view.sort { self.statistics.view.sort_arrow() } else { "" }),
                 Target::StatisticsControl(StatisticsControl::Sort(sort)), true,
             )).collect(),
             StatisticsMenu::More => vec![
@@ -439,7 +451,10 @@ impl App {
             }
             StatisticsControl::Sort(sort) => {
                 self.close_statistics_popup();
+                self.statistics.view.sort_reversed = self.statistics.view.sort == sort && !self.statistics.view.sort_reversed;
                 self.statistics.view.sort = sort;
+                self.statistics.view.rows.clear();
+                self.statistics.view.selected = 0;
                 self.statistics.view.rebuild();
                 self.statistics.view.offset = 0;
             }
@@ -459,6 +474,13 @@ impl App {
         match target {
             Target::StatisticsPage(page) => {
                 self.close_statistics_popup();
+                if page == StatisticsPage::Recent {
+                    self.statistics.view.sort = StatisticsSort::Date;
+                    self.statistics.view.sort_reversed = false;
+                } else if self.statistics.view.page == StatisticsPage::Recent && self.statistics.view.sort == StatisticsSort::Date {
+                    self.statistics.view.sort = StatisticsSort::Time;
+                    self.statistics.view.sort_reversed = false;
+                }
                 self.statistics.view.page = page;
                 self.statistics.view.rows.clear();
                 self.statistics.view.selected = 0;
@@ -471,7 +493,9 @@ impl App {
                     StatisticsSort::Plays => StatisticsSort::Starts,
                     StatisticsSort::Starts => StatisticsSort::Name,
                     StatisticsSort::Name => StatisticsSort::Time,
+                    StatisticsSort::Artist | StatisticsSort::Date => StatisticsSort::Time,
                 };
+                self.statistics.view.sort_reversed = false;
                 self.statistics.view.rebuild();
                 self.statistics.view.offset = 0;
             }
@@ -552,7 +576,7 @@ impl App {
             Key::End => {
                 self.statistics.view.selected = self.statistics.view.rows.len().saturating_sub(1)
             }
-            Key::Char('s' | 'S') if self.statistics.view.page != StatisticsPage::Recent => self.statistics_control(StatisticsControl::Menu(StatisticsMenu::Sort))?,
+            Key::Char('s' | 'S') => self.statistics_control(StatisticsControl::Menu(StatisticsMenu::Sort))?,
             Key::Char('m' | 'M') => self.statistics_control(StatisticsControl::Menu(StatisticsMenu::Page))?,
             Key::Char('o' | 'O') => self.statistics_control(StatisticsControl::Menu(StatisticsMenu::More))?,
             Key::F(1) => self.statistics_control(StatisticsControl::Info(StatisticsInfo::Counting))?,
