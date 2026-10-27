@@ -14,9 +14,9 @@
 <p align="center"><a href="#install">Install</a> &nbsp; · &nbsp; <a href="#screenshots">Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch">Getting&nbsp;started</a> &nbsp; · &nbsp; <a href="#help">Contribute</a></p>
 
 <p align="center">
-  <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists."></a>
+  <a href="docs/images/almavorn-lyrics-panel-en.png"><img src="docs/images/almavorn-lyrics-panel-en.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found through lyrics.ovh and saved for offline reading, alongside the track list and playlists."></a>
   <br>
-  <sub>King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists.</sub>
+  <sub>King Crimson, The Court of the Crimson King: lyrics found through lyrics.ovh and saved for offline reading, alongside the track list and playlists.</sub>
 </p>
 
 <p align="center"><img src="docs/images/readme/divider.svg" width="100%" alt=""></p>
@@ -30,7 +30,7 @@
   **It's all built in!**
 - Two modes: **Order** protects playlists from accidental edits.
   Switch to **Chaos** to add tracks straight to playlists and folders!
-- The **GUITUI** approach - *a terminal interface in a graphical window: a text grid and keyboard shortcuts alongside large buttons, mouse controls, cover art, and animations.*
+- The **GUITUI** approach brings terminal and graphical interfaces together. Text panels and keyboard shortcuts form the foundation; a graphics layer adds cover art, waveforms, animations, and large mouse-operated buttons. Text and graphics share one window, while graphical elements can extend beyond the character grid.
 
 Suggestions and feedback are welcome. We're only getting started, and we hope you'll enjoy the player!
 
@@ -76,45 +76,45 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 ## <img src="docs/images/readme/gallery.svg" width="24" height="24" alt=""> See the player in action
 
 <p align="center">
-  <a href="docs/images/almavorn-green-layout.png"><img src="docs/images/almavorn-green-layout.png" width="100%" alt="The Green theme with a custom layout: playlists on the right, the player below the Starbound track list."></a>
+  <a href="docs/images/almavorn-green-layout-en.png"><img src="docs/images/almavorn-green-layout-en.png" width="100%" alt="The Green theme with a custom layout: playlists on the right, the player below the Starbound track list."></a>
   <br>
   <sub>The Green theme with a custom layout: playlists on the right, the player below the Starbound track list.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-listening-statistics.png"><img src="docs/images/almavorn-listening-statistics.png" width="100%" alt="Listening statistics: time played, starts and play counts for each track."></a>
+  <a href="docs/images/almavorn-listening-statistics-en.png"><img src="docs/images/almavorn-listening-statistics-en.png" width="100%" alt="Listening statistics: time played, starts and play counts for each track."></a>
   <br>
   <sub>Listening statistics: time played, starts and play counts for each track.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-layout-editor.png"><img src="docs/images/almavorn-layout-editor.png" width="100%" alt="The layout editor: a compact arrangement with playlists and lyrics below the track list."></a>
+  <a href="docs/images/almavorn-layout-editor-en.png"><img src="docs/images/almavorn-layout-editor-en.png" width="100%" alt="The layout editor: a compact arrangement with playlists and lyrics below the track list."></a>
   <br>
   <sub>The layout editor: a compact arrangement with playlists and lyrics below the track list.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-settings-general.png"><img src="docs/images/almavorn-settings-general.png" width="100%" alt="Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left."></a>
+  <a href="docs/images/almavorn-settings-general-en.png"><img src="docs/images/almavorn-settings-general-en.png" width="100%" alt="Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left."></a>
   <br>
   <sub>Player settings: controls, artwork and panel placement. Themes, shortcuts, mods and services have their own sections on the left.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-help-search.png"><img src="docs/images/almavorn-help-search.png" width="100%" alt="Search Help in your own words: &quot;move a window&quot; finds the layout controls and shows your current shortcuts."></a>
+  <a href="docs/images/almavorn-help-search-en.png"><img src="docs/images/almavorn-help-search-en.png" width="100%" alt="Help search highlights matches for &quot;save lyrics&quot; and shows the relevant actions with your shortcuts."></a>
   <br>
-  <sub>Search Help in your own words: "move a window" finds the layout controls and shows your current shortcuts.</sub>
+  <sub>Help search highlights matches for "save lyrics" and shows the relevant actions with your shortcuts.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-new-playlist.png"><img src="docs/images/almavorn-new-playlist.png" width="100%" alt="Create a playlist: enter a name, create a new folder or choose existing music folders."></a>
+  <a href="docs/images/almavorn-new-playlist-en.png"><img src="docs/images/almavorn-new-playlist-en.png" width="100%" alt="Creating a playlist in the Light theme: name, music folders, and an on-screen keyboard."></a>
   <br>
-  <sub>Create a playlist: enter a name, create a new folder or choose existing music folders.</sub>
+  <sub>Creating a playlist in the Light theme: name, music folders, and an on-screen keyboard.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-playlist-search.png"><img src="docs/images/almavorn-playlist-search.png" width="100%" alt="Search selected playlists: six matches for &quot;Theme&quot; in Starbound."></a>
+  <a href="docs/images/almavorn-playlist-search-en.png"><img src="docs/images/almavorn-playlist-search-en.png" width="100%" alt="Search selected playlists: &quot;dream&quot; finds three tracks in Hollow Knight and King Crimson."></a>
   <br>
-  <sub>Search selected playlists: six matches for "Theme" in Starbound.</sub>
+  <sub>Search selected playlists: "dream" finds three tracks in Hollow Knight and King Crimson.</sub>
 </p>
 
 <a id="layout"></a>
@@ -150,7 +150,7 @@ Your layout is saved automatically. Press Ctrl+B or click "Edit layout" again to
 
 The packaged release is **0.2.0**, for 64-bit Linux on Intel/AMD.
 
-*(Windows support is in the works, hehe)* A reminder: **GUITUI** combines a terminal interface with graphics in its own window; **TUI** runs directly in your terminal.
+*(Windows support is in the works, hehe)* A reminder: **GUITUI** adds a graphics layer to the player's text interface in its own window. **TUI** runs directly in your terminal. Both versions share the music library, settings, and controls.
 
 ### GUITUI version
 
@@ -209,9 +209,9 @@ Choose your toolbar buttons in "Settings > General > Quick access": pin individu
 
 Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. The square buttons and their icons grow together; shortcut labels appear below. Normal is the default.
 
-In Statistics, choose a category and sorting from the drop-down lists. "More" opens overall totals, details about the selected row and the play-counting rules.
+In Statistics, choose a category and sorting from the drop-down lists. Click a column heading to sort; click again to reverse the order. "More" opens overall totals, details about the selected row and the play-counting rules.
 
-Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results show your current shortcuts; press Enter to open the explanation.
+Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results highlight matching words and show your current shortcuts; press Enter to open the explanation. Button names stand out in color, and longer instructions are split into steps. Complete matches take priority; partial suggestions appear when no complete answer is found.
 
 ### Create a playlist from a folder
 
@@ -225,10 +225,10 @@ Search Help in your own words: "make it louder", "recover a deleted song", or "m
 ### Build a playlist yourself
 
 1. Open "Playlist" and choose "New playlist", or press C. Enter a name and press Enter to create an empty playlist.
-2. In Order mode, select it and click "Edit".
-3. Open "Add to desk", choose "Add files", mark the files you want, and click "Add to desk" at the bottom. For a whole folder, choose "Add folder", open that folder, then click "Current folder · Add to desk".
-4. On the sorting desk, mark tracks using their checkboxes or Insert. Press X, choose your playlist, and confirm with Enter. The tracks will be copied into the playlist; the original files stay where they are.
-5. Click "Done" or press the editing shortcut again, E by default, to protect the playlist from accidental changes. Esc also finishes editing, first closing an open window or cancelling a drag.
+2. Open "Add to desk", choose "Add files", mark the files you want, and click "Add to desk" at the bottom. For a whole folder, choose "Add folder", open that folder, then click "Current folder · Add to desk".
+3. On the sorting desk, mark tracks using their checkboxes or Insert. Press X, choose your playlist, and click "Next: review copy".
+4. Check the source, destination, and track list, then click "Confirm copying". Existing tracks are skipped, audio files stay in place, and a protected playlist remains protected.
+5. To change the playlist contents or order later, enable editing. "Done", E again, or Esc finishes editing. Esc first closes an open window or cancels a drag.
 
 The sorting desk helps you organize music before adding it to permanent playlists. In Chaos, you can add files straight to the open playlist: uncheck "Add to sorting desk" in the add menu.
 
