@@ -14,6 +14,8 @@ python3 scripts/package-release.py --install --variant guitui
 
 Обновите версию в Cargo.toml и Cargo.lock, добавьте описание в releases/vX.Y.Z.md и закоммитьте изменения.
 
+Ветка release/X.Y.Z запускает сборку всех шести пакетов в GitHub Actions на Ubuntu 22.04 без публикации. Для распространения используйте эти сборки: локальный бинарник может зависеть от более новой glibc вашего дистрибутива. Результаты доступны в артефактах linux-guitui и linux-tui.
+
 Для локальных архивов:
 
 ```sh
