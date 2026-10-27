@@ -106,15 +106,15 @@
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-new-playlist.png"><img src="docs/images/almavorn-new-playlist.png" width="100%" alt="Создание плейлиста: задайте название, создайте новую папку или выберите существующие папки с музыкой."></a>
+  <a href="docs/images/almavorn-new-playlist.png"><img src="docs/images/almavorn-new-playlist.png" width="100%" alt="Создание плейлиста в теме Light: название, папки с музыкой и экранная клавиатура."></a>
   <br>
-  <sub>Создание плейлиста: задайте название, создайте новую папку или выберите существующие папки с музыкой.</sub>
+  <sub>Создание плейлиста в теме Light: название, папки с музыкой и экранная клавиатура.</sub>
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-playlist-search.png"><img src="docs/images/almavorn-playlist-search.png" width="100%" alt="Поиск композиций по выбранным плейлистам: шесть совпадений по запросу &quot;Theme&quot; в Starbound."></a>
+  <a href="docs/images/almavorn-playlist-search.png"><img src="docs/images/almavorn-playlist-search.png" width="100%" alt="Поиск по выбранным плейлистам: запрос &quot;dream&quot; находит три композиции в Hollow Knight и King Crimson."></a>
   <br>
-  <sub>Поиск композиций по выбранным плейлистам: шесть совпадений по запросу "Theme" в Starbound.</sub>
+  <sub>Поиск по выбранным плейлистам: запрос "dream" находит три композиции в Hollow Knight и King Crimson.</sub>
 </p>
 
 <a id="layout"></a>
