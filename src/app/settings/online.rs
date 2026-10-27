@@ -125,12 +125,24 @@ impl App {
                 include_str!("../../../docs/MODS.md"),
                 include_str!("../../../docs/MODS.ru.md"),
             )),
-            SettingsPage::ServiceGuide => Some(self.text(
-                include_str!("../../../docs/ONLINE_MUSIC.md"),
-                include_str!("../../../docs/ONLINE_MUSIC.ru.md"),
-            )),
+            SettingsPage::ServiceGuide => self.service_guide_topics().get(self.view.settings.guide_topic).map(|(_, text)| *text),
             _ => None,
         }
+    }
+
+    pub(crate) fn service_guide_topics(&self) -> Vec<(&'static str, &'static str)> {
+        let document = self.text(include_str!("../../../docs/ONLINE_MUSIC.md"), include_str!("../../../docs/ONLINE_MUSIC.ru.md"));
+        document.split("\n## ").enumerate().map(|(index, section)| {
+            let (title, text) = section.split_once('\n').unwrap_or((section, ""));
+            (if index == 0 { self.text("Overview", "Обзор") } else { title }, text.trim())
+        }).collect()
+    }
+
+    pub(in crate::app) fn select_settings_guide_topic(&mut self, index: usize) {
+        if self.view.settings.page != SettingsPage::ServiceGuide { return; }
+        self.view.settings.guide_topic = index.min(self.service_guide_topics().len().saturating_sub(1));
+        self.view.settings.offset = 0;
+        self.view.settings.focus = SettingsFocus::Parameters;
     }
 
     pub(super) fn scroll_online_settings(&mut self, direction: i64) -> bool {
@@ -150,6 +162,12 @@ impl App {
     }
 
     pub(super) fn settings_guide_key(&mut self, key: KeyPress) {
+        if self.view.settings.page == SettingsPage::ServiceGuide && matches!(key.key, Key::Left | Key::Right) {
+            let count = self.service_guide_topics().len();
+            let index = crate::app::bounded(self.view.settings.guide_topic, if key.key == Key::Left { -1 } else { 1 }, count);
+            self.select_settings_guide_topic(index);
+            return;
+        }
         let delta = match key.key {
             Key::Up => -1,
             Key::Down => 1,

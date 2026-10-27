@@ -10,6 +10,10 @@ pub(crate) enum SettingControl {
     LyricsEnabled,
     LyricsPanel,
     LyricsProvider(crate::lyrics::Provider),
+    LyricsKey(crate::lyrics::Provider),
+    LyricsKeyPage(crate::lyrics::Provider),
+    LyricsRemoveKey(crate::lyrics::Provider),
+    LyricsServices,
     Language,
     Volume,
     Desk,
@@ -57,12 +61,26 @@ pub(crate) enum SettingControl {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SettingGroup {
+    Interface,
+    Library,
+    Player,
+    Artwork,
+    LyricsSearch,
+    LyricsProviders,
+    LyricsAccess,
     Shortcuts(ShortcutGroup),
     DangerZone,
 }
 impl SettingGroup {
     pub(crate) fn name(self, language: Language) -> &'static str {
         match self {
+            Self::Interface => language.text("Interface", "Интерфейс"),
+            Self::Library => language.text("Library and layout", "Библиотека и расположение"),
+            Self::Player => language.text("Player", "Проигрыватель"),
+            Self::Artwork => language.text("Artwork", "Обложка композиции"),
+            Self::LyricsSearch => language.text("Search and display", "Поиск и отображение"),
+            Self::LyricsProviders => language.text("Lyrics sources", "Источники текстов песен"),
+            Self::LyricsAccess => language.text("Keys and accounts", "Ключи и аккаунты"),
             Self::Shortcuts(group) => group.name(language),
             Self::DangerZone => language.text("Danger zone", "Опасная зона"),
         }
@@ -88,6 +106,13 @@ impl App {
                     control: SettingControl,
                     adjustable: bool| {
             let group = match &control {
+                SettingControl::QuickAccess | SettingControl::Language | SettingControl::ButtonShortcuts => Some(SettingGroup::Interface),
+                SettingControl::Desk | SettingControl::PlaylistPlacement | SettingControl::PlayerPlacement => Some(SettingGroup::Library),
+                SettingControl::Volume | SettingControl::PlaybackTimeline | SettingControl::PlayerButtonSize | SettingControl::PlayerSpecialButtons => Some(SettingGroup::Player),
+                SettingControl::ArtworkVisible | SettingControl::ArtworkSize | SettingControl::ArtworkShared | SettingControl::ArtworkPath => Some(SettingGroup::Artwork),
+                SettingControl::LyricsEnabled | SettingControl::LyricsPanel => Some(SettingGroup::LyricsSearch),
+                SettingControl::LyricsProvider(_) => Some(SettingGroup::LyricsProviders),
+                SettingControl::LyricsKey(_) | SettingControl::LyricsKeyPage(_) | SettingControl::LyricsRemoveKey(_) | SettingControl::LyricsServices => Some(SettingGroup::LyricsAccess),
                 SettingControl::Binding(index) => Some(SettingGroup::Shortcuts(
                     self.settings.preferences.bindings[*index]
                         .action
@@ -123,17 +148,31 @@ impl App {
                     make(lang.text("Show lyrics", "Показывать текст"), checked(preferences.show_panel), lang.text("Show a separate lyrics block and search when tracks change. Move and resize it in Layout mode.", "Показывать отдельный блок текста и искать его при смене композиции. Положение и размер меняются в режиме Блоки."), SettingControl::LyricsPanel, true),
                 ];
                 rows.extend(crate::lyrics::Provider::ALL.into_iter().map(|provider| make(provider.name(), checked(!preferences.disabled.contains(&provider)), lang.text("Include this source in searches. Genius has priority among confident matches.", "Искать в этом источнике. При уверенном совпадении первым выбирается Genius."), SettingControl::LyricsProvider(provider), true)));
+                for provider in [crate::lyrics::Provider::Genius, crate::lyrics::Provider::Musixmatch] {
+                    let description = if provider == crate::lyrics::Provider::Genius {
+                        lang.text("An optional Client Access Token. Public search also works without a key.", "Необязательный Client Access Token. Без ключа работает публичный поиск.")
+                    } else {
+                        lang.text("An API key is required. Lyrics availability depends on your Musixmatch access.", "Нужен ключ API. Доступность текстов зависит от вашего доступа к Musixmatch.")
+                    };
+                    rows.push(make(&format!("{}: {}", provider.name(), lang.text("API key", "ключ API")), lang.text("Enter / replace…", "Ввести / заменить…").into(), description, SettingControl::LyricsKey(provider), false));
+                    rows.push(make(&format!("{}: {}", provider.name(), lang.text("get a key", "получить ключ")), lang.text("Open website", "Открыть сайт").into(), description, SettingControl::LyricsKeyPage(provider), false));
+                    rows.push(make(&format!("{}: {}", provider.name(), lang.text("delete key", "удалить ключ")), lang.text("Delete…", "Удалить…").into(), lang.text("Delete the saved key after confirmation. Other sources are unaffected.", "Удалить сохраненный ключ после подтверждения. Остальные источники продолжат работать."), SettingControl::LyricsRemoveKey(provider), false));
+                }
+                rows.push(make(lang.text("Yandex Music account", "Аккаунт Яндекс Музыки"), lang.text("Connections", "Подключения").into(), lang.text("Uses the account from Music services. Connect Yandex Music and sign in there.", "Используется аккаунт из музыкальных сервисов. Добавьте Яндекс Музыку и войдите в аккаунт."), SettingControl::LyricsServices, false));
+                for row in &mut rows {
+                    if matches!(row.control, SettingControl::LyricsKey(_) | SettingControl::LyricsRemoveKey(_)) { row.enabled = !self.lyrics_key_busy(); }
+                }
                 rows
             }
             SettingsPage::General => vec![
                 make(lang.text("Quick access", "Панель быстрого доступа"), lang.text("Customize…", "Настроить…").into(), lang.text("Choose the buttons above the library or show or hide them all. Only layout editing can appear automatically while active. Other buttons appear here when you pin them.", "Выберите кнопки над библиотекой, покажите все или уберите все. Автоматически может появляться только включенное редактирование блоков. Остальные кнопки выводятся наверх по вашим отметкам."), SettingControl::QuickAccess, false),
                 make(lang.text("Language", "Язык"), if lang == crate::model::Language::English { "English" } else { "Русский" }.into(), lang.text("Language of menus, descriptions, notices and keyboard hints.", "Язык меню, описаний, уведомлений и подсказок клавиш."), SettingControl::Language, true),
-                make(lang.text("Volume", "Громкость"), format!("{}%", (self.settings.preferences.volume*100.0).round() as u32), lang.text("Playback volume. Changes immediately; step: 5%.", "Громкость воспроизведения. Меняется сразу; шаг: 5%."), SettingControl::Volume, true),
+                make(lang.text("Shortcuts on buttons", "Клавиши на кнопках"), lang.text(if self.settings.preferences.appearance.show_button_shortcuts { "Shown" } else { "Hidden" }, if self.settings.preferences.appearance.show_button_shortcuts { "Показаны" } else { "Скрыты" }).into(), lang.text("Show shortcuts on buttons and compact toolbar menus. Change bindings under Shortcuts. Hiding hints keeps shortcuts active.", "Показывать сочетания на кнопках и меню свернутой верхней панели. Назначения меняются в разделе Клавиши; скрытие подсказок не отключает сочетания."), SettingControl::ButtonShortcuts, true),
                 make(lang.text("Sorting desk", "Сортировочный стол"), lang.text(if self.settings.preferences.sorting_desk { "On" } else { "Off" }, if self.settings.preferences.sorting_desk { "Включён" } else { "Выключен" }).into(), lang.text("In Chaos, route added music to the sorting desk instead of the selected playlist. In Order, music always goes to the desk, even with editing off.", "В Хаосе направлять добавляемую музыку в сортировочный стол вместо выбранного плейлиста. В Порядке музыка всегда добавляется в стол, даже без включения правки."), SettingControl::Desk, true),
                 make(lang.text("Playlists panel", "Панель плейлистов"), self.settings.preferences.playlist_placement.name(lang).into(), lang.text("Position of the playlist list relative to the tracks.", "Расположение списка плейлистов относительно композиций."), SettingControl::PlaylistPlacement, true),
                 make(lang.text("Player panel", "Панель проигрывателя"), self.settings.preferences.player_placement.name(lang).into(), lang.text("Position of playback controls relative to the library.", "Расположение управления воспроизведением относительно библиотеки."), SettingControl::PlayerPlacement, true),
+                make(lang.text("Volume", "Громкость"), format!("{}%", (self.settings.preferences.volume*100.0).round() as u32), lang.text("Playback volume. Changes immediately; step: 5%.", "Громкость воспроизведения. Меняется сразу; шаг: 5%."), SettingControl::Volume, true),
                 make(lang.text("Playback timeline", "Дорожка проигрывания"), self.settings.preferences.appearance.playback_timeline.name(lang).into(), lang.text("Choose waveform or progress bar. Only the selected view is shown, in both GUI and TUI. Saves into the active profile.", "Выберите аудиоволну или обычную полосу. Показывается только выбранный вид, в GUI и TUI. Выбор сохраняется в активный профиль."), SettingControl::PlaybackTimeline, true),
-                make(lang.text("Shortcuts on buttons", "Клавиши на кнопках"), lang.text(if self.settings.preferences.appearance.show_button_shortcuts { "Shown" } else { "Hidden" }, if self.settings.preferences.appearance.show_button_shortcuts { "Показаны" } else { "Скрыты" }).into(), lang.text("Show shortcuts on buttons and compact toolbar menus. Change bindings under Shortcuts. Hiding hints keeps shortcuts active.", "Показывать сочетания на кнопках и меню свернутой верхней панели. Назначения меняются в разделе Клавиши; скрытие подсказок не отключает сочетания."), SettingControl::ButtonShortcuts, true),
                 make(lang.text("Player button size", "Размер кнопок проигрывателя"), self.settings.preferences.appearance.player_button_size.name(lang).into(), lang.text("Choose compact, normal or large square playback buttons. The symbols grow with the buttons. Shortcut labels appear below them.", "Компактные, обычные или крупные квадратные кнопки воспроизведения. Значки увеличиваются вместе с кнопками. Подписи горячих клавиш показаны снизу."), SettingControl::PlayerButtonSize, true),
                 make(lang.text("Show player special keys", "Показывать спецклавиши проигрывателя"), if self.settings.preferences.appearance.show_player_special_buttons { "[x]" } else { "[ ]" }.into(), lang.text("Show equalizer, effects and visualization buttons beside the playback controls. Their commands remain available in the player menu.", "Показывать кнопки эквалайзера, эффектов и визуализации рядом с кнопками воспроизведения. Их команды остаются в меню проигрывателя."), SettingControl::PlayerSpecialButtons, true),
                 make(lang.text("Player artwork", "Обложка в проигрывателе"), if self.settings.preferences.artwork.visible { "[x]" } else { "[ ]" }.into(), lang.text("Show an image next to the playing track. When there is no artwork, show a music note.", "Показывать изображение рядом с текущей композицией. Если обложки нет, показывать музыкальную ноту."), SettingControl::ArtworkVisible, true),

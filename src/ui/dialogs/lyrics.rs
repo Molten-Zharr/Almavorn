@@ -36,53 +36,38 @@ pub(super) fn render(
     if inner.width < 24 || inner.height < 18 {
         return;
     }
-    let controls = controls(app, view, app.lyrics_loading());
-    let footer_height = buttons_height(app, inner.width, &controls).max(2);
+    let confirming = view.confirm_remove || view.confirm_key.is_some();
+    let controls = if confirming {
+        vec![
+            action(app.text("Cancel [Enter]", "Отмена [Enter]"), LyricsAction::Back, true),
+            action(app.text("Delete [D]", "Удалить [D]"), if view.confirm_key.is_some() { LyricsAction::ConfirmKey } else { LyricsAction::ConfirmRemove }, !app.lyrics_key_busy() && !app.lyrics_storage_busy()),
+        ]
+    } else { controls(app, view, app.lyrics_loading()) };
+    let footer_height = buttons_height(app, inner.width, &controls).max(2).min(inner.height);
     let footer = Rect::new(
         inner.x,
         inner.bottom() - footer_height,
         inner.width,
         footer_height,
     );
-    if view.confirm_remove || view.confirm_key.is_some() {
+    if confirming {
+        let mut message = if let Some(provider) = view.confirm_key {
+            format!("{}: {}", provider.name(), app.text("Delete the saved key?", "Удалить сохраненный ключ?"))
+        } else {
+            format!("{}\n\n{}", app.text("Delete the lyrics saved for this track?", "Удалить сохраненный текст этой композиции?"), app.lyrics.query.as_ref().map(|q| format!("{} - {}", clean(&q.track.artist), clean(&q.track.title))).unwrap_or_default())
+        };
+        if let Some(error) = &app.lyrics.error { message.push_str(&format!("\n\n{error}")); }
         frame.render_widget(
-            Paragraph::new(if let Some(provider) = view.confirm_key {
-                format!(
-                    "{}: {}",
-                    provider.name(),
-                    app.text("Remove the saved key?", "Удалить сохраненный ключ?")
-                )
-            } else {
-                app.text(
-                    "Remove the lyrics saved in Almavorn?",
-                    "Удалить текст, сохраненный в Almavorn?",
-                )
-                .into()
-            })
+            Paragraph::new(message)
             .style(palette.text())
             .wrap(Wrap { trim: false }),
-            inner,
+            Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(footer_height)),
         );
         buttons(
             frame,
             app,
             footer,
-            vec![
-                action(
-                    app.text("Cancel [Enter]", "Отмена [Enter]"),
-                    LyricsAction::Back,
-                    true,
-                ),
-                action(
-                    app.text("Remove [D]", "Удалить [D]"),
-                    if view.confirm_key.is_some() {
-                        LyricsAction::ConfirmKey
-                    } else {
-                        LyricsAction::ConfirmRemove
-                    },
-                    true,
-                ),
-            ],
+            controls,
             palette,
         );
         return;
@@ -384,7 +369,7 @@ fn controls(app: &App, view: &LyricsView, loading: bool) -> Vec<(String, Target,
         ];
     }
     let selected = !loading && view.selected < app.lyrics.results.len();
-    vec![
+    let mut controls = vec![
         action(
             app.text("Find elsewhere [N]", "Найти в другом [N]"),
             LyricsAction::FindOther,
@@ -406,14 +391,14 @@ fn controls(app: &App, view: &LyricsView, loading: bool) -> Vec<(String, Target,
             !loading,
         ),
         action(
-            app.text("Save [S]", "Сохранить [S]"),
+            app.text("Save lyrics [S]", "Сохранить текст [S]"),
             LyricsAction::Save,
-            selected,
+            selected && !app.lyrics_storage_busy(),
         ),
         action(
             app.text("Edit [E]", "Изменить [E]"),
             LyricsAction::Edit,
-            selected,
+            selected && !app.lyrics_storage_busy(),
         ),
         action(
             app.text("Export [X]", "В файл [X]"),
@@ -429,11 +414,14 @@ fn controls(app: &App, view: &LyricsView, loading: bool) -> Vec<(String, Target,
             LyricsAction::Follow,
             selected,
         ),
-        action(
-            app.text("Remove saved", "Удалить сохраненное"),
-            LyricsAction::Remove,
-            app.lyrics.saved,
-        ),
         action(app.text("Back", "Назад"), LyricsAction::Back, true),
-    ]
+    ];
+    if app.lyrics.saved {
+        controls.insert(controls.len() - 1, action(
+            app.text("Delete lyrics [D]", "Удалить текст [D]"),
+            LyricsAction::Remove,
+            !loading && !app.lyrics_storage_busy(),
+        ));
+    }
+    controls
 }

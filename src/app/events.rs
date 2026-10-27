@@ -1121,6 +1121,7 @@ impl App {
                 };
             }
             Target::SettingsTab(page) => self.select_settings_tab(page),
+            Target::SettingsGuideTopic(index) => self.select_settings_guide_topic(index),
             Target::SettingsVolume(index, area) => {
                 if area.width > 0 {
                     if self.view.workspace.gesture.is_none() {

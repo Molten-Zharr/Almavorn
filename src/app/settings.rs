@@ -128,6 +128,7 @@ pub(crate) struct SettingsView {
     pub themes_expanded: bool,
     pub mods_expanded: bool,
     pub services_expanded: bool,
+    pub guide_topic: usize,
     pub menu_area: Rect,
     pub parameters_area: Rect,
     pub binding_modifiers: [bool; 3],
@@ -326,6 +327,7 @@ impl App {
             );
         }
         self.view.settings.page = page;
+        self.view.settings.guide_topic = 0;
         self.sync_settings_menu();
         self.view.settings.selected = 0;
         self.view.settings.offset = 0;
@@ -353,6 +355,7 @@ impl App {
     pub(crate) fn settings_menu_targets(&self) -> Vec<Target> {
         let mut items = vec![
             Target::SettingsPage(SettingsPage::General),
+            Target::SettingsPage(SettingsPage::Lyrics),
             Target::SettingsPage(SettingsPage::Profiles),
             Target::SettingsThemes,
         ];
@@ -716,6 +719,17 @@ impl App {
                 self.view.dialog = Some(Dialog::ConfirmResetBindings { confirm: false });
             }
             SettingControl::NiriBindings => self.show_niri_bindings()?,
+            SettingControl::LyricsKey(provider) => self.lyrics_action(super::LyricsAction::Key(provider))?,
+            SettingControl::LyricsKeyPage(provider) => self.lyrics_action(super::LyricsAction::KeyPage(provider))?,
+            SettingControl::LyricsRemoveKey(provider) => {
+                self.view.dialog = Some(Dialog::Lyrics(super::LyricsView {
+                    confirm_key: Some(provider),
+                    sources: true,
+                    from_settings: true,
+                    ..Default::default()
+                }));
+            }
+            SettingControl::LyricsServices => self.open_settings_page(SettingsPage::Services),
             SettingControl::SystemMedia => self.show_system_media(),
             _ => self.adjust_setting(row, 1)?,
         }

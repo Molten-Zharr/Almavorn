@@ -45,10 +45,12 @@ struct Cached {
     reports: Vec<ProviderReport>,
     excluded: Vec<Provider>,
     selected: Option<usize>,
+    saved: bool,
 }
 
 #[derive(Default)]
 pub struct LyricsPanel {
+    pub saved: bool,
     pub query: Option<Query>,
     pub results: Vec<Lyric>,
     pub reports: Vec<ProviderReport>,
@@ -80,6 +82,8 @@ pub enum PanelAction {
     Other,
     Retry,
     Settings,
+    Save,
+    Remove,
     Close,
 }
 
@@ -106,6 +110,7 @@ impl LyricsPanel {
         }
         self.cache.push_back(Cached {
             key,
+            saved: self.saved,
             selected: self
                 .selected
                 .and_then(|selected| indices.iter().position(|index| *index == selected)),
@@ -125,6 +130,22 @@ impl LyricsPanel {
             None
         } else {
             self.selected.and_then(|index| self.results.get(index))
+        }
+    }
+    pub(super) fn saved_changed(&mut self, track: i64, lyric: Option<Lyric>) {
+        let saved = lyric.is_some();
+        for entry in self.cache.iter_mut().filter(|entry| entry.key.id == track) {
+            entry.saved = saved;
+            if let Some(lyric) = &lyric { entry.results = vec![lyric.clone()]; entry.selected = Some(0); }
+        }
+        if self.query.as_ref().is_some_and(|query| query.track.id == track) {
+            self.cancel();
+            self.saved = saved;
+            if let Some(lyric) = lyric {
+                self.results = vec![lyric]; self.selected = Some(0); self.cursor = 0; self.choosing = false;
+                self.offset = 0; self.follow = true;
+            }
+            self.remember();
         }
     }
 }
@@ -192,6 +213,7 @@ impl App {
             }
             match completed.result {
                 Ok(result) => {
+                    self.lyrics.panel.saved = result.saved;
                     if result.network_failed {
                         self.lyrics.network_paused = true;
                     }
@@ -225,6 +247,7 @@ impl App {
             panel.cancel();
             panel.key = key.clone();
             panel.results.clear();
+            panel.saved = false;
             panel.selected = None;
             panel.choosing = false;
             panel.cursor = 0;
@@ -239,8 +262,11 @@ impl App {
                 track,
             });
             if let Some(key) = key {
-                if let Some(cached) = panel.cache.iter().find(|entry| entry.key == key) {
+                // A saved copy takes precedence over any later, unsaved search
+                // result in the memory cache when this track starts again.
+                if let Some(cached) = panel.cache.iter().find(|entry| entry.key == key && !entry.saved) {
                     panel.results = cached.results.clone();
+                    panel.saved = cached.saved;
                     panel.selected = cached.selected;
                     panel.cursor = cached.selected.unwrap_or(0);
                     panel.choosing = cached.selected.is_none();
@@ -268,10 +294,11 @@ impl App {
             self.request_panel_lyrics(false);
         }
         let data = self.data_directory();
+        let store = self.store.try_clone();
         let runtime = self.runtime.as_ref().expect("runtime is alive");
         self.lyrics.panel.job.start(|request| {
             let request = request.clone();
-            background(runtime, move || run_request(&data, &request))
+            background(runtime, move || run_request(&data, &mut store?, &request))
         });
     }
 
@@ -316,8 +343,7 @@ impl App {
         }
         self.lyrics.job.cancel();
         self.lyrics.progress = None;
-        self.lyrics.saved =
-            crate::lyrics::cache_path(&self.data_directory(), query.track.id).exists();
+        self.lyrics.saved = self.lyrics.panel.saved;
         self.lyrics.query = Some(query);
         self.lyrics.results = self.lyrics.panel.results.clone();
         self.lyrics.reports = self.lyrics.panel.reports.clone();
@@ -363,6 +389,7 @@ impl App {
             self.lyrics.panel.excluded = self.lyrics.excluded.clone();
             self.lyrics.panel.reports = self.lyrics.reports.clone();
             self.lyrics.panel.error = None;
+            self.lyrics.panel.saved = self.lyrics.saved;
             self.lyrics.panel.offset = 0;
             self.lyrics.panel.follow = true;
             self.lyrics.panel.remember();
@@ -395,6 +422,16 @@ impl App {
             }
             PanelAction::Open => self.open_panel_lyrics()?,
             PanelAction::Settings => self.open_settings_page(crate::app::SettingsPage::Lyrics),
+            PanelAction::Save => {
+                let track = self.lyrics.panel.query.as_ref().context("Начните воспроизведение композиции.")?.track.id;
+                let lyric = self.lyrics.panel.lyric().context("Выберите найденный текст.")?.clone();
+                self.store_lyrics(track, Some(lyric))?;
+            }
+            PanelAction::Remove => {
+                anyhow::ensure!(self.lyrics.panel.saved && !self.lyrics_storage_busy(), "Нет сохраненного текста для удаления.");
+                self.open_panel_lyrics()?;
+                if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog { view.confirm_remove = true; view.panel_confirmation = true; }
+            }
             PanelAction::Close => {
                 self.close_panel(crate::workspace::Panel::Lyrics)?;
             }

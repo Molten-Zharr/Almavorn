@@ -58,6 +58,7 @@ pub enum Target {
     ToggleExpandedToolbar,
     CopyHelp(Option<usize>),
     HelpSection(usize),
+    SettingsGuideTopic(usize),
     HelpSearch,
     HelpClearSearch,
     HelpMatch(usize),

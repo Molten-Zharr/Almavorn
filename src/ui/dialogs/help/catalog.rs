@@ -834,6 +834,11 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Lyrics as usize];
+    q.topic("Settings > Song lyrics contains source toggles, Genius and Musixmatch keys, and access to the Yandex Music account.",
+        "Настройки > Тексты песен: включение источников, ключи Genius и Musixmatch, переход к аккаунту Яндекс Музыки.",
+        "поставщики провайдеры источники api ключ настройка genius musixmatch lyrics providers sources credentials");
+    q.note("Save lyrics in the panel keeps a local database copy for this track, also after a restart. Saved lyrics open before any API request. Delete lyrics removes that copy after confirmation.",
+        "Кнопка Сохранить текст в панели сохраняет копию в локальной БД под композицию, в том числе после перезапуска. Она открывается до обращения к API. Кнопка Удалить текст удаляет копию после подтверждения.");
     q.note("Song lyrics is a separate block. In Layout mode, drag its title or [↕], resize shared borders, or collapse it. Its position is saved with the layout. Visibility brings back a hidden lyrics block.",
         "Текст песни — отдельный блок. В режиме Блоки тяните его за заголовок или [↕], меняйте размер общей границей или сворачивайте. Положение сохраняется вместе с раскладкой. Скрытый блок можно вернуть через Видимость.");
     q.note("A word is underlined only when extended LRC provides explicit start and end markers for it. Plain text, line-only timing and incomplete word timing keep the line highlight.",
@@ -864,9 +869,10 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         ),
         (
             's',
-            "Save the lyrics in the player.",
-            "Сохранить текст песни в плеере.",
+            "In the full window, save lyrics in the player's local database.",
+            "В полном окне сохранить текст песни в локальной БД плеера.",
         ),
+        ('d', "In the full window, open confirmation to delete saved lyrics.", "В полном окне открыть подтверждение удаления сохраненного текста."),
         (
             'e',
             "Open the lyrics for editing.",
@@ -874,8 +880,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         ),
         (
             'x',
-            "Write the lyrics into the audio file after confirmation.",
-            "Записать текст песни в аудиофайл после подтверждения.",
+            "Export lyrics to a separate TXT or LRC file.",
+            "Сохранить текст песни в отдельный файл TXT или LRC.",
         ),
         (
             'l',

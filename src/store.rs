@@ -21,6 +21,7 @@ pub(crate) use playlists::FolderPlaylistImport;
 pub(crate) use playlists::new_playlist_folder_path;
 mod queries;
 mod statistics;
+mod lyrics;
 mod tags;
 use queries::{playlist_access, read_playlists, snapshot};
 pub(crate) use tags::FileEditOutcome;

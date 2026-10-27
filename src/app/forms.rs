@@ -539,6 +539,7 @@ impl App {
             }
             FormPurpose::LyricsKey(provider) => {
                 self.lyrics_set_key(*provider, Some(form.fields[0].value.clone()))?;
+                self.view.dialog = form.back.clone().map(|dialog| *dialog);
             }
             FormPurpose::LyricsEdit(track, lyric) => {
                 let mut lyric = lyric.clone();
@@ -548,9 +549,8 @@ impl App {
                     lyric.synced = form.fields[0].value.clone();
                 }
                 lyric.instrumental = false;
-                crate::lyrics::save(&self.data_directory(), *track, &lyric)?;
+                self.store_lyrics(*track, Some(lyric.clone()))?;
                 self.lyrics.results = vec![lyric];
-                self.lyrics.saved = true;
                 self.view.dialog = Some(Dialog::Lyrics(super::lyrics::LyricsView::content()));
                 self.update_panel_from_dialog();
             }

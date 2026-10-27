@@ -257,6 +257,9 @@ impl Drop for App {
         // Only shutdown waits for persistence. Share a deadline with the worker
         // shutdown because started blocking calls cannot be aborted.
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        if let Err(error) = self.shutdown_lyrics(&runtime, deadline) {
+            eprintln!("Almavorn: lyrics were not saved / текст песни не сохранен: {error:#}");
+        }
         if let Err(error) =
             session.and_then(|snapshot| self.shutdown_session(&runtime, deadline, snapshot))
         {

@@ -116,6 +116,7 @@ pub fn search(
         "Укажите название композиции или исполнителя."
     );
     let mut result = SearchResult {
+        saved: false,
         matches: vec![],
         warnings: vec![],
         network_failed: false,
@@ -136,6 +137,7 @@ pub fn search(
                     scope.spawn(move || {
                         if cancel.load(Ordering::Relaxed) {
                             return Ok(SearchResult {
+                                saved: false,
                                 matches: vec![],
                                 warnings: vec![],
                                 network_failed: false,
@@ -243,6 +245,7 @@ fn search_provider(
         Provider::Genius => genius(&client, data, query, &guesses, cancel),
         Provider::Musixmatch => musixmatch(&client, data, query, &guesses, cancel),
         _ => pages(&client, provider, query, &guesses, cancel).map(|matches| SearchResult {
+            saved: false,
             matches,
             warnings: vec![],
             network_failed: false,
@@ -514,6 +517,7 @@ fn genius(
     warnings.sort();
     warnings.dedup();
     Ok(SearchResult {
+        saved: false,
         matches: found,
         warnings,
         network_failed,
@@ -615,6 +619,7 @@ fn musixmatch(
         Ok(())
     })();
     Ok(SearchResult {
+        saved: false,
         matches: found,
         network_failed: operation
             .as_ref()
@@ -807,6 +812,7 @@ fn yandex(data: &Path, query: &Query, cancel: &AtomicBool) -> Result<SearchResul
         Ok(())
     })();
     Ok(SearchResult {
+        saved: false,
         matches,
         network_failed: operation
             .as_ref()

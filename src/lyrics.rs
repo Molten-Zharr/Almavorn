@@ -50,6 +50,7 @@ pub struct SearchResult {
     pub matches: Vec<Lyric>,
     pub warnings: Vec<String>,
     pub network_failed: bool,
+    pub saved: bool,
 }
 
 pub(crate) fn automatic_match(results: &[Lyric]) -> Option<usize> {
@@ -313,6 +314,7 @@ fn search_lrclib(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
         "Укажите название композиции или исполнителя."
     );
     let mut result = SearchResult {
+        saved: false,
         matches: Vec::new(),
         warnings: Vec::new(),
         network_failed: false,
@@ -371,6 +373,7 @@ fn search_ovh(query: &Query, cancel: &AtomicBool) -> Result<SearchResult> {
     let client = network::client()?;
     let guesses = candidates(query);
     let mut result = SearchResult {
+        saved: false,
         matches: vec![],
         warnings: vec![],
         network_failed: false,

@@ -221,6 +221,7 @@ impl Dialog {
     }
 
     pub(crate) fn is_settings(&self) -> bool {
+        if matches!(self, Self::Lyrics(view) if view.from_settings) { return true; }
         if let Self::Form(form) = self {
             return form.back.as_deref().is_some_and(Self::is_settings);
         }

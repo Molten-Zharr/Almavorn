@@ -77,6 +77,20 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Pal
             ("×".into(), Target::LyricsPanel(Action::Close), true),
         ]
     };
+    if inner.height >= 4 {
+        controls.insert(0, (
+            app.text("Save lyrics", "Сохранить текст").into(),
+            Target::LyricsPanel(Action::Save),
+            selected.is_some() && !loading && !app.lyrics_storage_busy(),
+        ));
+        if app.lyrics.panel.saved {
+            controls.insert(1, (
+                app.text("Delete lyrics", "Удалить текст").into(),
+                Target::LyricsPanel(Action::Remove),
+                !loading && !app.lyrics_storage_busy(),
+            ));
+        }
+    }
     if inner.height >= 7 {
         if choosing && app.lyrics.panel.selected.is_some() {
             controls.insert(
@@ -115,8 +129,11 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Pal
         |lyric| lyric.provider.as_str(),
     );
     if available > 0 {
+        let source = if app.lyrics.panel.saved {
+            format!("{source} · {}", app.text("Local copy available", "Есть сохраненная копия"))
+        } else { source.to_owned() };
         frame.render_widget(
-            Paragraph::new(clean(source)).style(palette.text().fg(palette.accent)),
+            Paragraph::new(clean(&source)).style(palette.text().fg(palette.accent)),
             Rect::new(inner.x, inner.y, inner.width, 1),
         );
     }

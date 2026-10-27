@@ -37,6 +37,7 @@ pub struct LyricsState {
     last_preferences: Option<crate::preferences::LyricsPreferences>,
     progress: Option<mpsc::Receiver<ProviderReport>>,
     key_job: Option<Background<()>>,
+    storage_job: Option<Background<(i64, Option<Lyric>)>>,
     job: LatestJob<Request, SearchResult>,
     cancel: Option<Arc<AtomicBool>>,
 }
@@ -50,6 +51,8 @@ pub struct LyricsView {
     pub sources: bool,
     pub confirm_key: Option<Provider>,
     pub panel_result: bool,
+    pub panel_confirmation: bool,
+    pub from_settings: bool,
 }
 impl LyricsView {
     pub fn content() -> Self {
@@ -138,7 +141,7 @@ impl App {
         let (progress, receiver) = mpsc::channel();
         self.lyrics.progress = Some(receiver);
         self.lyrics.error = None;
-        self.lyrics.saved = lyrics::cache_path(&self.data_directory(), query.track.id).exists();
+        self.lyrics.saved = false;
         self.lyrics.cancel = Some(cancel.clone());
         self.lyrics.job.request(Request {
             query,
@@ -153,10 +156,11 @@ impl App {
     }
     fn start_lyrics_job(&mut self) {
         let data = self.data_directory();
+        let store = self.store.try_clone();
         let runtime = self.runtime.as_ref().expect("runtime is alive");
         self.lyrics.job.start(|request| {
             let request = request.clone();
-            background(runtime, move || run_request(&data, &request))
+            background(runtime, move || run_request(&data, &mut store?, &request))
         });
     }
     pub fn lyrics_loading(&self) -> bool {
@@ -167,10 +171,12 @@ impl App {
     pub(super) fn tick_lyrics(&mut self) {
         self.sync_lyrics_preferences();
         self.tick_lyrics_panel();
+        self.tick_saved_lyrics();
         if matches!(&self.view.dialog, Some(Dialog::Lyrics(view)) if view.panel_result) {
             self.lyrics.query = self.lyrics.panel.query.clone();
             self.lyrics.excluded = self.lyrics.panel.excluded.clone();
             self.lyrics.reports = self.lyrics.panel.reports.clone();
+            self.lyrics.saved = self.lyrics.panel.saved;
             if !self.lyrics.panel_loading() {
                 self.lyrics.results = self.lyrics.panel.results.clone();
                 self.lyrics.error = self.lyrics.panel.error.clone();
@@ -193,16 +199,12 @@ impl App {
             self.lyrics.key_job = None;
             match result {
                 Ok(()) => {
-                    if matches!(self.view.dialog, Some(Dialog::Lyrics(_)))
-                        && let Some(query) = self.lyrics.query.clone()
-                    {
-                        self.start_lyrics(query, true);
-                        if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
-                            view.sources = true;
-                        }
-                    }
+                    self.message(self.text("Lyrics source key updated", "Ключ источника текстов обновлен").into());
                 }
-                Err(error) => self.lyrics.error = Some(error.to_string()),
+                Err(error) => {
+                    self.lyrics.error = Some(error.to_string());
+                    self.failure(error);
+                }
             }
         }
         let Some(completed) = self.lyrics.job.poll() else {
@@ -233,9 +235,7 @@ impl App {
                     )
                     .into()
                 });
-                self.lyrics.saved =
-                    lyrics::cache_path(&self.data_directory(), completed.request.query.track.id)
-                        .exists();
+                self.lyrics.saved = result.saved;
                 if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
                     let selected = lyrics::automatic_match(&self.lyrics.results);
                     view.selected = selected.unwrap_or(0);
@@ -267,6 +267,7 @@ impl App {
             self.lyrics.panel.reports = self.lyrics.reports.clone();
             self.lyrics.panel.excluded = self.lyrics.excluded.clone();
             self.lyrics.panel.error = self.lyrics.error.clone();
+            self.lyrics.panel.saved = self.lyrics.saved;
             self.lyrics.panel.remember();
         }
     }
@@ -274,7 +275,15 @@ impl App {
         let Some(Dialog::Lyrics(view)) = &mut self.view.dialog else {
             return false;
         };
+        if view.from_settings {
+            self.view.dialog = Some(Dialog::Settings { selected: self.view.settings.selected });
+            return true;
+        }
         if view.confirm_remove {
+            if view.panel_confirmation {
+                self.view.dialog = None;
+                return true;
+            }
             view.confirm_remove = false;
             return true;
         }
@@ -359,6 +368,7 @@ impl App {
             Key::PageUp => self.lyrics_scroll(-10),
             Key::PageDown => self.lyrics_scroll(10),
             Key::Char('s') => self.lyrics_action(LyricsAction::Save)?,
+            Key::Char('d') if self.lyrics.saved => self.lyrics_action(LyricsAction::Remove)?,
             Key::Char('e') => self.lyrics_action(LyricsAction::Edit)?,
             Key::Char('f') => self.lyrics_action(LyricsAction::Search)?,
             Key::Char('r') => self.lyrics_action(LyricsAction::Refresh)?,
@@ -373,6 +383,7 @@ impl App {
         let result = self.lyrics_action_inner(action);
         if let Err(error) = result {
             self.lyrics.error = Some(format!("{error:#}"));
+            if self.view.dialog.as_ref().is_some_and(Dialog::is_settings) { self.failure(error); }
         }
         Ok(())
     }
@@ -381,6 +392,30 @@ impl App {
             self.lyrics_close();
             return Ok(());
         }
+        match action {
+            LyricsAction::Key(provider) => {
+                anyhow::ensure!(!self.lyrics_key_busy(), "Дождитесь сохранения ключа.");
+                let mut field = FormField::new(self.text("New key", "Новый ключ"), "");
+                field.secret = true;
+                self.open_form(provider.name(), if provider == Provider::Genius {
+                    self.text("Optional Client Access Token from genius.com/api-clients. Public search works without it.", "Необязательный Client Access Token с genius.com/api-clients. Без него работает публичный поиск.")
+                } else {
+                    self.text("Enter your Musixmatch API key. Lyrics availability depends on your API access.", "Введите ключ API Musixmatch. Доступность текстов зависит от вашего доступа к API.")
+                }, vec![field], FormPurpose::LyricsKey(provider));
+                return Ok(());
+            }
+            LyricsAction::KeyPage(provider) => {
+                let mut child = std::process::Command::new("xdg-open")
+                    .arg(provider.key_url()).stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
+                    .spawn().context("Не удалось открыть браузер.")?;
+                std::thread::spawn(move || { let _ = child.wait(); });
+                return Ok(());
+            }
+            LyricsAction::Services => { self.open_services(); return Ok(()); }
+            LyricsAction::Settings => { self.open_settings_page(super::SettingsPage::Lyrics); return Ok(()); }
+            _ => {}
+        }
         let Some(Dialog::Lyrics(view)) = &mut self.view.dialog else {
             return Ok(());
         };
@@ -388,50 +423,29 @@ impl App {
             view.selected = index.min(self.lyrics.results.len().saturating_sub(1));
             return Ok(());
         }
-        let query = self.lyrics.query.clone().context("Выберите композицию.")?;
+        let query = self.lyrics.query.clone();
         let selected = view.selected;
         match action {
             LyricsAction::Sources => {
                 view.sources = !view.sources;
                 view.offset = 0;
             }
-            LyricsAction::Key(provider) => {
-                anyhow::ensure!(self.lyrics.key_job.is_none(), "Дождитесь сохранения ключа.");
-                let mut field = FormField::new(self.text("New key", "Новый ключ"), "");
-                field.secret = true;
-                self.open_form(
-                    provider.name(),
-                    if provider == Provider::Genius {
-                        self.text("Optional Client Access Token from genius.com/api-clients. Without it the player uses public search.", "Необязательный Client Access Token с genius.com/api-clients. Без него работает публичный поиск.")
-                    } else {
-                        self.text("Enter your Musixmatch API key. Text availability depends on your API access.", "Введите ключ API Musixmatch. Доступ к текстам зависит от вашего тарифа.")
-                    },
-                    vec![field], FormPurpose::LyricsKey(provider),
-                );
-            }
-            LyricsAction::KeyPage(provider) => {
-                let mut child = std::process::Command::new("xdg-open")
-                    .arg(provider.key_url())
-                    .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
-                    .spawn()
-                    .context("Не удалось открыть браузер.")?;
-                std::thread::spawn(move || {
-                    let _ = child.wait();
-                });
-            }
             LyricsAction::RemoveKey(provider) => {
                 view.confirm_key = Some(provider);
             }
             LyricsAction::ConfirmKey => {
                 if let Some(provider) = view.confirm_key {
+                    let from_settings = view.from_settings;
                     self.lyrics_set_key(provider, None)?;
+                    if from_settings {
+                        self.view.dialog = Some(Dialog::Settings { selected: self.view.settings.selected });
+                    } else if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
+                        view.confirm_key = None;
+                    }
                 }
             }
-            LyricsAction::Services => self.open_services(),
-            LyricsAction::Settings => self.open_settings_page(super::SettingsPage::Lyrics),
             LyricsAction::FindOther => {
+                let query = query.context("Выберите композицию.")?;
                 let mut excluded = self.lyrics.excluded.clone();
                 if let Some(lyric) = self.lyrics.results.get(selected)
                     && let Some(provider) = Provider::ALL
@@ -444,6 +458,7 @@ impl App {
                 self.start_lyrics_excluding(query, true, excluded);
             }
             LyricsAction::Search => {
+                let query = query.context("Выберите композицию.")?;
                 let title = self.text("Find lyrics", "Найти текст песни");
                 let description=self.text("Enter the artist and title. If no close match is found, the player also searches by title words.", "Укажите исполнителя и название. Если точного совпадения нет, плеер ищет также по словам названия.");
                 let fields = vec![
@@ -458,6 +473,7 @@ impl App {
                 );
             }
             LyricsAction::Refresh => {
+                let query = query.context("Выберите композицию.")?;
                 let sources = view.sources;
                 self.start_lyrics_excluding(query, true, self.lyrics.excluded.clone());
                 if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
@@ -473,26 +489,32 @@ impl App {
                 self.update_panel_from_dialog();
             }
             LyricsAction::Follow => view.follow = !view.follow,
-            LyricsAction::Remove => view.confirm_remove = true,
+            LyricsAction::Remove => {
+                anyhow::ensure!(self.lyrics.saved && self.lyrics.storage_job.is_none(), "Нет сохраненного текста для удаления.");
+                view.confirm_remove = true;
+            }
             LyricsAction::ConfirmRemove => {
-                lyrics::remove(&self.data_directory(), query.track.id)?;
-                self.lyrics.saved = false;
-                if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
+                anyhow::ensure!(view.confirm_remove, "Подтвердите удаление текста.");
+                let query = query.context("Выберите композицию.")?;
+                let panel = view.panel_confirmation;
+                self.store_lyrics(query.track.id, None)?;
+                if panel { self.view.dialog = None; }
+                else if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog {
                     view.confirm_remove = false;
                 }
             }
             LyricsAction::Save => {
+                let query = query.context("Выберите композицию.")?;
                 let lyric = self
                     .lyrics
                     .results
                     .get(selected)
-                    .context("Выберите найденный текст.")?;
-                lyrics::save(&self.data_directory(), query.track.id, lyric)?;
-                self.lyrics.saved = true;
-                self.lyrics.error = None;
-                self.update_panel_from_dialog();
+                    .context("Выберите найденный текст.")?.clone();
+                self.store_lyrics(query.track.id, Some(lyric))?;
             }
             LyricsAction::Edit => {
+                let query = query.context("Выберите композицию.")?;
+                anyhow::ensure!(self.lyrics.storage_job.is_none(), "Дождитесь сохранения текста.");
                 let lyric = self
                     .lyrics
                     .results
@@ -512,6 +534,7 @@ impl App {
                 );
             }
             LyricsAction::Export => {
+                let query = query.context("Выберите композицию.")?;
                 let lyric = self
                     .lyrics
                     .results
@@ -544,6 +567,54 @@ impl App {
     pub fn lyrics_key_busy(&self) -> bool {
         self.lyrics.key_job.is_some()
     }
+    pub fn lyrics_storage_busy(&self) -> bool { self.lyrics.storage_job.is_some() }
+
+    pub(super) fn shutdown_lyrics(&mut self, runtime: &tokio::runtime::Runtime, deadline: std::time::Instant) -> Result<()> {
+        if let Some(job) = self.lyrics.storage_job.take() {
+            runtime.block_on(async {
+                tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), job).await
+            }).context("Lyrics save did not finish before shutdown")?
+                .context("Lyrics save was interrupted")??;
+        }
+        Ok(())
+    }
+
+    pub(super) fn store_lyrics(&mut self, track: i64, lyric: Option<Lyric>) -> Result<()> {
+        anyhow::ensure!(!self.lyrics_storage_busy(), "Дождитесь сохранения текста.");
+        let mut store = self.store.try_clone()?;
+        self.lyrics.error = None;
+        self.lyrics.storage_job = Some(background(self.runtime.as_ref().expect("runtime is alive"), move || {
+            store.save_lyrics(track, lyric.as_ref())?;
+            Ok((track, lyric))
+        }));
+        Ok(())
+    }
+
+    fn tick_saved_lyrics(&mut self) {
+        let Some(result) = self.lyrics.storage_job.as_mut().and_then(poll) else { return };
+        self.lyrics.storage_job = None;
+        match result {
+            Ok((track, lyric)) => {
+                let saved = lyric.is_some();
+                if self.lyrics.query.as_ref().is_some_and(|query| query.track.id == track) {
+                    if let Some(cancel) = self.lyrics.cancel.take() { cancel.store(true, Ordering::Relaxed); }
+                    self.lyrics.job.cancel();
+                    self.lyrics.progress = None;
+                    self.lyrics.saved = saved;
+                    if let Some(lyric) = &lyric {
+                        self.lyrics.results = vec![lyric.clone()];
+                        if let Some(Dialog::Lyrics(view)) = &mut self.view.dialog { view.selected = 0; view.content = true; }
+                    }
+                }
+                self.lyrics.panel.saved_changed(track, lyric);
+                self.message(self.text(if saved { "Lyrics saved in the library" } else { "Saved lyrics removed" }, if saved { "Текст сохранен в библиотеке" } else { "Сохраненный текст удален" }).into());
+            }
+            Err(error) => {
+                self.lyrics.error = Some(error.to_string());
+                self.failure(error);
+            }
+        }
+    }
     pub(super) fn lyrics_set_key(&mut self, provider: Provider, key: Option<String>) -> Result<()> {
         anyhow::ensure!(self.lyrics.key_job.is_none(), "Дождитесь сохранения ключа.");
         if let Some(key) = &key {
@@ -560,30 +631,25 @@ impl App {
             self.runtime.as_ref().expect("runtime is alive"),
             move || lyrics::set_key(&data, provider, key.as_deref().map(str::trim)),
         ));
-        self.view.dialog = Some(Dialog::Lyrics(LyricsView {
-            sources: true,
-            ..LyricsView::default()
-        }));
         Ok(())
     }
 }
 
-fn run_request(data: &std::path::Path, request: &Request) -> Result<SearchResult> {
+fn run_request(data: &std::path::Path, store: &mut crate::store::Store, request: &Request) -> Result<SearchResult> {
     if request.cancel.load(Ordering::Relaxed) {
         return Ok(SearchResult::default());
     }
-    let mut warnings = vec![];
+    let saved = store.saved_lyrics(request.query.track.id)
+        .context("Не удалось прочитать сохраненный текст песни")?;
+    let has_saved = saved.is_some();
     if !request.force || !request.preferences.enabled {
-        match lyrics::cached(data, request.query.track.id) {
-            Ok(Some(mut lyric)) => {
-                lyric.score = 1000;
-                return Ok(SearchResult {
-                    matches: vec![lyric],
-                    ..SearchResult::default()
-                });
-            }
-            Err(error) => warnings.push(error.to_string()),
-            _ => {}
+        if let Some(mut lyric) = saved {
+            lyric.score = 1000;
+            return Ok(SearchResult {
+                matches: vec![lyric],
+                saved: true,
+                ..SearchResult::default()
+            });
         }
         if request.query.track.path.is_file()
             && let Some(lyric) = lyrics::embedded(&request.query.track)
@@ -595,10 +661,7 @@ fn run_request(data: &std::path::Path, request: &Request) -> Result<SearchResult
         }
     }
     if !request.preferences.enabled {
-        return Ok(SearchResult {
-            warnings,
-            ..SearchResult::default()
-        });
+        return Ok(SearchResult::default());
     }
     let mut result = lyrics::search(
         data,
@@ -608,7 +671,7 @@ fn run_request(data: &std::path::Path, request: &Request) -> Result<SearchResult
         &request.preferences,
         &request.excluded,
     )?;
-    result.warnings.extend(warnings);
+    result.saved = has_saved;
     Ok(result)
 }
 

@@ -135,8 +135,8 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     if path.try_exists()? {
         let mut connection = connect(path)?;
         let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        if matches!(version, 2..=5) {
-            if version < 5 {
+        if matches!(version, 2..=6) {
+            if version < 6 {
                 let transaction =
                     connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
                 upgrade_schema(&transaction)?;
@@ -182,7 +182,7 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     connection.pragma_update(None, "synchronous", "FULL")?;
     let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let version: i64 = transaction.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if matches!(version, 2..=5) {
+    if matches!(version, 2..=6) {
         upgrade_schema(&transaction)?;
         transaction.commit()?;
         configure_wal(&connection)?;
@@ -195,6 +195,7 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
     transaction.execute_batch(SCHEMA)?;
     transaction.execute_batch(FOLDER_SCHEMA)?;
     transaction.execute_batch(super::statistics::SCHEMA)?;
+    transaction.execute_batch(super::lyrics::SCHEMA)?;
     if let Some(library) = imported {
         import_duckdb(&transaction, library)?;
     } else if let Some(source) = &legacy {
@@ -216,8 +217,8 @@ pub(super) fn open(directory: &Path, path: &Path) -> Result<Connection> {
         !broken,
         "Library contains broken references; original databases were preserved"
     );
-    transaction.execute("INSERT INTO almavorn_metadata(key,value) VALUES ('schema_version','5') ON CONFLICT(key) DO UPDATE SET value=excluded.value", [])?;
-    transaction.pragma_update(None, "user_version", 5)?;
+    transaction.execute("INSERT INTO almavorn_metadata(key,value) VALUES ('schema_version','6') ON CONFLICT(key) DO UPDATE SET value=excluded.value", [])?;
+    transaction.pragma_update(None, "user_version", 6)?;
     transaction.commit()?;
     configure_wal(&connection)?;
     Ok(connection)
@@ -257,6 +258,11 @@ fn upgrade_schema(connection: &Connection) -> Result<()> {
             [],
         )?;
         connection.pragma_update(None, "user_version", 5)?;
+    }
+    if version < 6 {
+        connection.execute_batch(super::lyrics::SCHEMA)?;
+        connection.execute("UPDATE almavorn_metadata SET value='6' WHERE key='schema_version'", [])?;
+        connection.pragma_update(None, "user_version", 6)?;
     }
     Ok(())
 }
@@ -311,6 +317,9 @@ fn validate_schema(connection: &Connection, version: i64) -> Result<()> {
     }
     if version >= 5 {
         connection.prepare("SELECT session_id,track_id,duration_ms,started_at_ms,updated_at_ms,listened_ms,qualified,ended_at_ms FROM listening_sessions LIMIT 0")?;
+    }
+    if version >= 6 {
+        connection.prepare("SELECT track_id,value FROM saved_lyrics LIMIT 0")?;
     }
     Ok(())
 }
