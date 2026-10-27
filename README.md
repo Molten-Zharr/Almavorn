@@ -30,7 +30,7 @@
   **It's all built in!**
 - Two modes: **Order** protects playlists from accidental edits.
   Switch to **Chaos** to add tracks straight to playlists and folders!
-- The **GUITUI** approach - *a terminal interface in a graphical window: a text grid and keyboard shortcuts alongside large buttons, mouse controls, cover art, and animations.*
+- The **GUITUI** approach brings terminal and graphical interfaces together. Text panels and keyboard shortcuts form the foundation; a graphics layer adds cover art, waveforms, animations, and large mouse-operated buttons. Text and graphics share one window, while graphical elements can extend beyond the character grid.
 
 Suggestions and feedback are welcome. We're only getting started, and we hope you'll enjoy the player!
 
@@ -148,15 +148,15 @@ Your layout is saved automatically. Press Ctrl+B or click "Edit layout" again to
 
 ## <img src="docs/images/readme/download.svg" width="24" height="24" alt=""> Download and install
 
-The packaged release is **0.2.0**, for 64-bit Linux on Intel/AMD.
+The packaged release is **0.3.0**, for 64-bit Linux on Intel/AMD.
 
-*(Windows support is in the works, hehe)* A reminder: **GUITUI** combines a terminal interface with graphics in its own window; **TUI** runs directly in your terminal.
+*(Windows support is in the works, hehe)* A reminder: **GUITUI** adds a graphics layer to the player's text interface in its own window. **TUI** runs directly in your terminal. Both versions share the music library, settings, and controls.
 
 ### GUITUI version
 
 **GUITUI** runs in its own window with mouse and keyboard controls:
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.tar.gz) - especially handy on KDE/GNOME/COSMIC
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.tar.gz) - especially handy on KDE/GNOME/COSMIC
 
 ---OR---
 
@@ -170,7 +170,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 **TUI** runs right inside your favorite terminal:
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.tar.gz)
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.tar.gz)
 
 ---OR---
 
@@ -189,11 +189,11 @@ Paste the command straight into your terminal.
 
 <a id="appimage"></a>
 
-**AppImage** is a single file you can run without installing. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage).
+**AppImage** is a single file you can run without installing. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.AppImage).
 
 <a id="flatpak"></a>
 
-**Flatpak** installs the app with its required components. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak).
+**Flatpak** installs the app with its required components. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.flatpak).
 
 **tar.gz** is an archive with an installer and an application menu shortcut.
 
@@ -209,7 +209,7 @@ Choose your toolbar buttons in "Settings > General > Quick access": pin individu
 
 Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. The square buttons and their icons grow together; shortcut labels appear below. Normal is the default.
 
-In Statistics, choose a category and sorting from the drop-down lists. "More" opens overall totals, details about the selected row and the play-counting rules.
+In Statistics, choose a category and sorting from the drop-down lists. Click a column heading to sort; click again to reverse the order. "More" opens overall totals, details about the selected row and the play-counting rules.
 
 Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results show your current shortcuts; press Enter to open the explanation.
 
@@ -225,10 +225,10 @@ Search Help in your own words: "make it louder", "recover a deleted song", or "m
 ### Build a playlist yourself
 
 1. Open "Playlist" and choose "New playlist", or press C. Enter a name and press Enter to create an empty playlist.
-2. In Order mode, select it and click "Edit".
-3. Open "Add to desk", choose "Add files", mark the files you want, and click "Add to desk" at the bottom. For a whole folder, choose "Add folder", open that folder, then click "Current folder · Add to desk".
-4. On the sorting desk, mark tracks using their checkboxes or Insert. Press X, choose your playlist, and confirm with Enter. The tracks will be copied into the playlist; the original files stay where they are.
-5. Click "Done" or press the editing shortcut again, E by default, to protect the playlist from accidental changes. Esc also finishes editing, first closing an open window or cancelling a drag.
+2. Open "Add to desk", choose "Add files", mark the files you want, and click "Add to desk" at the bottom. For a whole folder, choose "Add folder", open that folder, then click "Current folder · Add to desk".
+3. On the sorting desk, mark tracks using their checkboxes or Insert. Press X, choose your playlist, and click "Next: review copy".
+4. Check the source, destination, and track list, then click "Confirm copying". Existing tracks are skipped, audio files stay in place, and a protected playlist remains protected.
+5. To change the playlist contents or order later, enable editing. "Done", E again, or Esc finishes editing. Esc first closes an open window or cancels a drag.
 
 The sorting desk helps you organize music before adding it to permanent playlists. In Chaos, you can add files straight to the open playlist: uncheck "Add to sorting desk" in the add menu.
 

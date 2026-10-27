@@ -30,7 +30,7 @@
   **Все это возможно в нашем плеере из коробки!**
 - Два режима работы: Хотите осторожные, защищенные от редактирования плейлисты? Режим "**Порядка**" тут.
   Желаете добавлять треки сразу в плейлисты и папки? Переключаемся на режим "**Хаоса**"!
-- Техника **GUITUI** - *терминальный интерфейс в графическом окне: текстовая сетка и горячие клавиши сочетаются с крупными кнопками, управлением мышью, обложками и анимациями.*
+- Кроме TUI, еще и техника **GUITUI** - объединение терминального и графического интерфейсов. В основе остается текстовый интерфейс с панелями и горячими клавишами, а графический слой добавляет обложки, аудиоволну, анимации и крупные кнопки с управлением мышью. Текст и графика работают вместе в отдельном окне, а графические элементы могут выходить за рамки символьной сетки.
 
 Мы открыты к предложениям и обратной связи. Мы только начали разгоняться, поэтому надеемся, что вам понравится наш плеер!
 
@@ -148,15 +148,15 @@ GIF-фон выбирается в F2, "Темы", "Анимация", "GIF-фо
 
 ## <img src="docs/images/readme/download.svg" width="24" height="24" alt=""> Хочу скачать и установить! Что есть?
 
-Готовый выпуск - **0.2.0**, для 64-разрядного Linux на Intel/AMD.
+Готовый выпуск - **0.3.0**, для 64-разрядного Linux на Intel/AMD.
 
-*(для Windows пока в работе, хе-хе)* Напоминаем: **GUITUI** соединяет терминальный интерфейс с графикой в отдельном окне; **TUI** запускается прямо в терминале.
+*(для Windows пока в работе, хе-хе)* Напоминаем: **GUITUI** - текстовая основа плеера с дополнительным графическим слоем в отдельном окне. **TUI** работает прямо в терминале. У обеих версий общие библиотека музыки, настройки и система управления.
 
 ### GUITUI версия
 
 **GUITUI** - отдельное окно с управлением мышью и клавиатурой:
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.tar.gz) - особенно удобно для KDE/Gnome/Cosmic
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.tar.gz) - особенно удобно для KDE/Gnome/Cosmic
 
 ---ИЛИ---
 
@@ -170,7 +170,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 **TUI** - интерфейс прямо в вашем любимом терминале:
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.tar.gz)
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.tar.gz)
 
 ---ИЛИ---
 
@@ -190,11 +190,11 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 <a id="appimage"></a>
 
-**AppImage** - один файл для запуска без установки. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage).
+**AppImage** - один файл для запуска без установки. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.AppImage).
 
 <a id="flatpak"></a>
 
-**Flatpak** - установка пакета вместе с нужными компонентами. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak).
+**Flatpak** - установка пакета вместе с нужными компонентами. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.flatpak).
 
 **tar.gz** - архив с установщиком и ярлыком в меню.
 
@@ -226,10 +226,10 @@ F2 открывает настройки, F1 - полную справку. В �
 ### Собираем плейлист сами
 
 1. Откройте "Плейлист" → "Создать плейлист" или нажмите C. Введите название и нажмите Enter - готов пустой плейлист.
-2. В режиме "Порядка" выберите его и нажмите "Редактировать".
-3. Через "Добавить на стол" → "Добавить файлы" отметьте нужные файлы и нажмите "Добавить на стол" внизу окна. Для целой папки: "Добавить папку" → откройте нужную папку → "Текущая папка · Добавить на стол".
-4. На сортировочном столе отметьте композиции галочками или Insert. Нажмите X, выберите свой плейлист и подтвердите Enter. Композиции скопируются в него; исходные файлы останутся на месте.
-5. Нажмите "Готово" или повторно клавишу правки, по умолчанию E, чтобы снова защитить плейлист от случайных изменений. Esc тоже завершает правку, сначала закрывая открытое окно или отменяя перетаскивание.
+2. Через "Добавить на стол" → "Добавить файлы" отметьте нужные файлы и нажмите "Добавить на стол" внизу окна. Для целой папки: "Добавить папку" → откройте нужную папку → "Текущая папка · Добавить на стол".
+3. На сортировочном столе отметьте композиции галочками или Insert. Нажмите X, выберите свой плейлист и нажмите "Далее: проверить копирование".
+4. Проверьте исходный плейлист, назначение и список треков. Нажмите "Подтвердить копирование". Уже имеющиеся треки будут пропущены, исходные файлы останутся на месте. Защищенный плейлист останется защищенным.
+5. Для последующего изменения состава или порядка включите "Редактировать". "Готово", повторное E или Esc завершают правку; Esc сначала закрывает открытое окно или отменяет перетаскивание.
 
 Сортировочный стол поможет разобрать музыку перед добавлением в постоянные плейлисты. В "Хаосе" можно добавлять файлы сразу в открытый плейлист: снимите галочку "Добавлять в сортировочный стол" в меню добавления.
 
