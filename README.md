@@ -30,6 +30,7 @@
   **It's all built in!**
 - Two modes: **Order** protects playlists from accidental edits.
   Switch to **Chaos** to add tracks straight to playlists and folders!
+- The **GUITUI** approach - *a terminal interface in a graphical window: a text grid and keyboard shortcuts alongside large buttons, mouse controls, cover art, and animations.*
 
 Suggestions and feedback are welcome. We're only getting started, and we hope you'll enjoy the player!
 
@@ -149,7 +150,7 @@ Your layout is saved automatically. Press Ctrl+B or click "Edit layout" again to
 
 The packaged release is **0.2.0**, for 64-bit Linux on Intel/AMD.
 
-*(Windows support is in the works, hehe)*
+*(Windows support is in the works, hehe)* A reminder: **GUITUI** combines a terminal interface with graphics in its own window; **TUI** runs directly in your terminal.
 
 ### GUITUI version
 
