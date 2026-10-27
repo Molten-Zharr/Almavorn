@@ -10,6 +10,19 @@ def run(*args, cwd=None):
 
 
 def build_appimage(package, binary, stage, linuxdeploy, appimagetool):
+    if shutil.which("strip") is None:
+        raise RuntimeError("AppImage requires the system strip tool from binutils")
+    # The bundled strip predates RELR sections used by current system libraries.
+    # Use the host toolchain while preserving the downloaded packaging tool.
+    tool_directory = stage / "linuxdeploy-tool"
+    tool_directory.mkdir()
+    subprocess.run([str(linuxdeploy), "--appimage-extract"], cwd=tool_directory,
+                   stdout=subprocess.DEVNULL, check=True)
+    extracted = tool_directory / "squashfs-root"
+    bundled_strip = extracted / "usr/bin/strip"
+    if bundled_strip.exists() or bundled_strip.is_symlink():
+        bundled_strip.rename(bundled_strip.with_name("strip.bundled"))
+    linuxdeploy = extracted / "AppRun"
     appdir = stage / "Almavorn.AppDir"
     shutil.copytree(package, appdir / "usr")
     libraries = []
@@ -24,7 +37,7 @@ def build_appimage(package, binary, stage, linuxdeploy, appimagetool):
             if path is None:
                 raise RuntimeError(f"Missing AppImage library: {name}")
             libraries += ["--library", path]
-    run(linuxdeploy, "--appimage-extract-and-run", "--appdir", appdir,
+    run(linuxdeploy, "--appdir", appdir,
         "--executable", appdir / "usr/bin" / binary,
         "--desktop-file", appdir / "usr/share/applications" / f"{binary}.desktop",
         "--icon-file", appdir / "usr/share/icons/hicolor/scalable/apps" / f"{binary}.svg", *libraries)
