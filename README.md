@@ -148,7 +148,7 @@ Your layout is saved automatically. Press Ctrl+B or click "Edit layout" again to
 
 ## <img src="docs/images/readme/download.svg" width="24" height="24" alt=""> Download and install
 
-The packaged release is **0.2.0**, for 64-bit Linux on Intel/AMD.
+The packaged release is **0.3.0**, for 64-bit Linux on Intel/AMD.
 
 *(Windows support is in the works, hehe)* A reminder: **GUITUI** adds a graphics layer to the player's text interface in its own window. **TUI** runs directly in your terminal. Both versions share the music library, settings, and controls.
 
@@ -156,7 +156,7 @@ The packaged release is **0.2.0**, for 64-bit Linux on Intel/AMD.
 
 **GUITUI** runs in its own window with mouse and keyboard controls:
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.tar.gz) - especially handy on KDE/GNOME/COSMIC
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.tar.gz) - especially handy on KDE/GNOME/COSMIC
 
 ---OR---
 
@@ -170,7 +170,7 @@ curl -fsSL https://raw.githubusercontent.com/Molten-Zharr/Almavorn/main/install.
 
 **TUI** runs right inside your favorite terminal:
 
-[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.tar.gz)
+[AppImage](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.AppImage) - [Flatpak](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.flatpak) - [tar.gz](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.tar.gz)
 
 ---OR---
 
@@ -189,11 +189,11 @@ Paste the command straight into your terminal.
 
 <a id="appimage"></a>
 
-**AppImage** is a single file you can run without installing. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.AppImage).
+**AppImage** is a single file you can run without installing. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.AppImage) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.AppImage).
 
 <a id="flatpak"></a>
 
-**Flatpak** installs the app with its required components. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.2.0/almavorn-0.2.0-tui-linux-x86_64.flatpak).
+**Flatpak** installs the app with its required components. [GUITUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-guitui-linux-x86_64.flatpak) · [TUI](https://github.com/Molten-Zharr/Almavorn/releases/download/v0.3.0/almavorn-0.3.0-tui-linux-x86_64.flatpak).
 
 **tar.gz** is an archive with an installer and an application menu shortcut.
 

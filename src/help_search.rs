@@ -319,6 +319,16 @@ impl Query {
         }
     }
 
+    pub fn matches_word(&self, text: &str) -> bool {
+        let document = words(text);
+        self.words.iter().any(|word| word_score(word, &document) > 0)
+    }
+
+    pub fn covers(&self, text: &str, aliases: &str, category: &str, shortcut: &str) -> bool {
+        let document = words(&format!("{text} {aliases} {category} {shortcut}"));
+        !self.words.is_empty() && self.words.iter().all(|word| word_score(word, &document) > 0)
+    }
+
     pub fn score(&self, text: &str, aliases: &str, category: &str, shortcut: &str) -> u32 {
         if self.words.is_empty() {
             return 0;
@@ -337,10 +347,10 @@ impl Query {
         let mut matched = 0;
         let mut score = 0;
         for word in &self.words {
-            let value = word_score(word, &body)
-                .max(word_score(word, &aliases_words))
-                .max(word_score(word, &key_words))
-                .max(word_score(word, &category_words) / 2);
+            let value = (word_score(word, &body) * 3)
+                .max(word_score(word, &aliases_words) * 2)
+                .max(word_score(word, &key_words) * 3)
+                .max(word_score(word, &category_words));
             if value > 0 {
                 matched += 1;
                 score += value;
@@ -351,6 +361,10 @@ impl Query {
             return 0;
         }
         score = score * matched as u32 / self.words.len() as u32;
+        // An explanation covering the whole question comes before partial matches.
+        if matched == self.words.len() {
+            score += 48;
+        }
         if normalize(text).contains(&self.phrase) {
             score += 24;
         }

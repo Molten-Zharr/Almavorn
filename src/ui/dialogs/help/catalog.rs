@@ -301,8 +301,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
 
     sections[C::Tracks as usize].note("Use checkboxes to select tracks for copying, moving, looping or editing tags together. A group checkbox selects its tracks matching the filter, even when collapsed.",
         "Отметьте треки галочками для копирования, переноса или правки тегов. Галочка группы отмечает подходящие под фильтр треки, даже если группа свернута.");
-    sections[C::Tracks as usize].topic("Right-click a group heading to open its own menu. Collapse the group, check all its tracks or remove the whole group from the playlist after confirmation. These group commands include tracks hidden by the filter. Music files stay on disk. Protected playlists can be unlocked from the same menu.",
-        "ПКМ по заголовку группы открывает ее меню. Можно свернуть группу, отметить все ее композиции или убрать группу из плейлиста с подтверждением. Команды группы учитывают и скрытые фильтром треки. Музыкальные файлы остаются на диске. Редактирование защищенного плейлиста можно включить в том же меню.",
+    sections[C::Tracks as usize].topic("Group menu: right-click its heading.\n• Collapse the group or check all its tracks.\n• Remove the whole group after confirmation. Music files stay on disk.\n• Enable editing of a protected playlist.\nGroup commands also include tracks hidden by the filter.",
+        "Меню группы: нажмите ПКМ по ее заголовку.\n• Сверните группу или отметьте все ее композиции.\n• Уберите всю группу после подтверждения. Музыкальные файлы останутся на диске.\n• Включите редактирование защищенного плейлиста.\nКоманды группы учитывают и скрытые фильтром треки.",
         "удалить убрать всю группу папку альбом контекстное меню пкм remove delete folder group album right click context menu");
     sections[C::Tracks as usize].keys(&[p(Enter)],
         "In Copy to playlist: first review the source, destination and track list, then confirm copying. Esc returns to destination selection. Existing tracks are skipped; protected playlists remain protected.",
@@ -541,8 +541,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.topic("Background animation: Settings > Themes > Animation. Choose a style, turn animation off or change its brightness.",
         "Анимация фона: Настройки > Темы > Анимация. Здесь можно выбрать вид, выключить анимацию или изменить ее яркость.",
         "фон мешает мигает раздражает слишком ярко выключить искры background distracting flashing disable brightness");
-    q.topic("GIF background: Settings > Themes > Animation > Background GIF. Choose a file and set visibility from 0 to 30% (default 15%). Text and buttons stay opaque. Update or create a theme preset to save the GIF settings. Remove background GIF leaves the original file on disk.",
-        "GIF-фон: Настройки > Темы > Анимация > GIF-фон. Выберите файл и задайте видимость от 0 до 30%, по умолчанию 15%. Текст и кнопки остаются непрозрачными. Обновите или создайте пресет темы, чтобы сохранить настройки GIF. Кнопка Убрать GIF-фон оставляет исходный файл на диске.",
+    q.topic("GIF background:\n1. Open Settings > Themes > Animation > Background GIF.\n2. Choose a file and set visibility from 0 to 30% (default 15%).\n3. Create or update a theme preset to save these settings.\nText and buttons stay opaque. Removing the background leaves the original GIF file on disk.",
+        "GIF-фон:\n1. Откройте Настройки > Темы > Анимация > GIF-фон.\n2. Выберите файл и задайте видимость от 0 до 30%, по умолчанию 15%.\n3. Создайте или обновите пресет темы для сохранения настроек.\nТекст и кнопки остаются непрозрачными. При удалении фона исходный GIF остается на диске.",
         "gif гиф гифка живые обои свой фон картинка прозрачность видимость анимация animation wallpaper background opacity image file");
     q.topic("Button shortcuts and EQ/FX/VIS: Settings > General. You can hide shortcut labels or the player's special buttons.",
         "Клавиши на кнопках и EQ/FX/VIS: Настройки > Общие. Можно скрыть подписи клавиш или специальные кнопки проигрывателя.",
@@ -837,8 +837,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     q.topic("Settings > Song lyrics contains source toggles, Genius and Musixmatch keys, and access to the Yandex Music account.",
         "Настройки > Тексты песен: включение источников, ключи Genius и Musixmatch, переход к аккаунту Яндекс Музыки.",
         "поставщики провайдеры источники api ключ настройка genius musixmatch lyrics providers sources credentials");
-    q.note("Save lyrics in the panel keeps a local database copy for this track, also after a restart. Saved lyrics open before any API request. Delete lyrics removes that copy after confirmation.",
-        "Кнопка Сохранить текст в панели сохраняет копию в локальной БД под композицию, в том числе после перезапуска. Она открывается до обращения к API. Кнопка Удалить текст удаляет копию после подтверждения.");
+    q.note("Lyrics without internet:\n• \"Save lyrics\" keeps the text for this track in the local database.\n• Saved lyrics open immediately, including after a restart, before any API request.\n• \"Delete lyrics\" removes the saved copy after confirmation.",
+        "Текст без интернета:\n• \"Сохранить текст\" оставляет копию для этой композиции в локальной БД.\n• Сохраненный текст открывается сразу, в том числе после перезапуска, до обращения к API.\n• \"Удалить текст\" убирает сохраненную копию после подтверждения.");
     q.note("Song lyrics is a separate block. In Layout mode, drag its title or [↕], resize shared borders, or collapse it. Its position is saved with the layout. Visibility brings back a hidden lyrics block.",
         "Текст песни — отдельный блок. В режиме Блоки тяните его за заголовок или [↕], меняйте размер общей границей или сворачивайте. Положение сохраняется вместе с раскладкой. Скрытый блок можно вернуть через Видимость.");
     q.note("A word is underlined only when extended LRC provides explicit start and end markers for it. Plain text, line-only timing and incomplete word timing keep the line highlight.",
@@ -952,8 +952,8 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
     );
 
     let q = &mut sections[C::Services as usize];
-    q.note("First Spotify sign-in has three steps: create an app on Spotify, copy its return address, then paste Client ID. Connect opens browser sign-in automatically.",
-        "Первый вход в Spotify проходит за три шага: создать приложение на сайте, скопировать адрес возврата, вставить Client ID. Кнопка \"Подключить\" сама открывает вход в браузере.");
+    q.note("First Spotify sign-in:\n1. Create an app on the Spotify website.\n2. Copy the return address into Redirect URIs.\n3. Paste Client ID into Almavorn and click \"Connect\" to sign in through your browser.",
+        "Первый вход в Spotify:\n1. Создайте приложение на сайте Spotify.\n2. Скопируйте адрес возврата в Redirect URIs.\n3. Вставьте Client ID в Almavorn и нажмите \"Подключить\" для входа через браузер.");
     q.keys(&[c(Char('1'))], "In Spotify setup: open the app registration page.",
         "При подключении Spotify: открыть страницу создания приложения.");
     q.keys(&[c(Char('2'))], "In Spotify setup: copy the return address for Redirect URIs.",

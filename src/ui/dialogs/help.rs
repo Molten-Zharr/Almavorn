@@ -9,9 +9,38 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::Modifier,
-    text::Span,
+    text::{Line, Span, Text},
     widgets::{Paragraph, Wrap},
 };
+
+/// Preserve the original wording and wrapping while making names and matches scannable.
+pub(super) fn rich_text<'a>(
+    text: &'a str,
+    palette: Palette,
+    query: Option<&crate::help_search::Query>,
+) -> Text<'a> {
+    let mut quoted = false;
+    Text::from(text.lines().map(|line| {
+        let label_end = line.find(':').filter(|&end| line[..end].chars().count() <= 60);
+        let mut position = 0;
+        let spans = line.split_inclusive(char::is_whitespace).map(|word| {
+            let named = quoted || word.contains('"');
+            if word.chars().filter(|&c| c == '"').count() % 2 == 1 {
+                quoted = !quoted;
+            }
+            let mut style = ratatui::style::Style::default();
+            if named || label_end.is_some_and(|end| position <= end) || word.trim() == "•" {
+                style = style.fg(palette.help_heading).add_modifier(Modifier::BOLD);
+            }
+            if query.is_some_and(|query| query.matches_word(word)) {
+                style = style.fg(palette.accent).add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+            }
+            position += word.len();
+            Span::styled(word, style)
+        }).collect::<Vec<_>>();
+        Line::from(spans)
+    }).collect::<Vec<_>>())
+}
 
 pub(super) fn wrapped_height(text: &str, width: u16) -> u16 {
     Paragraph::new(text)
@@ -118,10 +147,11 @@ pub(super) fn help_dialog(
     let mut identities = Vec::new();
     for (section_index, section) in sections.into_iter().enumerate() {
         headings.push(entries.len());
-        entries.push((None, section.name.to_owned()));
+        entries.push((None, section.name.to_owned(), true));
         identities.push(None);
         for (entry_index, entry) in section.entries.into_iter().enumerate() {
-            entries.push((entry.key, entry.text));
+            let heading = entry.search.is_empty();
+            entries.push((entry.key, entry.text, heading));
             identities.push(Some((section_index, entry_index)));
         }
     }
@@ -136,12 +166,14 @@ pub(super) fn help_dialog(
     // Offset is measured in rendered lines, including wrapped descriptions and keycaps.
     let layouts: Vec<_> = entries
         .iter()
-        .map(|(key, text)| {
+        .map(|(key, text, heading)| {
             let cap_width = key.map_or(0, keycaps::width);
             let cap_height = key.map_or(0, |key| keycaps::height(key, body.width));
             let stacked = key.is_some() && cap_width.saturating_add(22) > body.width;
             let text_x = if key.is_some() && !stacked {
                 cap_width + 2
+            } else if key.is_none() && !heading {
+                body.width.saturating_sub(1).min(2)
             } else {
                 0
             };
@@ -205,8 +237,8 @@ pub(super) fn help_dialog(
     }
     let mut cursor = 0;
     let visible_end = *offset + usize::from(body.height);
-    for (index, ((key, text), &(text_x, text_y, text_height, cap_height, height))) in
-        entries.iter().zip(&layouts).enumerate()
+    for ((key, text, heading), &(text_x, text_y, text_height, cap_height, height)) in
+        entries.iter().zip(&layouts)
     {
         let start = cursor;
         cursor += usize::from(height) + 1;
@@ -237,13 +269,19 @@ pub(super) fn help_dialog(
         let top = text_start.max(*offset);
         let bottom = (text_start + usize::from(text_height)).min(visible_end);
         if top < bottom {
+            if key.is_none() && !heading && text_x > 0 {
+                for row in top..bottom {
+                    frame.render_widget(Paragraph::new("│").style(palette.text().fg(palette.separator)),
+                        Rect::new(body.x, body.y + (row - *offset) as u16, 1, 1));
+                }
+            }
             frame.render_widget(
-                Paragraph::new(text.as_str())
-                    .style(palette.text().fg(if headings.contains(&index) {
-                        palette.help_heading
+                Paragraph::new(rich_text(text, palette, None))
+                    .style(if *heading {
+                        palette.text().fg(palette.help_heading).add_modifier(Modifier::BOLD)
                     } else {
-                        palette.text
-                    }))
+                        palette.text()
+                    })
                     .wrap(Wrap { trim: true })
                     .scroll(((top - text_start) as u16, 0)),
                 Rect::new(

@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
-    branches: ["main"]
+    branches: ["main", "release/*"]
     paths: ["releases/*.md", ".github/workflows/release.yml", "scripts/*", "packaging/*", "install.sh"]
   workflow_dispatch:
 
