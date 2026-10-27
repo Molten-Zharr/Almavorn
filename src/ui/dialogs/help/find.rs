@@ -1,4 +1,4 @@
-use super::{catalog::Section, keycaps, wrapped_height};
+use super::{catalog::Section, keycaps, rich_text, wrapped_height};
 use crate::{
     app::{App, Hit, Target},
     help_search::Query,
@@ -111,9 +111,14 @@ fn refresh(app: &mut App, sections: &[Section]) {
                 .unwrap_or_default();
             let score = query.score(&entry.search, entry.aliases, &section.search_name, &key);
             if score > 0 {
-                found.push((score, section_index, entry_index, key));
+                let complete = query.covers(&entry.search, entry.aliases, &section.search_name, &key);
+                found.push((score, section_index, entry_index, key, complete));
             }
         }
+    }
+    // Keep partial suggestions only when no explanation covers the whole question.
+    if found.iter().any(|result| result.4) {
+        found.retain(|result| result.4);
     }
     found.sort_by(|a, b| {
         b.0.cmp(&a.0)
@@ -123,7 +128,7 @@ fn refresh(app: &mut App, sections: &[Section]) {
     let mut seen = HashSet::new();
     app.view.help_search.matches = found
         .into_iter()
-        .filter_map(|(_, section, entry, key)| {
+        .filter_map(|(_, section, entry, key, _)| {
             seen.insert((key, sections[section].entries[entry].text.as_str()))
                 .then_some((section, entry))
         })
@@ -145,6 +150,7 @@ pub(super) fn results(
     palette: Palette,
 ) {
     refresh(app, sections);
+    let query = Query::new(&app.view.help_search.query);
     let selected = app.view.help_search.selected;
     let controls = vec![
         (
@@ -261,6 +267,10 @@ pub(super) fn results(
             frame.render_widget(Block::default().style(style), row);
             let section = &sections[section_index];
             let entry = &section.entries[entry_index];
+            let mut text_palette = palette;
+            if index == selected {
+                text_palette.help_heading = palette.selection_text;
+            }
             if start >= *offset {
                 frame.render_widget(
                     Paragraph::new(section.name).style(style.fg(palette.help_heading)),
@@ -289,7 +299,7 @@ pub(super) fn results(
             let text_bottom = (text_start + text_height as usize).min(end);
             if text_top < text_bottom {
                 frame.render_widget(
-                    Paragraph::new(entry.text.as_str())
+                    Paragraph::new(rich_text(&entry.text, text_palette, Some(&query)))
                         .style(style)
                         .wrap(Wrap { trim: true })
                         .scroll(((text_top - text_start) as u16, 0)),

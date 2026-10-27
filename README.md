@@ -211,7 +211,7 @@ Shortcut labels on buttons are hidden by default; the shortcuts still work. Enab
 
 In Statistics, choose a category and sorting from the drop-down lists. Click a column heading to sort; click again to reverse the order. "More" opens overall totals, details about the selected row and the play-counting rules.
 
-Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results show your current shortcuts; press Enter to open the explanation.
+Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results highlight matching words and show your current shortcuts; press Enter to open the explanation. Button names stand out in color, and longer instructions are split into steps. Complete matches take priority; partial suggestions appear when no complete answer is found.
 
 ### Create a playlist from a folder
 
