@@ -14,9 +14,9 @@
 <p align="center"><a href="#install">Install</a> &nbsp; · &nbsp; <a href="#screenshots">Screenshots</a> &nbsp; · &nbsp; <a href="#first-launch">Getting&nbsp;started</a> &nbsp; · &nbsp; <a href="#help">Contribute</a></p>
 
 <p align="center">
-  <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists."></a>
+  <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: lyrics found through lyrics.ovh and saved for offline reading, alongside the track list and playlists."></a>
   <br>
-  <sub>King Crimson, The Court of the Crimson King: lyrics found on Genius, alongside the track list and playlists.</sub>
+  <sub>King Crimson, The Court of the Crimson King: lyrics found through lyrics.ovh and saved for offline reading, alongside the track list and playlists.</sub>
 </p>
 
 <p align="center"><img src="docs/images/readme/divider.svg" width="100%" alt=""></p>
@@ -100,9 +100,9 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-help-search.png"><img src="docs/images/almavorn-help-search.png" width="100%" alt="Search Help in your own words: &quot;move a window&quot; finds the layout controls and shows your current shortcuts."></a>
+  <a href="docs/images/almavorn-help-search.png"><img src="docs/images/almavorn-help-search.png" width="100%" alt="Help search highlights matching words and shows actions for saving lyrics, with your current shortcuts."></a>
   <br>
-  <sub>Search Help in your own words: "move a window" finds the layout controls and shows your current shortcuts.</sub>
+  <sub>Help search highlights matching words and shows actions for saving lyrics, with your current shortcuts.</sub>
 </p>
 
 <p align="center">

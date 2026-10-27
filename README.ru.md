@@ -14,9 +14,9 @@
 <p align="center"><a href="#install">Установить</a> &nbsp; · &nbsp; <a href="#screenshots">Скриншоты</a> &nbsp; · &nbsp; <a href="#first-launch">Первый&nbsp;запуск</a> &nbsp; · &nbsp; <a href="#help">Помочь&nbsp;проекту</a></p>
 
 <p align="center">
-  <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: текст найден в Genius и открыт рядом с композицией и плейлистами."></a>
+   <a href="docs/images/almavorn-lyrics-panel.png"><img src="docs/images/almavorn-lyrics-panel.png" width="100%" alt="King Crimson, The Court of the Crimson King: текст найден через lyrics.ovh и сохранен для чтения без интернета. Рядом остаются композиции и плейлисты."></a>
   <br>
-  <sub>King Crimson, The Court of the Crimson King: текст найден в Genius и открыт рядом с композицией и плейлистами.</sub>
+  <sub>King Crimson, The Court of the Crimson King: текст найден через lyrics.ovh и сохранен для чтения без интернета. Рядом остаются композиции и плейлисты.</sub>
 </p>
 
 <p align="center"><img src="docs/images/readme/divider.svg" width="100%" alt=""></p>
@@ -100,9 +100,9 @@
 </p>
 
 <p align="center">
-  <a href="docs/images/almavorn-help-search.png"><img src="docs/images/almavorn-help-search.png" width="100%" alt="Поиск в помощи своими словами: запрос &quot;передвинуть окно&quot; находит настройку блоков и показывает ваши горячие клавиши."></a>
+  <a href="docs/images/almavorn-help-search.png"><img src="docs/images/almavorn-help-search.png" width="100%" alt="Поиск в помощи: запрос &quot;сохранить текст&quot; находит нужные действия, выделяет совпадения и показывает ваши клавиши."></a>
   <br>
-  <sub>Поиск в помощи своими словами: запрос "передвинуть окно" находит настройку блоков и показывает ваши горячие клавиши.</sub>
+  <sub>Поиск в помощи: запрос "сохранить текст" находит нужные действия, выделяет совпадения и показывает ваши клавиши.</sub>
 </p>
 
 <p align="center">
