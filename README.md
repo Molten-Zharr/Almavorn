@@ -30,7 +30,7 @@
   **It's all built in!**
 - Two modes: **Order** protects playlists from accidental edits.
   Switch to **Chaos** to add tracks straight to playlists and folders!
-- The **GUITUI** approach brings terminal and graphical interfaces together. Text panels and keyboard shortcuts form the foundation; a graphics layer adds cover art, waveforms, animations, and large mouse-operated buttons. Text and graphics share one window, while graphical elements can extend beyond the character grid.
+- The **GUITUI** approach brings terminal and graphical interfaces together. Text panels and keyboard shortcuts form the foundation. A graphics layer adds cover art, waveforms, animations, and large mouse-operated buttons. Text and graphics share one window, while graphical elements can extend beyond the character grid.
 
 Suggestions and feedback are welcome. We're only getting started, and we hope you'll enjoy the player!
 
@@ -131,16 +131,16 @@ Choose a GIF background under F2, "Themes", "Animation", "Background GIF". "Back
 Choose "Edit layout" in "More", or press Ctrl+B. Controls will appear on the panel headers:
 
 - "[↕]" lets you drag a block. You can also drag its title.
-- "[-]" collapses a block; "[+]" expands it again.
+- "[-]" collapses a block, and "[+]" expands it again.
 - "[x]" hides a block.
 
 Where you drop a block determines what happens: drop it at the edge of another panel to place it beside that panel, or in the center to swap them. Drag the shared border between panels to resize them.
 
 "Show blocks/buttons" in the "More" menu opens the list of blocks and buttons. You can bring back a hidden panel or hide individual buttons you don't need. "Restore default layout" is there too.
 
-You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow keys to swap it with a neighboring block, or Ctrl+Shift+arrow keys to resize it. Ctrl+Alt+Space collapses or expands the block; Ctrl+Alt+Delete hides it.
+You can also use the keyboard: select a block with Tab, then use Ctrl+Alt+arrow keys to swap it with a neighboring block, or Ctrl+Shift+arrow keys to resize it. Ctrl+Alt+Space collapses or expands the block. Ctrl+Alt+Delete hides it.
 
-Your layout is saved automatically. Press Ctrl+B or click "Edit layout" again to finish. During a drag, Esc cancels that move; otherwise, it exits layout mode.
+Your layout is saved automatically. Press Ctrl+B or click "Edit layout" again to finish. During a drag, Esc cancels that move. Otherwise, it exits layout mode.
 
 </details>
 
@@ -197,26 +197,40 @@ Paste the command straight into your terminal.
 
 **tar.gz** is an archive with an installer and an application menu shortcut.
 
-**How to update:** If you installed the player with the command above, run it again; otherwise, download the same type of file you chose originally.
+**How to update:** If you installed the player with the command above, run it again. Otherwise, download the same type of file you chose originally.
 
 <a id="first-launch"></a>
 
 ## <img src="docs/images/readme/keyboard.svg" width="24" height="24" alt=""> First launch
 
-F2 opens Settings; F1 opens the full help guide. In Settings, hover over an option and press F1 to read its description without changing the value. When navigating with the keyboard, F1 explains the selected option.
+F2 opens Settings. F1 opens the full help guide.
 
-Choose your toolbar buttons in "Settings > General > Quick access": pin individual buttons, show all or hide all. Other commands stay in "More", opened with Alt+5 by default. When every button fits on the toolbar, "More" disappears. Only layout editing appears automatically while active. Playback controls appear here only when pinned. Your choices are saved in the profile.
+In Settings, hover over an option and press F1 to read its description without changing the value. If you use the keyboard, F1 explains the selected option.
 
-Shortcut labels on buttons are hidden by default; the shortcuts still work. Enable labels under F2, "General", "Shortcuts on buttons". The same section offers "Player button size": compact, normal or large. The square buttons and their icons grow together; shortcut labels appear below. Normal is the default.
+Choose your toolbar buttons in "Settings > General > Quick access". Pin the buttons you need, or show or hide them all. Your choices are saved in the profile.
 
-In Statistics, choose a category and sorting from the drop-down lists. Click a column heading to sort; click again to reverse the order. "More" opens overall totals, details about the selected row and the play-counting rules.
+Other commands stay in "More", which opens with Alt+5 by default. When all buttons are on the toolbar and fit, "More" disappears.
 
-Search Help in your own words: "make it louder", "recover a deleted song", or "move a panel". Search works offline and recognizes synonyms, word endings, and small typos. Results highlight matching words and show your current shortcuts; press Enter to open the explanation. Button names stand out in color, and longer instructions are split into steps. Complete matches take priority; partial suggestions appear when no complete answer is found.
+Only the layout editing button appears automatically while that mode is active. Playback controls appear on the toolbar only when you pin them.
+
+Shortcut labels on buttons are hidden by default. The shortcuts still work. To show labels, press F2 and open "General", then "Shortcuts on buttons".
+
+Choose compact, normal or large under "Player button size" in the same section. Normal is the default. The square buttons and their icons grow together, with shortcut labels below.
+
+In Statistics, choose a category and sorting from the drop-down lists. You can also click a column heading to sort, then click it again to reverse the order.
+
+Open "More" for overall totals, details about the selected row and an explanation of how plays are counted.
+
+Search Help in your own words: "make it louder", "recover a deleted song" or "move a panel". Search works offline and recognizes synonyms, word endings and small typos.
+
+Results highlight matching words and show your current shortcuts. Press Enter to open the explanation. Button names stand out in color, and longer instructions are split into steps.
+
+Complete matches come first. If none are found, Help shows partial matches.
 
 ### Create a playlist from a folder
 
 1. At the top, open "Add to desk" and choose "Folders to playlists".
-2. Find your music folder. Double-click or press Enter to open a folder; "Parent" takes you up one level. The current path appears at the top of the window, for example "/home/anna/Music".
+2. Find your music folder. Double-click or press Enter to open a folder. "Parent" takes you up one level. The current path appears at the top of the window, for example "/home/anna/Music".
 3. Check the box next to a folder, or select it and press Insert. You can mark several folders at once: each becomes its own playlist!
 4. Enable "Subfolders as groups" to include music from nested folders. Without it, only files directly inside the marked folders are added.
 5. Click "Create playlists" or press Ctrl+Enter. The playlists will appear in the list, named after the folders you selected.
@@ -235,13 +249,14 @@ The sorting desk helps you organize music before adding it to permanent playlist
 ### Other useful controls
 
 - Ctrl+click the title in the player to copy "Artist - Title".
-- F4 opens the equalizer; F5 opens speed, tempo, and pitch settings.
+- F4 opens the equalizer, and F5 opens speed, tempo, and pitch settings.
 - F7 opens statistics, F8 the tag editor, and F9 song lyrics.
-- / searches playlists; Ctrl+F filters the current playlist.
+- Use / to search playlists and Ctrl+F to filter the current playlist.
 - Ctrl+B enables layout editing. Drag a block by its title, drag a border to resize it, then click "Done".
 - Insert marks tracks, Ctrl+Enter plays only the marked tracks, and Ctrl+U returns to the whole playlist.
-- Ctrl+Z undoes an action; Ctrl+Y redoes it, in Chaos and on the sorting desk.
-- Tab switches panels; right-click opens the action menu. Esc closes the open window; in the file picker, it clears the filter first.
+- In Chaos and on the sorting desk, Ctrl+Z undoes an action and Ctrl+Y redoes it.
+- Tab switches panels, and right-click opens the action menu.
+- Esc closes the open window. In the file picker, it clears the filter first.
 
 These are the default keys. Set your own shortcuts under F2, "Shortcuts".
 
