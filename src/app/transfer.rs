@@ -151,6 +151,11 @@ impl App {
             return Ok(());
         }
         let key = key.normalized();
+        if matches!(&self.view.dialog, Some(Dialog::Transfer(view)) if view.confirm.is_some())
+            && key.key == Key::Enter && (key.ctrl || key.alt)
+        {
+            return Ok(());
+        }
         if matches!(&self.view.dialog, Some(Dialog::Transfer(view)) if view.confirm.is_none()) {
             if self
                 .settings
