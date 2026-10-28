@@ -38,7 +38,9 @@ pub(super) fn render(
     let preparing = app.downloads.preparing.load(Ordering::Relaxed);
     let selected = app.downloads.rows.get(view.selected);
     let active = selected.is_some_and(|r| app.downloads.active.as_deref() == Some(&r.id));
-    let controls = if view.remove.is_some() {
+    let error = app.downloads.error.as_ref()
+        .or_else(|| selected.and_then(|row| row.error.as_ref()));
+    let mut controls = if view.remove.is_some() {
         vec![
             control(app.text("Cancel [Enter]", "Отмена [Enter]"), A::Back, true),
             control(
@@ -122,6 +124,11 @@ pub(super) fn render(
             control(app.text("Close", "Закрыть"), A::Back, true),
         ]
     };
+    if view.remove.is_none() && error.is_some() {
+        controls.insert(controls.len().saturating_sub(1), control(
+            app.text("Copy error", "Скопировать ошибку"), A::CopyError, true,
+        ));
+    }
     let height = buttons_height(app, inner.width, &controls)
         .max(2)
         .min(inner.height - 4);
@@ -184,11 +191,6 @@ pub(super) fn render(
         Paragraph::new(hint).style(palette.text().fg(palette.muted)),
         Rect::new(inner.x, inner.y + 1, inner.width, 1),
     );
-    let error = app
-        .downloads
-        .error
-        .as_ref()
-        .or_else(|| selected.and_then(|r| r.error.as_ref()));
     let notice = selected.and_then(|r| r.notice.as_ref());
     let detail = error.or(notice);
     let error_height = if detail.is_some() {

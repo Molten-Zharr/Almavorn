@@ -112,6 +112,7 @@ pub enum DownloadAction {
     Remove,
     ConfirmRemove,
     Import,
+    CopyError,
     History,
     Back,
 }
@@ -503,6 +504,12 @@ impl App {
         let selected = view.selected;
         let search = view.search;
         match action {
+            DownloadAction::CopyError => {
+                let error = self.downloads.error.as_ref()
+                    .or_else(|| self.downloads.rows.get(selected).and_then(|row| row.error.as_ref()))
+                    .context("Нет ошибки для копирования.")?;
+                self.view.clipboard_text = Some(error.clone());
+            }
             DownloadAction::History => {
                 view.search = false;
                 view.selected = 0;

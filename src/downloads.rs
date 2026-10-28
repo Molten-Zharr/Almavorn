@@ -278,7 +278,8 @@ pub(crate) fn command(_data: &Path) -> Result<Command> {
         "--ignore-config",
         "--no-plugin-dirs",
         "--no-playlist",
-        "--no-warnings",
+        "--color",
+        "never",
         "--socket-timeout",
         "20",
         "--retries",
@@ -295,23 +296,39 @@ pub(crate) fn command(_data: &Path) -> Result<Command> {
     Ok(command)
 }
 fn failed(stderr: &[u8]) -> anyhow::Error {
-    let message = String::from_utf8_lossy(stderr).to_lowercase();
-    anyhow::anyhow!(
-        if message.contains("sign in") || message.contains("login required") {
-            "Для этой записи нужен вход в сервис. Подключите аккаунт или выберите общедоступную запись."
-        } else if message.contains("unsupported url") {
-            "Этот источник пока не поддерживается компонентом загрузки."
-        } else if message.contains("429") {
-            "Сервис ограничил запросы. Повторите загрузку позже."
-        } else if message.contains("javascript")
-            || message.contains("challenge")
-            || message.contains("ejs")
-        {
-            "Обновите компоненты загрузки и повторите действие."
-        } else {
-            "Не удалось получить запись. Проверьте ссылку или обновите компоненты загрузки."
-        }
-    )
+    let output = String::from_utf8_lossy(stderr);
+    // Classify the actual error, not a warning or an authentication hint elsewhere
+    // in stderr. YouTube's bot check also contains the words "sign in".
+    let detail = output.lines().rev().map(str::trim)
+        .find(|line| line.starts_with("ERROR:"))
+        .or_else(|| output.lines().rev().map(str::trim).find(|line| !line.is_empty()))
+        .unwrap_or("");
+    let message = detail.to_lowercase();
+    let explanation = if message.contains("not a bot") || message.contains("captcha") {
+        "Сайт отклонил запрос yt-dlp при проверке на бота. Это не означает, что запись закрыта. Обновите компоненты загрузки и повторите."
+    } else if message.contains("429") || message.contains("too many requests") {
+        "Сервис ограничил запросы. Повторите загрузку позже."
+    } else if message.contains("private video") || message.contains("video is private")
+        || message.contains("members-only") || message.contains("members only")
+    {
+        "Источник ограничил доступ к записи. Проверьте, доступна ли она вам на самом сайте."
+    } else if message.contains("confirm your age") || message.contains("age-restricted") {
+        "Для этой записи сайт требует подтверждения возраста. Вход в музыкальные сервисы плеера не передает авторизацию в yt-dlp."
+    } else if message.contains("sign in") || message.contains("login required") {
+        "Сайт запросил авторизацию для yt-dlp. Подключение музыкального аккаунта в плеере не авторизует загрузчик."
+    } else if message.contains("unsupported url") {
+        "Этот источник пока не поддерживается компонентом загрузки."
+    } else if message.contains("javascript") || message.contains("challenge") || message.contains("ejs") {
+        "Загрузчик не смог обработать страницу. Обновите компоненты загрузки и повторите действие."
+    } else {
+        "Не удалось получить запись. Проверьте ссылку или обновите компоненты загрузки."
+    };
+    // Keep the source error in download history, but not a traceback or the long
+    // generic cookie instructions. The first line remains the user-facing summary.
+    let detail = detail.split(". Use --cookies").next().unwrap_or(detail)
+        .chars().filter(|c| !c.is_control()).take(800).collect::<String>();
+    if detail.is_empty() { anyhow::anyhow!(explanation) }
+    else { anyhow::anyhow!("{explanation}\n{detail}") }
 }
 
 pub fn search(data: &Path, query: &str, cancel: &AtomicBool) -> Result<Vec<SearchHit>> {
