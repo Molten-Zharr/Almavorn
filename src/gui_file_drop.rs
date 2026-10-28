@@ -3,17 +3,23 @@ use anyhow::Result;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 use std::{
     collections::HashMap,
-    io::{self, Read},
+    io::{self, Read, Write},
     os::{fd::AsFd, unix::net::UnixStream},
     path::PathBuf,
-    sync::mpsc::{self, Receiver, TryRecvError},
+    sync::{
+        Arc,
+        mpsc::{self, Receiver, TryRecvError},
+    },
     time::{Duration, Instant},
 };
 use wayland_client::{
     Connection, Dispatch, EventQueue, Proxy, QueueHandle, WEnum,
     backend::{Backend, ObjectId, WaylandError},
     delegate_noop, event_created_child,
-    protocol::{wl_data_device, wl_data_device_manager, wl_data_offer, wl_registry, wl_seat},
+    protocol::{
+        wl_data_device, wl_data_device_manager, wl_data_offer, wl_data_source, wl_pointer,
+        wl_registry, wl_seat, wl_surface,
+    },
 };
 
 const URI_LIST: &str = "text/uri-list";
@@ -28,6 +34,7 @@ pub struct WaylandDrop {
     queue: EventQueue<State>,
     state: State,
     connection: Connection,
+    origin: wl_surface::WlSurface,
 }
 
 impl WaylandDrop {
@@ -42,6 +49,14 @@ impl WaylandDrop {
         // eframe destroys its window. Workers only own sockets, never Wayland proxies.
         let backend = unsafe { Backend::from_foreign_display(display.display.as_ptr().cast()) };
         let connection = Connection::from_backend(backend);
+        // Borrow eframe's surface only as a request argument. Never destroy it.
+        let surface_id = unsafe {
+            ObjectId::from_ptr(
+                wl_surface::WlSurface::interface(),
+                window.surface.as_ptr().cast(),
+            )?
+        };
+        let origin = wl_surface::WlSurface::from_id(&connection, surface_id)?;
         let queue = connection.new_event_queue();
         connection.display().get_registry(&queue.handle(), ());
         connection.flush()?;
@@ -52,7 +67,60 @@ impl WaylandDrop {
                 ..Default::default()
             },
             connection,
+            origin,
         }))
+    }
+
+    pub fn start_drag(&mut self, uris: Arc<[u8]>) -> Result<()> {
+        self.queue.dispatch_pending(&mut self.state)?;
+        anyhow::ensure!(
+            self.state.outgoing.is_none(),
+            "{}",
+            self.state.language.text(
+                "A file drag is already active",
+                "Перетаскивание файлов уже выполняется"
+            )
+        );
+        let manager = self
+            .state
+            .manager
+            .as_ref()
+            .filter(|m| m.version() >= 3)
+            .ok_or_else(|| {
+                anyhow::anyhow!(self.state.language.text(
+                    "The desktop does not support file dragging",
+                    "Рабочий стол не поддерживает перетаскивание файлов"
+                ))
+            })?;
+        let (device, serial) = self
+            .state
+            .seats
+            .values()
+            .find_map(|seat| Some((seat.device.as_ref()?, seat.press?)))
+            .ok_or_else(|| {
+                anyhow::anyhow!(self.state.language.text(
+                    "Release the mouse button and drag the track again",
+                    "Отпустите кнопку мыши и перетащите композицию снова"
+                ))
+            })?;
+        let source = manager.create_data_source(&self.queue.handle(), uris);
+        source.offer(URI_LIST.into());
+        source.set_actions(wl_data_device_manager::DndAction::Copy);
+        device.start_drag(Some(&source), &self.origin, None, serial);
+        self.state.outgoing = Some(source);
+        self.connection.flush()?;
+        Ok(())
+    }
+
+    pub fn dragging(&self) -> bool {
+        self.state.outgoing.is_some()
+    }
+
+    pub fn cancel_drag(&mut self) {
+        if let Some(source) = self.state.outgoing.take() {
+            source.destroy();
+        }
+        let _ = self.connection.flush();
     }
 
     pub fn poll(&mut self, playlist: Option<i64>, language: Language) -> Result<Vec<DroppedFiles>> {
@@ -92,6 +160,7 @@ impl WaylandDrop {
 
 impl Drop for WaylandDrop {
     fn drop(&mut self) {
+        self.cancel_drag();
         if let Some(transfer) = self.state.transfer.take() {
             transfer.offer.destroy();
         }
@@ -103,7 +172,7 @@ impl Drop for WaylandDrop {
         }
         let _ = self.connection.flush();
         // Guest Backend also frees its registry/manager proxies without disconnecting
-        // eframe's display. No external surface is adopted by this backend.
+        // eframe's display. The borrowed origin surface is never destroyed here.
     }
 }
 
@@ -117,16 +186,23 @@ struct State {
     language: Language,
     transfer: Option<Transfer>,
     received: Vec<DroppedFiles>,
+    outgoing: Option<wl_data_source::WlDataSource>,
 }
 
 struct Seat {
     proxy: wl_seat::WlSeat,
     device: Option<wl_data_device::WlDataDevice>,
     dragging: Option<ObjectId>,
+    pointer: Option<wl_pointer::WlPointer>,
+    focused: bool,
+    press: Option<u32>,
 }
 
 impl Seat {
     fn release(self) {
+        if let Some(pointer) = self.pointer {
+            pointer.release();
+        }
         if let Some(device) = self.device
             && device.version() >= 2
         {
@@ -317,6 +393,9 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
                                 proxy,
                                 device: None,
                                 dragging: None,
+                                pointer: None,
+                                focused: false,
+                                press: None,
                             },
                         );
                     }
@@ -379,7 +458,8 @@ impl Dispatch<wl_data_device::WlDataDevice, u32> for State {
                 id: Some(id),
                 ..
             } => {
-                let matching = surface.id().as_ptr() as usize == state.surface;
+                let matching =
+                    surface.id().as_ptr() as usize == state.surface && state.outgoing.is_none();
                 if let Some(offer) = state.offers.get_mut(&id.id()) {
                     offer.accepted = matching && offer.uri_list;
                     id.accept(serial, offer.accepted.then(|| URI_LIST.into()));
@@ -441,5 +521,100 @@ impl Dispatch<wl_data_offer::WlDataOffer, ()> for State {
     }
 }
 
-delegate_noop!(State: ignore wl_seat::WlSeat);
+impl Dispatch<wl_seat::WlSeat, ()> for State {
+    fn event(
+        state: &mut Self,
+        proxy: &wl_seat::WlSeat,
+        event: wl_seat::Event,
+        _: &(),
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        if let wl_seat::Event::Capabilities {
+            capabilities: WEnum::Value(capabilities),
+        } = event
+            && let Some((&name, seat)) = state
+                .seats
+                .iter_mut()
+                .find(|(_, seat)| seat.proxy == *proxy)
+        {
+            if capabilities.contains(wl_seat::Capability::Pointer) {
+                if seat.pointer.is_none() {
+                    seat.pointer = Some(proxy.get_pointer(qh, name));
+                }
+            } else {
+                if let Some(pointer) = seat.pointer.take() {
+                    pointer.release();
+                }
+                seat.press = None;
+                seat.focused = false;
+            }
+        }
+    }
+}
+
+impl Dispatch<wl_pointer::WlPointer, u32> for State {
+    fn event(
+        state: &mut Self,
+        _: &wl_pointer::WlPointer,
+        event: wl_pointer::Event,
+        name: &u32,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        let Some(seat) = state.seats.get_mut(name) else {
+            return;
+        };
+        match event {
+            wl_pointer::Event::Enter { surface, .. } => {
+                seat.focused = surface.id().as_ptr() as usize == state.surface
+            }
+            wl_pointer::Event::Leave { .. } => {
+                seat.focused = false;
+                seat.press = None;
+            }
+            wl_pointer::Event::Button {
+                serial,
+                button: 0x110,
+                state: WEnum::Value(button),
+                ..
+            } => {
+                seat.press =
+                    (seat.focused && button == wl_pointer::ButtonState::Pressed).then_some(serial);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<wl_data_source::WlDataSource, Arc<[u8]>> for State {
+    fn event(
+        state: &mut Self,
+        source: &wl_data_source::WlDataSource,
+        event: wl_data_source::Event,
+        uris: &Arc<[u8]>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match event {
+            wl_data_source::Event::Send { mime_type, fd } if mime_type == URI_LIST => {
+                let uris = uris.clone();
+                // The target reads a pipe. Keep its I/O off the rendering thread.
+                let _ = std::thread::Builder::new()
+                    .name("almavorn-file-drag".into())
+                    .spawn(move || {
+                        let _ = std::fs::File::from(fd).write_all(&uris);
+                    });
+            }
+            wl_data_source::Event::Cancelled | wl_data_source::Event::DndFinished => {
+                if state.outgoing.as_ref() == Some(source) {
+                    state.outgoing.take();
+                    source.destroy();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 delegate_noop!(State: ignore wl_data_device_manager::WlDataDeviceManager);

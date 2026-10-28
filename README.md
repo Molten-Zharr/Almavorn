@@ -70,6 +70,8 @@ The tag editor writes changes to the audio file itself. Those changes affect tha
 - Edit titles, tags, and artwork for several tracks at once.
 - Choose a cover thumbnail size and open the original with one click.
 - Drag files straight from your file manager into the GUITUI window.
+- Show an audio file in your file manager.
+- Drag tracks from GUITUI into other applications.
 - Find and download music by name or link through "Downloads".
 - Connect music services and listen online in the same window!
 - Open keyboard help while your music keeps playing.

@@ -747,6 +747,7 @@ impl App {
             }
             Target::ResetWorkspace => self.reset_workspace()?,
             Target::Action(action) => self.action(action)?,
+            Target::RevealFile(path) => self.open_file_manager(path),
             Target::Mode(mode) => self.set_mode(mode)?,
             Target::Playlist(id) => {
                 self.view.playlist_scroll_selected = None;

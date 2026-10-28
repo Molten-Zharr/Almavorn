@@ -301,6 +301,14 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
 
     sections[C::Tracks as usize].note("Use checkboxes to select tracks for copying, moving, looping or editing tags together. A group checkbox selects its tracks matching the filter, even when collapsed.",
         "Отметьте треки галочками для копирования, переноса или правки тегов. Галочка группы отмечает подходящие под фильтр треки, даже если группа свернута.");
+    sections[C::Tracks as usize].topic(
+        "Show in file manager: right-click a track or the player and choose this command. The file manager selects the audio file. If selection is unsupported, its folder opens instead. Online tracks without local files cannot use this command.",
+        "Открыть в проводнике: нажмите ПКМ по композиции или проигрывателю и выберите эту команду. Проводник выделит аудиофайл. Если выделение не поддерживается, откроется папка с файлом. Команда недоступна для онлайн-композиций без локального файла.",
+        "проводник найти файл папка местоположение где лежит открыть dolphin thunar nautilus show reveal file manager location folder");
+    sections[C::Tracks as usize].topic(
+        "GUITUI: drag a track by its title into a file manager or another application that accepts files. Dragging a checked track sends all checked tracks in this playlist, including filtered-out ones. Dragging the title in the player sends only the playing track. Files are offered for copying, and originals stay in place. Esc cancels the drag.",
+        "В GUITUI потяните композицию за название в проводник или другое приложение, принимающее файлы. Если трек отмечен, передаются все отмеченные композиции этого плейлиста, включая скрытые фильтром. Название в проигрывателе передает только играющий трек. Файлы предлагаются для копирования, исходники остаются на месте. Esc отменяет перетаскивание.",
+        "перетащить наружу мышью отправить музыку файл файлы drag drop export send share copy files");
     sections[C::Tracks as usize].topic("Group menu: right-click its heading.\n• Collapse the group or check all its tracks.\n• Remove the whole group after confirmation. Music files stay on disk.\n• Enable editing of a protected playlist.\nGroup commands also include tracks hidden by the filter.",
         "Меню группы: нажмите ПКМ по ее заголовку.\n• Сверните группу или отметьте все ее композиции.\n• Уберите всю группу после подтверждения. Музыкальные файлы останутся на диске.\n• Включите редактирование защищенного плейлиста.\nКоманды группы учитывают и скрытые фильтром треки.",
         "удалить убрать всю группу папку альбом контекстное меню пкм remove delete folder group album right click context menu");
@@ -1225,6 +1233,10 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         (
             "Ctrl+left-click the title in the player to copy Artist - Title. If the artist or title is missing, copy the available text.",
             "Ctrl+ЛКМ по названию в проигрывателе копирует Исполнитель - Название. Если исполнитель или название не указаны, копируется имеющийся текст.",
+        ),
+        (
+            "GUITUI: drag a local track by its title into another application to copy its file. A checked track drags the whole checked set. Dragging the player title sends only the playing track. Esc cancels.",
+            "В GUITUI потяните локальный трек за название в другое приложение, чтобы скопировать файл. Отмеченный трек передает весь отмеченный набор. Название в проигрывателе передает только играющий трек. Esc отменяет перетаскивание.",
         ),
         (
             "Hover over a setting to select its description, then press F1 to read it. Hovering does not change the value.",

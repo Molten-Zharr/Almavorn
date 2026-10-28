@@ -47,6 +47,7 @@ impl Sort {
 pub enum Target {
     Artwork,
     PlayingTrack,
+    RevealFile(std::path::PathBuf),
     Form(super::FormAction),
     Lyrics(super::LyricsAction),
     LyricsPanel(super::lyrics::PanelAction),

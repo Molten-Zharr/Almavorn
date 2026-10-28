@@ -85,6 +85,7 @@ def build_flatpak(package, binary, stage):
     # Audio files can be anywhere, including removable drives. Tag editing needs writes.
     permissions = ["--socket=pulseaudio", "--filesystem=host",
                    "--share=network", "--talk-name=org.freedesktop.secrets",
+                   "--talk-name=org.freedesktop.FileManager1",
                    "--own-name=org.mpris.MediaPlayer2.almavorn.*"]
     if binary == "almavorn":
         permissions += ["--socket=wayland", "--socket=fallback-x11", "--share=ipc", "--device=dri"]

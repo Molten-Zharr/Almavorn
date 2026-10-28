@@ -17,7 +17,7 @@ strip = "debuginfo"
 
 [features]
 default = ["guitui"]
-guitui = ["dep:eframe", "dep:egui_ratatui", "dep:soft_ratatui", "dep:rustc-hash", "dep:wayland-client", "dep:raw-window-handle"]
+guitui = ["dep:eframe", "dep:egui_ratatui", "dep:soft_ratatui", "dep:rustc-hash", "dep:wayland-client", "dep:raw-window-handle", "dep:x11rb"]
 tui = ["dep:crossterm", "ratatui/crossterm"]
 
 [[bin]]
@@ -77,5 +77,6 @@ rhai = { version = "1.27", features = ["serde", "sync"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 wayland-client = { version = "0.31.15", features = ["system", "dlopen"], optional = true }
 raw-window-handle = { version = "0.6.2", optional = true }
+x11rb = { version = "0.13.2", optional = true }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 url = "2"

@@ -13,6 +13,10 @@ mod gui_fonts;
 mod gui_renderer;
 #[cfg(target_os = "linux")]
 mod gui_file_drop;
+#[cfg(target_os = "linux")]
+mod gui_file_drag;
+#[cfg(target_os = "linux")]
+mod gui_file_drag_x11;
 use std::time::{Duration, Instant};
 
 struct PlayerUi<F>(Option<F>);
@@ -81,12 +85,15 @@ fn run() -> Result<()> {
     let mut color_painter = gui_color_picker::ColorPickerPainter::default();
     #[cfg(target_os = "linux")]
     let (mut wayland_drop, mut drop_initialized) = (None, false);
+    #[cfg(target_os = "linux")]
+    let mut file_drag = gui_file_drag::FileDrag::default();
     let render = move |root: &mut egui::Ui, _frame: &mut eframe::Frame| {
         let ctx = root.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(16));
         #[cfg(target_os = "linux")]
         if !drop_initialized {
             drop_initialized = true;
+            file_drag = gui_file_drag::FileDrag::new(_frame);
             match gui_file_drop::WaylandDrop::new(_frame) {
                 Ok(receiver) => wayland_drop = receiver,
                 Err(error) => drop_failure(&mut app, error),
@@ -256,6 +263,13 @@ fn run() -> Result<()> {
                         Some(Target::Playlist(id)) if app.playlist_movable(*id) => {
                             egui::CursorIcon::Grab
                         }
+                        Some(Target::Track(_)) if app.view.dialog.is_none() && !app.view.layout_editing => {
+                            egui::CursorIcon::Grab
+                        }
+                        Some(Target::PlayingTrack) if app.view.dialog.is_none() && !app.view.layout_editing
+                            && app.playback.current.as_ref().is_some_and(|track| track.path.is_absolute()) => {
+                            egui::CursorIcon::Grab
+                        }
                         Some(
                             Target::PlaybackVolume(_)
                             | Target::Seek(_)
@@ -352,6 +366,10 @@ fn run() -> Result<()> {
                     )
                 });
                 for event in events {
+                    #[cfg(target_os = "linux")]
+                    if file_drag.event(&event, &mut app, &mut wayland_drop, to_cell, down, &mut previous_click) {
+                        continue;
+                    }
                     if handle_pointer_event(
                         &mut app,
                         image_rect,
@@ -461,6 +479,8 @@ fn run() -> Result<()> {
                         }
                     }
                 }
+                #[cfg(target_os = "linux")]
+                file_drag.poll(&mut app, &ctx, &wayland_drop);
             });
         if let Some(text) = app.view.clipboard_text.take() {
             ctx.copy_text(text);

@@ -347,6 +347,13 @@ impl App {
             });
         }
         if menu == CommandMenu::Tracks {
+            if let Some(entry) = self.entry() {
+                items.push(CommandItem {
+                    label: self.text("Show in file manager", "Открыть в проводнике").into(),
+                    target: Target::RevealFile(entry.track.path.clone()),
+                    enabled: entry.track.path.is_absolute(),
+                });
+            }
             let position = items.iter().position(|item| matches!(item.target, Target::Action(Action::Lyrics))).map_or(items.len(), |index| index + 1);
             items.insert(position, CommandItem {
                 label: format!("[{}] {}", if self.settings.preferences.lyrics.show_panel { 'x' } else { ' ' }, self.text("Show lyrics", "Показывать текст")),
@@ -354,6 +361,13 @@ impl App {
             });
         }
         if menu == CommandMenu::Player {
+            if let Some(track) = &self.playback.current {
+                items.push(CommandItem {
+                    label: self.text("Show in file manager", "Открыть в проводнике").into(),
+                    target: Target::RevealFile(track.path.clone()),
+                    enabled: track.path.is_absolute(),
+                });
+            }
             items.push(CommandItem {
                 label: format!("[{}] {}", if self.settings.preferences.appearance.show_player_special_buttons { 'x' } else { ' ' }, self.text("Show special buttons", "Показывать спецкнопки")),
                 target: Target::TogglePlayerSpecialButtons, enabled: true,
@@ -371,7 +385,7 @@ impl App {
             CommandMenu::Add => &[("Destination", "Куда добавлять"), ("Add music", "Добавление музыки"), ("Playlists", "Плейлисты"), ("Update", "Обновление")],
             CommandMenu::Playlist => &[("Create", "Создание"), ("Edit", "Редактирование"), ("Order", "Порядок"), ("Folders", "Папки")],
             CommandMenu::Tracks => &[("Playback", "Прослушивание"), ("Selection", "Отметки"), ("Edit", "Редактирование"), ("Information", "Сведения"), ("Update", "Обновление"), ("Lyrics", "Текст песни"), ("Navigation", "Навигация")],
-            CommandMenu::Player => &[("Playback", "Воспроизведение"), ("Modes", "Режимы"), ("Sound", "Звук"), ("Lyrics", "Текст песни"), ("Appearance", "Оформление")],
+            CommandMenu::Player => &[("Playback", "Воспроизведение"), ("Modes", "Режимы"), ("Sound", "Звук"), ("Lyrics", "Текст песни"), ("Appearance", "Оформление"), ("File", "Файл")],
             CommandMenu::Application => &[("Mode", "Режим"), ("Music services", "Музыкальные сервисы"), ("Appearance", "Оформление"), ("Information", "Информация")],
             _ => return items,
         };
@@ -387,6 +401,7 @@ impl App {
             (CommandMenu::Tracks, Target::Action(TogglePlay | PlayMarked | PlayWholePlaylist)) => 0,
             (CommandMenu::Tracks, Target::Action(Mark)) => 1,
             (CommandMenu::Tracks, Target::Action(Metadata)) => 3,
+            (CommandMenu::Tracks, Target::RevealFile(_)) => 3,
             (CommandMenu::Tracks, Target::Action(AddNew)) => 4,
             (CommandMenu::Tracks, Target::Action(Lyrics) | Target::ToggleLyricsPanel) => 5,
             (CommandMenu::Tracks, Target::Action(Sort | Search | Filter)) => 6,
@@ -395,6 +410,7 @@ impl App {
             (CommandMenu::Player, Target::Action(CycleRepeat | PlayWholePlaylist | ToggleShuffle)) => 1,
             (CommandMenu::Player, Target::Action(Equalizer | PlaybackTuner | VolumeDown | VolumeUp)) => 2,
             (CommandMenu::Player, Target::Action(Lyrics)) => 3,
+            (CommandMenu::Player, Target::RevealFile(_)) => 5,
             (CommandMenu::Player, _) => 4,
             (CommandMenu::Application, Target::Mode(_)) => 0,
             (CommandMenu::Application, Target::Action(Services | Downloads | Mods)) => 1,

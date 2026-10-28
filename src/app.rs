@@ -8,6 +8,7 @@ mod color_picker;
 mod commands;
 mod context;
 mod database;
+mod desktop;
 mod dialogs;
 mod downloads;
 mod equalizer;
@@ -86,6 +87,8 @@ pub struct App {
     session: session::SessionPersistence,
     tags: tags::TagsState,
     search_job: background::LatestJob<search::SearchRequest, Vec<search::SearchHit>>,
+    file_manager: background::LatestJob<std::path::PathBuf, Option<std::process::Child>>,
+    file_manager_processes: Vec<std::process::Child>,
     command_program: std::path::PathBuf,
     #[cfg(unix)]
     remote: Option<crate::remote::Server>,
@@ -135,6 +138,8 @@ impl App {
             session: Default::default(),
             tags: Default::default(),
             search_job: Default::default(),
+            file_manager: Default::default(),
+            file_manager_processes: Vec::new(),
             command_program: std::env::current_exe()
                 .context("Cannot locate Almavorn executable")?,
             #[cfg(unix)]
@@ -201,6 +206,7 @@ impl App {
         self.tick_playback()?;
         self.tick_seek()?;
         self.tick_artwork();
+        self.tick_file_manager();
         self.tick_gif_background();
         self.tick_waveform();
         self.poll_import()?;

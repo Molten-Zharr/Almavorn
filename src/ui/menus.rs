@@ -24,6 +24,10 @@ pub(super) fn hint(app: &App) -> Option<String> {
         .and_then(|index| items.get(index))
         .or_else(|| items.get(*selected))?;
     let description = match item.target {
+        Target::RevealFile(_) => app.text(
+            "Show this audio file in your file manager. Online tracks have no local file.",
+            "Показать аудиофайл в проводнике. У онлайн-композиций нет локального файла.",
+        ),
         Target::GroupAction(action) => match action {
             crate::app::GroupAction::Collapse => app.text("Expand or collapse this group.", "Развернуть или свернуть эту группу."),
             crate::app::GroupAction::Mark => app.text("Check or uncheck every track in this group, including tracks hidden by the filter.", "Отметить или снять отметки со всей группы, включая скрытые фильтром композиции."),
