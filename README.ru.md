@@ -11,6 +11,14 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.ru.md">Русский</a></p>
 
+<p align="center">
+  <a href="https://github.com/Molten-Zharr/Almavorn/releases/latest"><img src="https://img.shields.io/github/v/release/Molten-Zharr/Almavorn?style=flat-square&amp;labelColor=000000&amp;color=790000&amp;label=%D1%80%D0%B5%D0%BB%D0%B8%D0%B7" height="20" alt="Последний выпуск Almavorn"></a>
+  <img src="https://img.shields.io/badge/%D0%9E%D0%A1-Linux-790000?style=flat-square&amp;labelColor=000000&amp;color=790000" height="20" alt="Операционная система: Linux">
+  <img src="https://img.shields.io/badge/%D0%B8%D0%BD%D1%82%D0%B5%D1%80%D1%84%D0%B5%D0%B9%D1%81-GUITUI%20%2B%20TUI-790000?style=flat-square&amp;labelColor=000000&amp;color=790000" height="20" alt="Интерфейсы: GUITUI + TUI">
+  <a href="Cargo.toml"><img src="https://img.shields.io/badge/%D0%BA%D0%BE%D0%B4-Rust-790000?style=flat-square&amp;labelColor=000000&amp;color=790000" height="20" alt="Написан на Rust"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Molten-Zharr/Almavorn?style=flat-square&amp;labelColor=000000&amp;color=790000&amp;label=%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F" height="20" alt="Лицензия MIT"></a>
+</p>
+
 <p align="center"><a href="#install">Установить</a> &nbsp; · &nbsp; <a href="#screenshots">Скриншоты</a> &nbsp; · &nbsp; <a href="#first-launch">Первый&nbsp;запуск</a> &nbsp; · &nbsp; <a href="#help">Помочь&nbsp;проекту</a></p>
 
 <p align="center">
