@@ -121,6 +121,33 @@ pub(super) fn render(
             !app.downloads_loading(),
         ),
     ];
+    let cobalt_help = app.text(
+        "Get the API address and key from a Cobalt server owner. There is no public API. Guides for your own server:",
+        "Адрес API и ключ дает владелец сервера Cobalt. Общедоступного API нет. Инструкции для своего сервера:",
+    );
+    let cobalt_controls = vec![
+        control(
+            app.text("API address guide · Ctrl+1", "Адрес API: инструкция · Ctrl+1"),
+            A::CobaltApiGuide,
+            true,
+        ),
+        control(
+            app.text("API key guide · Ctrl+2", "Ключ API: инструкция · Ctrl+2"),
+            A::CobaltKeyGuide,
+            true,
+        ),
+    ];
+    let settings_hint = app.text(
+        "An empty key keeps the saved key. Missing folders are created automatically.",
+        "Пустое поле ключа сохраняет прежний ключ. Папка создается автоматически.",
+    );
+    let cobalt_help_height = Paragraph::new(cobalt_help)
+        .wrap(Wrap { trim: false })
+        .line_count(width.max(1)) as u16;
+    let cobalt_controls_height = buttons_height(app, width, &cobalt_controls);
+    let settings_hint_height = Paragraph::new(settings_hint)
+        .wrap(Wrap { trim: false })
+        .line_count(width.max(1)) as u16;
     let footer_controls = vec![
         control(
             if new {
@@ -146,7 +173,7 @@ pub(super) fn render(
         + if new {
             3 + engine_height
         } else if settings {
-            2
+            cobalt_help_height + cobalt_controls_height + settings_hint_height
         } else {
             0
         }
@@ -212,6 +239,22 @@ pub(super) fn render(
                 palette,
             );
         }
+        if settings && index == 0 {
+            frame.render_widget(
+                Paragraph::new(cobalt_help)
+                    .style(palette.text().fg(palette.muted))
+                    .wrap(Wrap { trim: false }),
+                Rect::new(inner.x, y, inner.width, cobalt_help_height),
+            );
+            y += cobalt_help_height;
+            y += buttons(
+                frame,
+                app,
+                Rect::new(inner.x, y, inner.width, cobalt_controls_height),
+                cobalt_controls.clone(),
+                palette,
+            );
+        }
     }
     if new {
         let title = if form.selected == 3 {
@@ -253,15 +296,12 @@ pub(super) fn render(
         y += 2;
     } else if settings {
         frame.render_widget(
-            Paragraph::new(app.text(
-                "An empty key keeps the saved key. Missing folders are created automatically.",
-                "Пустое поле ключа сохраняет прежний ключ. Новая папка создается автоматически.",
-            ))
-            .style(palette.text().fg(palette.muted))
-            .wrap(Wrap { trim: false }),
-            Rect::new(inner.x, y, inner.width, 2),
+            Paragraph::new(settings_hint)
+                .style(palette.text().fg(palette.muted))
+                .wrap(Wrap { trim: false }),
+            Rect::new(inner.x, y, inner.width, settings_hint_height),
         );
-        y += 2;
+        y += settings_hint_height;
     }
     let remaining = footer.y.saturating_sub(y);
     if let Some(error) = &form.error {

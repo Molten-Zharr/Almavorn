@@ -70,6 +70,8 @@ pub enum FormAction {
     DownloadDefaultFolder,
     DownloadEngine(crate::downloads::Engine),
     DownloadSettings,
+    CobaltApiGuide,
+    CobaltKeyGuide,
     SpotifyDashboard,
     SpotifyRedirect,
     SpotifyNext,
@@ -213,6 +215,13 @@ impl App {
             }
             if key.key == Key::Enter && !form.fields[form.selected].checkbox {
                 return self.form_action(FormAction::Save);
+            }
+        }
+        if matches!(form.purpose, FormPurpose::DownloadSettings) && key.ctrl {
+            match key.key {
+                Key::Char('1') => return self.form_action(FormAction::CobaltApiGuide),
+                Key::Char('2') => return self.form_action(FormAction::CobaltKeyGuide),
+                _ => {},
             }
         }
         if let FormPurpose::SpotifyConnect(_, step) = form.purpose {
@@ -367,6 +376,17 @@ impl App {
             FormAction::DownloadEngine(engine) if matches!(form.purpose, FormPurpose::DownloadNew(_)) => {
                 form.fields[3].value = (engine == crate::downloads::Engine::Cobalt).to_string();
                 form.error = None;
+            }
+            FormAction::CobaltApiGuide | FormAction::CobaltKeyGuide
+                if matches!(form.purpose, FormPurpose::DownloadSettings) =>
+            {
+                let link = match action {
+                    FormAction::CobaltApiGuide => "https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md",
+                    _ => "https://github.com/imputnet/cobalt/blob/main/docs/protect-an-instance.md#configure-api-keys",
+                };
+                if let Err(error) = super::services::open_service_page(link) {
+                    form.error = Some(format!("{error}\n{link}"));
+                }
             }
             FormAction::SpotifyDashboard if matches!(form.purpose, FormPurpose::SpotifyConnect(..)) => {
                 form.error = None;

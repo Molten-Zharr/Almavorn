@@ -125,8 +125,8 @@ impl App {
         key.secret = true;
         self.open_form(
             self.text("Download settings", "Настройки загрузок"),
-            self.text("Choose the default folder. Cobalt requires an API address; yt-dlp is ready to use.",
-                "Выберите папку по умолчанию. Для Cobalt нужен адрес API; yt-dlp готов к работе."),
+            self.text("Choose the default folder. yt-dlp works without Cobalt.",
+                "Выберите папку по умолчанию. Для yt-dlp настройка Cobalt не нужна."),
             vec![
                 FormField::new(self.text("Download folder", "Папка загрузки"), self.downloads.config.directory.display().to_string()),
                 FormField::new(self.text("Cobalt API address", "Адрес API Cobalt"), self.downloads.config.cobalt_url.clone()),

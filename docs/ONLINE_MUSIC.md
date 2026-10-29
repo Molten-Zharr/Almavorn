@@ -66,6 +66,8 @@ Cancel, retry or edit pending downloads. The queue and history survive restarts;
 
 For Cobalt, enter an API address and optional key supplied by the server owner, then switch the download source to Cobalt.
 
+In Download settings, "API address guide" and "API key guide" open Cobalt's official guides in your browser. Cobalt has no public API. For your own server, follow the [setup guide](https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md) and [API key instructions](https://github.com/imputnet/cobalt/blob/main/docs/protect-an-instance.md#configure-api-keys).
+
 ## Controls
 
 Use the player's usual pause, skip, seek and volume controls. Its heading identifies the current source. Connections can be renamed, disabled, removed or signed out. Credentials are stored in the system secret store; unlock it through your desktop environment if sign-in cannot be saved.
