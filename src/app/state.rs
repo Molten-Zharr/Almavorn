@@ -52,7 +52,6 @@ pub enum Target {
     Lyrics(super::LyricsAction),
     LyricsPanel(super::lyrics::PanelAction),
     ToggleLyricsPanel,
-    ToggleArtworkSearch,
     OpenArtworkSearch,
     ArtworkSearch(super::ArtworkSearchAction),
     Downloads(super::DownloadAction),

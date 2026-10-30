@@ -1,11 +1,11 @@
 use super::{
-    App, Dialog, Target,
+    App, Dialog,
     background::{LatestJob, background},
 };
 use crate::{
     artwork::{
         ArtworkImage,
-        search::{self, Candidate, SearchProgress},
+        search::{self, Candidate, FileSnapshot, SearchProgress},
     },
     input::{Key, KeyPress},
     model::Track,
@@ -27,6 +27,7 @@ struct SearchRequest {
 #[derive(Clone, Copy)]
 pub enum ArtworkSearchAction {
     Search,
+    Track(usize),
     Select(usize),
     Save,
     ConfirmSave,
@@ -44,6 +45,8 @@ pub(crate) struct Preview {
 
 #[derive(Default)]
 pub(crate) struct ArtworkManualState {
+    pub tracks: Vec<Track>,
+    pub track_index: usize,
     pub track: Option<Track>,
     pub results: Vec<Candidate>,
     pub selected: usize,
@@ -56,9 +59,13 @@ pub(crate) struct ArtworkManualState {
     pub details: bool,
     pub details_offset: usize,
     pub progress: Option<SearchProgress>,
+    snapshot: Option<FileSnapshot>,
     search: LatestJob<SearchRequest, (Vec<Candidate>, bool)>,
     preview_job: LatestJob<(usize, Candidate), (Vec<u8>, ArtworkImage)>,
-    save_job: LatestJob<(Track, Arc<Vec<u8>>, Arc<Mutex<bool>>), Option<std::path::PathBuf>>,
+    save_job: LatestJob<
+        (Track, Arc<Vec<u8>>, Arc<Mutex<bool>>, FileSnapshot),
+        Option<std::path::PathBuf>,
+    >,
     allowed: Option<Arc<Mutex<bool>>>,
     search_cancel: Option<Arc<AtomicBool>>,
     progress_receiver: Option<mpsc::Receiver<SearchProgress>>,
@@ -66,7 +73,7 @@ pub(crate) struct ArtworkManualState {
 
 impl App {
     pub(crate) fn artwork_manual_searching(&self) -> bool {
-        self.artwork_manual.search.is_running()
+        self.artwork_manual.search.requested().is_some()
     }
     pub(crate) fn artwork_manual_loading(&self) -> bool {
         self.artwork_manual.preview_job.requested().is_some()
@@ -77,8 +84,19 @@ impl App {
 
     pub(super) fn open_artwork_search(&mut self) {
         self.cancel_artwork_manual();
-        let track = self.entry().map(|entry| entry.track.clone());
+        let mut tracks: Vec<_> = self
+            .playlist()
+            .into_iter()
+            .flat_map(|playlist| &playlist.entries)
+            .filter(|entry| self.library.marked.contains(&entry.id))
+            .map(|entry| entry.track.clone())
+            .collect();
+        if tracks.is_empty() {
+            tracks.extend(self.entry().map(|entry| entry.track.clone()));
+        }
+        let track = tracks.first().cloned();
         self.artwork_manual = ArtworkManualState {
+            tracks,
             track,
             ..Default::default()
         };
@@ -147,7 +165,6 @@ impl App {
             return Ok(());
         }
         match key.normalized().key {
-            Key::Char(' ') => self.target(Target::ToggleArtworkSearch, false)?,
             Key::Char('r') => self.artwork_search_action(ArtworkSearchAction::Search)?,
             Key::Char('s') => self.artwork_search_action(ArtworkSearchAction::Save)?,
             Key::Char('i') => self.artwork_search_action(ArtworkSearchAction::Details)?,
@@ -156,6 +173,12 @@ impl App {
             Key::Down => self.artwork_search_move(1)?,
             Key::PageUp => self.artwork_search_move(-8)?,
             Key::PageDown => self.artwork_search_move(8)?,
+            Key::Left => self.artwork_search_action(ArtworkSearchAction::Track(
+                self.artwork_manual.track_index.saturating_sub(1),
+            ))?,
+            Key::Right => self.artwork_search_action(ArtworkSearchAction::Track(
+                self.artwork_manual.track_index.saturating_add(1),
+            ))?,
             _ => {}
         }
         Ok(())
@@ -174,6 +197,25 @@ impl App {
 
     pub(super) fn artwork_search_action(&mut self, action: ArtworkSearchAction) -> Result<()> {
         match action {
+            ArtworkSearchAction::Track(index) => {
+                if self.artwork_manual_saving()
+                    || index >= self.artwork_manual.tracks.len()
+                    || index == self.artwork_manual.track_index
+                {
+                    return Ok(());
+                }
+                self.cancel_artwork_manual();
+                self.artwork_manual.track_index = index;
+                self.artwork_manual.track = self.artwork_manual.tracks.get(index).cloned();
+                self.artwork_manual.results.clear();
+                self.artwork_manual.preview = None;
+                self.artwork_manual.selected = 0;
+                self.artwork_manual.truncated = false;
+                self.artwork_manual.error = None;
+                self.artwork_manual.message = None;
+                self.artwork_manual.progress = None;
+                self.artwork_manual.snapshot = None;
+            }
             ArtworkSearchAction::Details => {
                 self.artwork_manual.details = true;
                 self.artwork_manual.details_offset = 0;
@@ -200,6 +242,14 @@ impl App {
                     );
                     return Ok(());
                 };
+                let snapshot = match FileSnapshot::read(&track.path) {
+                    Ok(snapshot) => snapshot,
+                    Err(error) => {
+                        self.artwork_manual.error = Some(format!("{error:#}"));
+                        return Ok(());
+                    }
+                };
+                self.artwork_manual.snapshot = Some(snapshot);
                 self.artwork_manual.preview_job.cancel();
                 self.artwork_manual.results.clear();
                 self.artwork_manual.preview = None;
@@ -260,6 +310,9 @@ impl App {
                 let Some(track) = self.artwork_manual.track.clone() else {
                     return Ok(());
                 };
+                let Some(snapshot) = self.artwork_manual.snapshot.clone() else {
+                    return Ok(());
+                };
                 let Some(preview) = self
                     .artwork_manual
                     .preview
@@ -270,9 +323,12 @@ impl App {
                 };
                 let allowed = Arc::new(Mutex::new(true));
                 self.artwork_manual.allowed = Some(allowed.clone());
-                self.artwork_manual
-                    .save_job
-                    .request((track, preview.bytes.clone(), allowed));
+                self.artwork_manual.save_job.request((
+                    track,
+                    preview.bytes.clone(),
+                    allowed,
+                    snapshot,
+                ));
                 self.artwork_manual.confirm_save = false;
                 self.artwork_manual.error = None;
                 self.artwork_manual.message = None;
@@ -296,12 +352,13 @@ impl App {
         });
         self.artwork_manual
             .save_job
-            .start(|(track, bytes, allowed)| {
+            .start(|(track, bytes, allowed, snapshot)| {
                 let track = track.clone();
                 let bytes = bytes.clone();
                 let allowed = allowed.clone();
+                let snapshot = snapshot.clone();
                 background(runtime, move || {
-                    search::save_manual(&track, &bytes, &allowed)
+                    search::save_manual(&track, &bytes, &allowed, &snapshot)
                 })
             });
     }
@@ -342,13 +399,7 @@ impl App {
                     }
                 }
                 Err(error) => {
-                    self.artwork_manual.error = Some(format!(
-                        "{}: {error:#}",
-                        self.text(
-                            "MusicBrainz search failed",
-                            "Не удалось выполнить поиск в MusicBrainz"
-                        )
-                    ));
+                    self.artwork_manual.error = Some(format!("{error:#}"));
                 }
             }
         }

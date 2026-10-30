@@ -18,7 +18,6 @@ pub struct ArtworkSettings {
     pub shared: bool,
     pub path: Option<PathBuf>,
     pub size: ArtworkSize,
-    pub search_online: bool,
 }
 
 impl Default for ArtworkSettings {
@@ -28,7 +27,6 @@ impl Default for ArtworkSettings {
             shared: false,
             path: None,
             size: ArtworkSize::default(),
-            search_online: true,
         }
     }
 }

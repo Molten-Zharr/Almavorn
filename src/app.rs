@@ -250,7 +250,6 @@ impl Drop for App {
         }
         self.finish_listening();
         self.downloads.cancel_all();
-        self.cancel_artwork_search();
         self.cancel_artwork_manual();
         self.services.cancel_all();
         self.mods.cancel_all();

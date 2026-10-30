@@ -57,20 +57,71 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         );
         return;
     }
-    let enabled = app.settings.preferences.artwork.search_online;
+    let count = app.artwork_manual.tracks.len();
+    let index = app.artwork_manual.track_index;
+    frame.render_widget(
+        Paragraph::new(app.text(
+            "Mark tracks in the playlist, then select one here and press Find.",
+            "Отметьте композиции в плейлисте, выберите нужную и нажмите Найти.",
+        ))
+        .style(palette.text().fg(palette.muted))
+        .wrap(Wrap { trim: true }),
+        Rect::new(inner.x, inner.y, inner.width, 2),
+    );
+    frame.render_widget(
+        Paragraph::new(app.text(
+            "MusicBrainz receives the artist and title from tags or the filename.",
+            "MusicBrainz получает исполнителя и название из тегов или имени файла.",
+        ))
+        .style(palette.text().fg(palette.muted))
+        .wrap(Wrap { trim: true }),
+        Rect::new(inner.x, inner.y + 2, inner.width, 2),
+    );
+    let track = app
+        .artwork_manual
+        .track
+        .as_ref()
+        .map(|track| {
+            let artist = clean(&track.artist);
+            let title = clean(&track.title);
+            if artist.trim().is_empty() {
+                title
+            } else {
+                format!("{artist} - {title}")
+            }
+        })
+        .unwrap_or_else(|| {
+            app.text(
+                "Select a track in the playlist",
+                "Выберите композицию в плейлисте",
+            )
+            .into()
+        });
+    frame.render_widget(
+        Paragraph::new(format!(
+            "{} {}/{}: {}",
+            app.text("Track", "Композиция"),
+            if count == 0 { 0 } else { index + 1 },
+            count,
+            track
+        ))
+        .style(palette.text().fg(palette.accent)),
+        Rect::new(inner.x, inner.y + 5, inner.width, 1),
+    );
     buttons(
         frame,
         app,
-        Rect::new(inner.x, inner.y, inner.width, 1),
+        Rect::new(inner.x, inner.y + 6, inner.width, 2),
         vec![
             (
-                format!(
-                    "[{}] {}",
-                    if enabled { 'x' } else { ' ' },
-                    app.text("Automatic search", "Автопоиск")
-                ),
-                Target::ToggleArtworkSearch,
-                true,
+                app.text("Previous track", "Предыдущая").into(),
+                Target::ArtworkSearch(A::Track(index.saturating_sub(1))),
+                index > 0 && !app.artwork_manual_saving(),
+            ),
+            (
+                app.text("Next track", "Следующая").into(),
+                Target::ArtworkSearch(A::Track(index + 1)),
+                index + 1 < count && !app.artwork_manual_saving(),
             ),
             (
                 app.text("Details", "Подробнее").into(),
@@ -80,102 +131,11 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         ],
         palette,
     );
-    let status = if !enabled {
-        app.text("Off", "Выключен").to_owned()
-    } else if let Some(track) = app.artwork_search_current() {
-        format!("{}: {}", app.text("Checking", "Проверяется"), clean(&track))
-    } else if app.artwork_search_remaining() > 0 {
-        app.text(
-            "Waiting for the next track",
-            "Ожидание следующей композиции",
-        )
-        .to_owned()
-    } else if app.artwork_search_counts().0 > 0 && app.artwork_search_remaining() == 0 {
-        app.text("Queue processed", "Очередь обработана").to_owned()
-    } else {
-        app.text("Waiting for tracks", "Ожидание композиций")
-            .to_owned()
-    };
-    frame.render_widget(
-        Paragraph::new(status).style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, inner.y + 1, inner.width, 1),
-    );
-    let (checked, added, skipped, failed) = app.artwork_search_counts();
-    let counts = format!(
-        "{} · {}: {checked} · {}: {added} · {}: {skipped} · {}: {failed} · {}: {}",
-        app.text("This session", "За запуск"),
-        app.text("Checked", "Проверено"),
-        app.text("Saved", "Сохранено"),
-        app.text("Skipped", "Пропущено"),
-        app.text("Errors", "Ошибок"),
-        app.text("Queue", "В очереди"),
-        app.artwork_search_remaining()
-    );
-    frame.render_widget(
-        Paragraph::new(counts).style(palette.text()),
-        Rect::new(inner.x, inner.y + 2, inner.width, 1),
-    );
-    let last = app.artwork_search_last().map(clean).unwrap_or_else(|| {
-        app.text(
-            "No completed checks this session",
-            "Пока нет проверенных композиций",
-        )
-        .into()
-    });
-    frame.render_widget(
-        Paragraph::new(format!("{}: {last}", app.text("Last", "Последнее")))
-            .style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, inner.y + 3, inner.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(app.text(
-            "Missing covers are saved to audio files.",
-            "Недостающие обложки сохраняются в аудиофайлы.",
-        ))
-        .style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, inner.y + 4, inner.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(app.text(
-            "MusicBrainz: artist and title · Cover Art Archive",
-            "MusicBrainz: исполнитель и название · Cover Art Archive",
-        ))
-        .style(palette.text().fg(palette.muted)),
-        Rect::new(inner.x, inner.y + 5, inner.width, 1),
-    );
-    frame.render_widget(
-        Paragraph::new(app.text("Manual search", "Ручной поиск"))
-            .style(palette.text().fg(palette.accent)),
-        Rect::new(inner.x, inner.y + 7, inner.width, 1),
-    );
-    let track = app
-        .artwork_manual
-        .track
-        .as_ref()
-        .map(|track| {
-            format!(
-                "{}: {} - {}",
-                app.text("Track", "Композиция"),
-                clean(&track.artist),
-                clean(&track.title)
-            )
-        })
-        .unwrap_or_else(|| {
-            app.text(
-                "Select a track in the library before opening this window",
-                "Выберите композицию в библиотеке перед открытием окна",
-            )
-            .into()
-        });
-    frame.render_widget(
-        Paragraph::new(track).style(palette.text()),
-        Rect::new(inner.x, inner.y + 8, inner.width, 1),
-    );
     let saving = app.artwork_manual_saving();
     let controls_height = buttons(
         frame,
         app,
-        Rect::new(inner.x, inner.y + 9, inner.width, 2),
+        Rect::new(inner.x, inner.y + 8, inner.width, 2),
         vec![
             (
                 app.text("Find", "Найти").into(),
@@ -199,7 +159,13 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         ],
         palette,
     );
-    let footer_y = inner.bottom().saturating_sub(1);
+    let footer_height =
+        if app.artwork_manual.error.is_some() || app.artwork_manual.message.is_some() {
+            4
+        } else {
+            1
+        };
+    let footer_y = inner.bottom().saturating_sub(footer_height);
     let message = if saving {
         app.text("Saving artwork…", "Сохранение обложки…")
             .to_owned()
@@ -215,20 +181,38 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         .into()
     } else {
         app.text(
-            "R: search · ↑↓: select · Enter: save · Space: automatic · Esc: close",
-            "R: поиск · ↑↓: выбор · Enter: сохранить · Пробел: автопоиск · Esc: закрыть",
+            "R: find · ←→: track · ↑↓: edition · Enter: save · Esc: close",
+            "R: найти · ←→: композиция · ↑↓: издание · Enter: сохранить · Esc: закрыть",
         )
         .into()
     };
     frame.render_widget(
-        Paragraph::new(message).style(palette.text().fg(if app.artwork_manual.error.is_some() {
-            palette.error
-        } else {
-            palette.muted
-        })),
-        Rect::new(inner.x, footer_y, inner.width, 1),
+        Paragraph::new(message)
+            .style(palette.text().fg(if app.artwork_manual.error.is_some() {
+                palette.error
+            } else {
+                palette.muted
+            }))
+            .wrap(Wrap { trim: true }),
+        Rect::new(
+            inner.x,
+            footer_y,
+            inner.width,
+            if footer_height > 1 {
+                footer_height - 1
+            } else {
+                1
+            },
+        ),
     );
-    let heading_y = inner.y + 9 + controls_height;
+    if app.artwork_manual.error.is_some() {
+        frame.render_widget(
+            Paragraph::new(app.text("Full error: Details", "Полная ошибка: Подробнее"))
+                .style(palette.text().fg(palette.muted)),
+            Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
+        );
+    }
+    let heading_y = inner.y + 8 + controls_height;
     if !app.artwork_manual.results.is_empty() && heading_y < footer_y {
         frame.render_widget(
             Paragraph::new(format!(
@@ -392,31 +376,19 @@ fn details(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         25,
         palette,
     );
-    let (checked, added, skipped, failed) = app.artwork_search_counts();
-    let mut text = format!("{}\n\n{}\n\n{}\n\n{}\n\n{}: {checked} · {}: {added} · {}: {skipped} · {}: {failed}\n\n{}\n",
-        app.text("MusicBrainz searches by artist and title. Cover Art Archive provides the image.", "MusicBrainz ищет запись по исполнителю и названию, Cover Art Archive предоставляет изображение."),
-        app.text("Album and duration are checked locally. If the match is unambiguous and the file has no cover, artwork is saved to the audio file.", "Альбом и длительность сверяются на компьютере. При однозначном совпадении обложка сохраняется в аудиофайл, если ее там еще нет."),
-        app.text("After a connection error, the player retries later. A negative result is remembered for 30 days.", "При ошибке связи плеер повторит попытку позже. Результат без обложки запоминается на 30 дней."),
-        app.text("Statistics and recent checks below cover this run of the player.", "Статистика и последние проверки ниже относятся к текущему запуску плеера."),
-        app.text("Checked", "Проверено"), app.text("Saved", "Сохранено"), app.text("Skipped", "Пропущено"), app.text("Errors", "Ошибок"),
-        app.text("Recent checks", "Последние проверки"));
+    let mut text = app.text(
+        "Select tracks in the playlist before opening this window. Choose a track and press Find. No other tracks are searched.\n\nMusicBrainz receives the artist and title from the tags or filename. Cover Art Archive provides the image. Select an edition to see its cover. Saving to an audio file requires confirmation.",
+        "Перед открытием окна отметьте композиции в плейлисте. Выберите нужную и нажмите Найти. Другие композиции не ищутся.\n\nMusicBrainz получает исполнителя и название из тегов или имени файла. Cover Art Archive предоставляет изображение. Выберите издание, чтобы увидеть обложку. Для записи в аудиофайл потребуется подтверждение.",
+    ).to_owned();
     if let Some(error) = &app.artwork_manual.error {
         text.push_str(&format!(
-            "\n{}: {}\n",
-            app.text("Manual action error", "Ошибка ручного действия"),
+            "\n\n{}: {}",
+            app.text("Error", "Ошибка"),
             clean(error)
         ));
     }
     if let Some(message) = &app.artwork_manual.message {
-        text.push_str(&format!("\n{}\n", clean(message)));
-    }
-    if app.artwork_search_recent().is_empty() {
-        text.push_str(app.text("No checks yet", "Пока нет проверок"));
-    } else {
-        for entry in app.artwork_search_recent() {
-            text.push_str("\n• ");
-            text.push_str(&clean(entry));
-        }
+        text.push_str(&format!("\n\n{}", clean(message)));
     }
     let body = Rect::new(
         inner.x,

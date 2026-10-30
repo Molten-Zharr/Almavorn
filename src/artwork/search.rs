@@ -5,21 +5,18 @@ use crate::{
 use anyhow::{Context, Result, ensure};
 use reqwest::{blocking::Client, redirect::Policy};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
     io::{Cursor, Read},
-    path::Path,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
         mpsc,
     },
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 const MAX_COVER: u64 = 8 * 1024 * 1024;
-const NEGATIVE_TTL: u64 = 30 * 24 * 60 * 60;
 
 static LAST_MUSICBRAINZ_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
 
@@ -51,27 +48,38 @@ pub(crate) struct SearchProgress {
     pub editions: usize,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum AutoOutcome {
-    Saved,
-    HasCover,
-    NotLocal,
-    MissingMetadata,
-    MismatchedMetadata,
-    Unsupported,
-    NoMatch,
-    Ambiguous,
-    TooMany,
-    NoCover,
-    CachedNoMatch,
-    Cancelled,
+#[derive(Clone)]
+pub(crate) struct FileSnapshot {
+    length: u64,
+    modified: Option<std::time::SystemTime>,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
 }
 
-enum MatchOutcome {
-    Matched(String, String),
-    NoMatch,
-    Ambiguous,
-    TooMany,
+impl FileSnapshot {
+    pub(crate) fn read(path: &std::path::Path) -> Result<Self> {
+        let metadata = std::fs::metadata(path).context("Аудиофайл недоступен")?;
+        ensure!(metadata.is_file(), "Выберите локальный аудиофайл.");
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+        Ok(Self {
+            length: metadata.len(),
+            modified: metadata.modified().ok(),
+            #[cfg(unix)]
+            device: metadata.dev(),
+            #[cfg(unix)]
+            inode: metadata.ino(),
+        })
+    }
+
+    fn matches(&self, other: &Self) -> bool {
+        let same = self.length == other.length && self.modified == other.modified;
+        #[cfg(unix)]
+        let same = same && self.device == other.device && self.inode == other.inode;
+        same
+    }
 }
 
 pub(crate) fn manual_search(
@@ -79,95 +87,114 @@ pub(crate) fn manual_search(
     cancel: &AtomicBool,
     progress: &mpsc::Sender<SearchProgress>,
 ) -> Result<(Vec<Candidate>, bool)> {
+    let query = crate::lyrics::Query {
+        track: track.clone(),
+        artist: if usable(&track.artist) {
+            track.artist.clone()
+        } else {
+            String::new()
+        },
+        title: if usable(&track.title) {
+            track.title.clone()
+        } else {
+            String::new()
+        },
+    };
+    let guesses: Vec<_> = crate::lyrics::candidates(&query)
+        .into_iter()
+        .filter(|(artist, title)| usable(artist) && usable(title))
+        .collect();
     ensure!(
-        usable(&track.artist) && usable(&track.title),
-        "У композиции нужны исполнитель и название для поиска."
+        !guesses.is_empty(),
+        "Не удалось определить исполнителя и название. Укажите их в тегах или имени файла."
     );
     ensure!(
         track.path.is_absolute() && track.path.is_file(),
         "Для поиска выберите локальный аудиофайл."
     );
-    let query = format!(
-        "recording:{} AND artist:{}",
-        quoted(&track.title),
-        quoted(&track.artist)
-    );
     let client = client()?;
     let mut seen = BTreeSet::new();
     let mut results = Vec::new();
-    let mut offset = 0_u64;
     let mut truncated = false;
-    'pages: loop {
-        ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
-        wait_for_musicbrainz();
-        ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
-        let response = client
-            .get("https://musicbrainz.org/ws/2/recording/")
-            .query(&[
-                ("query", query.as_str()),
-                ("fmt", "json"),
-                ("limit", "100"),
-                ("offset", &offset.to_string()),
-            ])
-            .send()
-            .context("MusicBrainz недоступен")?;
-        let body: Value = crate::network::json(response)?;
-        let count = body["count"]
-            .as_u64()
-            .context("MusicBrainz не вернул число записей.")?;
-        ensure!(
-            count == 0 || body["recordings"].is_array(),
-            "MusicBrainz не вернул список записей."
+    'guesses: for (guess_artist, guess_title) in guesses {
+        let query = format!(
+            "recording:{} AND artist:{}",
+            quoted(&guess_title),
+            quoted(&guess_artist)
         );
-        let recordings = body["recordings"].as_array();
-        let received = recordings.map_or(0, Vec::len) as u64;
-        ensure!(
-            received > 0 || offset >= count,
-            "MusicBrainz вернул неполный список записей."
-        );
-        for recording in recordings.into_iter().flatten() {
-            let artist = credit(recording);
-            let title = recording["title"].as_str().unwrap_or_default();
-            if normalized(&artist) != normalized(&track.artist)
-                || normalized(title) != normalized(&track.title)
-            {
-                continue;
+        let mut offset = 0_u64;
+        loop {
+            ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
+            wait_for_musicbrainz();
+            ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
+            let response = client
+                .get("https://musicbrainz.org/ws/2/recording/")
+                .query(&[
+                    ("query", query.as_str()),
+                    ("fmt", "json"),
+                    ("limit", "100"),
+                    ("offset", &offset.to_string()),
+                ])
+                .send()
+                .context("MusicBrainz недоступен")?;
+            let body: Value = crate::network::json(response)?;
+            let count = body["count"]
+                .as_u64()
+                .context("MusicBrainz не вернул число записей.")?;
+            ensure!(
+                count == 0 || body["recordings"].is_array(),
+                "MusicBrainz не вернул список записей."
+            );
+            let recordings = body["recordings"].as_array();
+            let received = recordings.map_or(0, Vec::len) as u64;
+            ensure!(
+                received > 0 || offset >= count,
+                "MusicBrainz вернул неполный список записей."
+            );
+            for recording in recordings.into_iter().flatten() {
+                let artist = credit(recording);
+                let title = recording["title"].as_str().unwrap_or_default();
+                if normalized(&artist) != normalized(&guess_artist)
+                    || normalized(title) != normalized(&guess_title)
+                {
+                    continue;
+                }
+                for release in recording["releases"].as_array().into_iter().flatten() {
+                    let Some(id) = release["id"].as_str().filter(|id| valid_id(id)) else {
+                        continue;
+                    };
+                    if !seen.insert(id.to_owned()) {
+                        continue;
+                    }
+                    let album = release["title"].as_str().unwrap_or_default().trim();
+                    if album.is_empty() {
+                        continue;
+                    }
+                    results.push(Candidate {
+                        id: id.into(),
+                        album: album.into(),
+                        artist: artist.clone(),
+                        date: release["date"].as_str().unwrap_or_default().into(),
+                    });
+                    if results.len() >= 1000 {
+                        truncated = true;
+                        break 'guesses;
+                    }
+                }
             }
-            for release in recording["releases"].as_array().into_iter().flatten() {
-                let Some(id) = release["id"].as_str().filter(|id| valid_id(id)) else {
-                    continue;
-                };
-                if !seen.insert(id.to_owned()) {
-                    continue;
-                }
-                let album = release["title"].as_str().unwrap_or_default().trim();
-                if album.is_empty() {
-                    continue;
-                }
-                results.push(Candidate {
-                    id: id.into(),
-                    album: album.into(),
-                    artist: artist.clone(),
-                    date: release["date"].as_str().unwrap_or_default().into(),
-                });
-                if results.len() >= 1000 {
-                    truncated = true;
-                    break 'pages;
-                }
+            offset += received;
+            let _ = progress.send(SearchProgress {
+                checked: offset,
+                total: count,
+                editions: results.len(),
+            });
+            if offset >= count {
+                break;
             }
-        }
-        offset += received;
-        let _ = progress.send(SearchProgress {
-            checked: offset,
-            total: count,
-            editions: results.len(),
-        });
-        if offset >= count {
-            break;
-        }
-        if offset >= 500 {
-            truncated = true;
-            break;
+            if offset >= 500 {
+                truncated = true;
+                break;
+            }
         }
     }
     results.sort_by_key(|candidate| normalized(&candidate.album) != normalized(&track.album));
@@ -261,258 +288,6 @@ fn credit(recording: &Value) -> String {
         .unwrap_or_default()
 }
 
-fn matching_release(
-    client: &Client,
-    track: &Track,
-    enabled: &Arc<Mutex<bool>>,
-) -> Result<MatchOutcome> {
-    let query = format!(
-        "recording:{} AND artist:{}",
-        quoted(&track.title),
-        quoted(&track.artist)
-    );
-    let mut groups = BTreeSet::new();
-    let mut releases = BTreeSet::new();
-    let mut offset = 0_u64;
-    loop {
-        if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-            return Ok(MatchOutcome::NoMatch);
-        }
-        wait_for_musicbrainz();
-        if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-            return Ok(MatchOutcome::NoMatch);
-        }
-        let response = client
-            .get("https://musicbrainz.org/ws/2/recording/")
-            .query(&[
-                ("query", query.as_str()),
-                ("fmt", "json"),
-                ("limit", "100"),
-                ("offset", &offset.to_string()),
-            ])
-            .send()
-            .context("MusicBrainz недоступен")?;
-        let body: Value = crate::network::json(response)?;
-        let count = body["count"]
-            .as_u64()
-            .context("MusicBrainz не вернул число записей.")?;
-        ensure!(
-            count == 0 || body["recordings"].is_array(),
-            "MusicBrainz не вернул список записей."
-        );
-        if count > 500 {
-            return Ok(MatchOutcome::TooMany);
-        }
-        let recordings = body["recordings"].as_array();
-        let received = recordings.map_or(0, Vec::len) as u64;
-        ensure!(
-            received > 0 || offset >= count,
-            "MusicBrainz вернул неполный список записей."
-        );
-        for recording in recordings.into_iter().flatten() {
-            if normalized(recording["title"].as_str().unwrap_or("")) != normalized(&track.title)
-                || normalized(&credit(recording)) != normalized(&track.artist)
-            {
-                continue;
-            }
-            if let Some(length) = recording["length"].as_u64()
-                && track.duration_ms > 0
-                && length.abs_diff(track.duration_ms) > 3000
-            {
-                continue;
-            }
-            for release in recording["releases"].as_array().into_iter().flatten() {
-                if normalized(release["title"].as_str().unwrap_or("")) != normalized(&track.album) {
-                    continue;
-                }
-                if let Some(id) = release["release-group"]["id"]
-                    .as_str()
-                    .filter(|id| valid_id(id))
-                {
-                    groups.insert(id.to_owned());
-                } else if let Some(id) = release["id"].as_str().filter(|id| valid_id(id)) {
-                    releases.insert(id.to_owned());
-                }
-            }
-        }
-        offset += received;
-        if offset >= count {
-            break;
-        }
-    }
-    if groups.len() == 1 && releases.is_empty() {
-        Ok(MatchOutcome::Matched(
-            "release-group".into(),
-            groups.into_iter().next().expect("one group"),
-        ))
-    } else if groups.is_empty() && releases.len() == 1 {
-        Ok(MatchOutcome::Matched(
-            "release".into(),
-            releases.into_iter().next().expect("one release"),
-        ))
-    } else if !groups.is_empty() || !releases.is_empty() {
-        Ok(MatchOutcome::Ambiguous)
-    } else {
-        Ok(MatchOutcome::NoMatch)
-    }
-}
-
-fn cache_path(track: &Track, cache: &Path) -> std::path::PathBuf {
-    let key = format!(
-        "{}\0{}\0{}\0{}",
-        normalized(&track.artist),
-        normalized(&track.title),
-        normalized(&track.album),
-        track.duration_ms
-    );
-    cache.join(format!("{:x}.json", Sha256::digest(key.as_bytes())))
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-}
-
-fn metadata_matches(document: &Document, track: &Track) -> bool {
-    use lofty::tag::ItemKey;
-    let Some(primary) = document.blocks.first() else {
-        return false;
-    };
-    [
-        (ItemKey::TrackTitle, &track.title),
-        (ItemKey::TrackArtist, &track.artist),
-        (ItemKey::AlbumTitle, &track.album),
-    ]
-    .into_iter()
-    .all(|(key, expected)| {
-        primary
-            .fields
-            .iter()
-            .find(|field| field.item.key() == key)
-            .and_then(|field| field.item.value().text())
-            .is_some_and(|value| normalized(value) == normalized(expected))
-    })
-}
-
-/// Read the file first and write only an unambiguous missing cover.
-pub(crate) fn find_and_save(
-    track: &Track,
-    cache: &Path,
-    enabled: &Arc<Mutex<bool>>,
-) -> Result<AutoOutcome> {
-    if !track.path.is_absolute() || !track.path.is_file() {
-        return Ok(AutoOutcome::NotLocal);
-    }
-    if !usable(&track.artist) || !usable(&track.title) || !usable(&track.album) {
-        return Ok(AutoOutcome::MissingMetadata);
-    }
-    if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-        return Ok(AutoOutcome::Cancelled);
-    }
-    let mut document = Document::read(&track.path)?;
-    if !metadata_matches(&document, track) {
-        return Ok(AutoOutcome::MismatchedMetadata);
-    }
-    if document.blocks.iter().any(|block| !block.covers.is_empty()) {
-        return Ok(AutoOutcome::HasCover);
-    }
-    if !document.blocks.iter().any(|block| block.writable) {
-        return Ok(AutoOutcome::Unsupported);
-    }
-    let cached = cache_path(track, cache);
-    if crate::network::load_json::<u64>(&cached)
-        .is_ok_and(|time| now().saturating_sub(time) < NEGATIVE_TTL)
-    {
-        return Ok(AutoOutcome::CachedNoMatch);
-    }
-    let client = client()?;
-    if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-        return Ok(AutoOutcome::Cancelled);
-    }
-    let matched = matching_release(&client, track, enabled)?;
-    let (kind, id) = match matched {
-        MatchOutcome::Matched(kind, id) => (kind, id),
-        other => {
-            if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-                return Ok(AutoOutcome::Cancelled);
-            }
-            let _ = crate::network::save_json(&cached, &now());
-            return Ok(match other {
-                MatchOutcome::NoMatch => AutoOutcome::NoMatch,
-                MatchOutcome::Ambiguous => AutoOutcome::Ambiguous,
-                MatchOutcome::TooMany => AutoOutcome::TooMany,
-                MatchOutcome::Matched(_, _) => unreachable!(),
-            });
-        }
-    };
-    if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-        return Ok(AutoOutcome::Cancelled);
-    }
-    let response = client
-        .get(format!("https://coverartarchive.org/{kind}/{id}/front-500"))
-        .send()
-        .context("Cover Art Archive недоступен")?;
-    let response = if response.status() == reqwest::StatusCode::NOT_FOUND {
-        if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-            return Ok(AutoOutcome::Cancelled);
-        }
-        client
-            .get(format!("https://coverartarchive.org/{kind}/{id}/front"))
-            .send()
-            .context("Cover Art Archive недоступен")?
-    } else {
-        response
-    };
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        let _ = crate::network::save_json(&cached, &now());
-        return Ok(AutoOutcome::NoCover);
-    }
-    let response = response
-        .error_for_status()
-        .context("Ошибка Cover Art Archive")?;
-    ensure!(
-        response.status().is_success(),
-        "Cover Art Archive перенаправил запрос на недоступный адрес."
-    );
-    ensure!(
-        response
-            .content_length()
-            .is_none_or(|size| size <= MAX_COVER),
-        "Обложка слишком большая."
-    );
-    let mut bytes = Vec::new();
-    response
-        .take(MAX_COVER + 1)
-        .read_to_end(&mut bytes)
-        .context("Не удалось загрузить обложку из Cover Art Archive")?;
-    ensure!(bytes.len() as u64 <= MAX_COVER, "Обложка слишком большая.");
-    crate::artwork::validate_bytes(&bytes)?;
-    let mut picture = lofty::picture::Picture::from_reader(&mut Cursor::new(bytes))?;
-    picture.set_pic_type(lofty::picture::PictureType::CoverFront);
-    document
-        .blocks
-        .iter_mut()
-        .find(|block| block.writable)
-        .context("Формат не поддерживает запись обложки.")?
-        .covers
-        .push(Cover {
-            picture,
-            remove: false,
-        });
-    if !*enabled.lock().unwrap_or_else(|error| error.into_inner()) {
-        return Ok(AutoOutcome::Cancelled);
-    }
-    let prepared = document.prepare()?;
-    let guard = enabled.lock().unwrap_or_else(|error| error.into_inner());
-    if !*guard {
-        return Ok(AutoOutcome::Cancelled);
-    }
-    prepared.replace()?.accept()?;
-    Ok(AutoOutcome::Saved)
-}
-
 pub(crate) fn preview(candidate: &Candidate) -> Result<(Vec<u8>, crate::artwork::ArtworkImage)> {
     ensure!(
         valid_id(&candidate.id),
@@ -561,9 +336,18 @@ pub(crate) fn save_manual(
     track: &Track,
     bytes: &[u8],
     allowed: &Arc<Mutex<bool>>,
+    snapshot: &FileSnapshot,
 ) -> Result<Option<std::path::PathBuf>> {
     use lofty::tag::ItemKey;
+    ensure!(
+        snapshot.matches(&FileSnapshot::read(&track.path)?),
+        "Файл изменился после поиска. Повторите поиск обложки."
+    );
     let mut document = Document::read(&track.path)?;
+    ensure!(
+        snapshot.matches(&FileSnapshot::read(&track.path)?),
+        "Файл изменился после поиска. Повторите поиск обложки."
+    );
     let primary = document
         .blocks
         .first()
@@ -578,8 +362,8 @@ pub(crate) fn save_manual(
             .find(|field| field.item.key() == key)
             .and_then(|field| field.item.value().text());
         ensure!(
-            value.is_some_and(|value| normalized(value) == normalized(expected)),
-            "Теги файла изменились или не содержат исполнителя и название. Обновите библиотеку и повторите поиск."
+            !usable(expected) || value.is_none_or(|value| !usable(value) || normalized(value) == normalized(expected)),
+            "Теги файла изменились. Обновите библиотеку и повторите поиск."
         );
     }
     if usable(&track.album) {
@@ -589,7 +373,7 @@ pub(crate) fn save_manual(
             .find(|field| field.item.key() == ItemKey::AlbumTitle)
             .and_then(|field| field.item.value().text());
         ensure!(
-            album.is_some_and(|value| normalized(value) == normalized(&track.album)),
+            album.is_none_or(|value| !usable(value) || normalized(value) == normalized(&track.album)),
             "Альбом в файле изменился. Обновите библиотеку и повторите поиск."
         );
     }
