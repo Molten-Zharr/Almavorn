@@ -5,7 +5,7 @@ use lofty::{
     file::{AudioFile, FileType},
     tag::{SplitTag, Tag, TagExt, TagType},
 };
-use std::{fs::File, path::Path};
+use std::path::Path;
 
 #[derive(Clone)]
 pub(super) enum Native {
@@ -63,7 +63,8 @@ impl Native {
 }
 
 pub(super) fn read(path: &Path, kind: FileType) -> Result<Vec<Native>> {
-    let mut reader = File::open(path)?;
+    let mut reader = super::reader::Reader::open(path, kind == FileType::Mpeg)?;
+    let blank_year = reader.preserved_id3v1.is_some();
     let options = ParseOptions::new().parsing_mode(ParsingMode::Strict);
     let mut tags = Vec::new();
     macro_rules! read {
@@ -98,6 +99,13 @@ pub(super) fn read(path: &Path, kind: FileType) -> Result<Vec<Native>> {
                 .clone(),
         )),
         _ => bail!("Формат не поддерживает безопасное редактирование всех блоков тегов."),
+    }
+    if blank_year {
+        for tag in &mut tags {
+            if let Native::Id3v1(tag) = tag {
+                tag.year = None;
+            }
+        }
     }
     Ok(tags)
 }

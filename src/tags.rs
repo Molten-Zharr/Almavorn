@@ -18,6 +18,7 @@ use tempfile::NamedTempFile;
 mod extra;
 mod files;
 mod native;
+mod reader;
 mod relocate;
 mod batch;
 pub use batch::BatchEdits;
@@ -170,14 +171,24 @@ pub struct Document {
     pub path: PathBuf,
     pub blocks: Vec<TagBlock>,
     stamp: Stamp,
+    preserved_id3v1: Option<[u8; 128]>,
 }
 
 fn parse(path: &Path) -> Result<TaggedFile> {
-    Probe::open(path)?
-        .guess_file_type()?
-        .options(ParseOptions::new().parsing_mode(ParsingMode::Strict))
-        .read()
-        .map_err(Into::into)
+    let probe = Probe::open(path)?.guess_file_type()?;
+    let options = ParseOptions::new().parsing_mode(ParsingMode::Strict);
+    if probe.file_type() != Some(lofty::file::FileType::Mpeg) {
+        return probe.options(options).read().map_err(Into::into);
+    }
+    let reader = reader::Reader::open(path, true)?;
+    let blank_year = reader.preserved_id3v1.is_some();
+    let mut file = Probe::with_file_type(reader, lofty::file::FileType::Mpeg)
+        .options(options)
+        .read()?;
+    if blank_year && let Some(tag) = file.tag_mut(TagType::Id3v1) {
+        tag.remove_key(ItemKey::Year);
+    }
+    Ok(file)
 }
 
 impl Document {
@@ -188,6 +199,10 @@ impl Document {
             .context("Не удалось полностью прочитать теги. Запись этого файла запрещена.")?;
         let primary = file.primary_tag_type();
         let native_tags = native::read(&path, file.file_type())?;
+        let preserved_id3v1 = reader::Reader::open(
+            &path,
+            file.file_type() == lofty::file::FileType::Mpeg,
+        )?.preserved_id3v1;
         let mut kinds = TAG_TYPES.to_vec();
         kinds.sort_by_key(|kind| (*kind != primary, !file.contains_tag_type(*kind)));
         let blocks = kinds
@@ -219,7 +234,8 @@ impl Document {
                 Ok(TagBlock {
                     kind,
                     existed: file.contains_tag_type(kind),
-                    writable: file.tag_support(kind).is_writable(),
+                    writable: file.tag_support(kind).is_writable()
+                        && !(kind == TagType::Id3v1 && preserved_id3v1.is_some()),
                     fields: original
                         .items()
                         .cloned()
@@ -259,6 +275,7 @@ impl Document {
             path,
             blocks,
             stamp,
+            preserved_id3v1,
         })
     }
 
@@ -300,6 +317,12 @@ impl Document {
             .join(destination.file_name().context("Укажите имя файла.")?);
         let relocating = destination != self.path;
         let editing_tags = self.changed();
+        ensure!(
+            self.preserved_id3v1.is_none()
+                || self.blocks.iter().filter(|block| block.kind == TagType::Id3v1)
+                    .all(|block| !block.changed()),
+            "Старый блок ID3v1 с пустым годом сохраняется без изменений. Для правки используйте ID3v2."
+        );
         ensure!(editing_tags || relocating, "Нет изменений для записи.");
         ensure!(
             !relocating
@@ -388,6 +411,12 @@ impl Document {
         let written = parse(edited.path())
             .context("Не удалось прочитать результат записи. Исходный файл сохранен.")?;
         let written_native = native::read(edited.path(), written.file_type())?;
+        if let Some(original) = self.preserved_id3v1 {
+            ensure!(
+                reader::Reader::open(edited.path(), true)?.preserved_id3v1 == Some(original),
+                "При записи изменился старый блок ID3v1. Исходный файл сохранен."
+            );
+        }
         for block in &self.blocks {
             let actual = written_native.iter().find(|tag| tag.kind() == block.kind);
             if !block.changed() {
