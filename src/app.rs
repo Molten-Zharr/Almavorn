@@ -40,6 +40,7 @@ mod transfer;
 mod tuner;
 mod toolbar;
 mod visualizer;
+mod wallpaper_palette;
 mod workspace;
 
 pub use browser::{Browser, BrowserEntry, PaletteFilePicker, PlaylistFolderPicker};
@@ -82,6 +83,7 @@ pub struct App {
     pub view: UiState,
     artwork: artwork::ArtworkState,
     gif_background: gif_background::GifBackgroundState,
+    wallpaper_palette: wallpaper_palette::WallpaperPaletteState,
     browser_state: BrowserState,
     persistence: SettingsPersistence,
     session: session::SessionPersistence,
@@ -127,6 +129,7 @@ impl App {
             view,
             artwork: Default::default(),
             gif_background: Default::default(),
+            wallpaper_palette: Default::default(),
             playback: Default::default(),
             statistics: Default::default(),
             lyrics: Default::default(),
@@ -208,6 +211,7 @@ impl App {
         self.tick_artwork();
         self.tick_file_manager();
         self.tick_gif_background();
+        self.tick_wallpaper_palette();
         self.tick_waveform();
         self.poll_import()?;
         self.tick_library()?;

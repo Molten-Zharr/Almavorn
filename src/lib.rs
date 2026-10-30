@@ -27,6 +27,7 @@ pub mod tuner;
 pub mod toolbar;
 pub mod ui;
 pub mod visualizer;
+pub mod wallpaper_palette;
 pub mod workspace;
 
 pub mod services;

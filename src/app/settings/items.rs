@@ -8,6 +8,13 @@ use crate::{
 #[derive(Clone, Debug)]
 pub(crate) enum SettingControl {
     ArtworkSearch,
+    WallpaperSource,
+    WallpaperFile,
+    WallpaperScheme,
+    WallpaperLight,
+    WallpaperBlack,
+    WallpaperSave,
+    WallpaperStatus,
     LyricsEnabled,
     LyricsPanel,
     LyricsProvider(crate::lyrics::Provider),
@@ -147,6 +154,24 @@ impl App {
                 lang.text("Search MusicBrainz and Cover Art Archive in the background. The artist and track title are sent to MusicBrainz. The album is checked locally. A cover is saved only for an unambiguous match and never replaces an existing one.", "Искать обложки в MusicBrainz и Cover Art Archive в фоновом режиме. В MusicBrainz передаются исполнитель и название композиции. Альбом сверяется на компьютере. Обложка сохраняется только при однозначном совпадении и не заменяет существующую."),
                 SettingControl::ArtworkSearch, true,
             )],
+            SettingsPage::WallpaperPalette => {
+                let options = &self.settings.preferences.appearance.wallpaper_palette;
+                let mut rows = vec![
+                    make(lang.text("Palette source", "Источник палитры"), options.source.name(lang).into(), lang.text("Use the selected palette, Noctalia's default wallpaper, or your own image. Colors follow changes to the default wallpaper.", "Выберите обычную палитру, обои Noctalia по умолчанию или свое изображение. При смене обоев по умолчанию цвета обновятся."), SettingControl::WallpaperSource, true),
+                    make(lang.text("Choose image", "Выбрать изображение"), options.path.as_ref().map_or_else(|| lang.text("Choose…", "Выбрать…").into(), |path| path.display().to_string()), lang.text("Choose a PNG, JPEG or GIF file. The first GIF frame is used. Selecting a file switches the source to that image.", "Выберите PNG, JPEG или GIF. У GIF используется первый кадр. После выбора источником станет это изображение."), SettingControl::WallpaperFile, false),
+                    make(lang.text("Color scheme", "Схема цветов"), options.scheme.name(lang).into(), lang.text("Choose colors close to the image, vibrant, soft, monochrome or inverted. These are Almavorn's own schemes.", "Цвета изображения, яркая, мягкая, монохромная палитра или инверсия цветов. Это собственные схемы Almavorn."), SettingControl::WallpaperScheme, true),
+                    make(lang.text("Light theme", "Светлая тема"), if options.light { "[x]" } else { "[ ]" }.into(), lang.text("Switch between light and dark colors generated from the image.", "Переключить светлые и темные цвета, созданные из изображения."), SettingControl::WallpaperLight, true),
+                    make(lang.text("Pure black background", "Чистый черный фон"), if options.pure_black { "[x]" } else { "[ ]" }.into(), lang.text("Use black for the dark theme background.", "Использовать черный фон в темной теме."), SettingControl::WallpaperBlack, true),
+                    make(lang.text("Save generated palette", "Сохранить палитру"), action.clone(), lang.text("Save a copy to the palette catalog. It can be edited, exported or used independently of the image.", "Сохранить копию в списке палитр. Ее можно редактировать, экспортировать и использовать отдельно от изображения."), SettingControl::WallpaperSave, false),
+                    make(lang.text("Status", "Состояние"), self.wallpaper_palette_status(), lang.text("If the image is unavailable, the last generated palette remains. Before the first successful read, the selected ordinary palette is used.", "Если изображение недоступно, остается последняя созданная палитра. До первого успешного чтения используется выбранная обычная палитра."), SettingControl::WallpaperStatus, false),
+                ];
+                rows[2].enabled = options.source != crate::wallpaper_palette::Source::Palette;
+                rows[3].enabled = rows[2].enabled;
+                rows[4].enabled = rows[2].enabled && !options.light;
+                rows[5].enabled = self.wallpaper_palette_ready();
+                rows[6].enabled = false;
+                rows
+            },
             SettingsPage::Lyrics => {
                 let preferences = &self.settings.preferences.lyrics;
                 let checked = |value| if value { "[x]".to_owned() } else { "[ ]".to_owned() };

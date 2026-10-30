@@ -86,6 +86,7 @@ pub struct Appearance {
     pub visualizer: crate::visualizer::VisualizerKind,
     pub animation_brightness: u8,
     pub gif_background: crate::background_gif::GifBackgroundSettings,
+    pub wallpaper_palette: crate::wallpaper_palette::WallpaperSettings,
 }
 impl Default for Appearance {
     fn default() -> Self {
@@ -105,6 +106,7 @@ impl Default for Appearance {
             visualizer: crate::visualizer::VisualizerKind::default(),
             animation_brightness: 35,
             gif_background: Default::default(),
+            wallpaper_palette: Default::default(),
         }
     }
 }
@@ -371,6 +373,8 @@ pub struct ThemeStyle {
     pub corners: Corners,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub animation: Option<ThemeAnimation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallpaper_palette: Option<crate::wallpaper_palette::WallpaperSettings>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThemeAnimation {
@@ -386,6 +390,10 @@ impl ThemeStyle {
             && self.font_size == current.font_size
             && self.borders == current.borders
             && self.corners == current.corners
+            && match &self.wallpaper_palette {
+                Some(settings) => current.wallpaper_palette.as_ref() == Some(settings),
+                None => current.wallpaper_palette.as_ref().is_none_or(|settings| settings.source == crate::wallpaper_palette::Source::Palette),
+            }
             // Presets saved before animation support keep the current background.
             && self
                 .animation
@@ -412,6 +420,7 @@ pub fn default_presets() -> Vec<ThemePreset> {
                 borders: BorderWeight::Single,
                 corners: Corners::Square,
                 animation: None,
+                wallpaper_palette: None,
             },
         })
         .collect()
@@ -652,6 +661,7 @@ impl Settings {
                 brightness: self.preferences.appearance.animation_brightness.clamp(10, 70),
                 gif_background: self.preferences.appearance.gif_background.clone(),
             }),
+            wallpaper_palette: Some(self.preferences.appearance.wallpaper_palette.clone()),
         }
     }
     pub fn apply_style(&mut self, style: ThemeStyle) {
@@ -661,6 +671,7 @@ impl Settings {
         self.preferences.appearance.font_size = style.font_size;
         self.preferences.appearance.borders = style.borders;
         self.preferences.appearance.corners = style.corners;
+        self.preferences.appearance.wallpaper_palette = style.wallpaper_palette.unwrap_or_default();
         if let Some(animation) = style.animation {
             self.preferences.appearance.visualizer = animation.visualizer;
             self.preferences.appearance.animation_brightness = animation.brightness.clamp(10, 70);

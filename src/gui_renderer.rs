@@ -115,7 +115,7 @@ impl PlaybackPainter {
         } else {
             app.view.progress_area
         });
-        let palette = app.settings.current_palette();
+        let palette = app.current_palette();
         let color = |key| {
             let [r, g, b] = palette.color(key);
             egui::Color32::from_rgb(r, g, b)
@@ -243,7 +243,7 @@ impl PlaybackPainter {
         let scale = (area.width() / dimensions.x).min(area.height() / dimensions.y);
         let destination = egui::Rect::from_center_size(area.center(), dimensions * scale);
         let painter = ui.painter().with_clip_rect(canvas.intersect(ui.clip_rect()));
-        let [r, g, b] = app.settings.current_palette().color("background");
+        let [r, g, b] = app.current_palette().color("background");
         painter.rect_filled(area, 0, egui::Color32::from_rgb(r, g, b));
         painter.image(texture.id(), destination, egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
     }
@@ -347,7 +347,7 @@ impl ImageCache {
                     for x in area.x..area.right() { cells[usize::from(y) * usize::from(size.width) + usize::from(x)] = false; }
                 }
             }
-            BackgroundMask { color: app.settings.current_palette().color("background"), width: size.width, cells }
+            BackgroundMask { color: app.current_palette().color("background"), width: size.width, cells }
         });
         if self.background_mask != mask {
             self.background_mask = mask;
@@ -515,7 +515,7 @@ pub fn paint_keycaps(
     if hits.is_empty() && keycaps.is_empty() {
         return;
     }
-    let palette = app.settings.current_palette();
+    let palette = app.current_palette();
     for hit in hits {
         if (app.view.dialog.is_none() || matches!(layer, KeycapLayer::Background))
             && matches!(hit.target, Target::Action(_) | Target::Mode(_))

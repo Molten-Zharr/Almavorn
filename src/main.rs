@@ -35,7 +35,7 @@ impl<F: FnMut(&mut egui::Ui, &mut eframe::Frame)> eframe::App for PlayerUi<F> {
 }
 
 fn light_palette(app: &App) -> bool {
-    let [r, g, b] = app.settings.current_palette().color("background");
+    let [r, g, b] = app.current_palette().color("background");
     299 * u32::from(r) + 587 * u32::from(g) + 114 * u32::from(b) >= 128_000
 }
 
@@ -182,7 +182,7 @@ fn run() -> Result<()> {
                     canvas.min.round_to_pixels(pixels_per_point),
                     image_size / pixels_per_point,
                 );
-                let [r, g, b] = app.settings.current_palette().color("background");
+                let [r, g, b] = app.current_palette().color("background");
                 // Keep physical font pixels 1:1. Only the sub-cell remainder is background.
                 ui.painter()
                     .rect_filled(canvas, 0, egui::Color32::from_rgb(r, g, b));

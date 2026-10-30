@@ -29,6 +29,7 @@ pub enum SettingsPage {
     Palettes,
     Typography,
     Animation,
+    WallpaperPalette,
     Shortcuts,
     Mods,
     ModGuide,
@@ -39,7 +40,7 @@ pub enum SettingsPage {
     ServiceGuide,
 }
 impl SettingsPage {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::General,
         Self::Lyrics,
         Self::ApplicationServices,
@@ -48,6 +49,7 @@ impl SettingsPage {
         Self::Palettes,
         Self::Typography,
         Self::Animation,
+        Self::WallpaperPalette,
         Self::Shortcuts,
         Self::Mods,
         Self::ModGuide,
@@ -58,13 +60,13 @@ impl SettingsPage {
         Self::ServiceGuide,
     ];
     pub const SECTIONS: [Self; 8] = [Self::General, Self::Lyrics, Self::ApplicationServices, Self::Profiles, Self::Themes, Self::Shortcuts, Self::Mods, Self::Services];
-    pub const THEME_TABS: [Self; 4] = [Self::Themes, Self::Palettes, Self::Typography, Self::Animation];
+    pub const THEME_TABS: [Self; 5] = [Self::Themes, Self::Palettes, Self::Typography, Self::Animation, Self::WallpaperPalette];
     pub const MOD_TABS: [Self; 2] = [Self::Mods, Self::ModGuide];
     pub const SERVICE_TABS: [Self; 5] = [Self::Services, Self::ServiceTracks, Self::ServicePlaylists, Self::ServiceDevices, Self::ServiceGuide];
 
     pub fn section(self) -> Self {
         match self {
-            Self::Palettes | Self::Typography | Self::Animation => Self::Themes,
+            Self::Palettes | Self::Typography | Self::Animation | Self::WallpaperPalette => Self::Themes,
             Self::ModGuide => Self::Mods,
             Self::ServiceTracks | Self::ServicePlaylists | Self::ServiceDevices | Self::ServiceGuide => Self::Services,
             page => page,
@@ -100,6 +102,7 @@ impl SettingsPage {
             Self::Palettes => language.text("Palettes", "Палитры"),
             Self::Typography => language.text("Font and geometry", "Шрифт и геометрия"),
             Self::Animation => language.text("Animation", "Анимация"),
+            Self::WallpaperPalette => language.text("Wallpaper colors", "Цвета обоев"),
             Self::Shortcuts => language.text("Shortcuts", "Клавиши"),
             Self::Mods => language.text("Mods", "Моды"),
             Self::ModGuide => language.text("Create a mod", "Создание модов"),
@@ -639,6 +642,8 @@ impl App {
         }
         self.select_setting(row);
         match item.control {
+            SettingControl::WallpaperFile => self.choose_wallpaper_image(),
+            SettingControl::WallpaperSave => self.save_wallpaper_palette()?,
             SettingControl::QuickAccess => self.quick_access_action(crate::toolbar::QuickAction::Open)?,
             SettingControl::ProfileCreate => self.settings_text(
                 SettingsEdit::CreateProfile,
@@ -672,6 +677,7 @@ impl App {
                 );
             }
             SettingControl::PaletteApply => {
+                self.settings.preferences.appearance.wallpaper_palette.source = crate::wallpaper_palette::Source::Palette;
                 self.settings.preferences.appearance.palette_ids[self.settings.mode.index()] =
                     self.selected_settings_palette().id.clone();
                 self.save_settings()?;
@@ -749,6 +755,18 @@ impl App {
         }
         self.select_setting(row);
         match item.control {
+            SettingControl::WallpaperSource => {
+                self.settings.preferences.appearance.wallpaper_palette.source = cycle(self.settings.preferences.appearance.wallpaper_palette.source, &crate::wallpaper_palette::Source::ALL, direction);
+            }
+            SettingControl::WallpaperScheme => {
+                self.settings.preferences.appearance.wallpaper_palette.scheme = cycle(self.settings.preferences.appearance.wallpaper_palette.scheme, &crate::wallpaper_palette::Scheme::ALL, direction);
+            }
+            SettingControl::WallpaperLight => {
+                self.settings.preferences.appearance.wallpaper_palette.light = !self.settings.preferences.appearance.wallpaper_palette.light;
+            }
+            SettingControl::WallpaperBlack => {
+                self.settings.preferences.appearance.wallpaper_palette.pure_black = !self.settings.preferences.appearance.wallpaper_palette.pure_black;
+            }
             SettingControl::ArtworkSearch => {
                 self.settings.preferences.artwork.search_online = !self.settings.preferences.artwork.search_online;
                 if !self.settings.preferences.artwork.search_online {
@@ -879,6 +897,7 @@ impl App {
                 self.settings.apply_preset(&id)?;
             }
             SettingControl::ModePalette(mode) => {
+                self.settings.preferences.appearance.wallpaper_palette.source = crate::wallpaper_palette::Source::Palette;
                 let selected = self
                     .settings
                     .palettes

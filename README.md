@@ -219,6 +219,8 @@ In Settings, hover over an option and press F1 to read its description without c
 
 Choose your toolbar buttons in "Settings > General > Quick access". Pin the buttons you need, or show or hide them all. Your choices are saved in the profile.
 
+Under "Settings > Themes > Wallpaper colors", create a palette from Noctalia's default wallpaper or a PNG, JPEG or GIF image. Choose a scheme and a light or dark theme, then save the palette if you want to edit it later. Colors follow changes to the default wallpaper. Almavorn uses its own color schemes.
+
 Other commands stay in "More", which opens with Alt+5 by default. When all buttons are on the toolbar and fit, "More" disappears.
 
 Only the layout editing button appears automatically while that mode is active. Playback controls appear on the toolbar only when you pin them.

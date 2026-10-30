@@ -21,6 +21,7 @@ pub(super) fn browser_dialog(
     } else { app.import_caption() };
     let title = match &browser.palette_file {
         Some(PaletteFilePicker::BackgroundGif) => app.text("Choose background · GIF", "Выбрать фон · GIF"),
+        Some(PaletteFilePicker::WallpaperImage) => app.text("Choose an image", "Выбрать изображение"),
         None if browser.download_form.is_some() => app.text("Choose download folder", "Куда скачать музыку"),
         Some(PaletteFilePicker::Import) => {
             app.text("Import palette · JSON", "Импорт палитры · JSON")
@@ -259,6 +260,8 @@ pub(super) fn browser_dialog(
             "DIR"
         } else if matches!(browser.palette_file, Some(PaletteFilePicker::BackgroundGif)) {
             "GIF"
+        } else if matches!(browser.palette_file, Some(PaletteFilePicker::WallpaperImage)) {
+            "IMG"
         } else if browser.palette_file.is_some() {
             "JSON"
         } else if browser.marked.contains(&entry.path) {
@@ -306,6 +309,7 @@ pub(super) fn browser_dialog(
     let add = if let Some(purpose) = &browser.palette_file {
         match purpose {
             PaletteFilePicker::BackgroundGif => app.text("Choose", "Выбрать").into(),
+            PaletteFilePicker::WallpaperImage => app.text("Choose", "Выбрать").into(),
             PaletteFilePicker::Import => app
                 .text(
                     "Import",

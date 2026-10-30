@@ -15,6 +15,7 @@ pub(super) struct BrowserRequest {
     folder: bool,
     palette: bool,
     gif: bool,
+    image: bool,
     initial: bool,
     focus: Option<PathBuf>,
     offset: usize,
@@ -24,6 +25,7 @@ pub(super) struct BrowserRequest {
 pub enum PaletteFilePicker {
     Import,
     BackgroundGif,
+    WallpaperImage,
     Export { id: String, filename: String },
 }
 
@@ -129,7 +131,9 @@ impl Browser {
                 entry
                     .path()
                     .extension()
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
+                    .is_some_and(|extension| if wanted == "image" {
+                        ["png", "jpg", "jpeg", "gif"].iter().any(|value| extension.eq_ignore_ascii_case(value))
+                    } else { extension.eq_ignore_ascii_case(wanted) })
             } else {
                 media::is_audio(&entry.path())
             };
@@ -445,6 +449,12 @@ impl App {
         self.show_palette_browser(PaletteFilePicker::BackgroundGif, directory);
     }
 
+    pub(super) fn choose_wallpaper_image(&mut self) {
+        let directory = self.settings.preferences.appearance.wallpaper_palette.path.as_ref()
+            .and_then(|path| path.parent().map(Path::to_owned)).or_else(dirs::picture_dir);
+        self.show_palette_browser(PaletteFilePicker::WallpaperImage, directory);
+    }
+
     pub(super) fn choose_palette_export_folder(&mut self) {
         let Some(Dialog::Text(dialog)) = &self.view.dialog else {
             return;
@@ -604,6 +614,7 @@ impl App {
             folder,
             palette: matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if browser.palette_file.is_some()),
             gif: matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if matches!(browser.palette_file, Some(PaletteFilePicker::BackgroundGif))),
+            image: matches!(&self.view.dialog, Some(Dialog::Browser(browser)) if matches!(browser.palette_file, Some(PaletteFilePicker::WallpaperImage))),
             initial,
             focus,
             offset,
@@ -619,6 +630,7 @@ impl App {
                 folder,
                 palette,
                 gif,
+                image,
                 initial,
                 focus,
                 offset,
@@ -627,13 +639,15 @@ impl App {
                 (directory.clone(), *folder, *palette, *initial);
             let (focus, offset) = (focus.clone(), *offset);
             let gif = *gif;
+            let image = *image;
             background(runtime, move || {
                 let directory = if initial && !directory.is_dir() {
                     dirs::home_dir().unwrap_or(directory)
                 } else {
                     directory
                 };
-                let mut browser = if gif { Browser::open_extension(directory, folder, Some("gif"))? }
+                let mut browser = if image { Browser::open_extension(directory, folder, Some("image"))? }
+                    else if gif { Browser::open_extension(directory, folder, Some("gif"))? }
                     else { Browser::open(directory, folder, palette)? };
                 if let Some(focus) = focus
                     && let Some(index) =
@@ -789,6 +803,16 @@ impl App {
             && let Some(purpose) = browser.palette_file.clone()
         {
             match purpose {
+                PaletteFilePicker::WallpaperImage => {
+                    let path = browser.entries.get(browser.selected).filter(|entry| !entry.directory)
+                        .context(self.text("Choose an image", "Выберите изображение"))?.path.clone();
+                    self.settings.preferences.appearance.wallpaper_palette.path = Some(path.clone());
+                    self.settings.preferences.appearance.wallpaper_palette.source = crate::wallpaper_palette::Source::File;
+                    self.save_settings()?;
+                    self.view.settings.file_directory = path.parent().map(Path::to_owned);
+                    self.cancel_browser();
+                    self.show_settings();
+                }
                 PaletteFilePicker::BackgroundGif => {
                     let path = browser.entries.get(browser.selected).filter(|entry| !entry.directory)
                         .context(self.text("Choose a GIF file", "Выберите GIF-файл"))?.path.clone();

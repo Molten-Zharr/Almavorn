@@ -28,7 +28,7 @@ pub(super) struct Palette {
 }
 impl Palette {
     pub(super) fn new(app: &App) -> Self {
-        let palette = app.settings.current_palette();
+        let palette = app.current_palette();
         let color = |key| {
             let [r, g, b] = palette.color(key);
             Color::Rgb(r, g, b)
