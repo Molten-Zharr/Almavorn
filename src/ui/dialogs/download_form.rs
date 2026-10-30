@@ -179,6 +179,8 @@ pub(super) fn render(
         }
         + 3
         + buttons_height(app, width, &footer_controls);
+    let settings_gap = u16::from(settings && area.height >= required_height.saturating_add(4));
+    let required_height = required_height + settings_gap * 2;
     let inner = file_modal(
         frame,
         app,
@@ -240,6 +242,7 @@ pub(super) fn render(
             );
         }
         if settings && index == 0 {
+            y += settings_gap;
             frame.render_widget(
                 Paragraph::new(cobalt_help)
                     .style(palette.text().fg(palette.muted))
@@ -254,6 +257,7 @@ pub(super) fn render(
                 cobalt_controls.clone(),
                 palette,
             );
+            y += settings_gap;
         }
     }
     if new {

@@ -59,7 +59,8 @@ pub(in crate::ui) fn render_content(
         .connections
         .iter()
         .find(|c| Some(&c.id) == app.services.connection.as_ref() && c.enabled);
-    let ready = !busy && connection.is_some();
+    let has_connection = connection.is_some();
+    let ready = !busy && has_connection;
     let spotify = connection.is_some_and(|c| c.provider == Provider::Spotify);
     let mut controls = if view.remove.is_some() {
         vec![
@@ -73,9 +74,6 @@ pub(in crate::ui) fn render_content(
     } else {
         let mut items = match view.page {
             ServicePage::Connections => vec![
-                action("+ Яндекс Музыка", A::Add(Provider::Yandex), !busy),
-                action("+ Spotify", A::Add(Provider::Spotify), !busy),
-                action("+ YouTube Music", A::Add(Provider::YouTube), !busy),
                 action(
                     if selected_spotify {
                         if selected.is_some_and(|c| c.authenticated) {
@@ -209,7 +207,7 @@ pub(in crate::ui) fn render_content(
                 items.retain(|(_, target, _)| !matches!(target, Target::Services(A::Login)));
             }
             if selected.is_some_and(|c| c.authenticated) {
-                items.insert(4, action(app.text("Choose device", "Выбрать устройство"), A::Devices,
+                items.insert(1, action(app.text("Choose device", "Выбрать устройство"), A::Devices,
                     !busy && selected.is_some_and(|c| c.enabled)));
             }
         }
@@ -257,9 +255,23 @@ pub(in crate::ui) fn render_content(
             ),
         );
     }
-    let footer_height = buttons_height(app, inner.width, &controls)
+    let mut footer_height = buttons_height(app, inner.width, &controls)
         .max(2)
         .min(inner.height - 4);
+    let list_add = view.remove.is_none()
+        && view.page == ServicePage::Connections
+        && inner.height.saturating_sub(footer_height + 3
+            + if app.services.error.is_some() { 3 } else { 0 }) >= 5;
+    if view.remove.is_none() && view.page == ServicePage::Connections && !list_add {
+        controls.splice(0..0, [
+            action("+ Яндекс Музыка", A::Add(Provider::Yandex), !busy),
+            action("+ Spotify", A::Add(Provider::Spotify), !busy),
+            action("+ YouTube Music", A::Add(Provider::YouTube), !busy),
+        ]);
+        footer_height = buttons_height(app, inner.width, &controls)
+            .max(2)
+            .min(inner.height - 4);
+    }
     let footer = Rect::new(
         inner.x,
         inner.bottom() - footer_height,
@@ -357,11 +369,32 @@ pub(in crate::ui) fn render_content(
     } else {
         0
     };
+    let mut body_y = inner.y + 3;
+    if list_add {
+        let available = footer.y.saturating_sub(body_y + error_height);
+        if available >= 5 {
+            frame.render_widget(
+                Paragraph::new(app.text("Add a service", "Добавить сервис"))
+                    .style(palette.text().fg(palette.accent)),
+                Rect::new(inner.x, body_y, inner.width, 1),
+            );
+            body_y += 1;
+            for entry in [
+                action("+ Яндекс Музыка", A::Add(Provider::Yandex), !busy),
+                action("+ Spotify", A::Add(Provider::Spotify), !busy),
+                action("+ YouTube Music", A::Add(Provider::YouTube), !busy),
+            ] {
+                buttons(frame, app, Rect::new(inner.x, body_y, inner.width, 1), vec![entry], palette);
+                body_y += 1;
+            }
+            body_y += 1;
+        }
+    }
     let body = Rect::new(
         inner.x,
-        inner.y + 3,
+        body_y,
         inner.width,
-        footer.y.saturating_sub(inner.y + 3 + error_height),
+        footer.y.saturating_sub(body_y + error_height),
     );
     let count = match view.page {
         ServicePage::Connections => app.services.connections.len(),
@@ -436,7 +469,7 @@ pub(in crate::ui) fn render_content(
     if count == 0 && !busy {
         frame.render_widget(
             Paragraph::new(
-                if view.page != ServicePage::Connections && connection.is_none() {
+                if view.page != ServicePage::Connections && !has_connection {
                     app.text(
                         "Choose an enabled account in Connections.",
                         "Выберите включенное подключение в разделе Подключения.",
@@ -449,8 +482,8 @@ pub(in crate::ui) fn render_content(
                 } else {
                     match view.page {
                         ServicePage::Connections => app.text(
-                            "Add Yandex Music, Spotify or YouTube Music below.",
-                            "Добавьте Яндекс Музыку, Spotify или YouTube Music кнопками ниже.",
+                            "No accounts connected yet.",
+                            "Пока нет подключенных аккаунтов.",
                         ),
                         ServicePage::Tracks => app.text(
                             "No recordings found. Try another query or open My music.",

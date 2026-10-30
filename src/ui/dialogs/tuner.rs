@@ -20,7 +20,7 @@ pub(super) fn render(
         app,
         area,
         app.text("Playback tuner", "Настройщик проигрывания").into(),
-        29,
+        31,
         palette,
     );
     if inner.height < 6 || inner.width < 8 {
@@ -46,10 +46,18 @@ pub(super) fn render(
         )
         .into()
     };
+    let gap = u16::from(inner.height >= 18);
+    if scope_height > 0 {
+        frame.render_widget(
+            Paragraph::new(scope).style(palette.text().fg(palette.muted)),
+            Rect::new(inner.x, inner.y, inner.width, 1),
+        );
+    }
+    let pin_y = inner.y + scope_height + gap * scope_height;
     buttons(
         frame,
         app,
-        Rect::new(inner.x, inner.y, inner.width, 1),
+        Rect::new(inner.x, pin_y, inner.width, 1),
         vec![(
             format!(
                 "[{}] {}",
@@ -65,18 +73,12 @@ pub(super) fn render(
         )],
         palette,
     );
-    if scope_height > 0 {
-        frame.render_widget(
-            Paragraph::new(scope).style(palette.text().fg(palette.muted)),
-            Rect::new(inner.x, inner.y + 1, inner.width, 1),
-        );
-    }
-    let header_height = 1
-        + scope_height
+    let controls_y = pin_y + 1 + gap;
+    let header_height = controls_y - inner.y
         + buttons(
             frame,
             app,
-            Rect::new(inner.x, inner.y + 1 + scope_height, inner.width, 3),
+            Rect::new(inner.x, controls_y, inner.width, 3),
             vec![
                 (
                     format!(

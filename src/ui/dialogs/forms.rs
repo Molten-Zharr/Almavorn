@@ -74,13 +74,18 @@ pub(super) fn render(
     );
     let hint_height = 2;
     let error_height = if form.error.is_some() { 3 } else { 0 };
+    let description_gap = u16::from(
+        description_height > 0
+            && footer.y.saturating_sub(inner.y + description_height + hint_height + error_height)
+                > 3 * form.fields.len().max(1) as u16,
+    );
     let available = footer
         .y
-        .saturating_sub(inner.y + description_height + hint_height + error_height);
+        .saturating_sub(inner.y + description_height + description_gap + hint_height + error_height);
     let height = (available / form.fields.len().max(1) as u16).max(3);
     let visible = (available / height).max(1) as usize;
     let start = form.selected.saturating_sub(visible - 1);
-    let mut y = inner.y + description_height;
+    let mut y = inner.y + description_height + description_gap;
     for index in start..(start + visible).min(form.fields.len()) {
         let field = &form.fields[index];
         let area = Rect::new(
