@@ -278,7 +278,7 @@ impl Action {
             Self::Services => language.text("Open Music services in Settings to connect an account and listen online.", "Открыть музыкальные сервисы в настройках: подключить аккаунт и слушать онлайн."),
             Self::Downloads => language.text("Open Downloads to find music or download a link.", "Открыть Загрузки: найти музыку или скачать по ссылке."),
             Self::Lyrics => language.text("Find and save lyrics for the playing or selected track.", "Найти и сохранить текст играющей или выбранной песни."),
-            Self::ArtworkSearch => language.text("Open artwork search for the selected or checked tracks. Search starts when you press Find.", "Открыть поиск обложек для выбранной или отмеченных композиций. Поиск начинается по кнопке Найти."),
+            Self::ArtworkSearch => language.text("Open artwork search for the selected or checked tracks. Find and save all processes the list in the background.", "Открыть поиск обложек для выбранной или отмеченных композиций. Найти и сохранить все обрабатывает список в фоне."),
             Self::ToggleLyricsPanel => language.text("Show or hide the lyrics panel beside the playlist.", "Показать или скрыть панель текста песни рядом с плейлистом."),
             Self::TogglePlayerSpecialButtons => language.text("Show or hide the equalizer, playback effects and background animation buttons in the player.", "Показать или скрыть кнопки эквалайзера, эффектов воспроизведения и анимации фона в проигрывателе."),
             Self::OpenArtwork => language.text("Open the artwork shown in the player at its original size.", "Открыть обложку из проигрывателя в исходном размере."),

@@ -1,5 +1,6 @@
 mod actions;
 mod artwork;
+mod artwork_batch;
 mod artwork_search;
 mod gif_background;
 mod groups;
@@ -85,6 +86,7 @@ pub struct App {
     pub view: UiState,
     artwork: artwork::ArtworkState,
     pub(crate) artwork_manual: artwork_search::ArtworkManualState,
+    pub(crate) artwork_batch: artwork_batch::ArtworkBatchState,
     gif_background: gif_background::GifBackgroundState,
     wallpaper_palette: wallpaper_palette::WallpaperPaletteState,
     browser_state: BrowserState,
@@ -132,6 +134,7 @@ impl App {
             view,
             artwork: Default::default(),
             artwork_manual: Default::default(),
+            artwork_batch: Default::default(),
             gif_background: Default::default(),
             wallpaper_palette: Default::default(),
             playback: Default::default(),
@@ -214,6 +217,7 @@ impl App {
         self.tick_seek()?;
         self.tick_artwork();
         self.tick_artwork_manual();
+        self.tick_artwork_batch();
         self.tick_file_manager();
         self.tick_gif_background();
         self.tick_wallpaper_palette();
@@ -251,6 +255,7 @@ impl Drop for App {
         self.finish_listening();
         self.downloads.cancel_all();
         self.cancel_artwork_manual();
+        self.cancel_artwork_batch();
         self.services.cancel_all();
         self.mods.cancel_all();
         self.cancel_audio_preparation();

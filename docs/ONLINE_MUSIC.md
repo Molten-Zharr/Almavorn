@@ -58,9 +58,13 @@ Genius works without a key. Musixmatch requires an API key. Lyrics settings incl
 
 Select a track or mark several tracks in a playlist, then open "More > Services (Application) > Artwork search". You can pin this window to the toolbar in Quick access settings.
 
-Choose a marked track and press "Find". Select an edition, preview its cover and choose "Save cover". The player asks for confirmation before writing to the file, because existing front artwork will be replaced.
+Press "Find and save all" to process the displayed list in the background. Missing covers with unambiguous matches are saved to the audio files. Existing covers are kept. You can close the window and reopen it to see progress and each track's result. "Stop" cancels the remaining work and keeps completed saves. Closing the player stops processing.
 
-The player sends the artist and track title from tags or the filename to MusicBrainz and gets the image from Cover Art Archive. Search starts only when you press "Find". Your music remains available offline.
+"Current selection" refreshes the list from the playlist marks. With no marks, the highlighted track is used. Duplicate file paths are processed once. Changing the playlist selection during a search does not change its queue.
+
+Ambiguous matches and errors remain in the results for review and do not stop the other tracks. Select a row and choose "Choose manually" to review editions, preview a cover and use "Save cover". Replacing existing front artwork requires confirmation.
+
+The player sends the artist and track title from tags or the filename to MusicBrainz and gets the image from Cover Art Archive. Processing starts only when you launch it. Your music remains available offline.
 
 ## Downloads
 

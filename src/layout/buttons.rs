@@ -7,6 +7,17 @@ use std::borrow::Cow;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::ArtworkSearch(action) => match action {
+            crate::app::ArtworkSearchAction::StartAll | crate::app::ArtworkSearchAction::Search => Some("R".into()),
+            crate::app::ArtworkSearchAction::StopAll => Some("C".into()),
+            crate::app::ArtworkSearchAction::RefreshTracks => Some("U".into()),
+            crate::app::ArtworkSearchAction::Manual => Some("M".into()),
+            crate::app::ArtworkSearchAction::Save => Some("S".into()),
+            crate::app::ArtworkSearchAction::ConfirmSave => Some("Enter".into()),
+            crate::app::ArtworkSearchAction::CancelSave | crate::app::ArtworkSearchAction::CloseDetails => Some("Esc".into()),
+            crate::app::ArtworkSearchAction::Details => Some("I".into()),
+            _ => None,
+        },
         Target::OpenArtworkSearch
         | Target::ToggleLyricsPanel
         | Target::TogglePlayerSpecialButtons

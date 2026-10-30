@@ -16,6 +16,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub(crate) mod batch;
+
 const MAX_COVER: u64 = 8 * 1024 * 1024;
 
 static LAST_MUSICBRAINZ_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
@@ -382,6 +384,17 @@ fn credit(recording: &Value) -> String {
         .unwrap_or_default()
 }
 
+#[derive(Debug)]
+struct NoCover;
+
+impl std::fmt::Display for NoCover {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("Для этого издания обложка не найдена.")
+    }
+}
+
+impl std::error::Error for NoCover {}
+
 pub(crate) fn preview(candidate: &Candidate) -> Result<(Vec<u8>, crate::artwork::ArtworkImage)> {
     ensure!(
         valid_id(&candidate.id),
@@ -404,10 +417,9 @@ pub(crate) fn preview(candidate: &Candidate) -> Result<(Vec<u8>, crate::artwork:
     } else {
         response
     };
-    ensure!(
-        response.status() != reqwest::StatusCode::NOT_FOUND,
-        "Для этого издания обложка не найдена."
-    );
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoCover.into());
+    }
     let response = response.error_for_status()?;
     ensure!(
         response.status().is_success(),

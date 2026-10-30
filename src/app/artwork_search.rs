@@ -26,6 +26,10 @@ struct SearchRequest {
 
 #[derive(Clone, Copy)]
 pub enum ArtworkSearchAction {
+    StartAll,
+    StopAll,
+    RefreshTracks,
+    Manual,
     Search,
     Track(usize),
     Select(usize),
@@ -45,6 +49,7 @@ pub(crate) struct Preview {
 
 #[derive(Default)]
 pub(crate) struct ArtworkManualState {
+    pub manual_mode: bool,
     pub tracks: Vec<Track>,
     pub track_index: usize,
     pub track: Option<Track>,
@@ -84,6 +89,22 @@ impl App {
     }
 
     pub(super) fn open_artwork_search(&mut self) {
+        if !self.artwork_manual_saving() {
+            self.cancel_artwork_manual();
+            self.artwork_manual.manual_mode = false;
+            self.artwork_manual.details = false;
+            self.artwork_manual.confirm_save = false;
+            if !self.artwork_batch.started {
+                self.refresh_artwork_tracks();
+            }
+        }
+        self.view.dialog = Some(Dialog::ArtworkSearch);
+    }
+
+    fn refresh_artwork_tracks(&mut self) {
+        if self.artwork_batch.running || self.artwork_manual_saving() {
+            return;
+        }
         self.cancel_artwork_manual();
         let mut tracks: Vec<_> = self
             .playlist()
@@ -95,13 +116,15 @@ impl App {
         if tracks.is_empty() {
             tracks.extend(self.entry().map(|entry| entry.track.clone()));
         }
+        let mut paths = std::collections::BTreeSet::new();
+        tracks.retain(|track| paths.insert(track.path.clone()));
         let track = tracks.first().cloned();
         self.artwork_manual = ArtworkManualState {
             tracks,
             track,
             ..Default::default()
         };
-        self.view.dialog = Some(Dialog::ArtworkSearch);
+        self.artwork_batch = Default::default();
     }
 
     pub(super) fn close_artwork_search(&mut self) -> bool {
@@ -122,6 +145,10 @@ impl App {
             return true;
         }
         self.cancel_artwork_manual();
+        if self.artwork_manual.manual_mode {
+            self.artwork_manual.manual_mode = false;
+            return true;
+        }
         false
     }
 
@@ -165,6 +192,36 @@ impl App {
             }
             return Ok(());
         }
+        if !self.artwork_manual.manual_mode {
+            let action = match key.normalized().key {
+                Key::Char('r') => Some(ArtworkSearchAction::StartAll),
+                Key::Char('c') => Some(ArtworkSearchAction::StopAll),
+                Key::Char('u') => Some(ArtworkSearchAction::RefreshTracks),
+                Key::Char('m') | Key::Enter => Some(ArtworkSearchAction::Manual),
+                Key::Char('i') => Some(ArtworkSearchAction::Details),
+                Key::Up => {
+                    self.artwork_search_move(-1)?;
+                    None
+                }
+                Key::Down => {
+                    self.artwork_search_move(1)?;
+                    None
+                }
+                Key::PageUp => {
+                    self.artwork_search_move(-8)?;
+                    None
+                }
+                Key::PageDown => {
+                    self.artwork_search_move(8)?;
+                    None
+                }
+                _ => None,
+            };
+            if let Some(action) = action {
+                self.artwork_search_action(action)?;
+            }
+            return Ok(());
+        }
         match key.normalized().key {
             Key::Char('r') => self.artwork_search_action(ArtworkSearchAction::Search)?,
             Key::Char('s') => self.artwork_search_action(ArtworkSearchAction::Save)?,
@@ -186,6 +243,14 @@ impl App {
     }
 
     pub(super) fn artwork_search_move(&mut self, delta: i64) -> Result<()> {
+        if !self.artwork_manual.manual_mode {
+            let len = self.artwork_manual.tracks.len();
+            if len > 0 {
+                let index = super::bounded(self.artwork_manual.track_index, delta, len);
+                self.artwork_search_action(ArtworkSearchAction::Track(index))?;
+            }
+            return Ok(());
+        }
         let len = self.artwork_manual.results.len();
         if len > 0 {
             let next = super::bounded(self.artwork_manual.selected, delta, len);
@@ -197,7 +262,29 @@ impl App {
     }
 
     pub(super) fn artwork_search_action(&mut self, action: ArtworkSearchAction) -> Result<()> {
+        if self.artwork_batch.running
+            && matches!(
+                action,
+                ArtworkSearchAction::Search
+                    | ArtworkSearchAction::Select(_)
+                    | ArtworkSearchAction::Save
+                    | ArtworkSearchAction::ConfirmSave
+                    | ArtworkSearchAction::Manual
+                    | ArtworkSearchAction::RefreshTracks
+            )
+        {
+            return Ok(());
+        }
         match action {
+            ArtworkSearchAction::StartAll => self.start_artwork_batch(),
+            ArtworkSearchAction::StopAll => self.cancel_artwork_batch(),
+            ArtworkSearchAction::RefreshTracks => self.refresh_artwork_tracks(),
+            ArtworkSearchAction::Manual => {
+                if self.artwork_manual.track.is_some() && !self.artwork_manual_saving() {
+                    self.artwork_manual.manual_mode = true;
+                    return self.artwork_search_action(ArtworkSearchAction::Search);
+                }
+            }
             ArtworkSearchAction::Track(index) => {
                 if self.artwork_manual_saving()
                     || index >= self.artwork_manual.tracks.len()
@@ -442,6 +529,15 @@ impl App {
                         .is_some_and(|track| track.path == done.request.0.path)
                     {
                         self.invalidate_artwork();
+                    }
+                    if let Some(index) = self
+                        .artwork_batch
+                        .tracks
+                        .iter()
+                        .position(|track| track.path == done.request.0.path)
+                    {
+                        self.artwork_batch.reports[index] =
+                            Some(search::batch::Outcome::Saved(backup.clone()));
                     }
                     self.artwork_manual.message = Some(if let Some(path) = backup {
                         format!(

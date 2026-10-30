@@ -11,12 +11,17 @@ use ratatui::{
     widgets::{Paragraph, Wrap},
 };
 
+mod batch;
+
 pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     if app.artwork_manual.details {
         return details(frame, app, area, palette);
     }
     if app.artwork_manual.confirm_save {
         return confirm(frame, app, area, palette);
+    }
+    if !app.artwork_manual.manual_mode {
+        return batch::render(frame, app, area, palette);
     }
     let inner = modal(
         frame,
@@ -49,7 +54,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             app,
             Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
             vec![(
-                app.text("Close", "Закрыть").into(),
+                app.text("Back", "Назад").into(),
                 Target::CloseDialog,
                 true,
             )],
@@ -157,7 +162,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
                     && !saving,
             ),
             (
-                app.text("Close", "Закрыть").into(),
+                app.text("Back", "Назад").into(),
                 Target::CloseDialog,
                 !saving,
             ),
@@ -206,8 +211,8 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         .into()
     } else {
         app.text(
-            "R: find · ←→: track · ↑↓: edition · Enter: save · Esc: close",
-            "R: найти · ←→: композиция · ↑↓: издание · Enter: сохранить · Esc: закрыть",
+            "R: find · ←→: track · ↑↓: edition · Enter: save · Esc: back",
+            "R: найти · ←→: композиция · ↑↓: издание · Enter: сохранить · Esc: назад",
         )
         .into()
     };
@@ -406,9 +411,32 @@ fn details(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         palette,
     );
     let mut text = app.text(
-        "Select tracks in the playlist before opening this window. Choose a track and press Find. No other tracks are searched.\n\nMusicBrainz receives the artist and title from the tags or filename. Cover Art Archive provides the image. Select an edition to see its cover. Saving to an audio file requires confirmation.",
-        "Перед открытием окна отметьте композиции в плейлисте. Выберите нужную и нажмите Найти. Другие композиции не ищутся.\n\nMusicBrainz получает исполнителя и название из тегов или имени файла. Cover Art Archive предоставляет изображение. Выберите издание, чтобы увидеть обложку. Для записи в аудиофайл потребуется подтверждение.",
+        "Mark tracks in the playlist and choose Find and save all. Only this list is processed, one file at a time. Existing covers are kept. Closing this window keeps the search running, while closing the player stops it. Stop cancels the remaining files and keeps completed saves.\n\nChoose Current selection to load the playlist marks again. If no tracks are marked, the highlighted track is used. Duplicate file paths are processed once.\n\nMusicBrainz receives the artist and title from the tags or filename. Cover Art Archive provides the image. Ambiguous or incomplete matches are left for manual review. Errors do not stop the remaining files.\n\nChoose a row and Choose manually to review editions and preview a cover. Replacing existing front artwork requires confirmation.",
+        "Отметьте композиции в плейлисте и нажмите Найти и сохранить все. Обрабатывается только этот список, по одному файлу. Имеющиеся обложки остаются. Окно можно закрыть, поиск продолжится. Закрытие плеера останавливает обработку. Остановить отменяет оставшиеся файлы, сохраняя готовые обложки.\n\nТекущие отметки заново загружает список из плейлиста. Если отметок нет, используется выделенная композиция. Одинаковые пути файлов обрабатываются один раз.\n\nMusicBrainz получает исполнителя и название из тегов или имени файла. Cover Art Archive предоставляет изображение. Неоднозначные или неполные совпадения остаются для ручного выбора. Ошибка не останавливает остальные файлы.\n\nВыберите строку и нажмите Выбрать вручную, чтобы посмотреть издания и обложку. Замена существующей лицевой обложки требует подтверждения.",
     ).to_owned();
+    if let Some(track) = &app.artwork_manual.track {
+        text.push_str(&format!(
+            "\n\n{}: {} - {}\n{}: {}",
+            app.text("Track", "Композиция"),
+            clean(&track.artist),
+            clean(&track.title),
+            app.text("File", "Файл"),
+            clean(&track.path.display().to_string())
+        ));
+    }
+    if let Some(report) = app
+        .artwork_batch
+        .reports
+        .get(app.artwork_manual.track_index)
+        .and_then(Option::as_ref)
+    {
+        text.push_str(&format!(
+            "\n\n{}: {}\n{}",
+            app.text("Result", "Результат"),
+            report.label(app.settings.preferences.language),
+            clean(&report.details(app.settings.preferences.language))
+        ));
+    }
     if let Some(error) = &app.artwork_manual.error {
         text.push_str(&format!(
             "\n\n{}: {}",
