@@ -444,6 +444,7 @@ impl App {
         }
     }
     pub(super) fn close_dialog(&mut self) -> bool {
+        if matches!(self.view.dialog, Some(Dialog::ArtworkSearch)) && self.close_artwork_search() { return true; }
         if matches!(self.view.dialog, Some(Dialog::Statistics)) && self.close_statistics_popup() {
             return true;
         }

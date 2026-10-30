@@ -56,9 +56,11 @@ Genius works without a key. Musixmatch requires an API key. Lyrics settings incl
 
 ## Track artwork
 
-Turn artwork search on or off under "More > Services (Application)". It is enabled by default and searches for missing artwork in your library in the background. You can pin the button to the toolbar in Quick access settings.
+Open "More > Services (Application) > Artwork search" to turn automatic search on or off and see its progress. It is enabled by default and searches for missing artwork in your library in the background. You can pin this window to the toolbar in Quick access settings.
 
-The player sends the artist and track title to MusicBrainz and gets the image from Cover Art Archive. The album is checked locally. Artwork is embedded only when the match is unambiguous and the file has no artwork already. Artist, title and album tags are needed. Your music remains available offline.
+For a manual search, select a track in the library before opening the window and choose "Find". Select an edition, preview its cover and choose "Save cover". The player asks for confirmation before writing to the file, because existing front artwork will be replaced.
+
+The player sends the artist and track title to MusicBrainz and gets the image from Cover Art Archive. Automatic search checks the album locally and embeds artwork only for an unambiguous match when the file has no cover. Automatic search needs artist, title and album tags. Your music remains available offline.
 
 ## Downloads
 

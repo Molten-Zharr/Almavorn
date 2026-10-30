@@ -14,7 +14,6 @@ impl App {
             Repeat => self.settings.preferences.repeat != RepeatMode::Off,
             Marked => self.marked_playback_playlist().is_some(),
             Lyrics => self.settings.preferences.lyrics.show_panel,
-            ArtworkSearch => self.settings.preferences.artwork.search_online,
             SpecialButtons => self.settings.preferences.appearance.show_player_special_buttons,
             Layout => self.view.layout_editing,
             Equalizer => self.settings.preferences.equalizer.enabled,
@@ -53,7 +52,7 @@ impl App {
             Search => Target::Action(Action::Search),
             Filter => Target::Action(Action::Filter),
             Services => Target::Action(Action::Services),
-            ArtworkSearch => Target::ToggleArtworkSearch,
+            ArtworkSearch => Target::OpenArtworkSearch,
             Downloads => Target::Action(Action::Downloads),
             Mods => Target::Action(Action::Mods),
             Statistics => Target::Action(Action::Statistics),
@@ -75,7 +74,7 @@ impl App {
             Layout => self.text("Edit layout", "Редактирование блоков").into(),
             _ => button.name(language).into(),
         };
-        let label = if matches!(button, Layout | ArtworkSearch) {
+        let label = if button == Layout {
             format!("[{}] {name}", if self.quick_active(button) { 'x' } else { ' ' })
         } else if self.quick_active(button) { format!("[x] {name}") } else { name };
         let enabled = match target {

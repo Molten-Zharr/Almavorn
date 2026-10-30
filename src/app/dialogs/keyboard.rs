@@ -31,6 +31,9 @@ impl App {
             Some(Dialog::Equalizer { .. }) => self.equalizer_key(key.normalized()),
             Some(Dialog::PlaybackTuner { .. }) => self.tuner_key(key.normalized()),
             Some(Dialog::Statistics) => self.statistics_key(key.normalized()),
+            Some(Dialog::ArtworkSearch) => {
+                self.artwork_search_key(key)
+            }
             Some(Dialog::CaptureBinding { index }) => self.capture_binding_key(*index, key),
             Some(Dialog::Text(_)) => self.text_key(key),
             Some(Dialog::RemovePlaylist { .. }) => self.remove_playlist_key(key),

@@ -24,9 +24,9 @@ pub(super) fn hint(app: &App) -> Option<String> {
         .and_then(|index| items.get(index))
         .or_else(|| items.get(*selected))?;
     let description = match item.target {
-        Target::ToggleArtworkSearch => app.text(
-            "Find artwork with MusicBrainz and Cover Art Archive, sending the artist and track title to MusicBrainz.",
-            "Искать обложки через MusicBrainz и Cover Art Archive, передавая исполнителя и название композиции в MusicBrainz.",
+        Target::OpenArtworkSearch => app.text(
+            "Open artwork search and its settings.",
+            "Открыть поиск обложек и его настройки.",
         ),
         Target::RevealFile(_) => app.text(
             "Show this audio file in your file manager. Online tracks have no local file.",

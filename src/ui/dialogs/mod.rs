@@ -1,4 +1,5 @@
 mod bindings;
+mod artwork_search;
 mod browser;
 mod color_picker;
 mod equalizer;
@@ -74,6 +75,7 @@ pub(super) fn render_dialog(
         return;
     }
     match dialog {
+        Dialog::ArtworkSearch => artwork_search::render(frame, app, area, palette),
         Dialog::ScanFolders(view) => scan_folders::render(frame, app, view, area, palette),
         Dialog::Form(form)=>forms::render(frame,app,form,area,palette),
         Dialog::Lyrics(view)=>lyrics::render(frame,app,view,area,palette),

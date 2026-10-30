@@ -57,6 +57,7 @@ impl TextDialog {
 
 #[derive(Clone)]
 pub enum Dialog {
+    ArtworkSearch,
     Form(Box<super::Form>),
     Lyrics(super::LyricsView),
     Downloads(super::DownloadsView),
@@ -177,7 +178,7 @@ impl Dialog {
         use crate::input::Action;
         match self {
             Self::Commands { menu, .. } => menu.opening_action(),
-            Self::Form(_) | Self::ScanFolders(_) | Self::QuickAccess { .. } => None,
+            Self::Form(_) | Self::ScanFolders(_) | Self::QuickAccess { .. } | Self::ArtworkSearch => None,
             Self::Lyrics(_) => Some(Action::Lyrics),
             Self::Downloads(_) => Some(Action::Downloads),
             Self::Services(_) => Some(Action::Services),

@@ -144,7 +144,7 @@ pub(crate) fn original_path(request: &ArtworkRequest, cache: &Path) -> Result<Pa
     Ok(path)
 }
 
-fn decode(bytes: &[u8]) -> Result<ArtworkImage> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<ArtworkImage> {
     ensure!(bytes.len() <= 32 * 1024 * 1024, AppError::ArtworkTooLarge);
     let mut reader = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()

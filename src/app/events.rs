@@ -252,6 +252,15 @@ impl App {
                     return Ok(());
                 }
                 let position = Position::new(x, y);
+                if matches!(self.view.dialog, Some(Dialog::ArtworkSearch)) {
+                    if self.artwork_manual.confirm_save { return Ok(()); }
+                    if self.artwork_manual.details {
+                        self.artwork_search_action(super::ArtworkSearchAction::ScrollDetails(delta * 3))?;
+                    } else {
+                        self.artwork_search_move(i64::from(delta) * 3)?;
+                    }
+                    return Ok(());
+                }
                 if matches!(self.view.dialog, Some(Dialog::Browser(_))) {
                     self.scroll_browser_pages(position, delta, ctrl && !shift);
                     return Ok(());
@@ -673,6 +682,8 @@ impl App {
                 }
                 self.save_settings()?;
             }
+            Target::OpenArtworkSearch => self.open_artwork_search(),
+            Target::ArtworkSearch(action) => self.artwork_search_action(action)?,
             Target::Tags(action) => {
                 self.tag_action(action)?;
                 if double && let super::TagAction::Row(index) = action {

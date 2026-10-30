@@ -1,5 +1,6 @@
 mod actions;
 mod artwork;
+mod artwork_search;
 mod gif_background;
 mod groups;
 mod background;
@@ -44,6 +45,7 @@ mod wallpaper_palette;
 mod workspace;
 
 pub use browser::{Browser, BrowserEntry, PaletteFilePicker, PlaylistFolderPicker};
+pub use artwork_search::ArtworkSearchAction;
 pub use commands::{CommandItem, CommandMenu};
 use context::{BrowserState, SettingsPersistence};
 pub use context::{LibraryState, PlaybackState, UiState};
@@ -82,6 +84,7 @@ pub struct App {
     pub mods: ModsState,
     pub view: UiState,
     artwork: artwork::ArtworkState,
+    pub(crate) artwork_manual: artwork_search::ArtworkManualState,
     gif_background: gif_background::GifBackgroundState,
     wallpaper_palette: wallpaper_palette::WallpaperPaletteState,
     browser_state: BrowserState,
@@ -128,6 +131,7 @@ impl App {
             library,
             view,
             artwork: Default::default(),
+            artwork_manual: Default::default(),
             gif_background: Default::default(),
             wallpaper_palette: Default::default(),
             playback: Default::default(),
@@ -209,6 +213,7 @@ impl App {
         self.tick_playback()?;
         self.tick_seek()?;
         self.tick_artwork();
+        self.tick_artwork_manual();
         self.tick_file_manager();
         self.tick_gif_background();
         self.tick_wallpaper_palette();
@@ -246,6 +251,7 @@ impl Drop for App {
         self.finish_listening();
         self.downloads.cancel_all();
         self.cancel_artwork_search();
+        self.cancel_artwork_manual();
         self.services.cancel_all();
         self.mods.cancel_all();
         self.cancel_audio_preparation();
