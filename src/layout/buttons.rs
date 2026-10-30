@@ -7,6 +7,28 @@ use std::borrow::Cow;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::OpenArtworkSearch
+        | Target::ToggleLyricsPanel
+        | Target::TogglePlayerSpecialButtons
+        | Target::ManagePanels
+        | Target::QuickAccess(crate::toolbar::QuickAction::Open)
+        | Target::RevealFile(_)
+        | Target::Artwork
+        | Target::PlayingTrack => {
+            let action = match target {
+                Target::OpenArtworkSearch => Action::ArtworkSearch,
+                Target::ToggleLyricsPanel => Action::ToggleLyricsPanel,
+                Target::TogglePlayerSpecialButtons => Action::TogglePlayerSpecialButtons,
+                Target::ManagePanels => Action::ManagePanels,
+                Target::QuickAccess(_) => Action::QuickAccess,
+                Target::RevealFile(_) => Action::RevealFile,
+                Target::Artwork => Action::OpenArtwork,
+                Target::PlayingTrack => Action::RevealPlayingTrack,
+                _ => unreachable!("matched shortcut target"),
+            };
+            app.settings.preferences.bindings.iter().find(|binding| binding.action == action)
+                .map(|binding| binding.key.label())
+        }
         Target::GroupAction(action) => {
             let action = match action {
                 crate::app::GroupAction::Remove => Action::Delete,
@@ -52,13 +74,6 @@ pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
                 .find(|binding| binding.action == action)
                 .map(|binding| binding.key.label())
         }
-        Target::CommandMenu(crate::app::CommandMenu::Visualizer) => app
-            .settings
-            .preferences
-            .bindings
-            .iter()
-            .find(|binding| binding.action == Action::CycleVisualizer)
-            .map(|binding| binding.key.label()),
         Target::Action(action) => app
             .settings
             .preferences

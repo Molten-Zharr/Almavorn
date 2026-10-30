@@ -535,28 +535,7 @@ impl ProfilePreferences {
             {
                 continue;
             }
-            if matches!(
-                binding.action,
-                crate::input::Action::Filter
-                    | crate::input::Action::OpenAddMenu
-                    | crate::input::Action::OpenPlaylistMenu
-                    | crate::input::Action::OpenTracksMenu
-                    | crate::input::Action::OpenApplicationMenu
-                    | crate::input::Action::ToggleToolbar
-                    | crate::input::Action::EditTags
-                    | crate::input::Action::AddFolderPlaylists
-                    | crate::input::Action::PlaylistFolders
-                    | crate::input::Action::CopyPlaylist
-                    | crate::input::Action::ComposePlaylists
-                    | crate::input::Action::PlaylistUp
-                    | crate::input::Action::PlaylistDown
-                    | crate::input::Action::CycleRepeat
-                    | crate::input::Action::ToggleShuffle
-                    | crate::input::Action::Equalizer
-                    | crate::input::Action::PlaybackTuner
-                    | crate::input::Action::PlayMarked
-                    | crate::input::Action::PlayWholePlaylist
-            ) && self.bindings.iter().any(|value| value.key == binding.key)
+            if self.bindings.iter().any(|value| value.key == binding.key)
                 && let Some(key) =
                     std::iter::once(crate::input::KeyPress::plain(crate::input::Key::F(4)))
                         .chain(crate::input::Key::shortcut_choices().map(|key| {

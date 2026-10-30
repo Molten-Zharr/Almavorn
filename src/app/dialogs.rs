@@ -178,7 +178,9 @@ impl Dialog {
         use crate::input::Action;
         match self {
             Self::Commands { menu, .. } => menu.opening_action(),
-            Self::Form(_) | Self::ScanFolders(_) | Self::QuickAccess { .. } | Self::ArtworkSearch => None,
+            Self::Form(_) | Self::ScanFolders(_) => None,
+            Self::QuickAccess { .. } => Some(Action::QuickAccess),
+            Self::ArtworkSearch => Some(Action::ArtworkSearch),
             Self::Lyrics(_) => Some(Action::Lyrics),
             Self::Downloads(_) => Some(Action::Downloads),
             Self::Services(_) => Some(Action::Services),
@@ -187,7 +189,7 @@ impl Dialog {
             Self::Statistics => Some(Action::Statistics),
             Self::PlaybackTuner { .. } => Some(Action::PlaybackTuner),
             Self::Equalizer { .. } => Some(Action::Equalizer),
-            Self::Panels { .. } => Some(Action::Panels),
+            Self::Panels { .. } => Some(Action::ManagePanels),
             Self::Help { .. } | Self::SettingsHelp { .. } | Self::CopyableHelp { .. } => {
                 Some(Action::Help)
             }

@@ -527,5 +527,16 @@ pub(crate) fn aliases(action: Action) -> &'static str {
         OpenPlaylistMenu => "кнопки плейлиста; playlist menu commands",
         OpenTracksMenu => "кнопки композиции; контекстное меню песни; track song menu commands",
         OpenApplicationMenu => "настройки; верхняя панель; settings toolbar",
+        OpenPlayerMenu => "команды проигрывателя; меню воспроизведения; player playback menu commands",
+        OpenVisualizerMenu => "выбрать анимацию; меню фона; background animation menu visualizer",
+        ArtworkSearch => "найти обложку; картинка альбома из интернета; поиск обложек; find search artwork album cover image",
+        ToggleLyricsPanel => "спрятать текст песни; показать слова рядом; панель текста; show hide lyrics panel sidebar",
+        TogglePlayerSpecialButtons => "скрыть спецкнопки; показать эквалайзер эффекты; кнопки проигрывателя; show hide player special buttons eq fx",
+        OpenArtwork => "увеличить обложку; посмотреть картинку альбома; полный размер; open enlarge artwork cover full size",
+        RevealPlayingTrack => "где играет песня; найти текущую композицию в плейлисте; go to playing track locate current song",
+        CopyPlayingTrack => "скопировать название песни; копировать исполнителя; буфер обмена; copy artist title playing track clipboard",
+        RevealFile => "где лежит файл; открыть папку с песней; проводник; show file manager open containing folder",
+        ManagePanels => "видимость блоков; скрыть панель; показать кнопку; вернуть скрытый блок; show hide blocks buttons panels visibility",
+        QuickAccess => "закрепить кнопку сверху; настроить верхние кнопки; быстрый доступ; pin toolbar buttons quick access customize",
     }
 }

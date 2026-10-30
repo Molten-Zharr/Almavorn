@@ -74,6 +74,9 @@ impl App {
             PlaybackTuner if self.services_playing()=>false,
             Equalizer if self.services_remote_active()=>false,
             Lyrics => self.playback.current.is_some() || self.entry().is_some(),
+            OpenArtwork => self.artwork_image().is_some(),
+            RevealPlayingTrack | CopyPlayingTrack => self.playback.current.is_some(),
+            RevealFile => self.reveal_file_path().is_some(),
             Quit if self.writing_tags() => false,
             EditTags => {
                 !self.busy()
@@ -284,11 +287,13 @@ impl App {
         use Action::*;
         match action {
             OpenApplicationMenu => self.open_settings_page(super::SettingsPage::General),
-            OpenAddMenu | OpenPlaylistMenu | OpenTracksMenu => {
+            OpenAddMenu | OpenPlaylistMenu | OpenTracksMenu | OpenPlayerMenu | OpenVisualizerMenu => {
                 let menu = match action {
                     OpenAddMenu => super::CommandMenu::Add,
                     OpenPlaylistMenu => super::CommandMenu::Playlist,
                     OpenTracksMenu => super::CommandMenu::Tracks,
+                    OpenPlayerMenu => super::CommandMenu::Player,
+                    OpenVisualizerMenu => super::CommandMenu::Visualizer,
                     _ => super::CommandMenu::Application,
                 };
                 self.view.toolbar_selected = self.toolbar_items().iter().position(|item| matches!(item.target, super::Target::CommandMenu(value) if value == menu));
@@ -312,6 +317,23 @@ impl App {
             PlayMarked => self.play_marked()?,
             PlayWholePlaylist => self.play_whole_playlist()?,
             Lyrics => self.open_lyrics()?,
+            ArtworkSearch => self.open_artwork_search(),
+            ToggleLyricsPanel => self.show_panel(crate::workspace::Panel::Lyrics)?,
+            TogglePlayerSpecialButtons => {
+                self.settings.preferences.appearance.show_player_special_buttons = !self.settings.preferences.appearance.show_player_special_buttons;
+                self.cancel_workspace_drag();
+                self.save_settings()?;
+            }
+            OpenArtwork => self.open_artwork(),
+            RevealPlayingTrack => self.reveal_playing_track()?,
+            CopyPlayingTrack => { self.copy_playing_track(); }
+            RevealFile => {
+                if let Some(path) = self.reveal_file_path() { self.open_file_manager(path); }
+            }
+            ManagePanels => {
+                self.view.dialog = Some(Dialog::Panels { selected: 0, expanded: Vec::new() });
+            }
+            QuickAccess => self.quick_access_action(crate::toolbar::QuickAction::Open)?,
             Downloads => self.open_downloads(),
             Services => self.open_services(),
             Mods => self.open_mods(),

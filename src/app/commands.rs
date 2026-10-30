@@ -26,7 +26,9 @@ impl CommandMenu {
             Self::Tracks => Some(Action::OpenTracksMenu),
             Self::Application => Some(Action::OpenApplicationMenu),
             Self::More => Some(Action::ToggleToolbar),
-            Self::Player | Self::Visualizer | Self::Group => None,
+            Self::Player => Some(Action::OpenPlayerMenu),
+            Self::Visualizer => Some(Action::OpenVisualizerMenu),
+            Self::Group => None,
         }
     }
     pub fn title(self, language: crate::model::Language) -> &'static str {

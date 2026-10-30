@@ -148,6 +148,14 @@ fn categories(action: Action) -> &'static [Category] {
     match action {
         OpenAddMenu | OpenPlaylistMenu | OpenTracksMenu | OpenApplicationMenu | ToggleToolbar
         | Quit | Help | SwitchMode => &[C::Navigation],
+        OpenPlayerMenu | OpenVisualizerMenu => &[C::Navigation, C::Playback],
+        ArtworkSearch => &[C::Tracks, C::Tags],
+        ToggleLyricsPanel => &[C::Layout, C::Lyrics],
+        TogglePlayerSpecialButtons => &[C::Playback, C::Layout],
+        OpenArtwork => &[C::Playback, C::Tags],
+        RevealPlayingTrack | CopyPlayingTrack => &[C::Playback, C::Tracks],
+        RevealFile => &[C::Tracks, C::Navigation],
+        ManagePanels | QuickAccess => &[C::Layout, C::Settings],
         Settings => &[C::Settings],
         Statistics => &[C::Statistics],
         TogglePlay | Stop | Next | Previous | CycleRepeat | ToggleShuffle | VolumeUp

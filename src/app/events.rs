@@ -14,6 +14,10 @@ impl App {
         {
             return false;
         }
+        self.copy_playing_track()
+    }
+
+    pub(super) fn copy_playing_track(&mut self) -> bool {
         let Some(track) = self.playback.current.as_ref() else { return false; };
         let text = [track.artist.trim(), track.title.trim()]
             .into_iter()
@@ -673,9 +677,9 @@ impl App {
             }
             Target::LyricsPanel(action) => self.lyrics_panel_action(action)?,
             Target::ToggleLyricsPanel => {
-                self.show_panel(crate::workspace::Panel::Lyrics)?;
+                self.action(Action::ToggleLyricsPanel)?;
             }
-            Target::OpenArtworkSearch => self.open_artwork_search(),
+            Target::OpenArtworkSearch => self.action(Action::ArtworkSearch)?,
             Target::ArtworkSearch(action) => self.artwork_search_action(action)?,
             Target::Tags(action) => {
                 self.tag_action(action)?;
@@ -692,9 +696,7 @@ impl App {
                 }
             }
             Target::TogglePlayerSpecialButtons => {
-                self.settings.preferences.appearance.show_player_special_buttons = !self.settings.preferences.appearance.show_player_special_buttons;
-                self.cancel_workspace_drag();
-                self.save_settings()?;
+                self.action(Action::TogglePlayerSpecialButtons)?;
             }
             Target::ToggleExpandedToolbar => {
                 self.action(Action::ToggleToolbar)?;
@@ -715,10 +717,7 @@ impl App {
             Target::StatisticsControl(control) => self.statistics_control(control)?,
             Target::CommandRow(index) => self.activate_command(index)?,
             Target::ManagePanels => {
-                self.view.dialog = Some(Dialog::Panels {
-                    selected: 0,
-                    expanded: Vec::new(),
-                });
+                self.action(Action::ManagePanels)?;
             }
             Target::PanelFocus(panel) => self.focus_panel(panel),
             Target::PanelMove(panel) => {

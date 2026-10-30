@@ -132,11 +132,22 @@ pub enum Action {
     OpenPlaylistMenu,
     OpenTracksMenu,
     OpenApplicationMenu,
+    OpenPlayerMenu,
+    OpenVisualizerMenu,
     ToggleToolbar,
     Mods,
     Services,
     Downloads,
     Lyrics,
+    ArtworkSearch,
+    ToggleLyricsPanel,
+    TogglePlayerSpecialButtons,
+    OpenArtwork,
+    RevealPlayingTrack,
+    CopyPlayingTrack,
+    RevealFile,
+    ManagePanels,
+    QuickAccess,
     Quit,
     Help,
     Settings,
@@ -222,7 +233,14 @@ impl Action {
             | Self::VolumeUp
             | Self::VolumeDown
             | Self::SeekForward
-            | Self::SeekBackward => ShortcutGroup::Player,
+            | Self::SeekBackward
+            | Self::OpenPlayerMenu
+            | Self::OpenVisualizerMenu
+            | Self::ToggleLyricsPanel
+            | Self::TogglePlayerSpecialButtons
+            | Self::OpenArtwork
+            | Self::RevealPlayingTrack
+            | Self::CopyPlayingTrack => ShortcutGroup::Player,
             Self::Quit
             | Self::OpenAddMenu
             | Self::OpenPlaylistMenu
@@ -239,7 +257,10 @@ impl Action {
             | Self::Redo
             | Self::PlaylistPanel
             | Self::PlayerPanel
-            | Self::Panels => ShortcutGroup::MainWindow,
+            | Self::Panels
+            | Self::ArtworkSearch
+            | Self::ManagePanels
+            | Self::QuickAccess => ShortcutGroup::MainWindow,
             _ => ShortcutGroup::Playlist,
         }
     }
@@ -250,11 +271,22 @@ impl Action {
             Self::OpenPlaylistMenu => language.text("Open the Playlists menu.", "Открыть меню плейлистов."),
             Self::OpenTracksMenu => language.text("Open the Tracks menu.", "Открыть меню композиций."),
             Self::OpenApplicationMenu => language.text("Open Settings from the top toolbar.", "Открыть настройки с верхней панели."),
+            Self::OpenPlayerMenu => language.text("Open the player menu with playback and sound controls.", "Открыть меню проигрывателя с командами воспроизведения и настройки звука."),
+            Self::OpenVisualizerMenu => language.text("Open the background animation menu to choose an effect or turn it off.", "Открыть меню анимации фона: выбрать эффект или выключить его."),
             Self::ToggleToolbar => language.text("Open More: library tools, services, appearance and help.", "Открыть меню Больше: библиотека, сервисы, оформление и справка."),
             Self::Mods => language.text("Open Mods in Settings to install, create or customize a mod.", "Открыть Моды в настройках: установить, создать или настроить мод."),
             Self::Services => language.text("Open Music services in Settings to connect an account and listen online.", "Открыть музыкальные сервисы в настройках: подключить аккаунт и слушать онлайн."),
             Self::Downloads => language.text("Open Downloads to find music or download a link.", "Открыть Загрузки: найти музыку или скачать по ссылке."),
             Self::Lyrics => language.text("Find and save lyrics for the playing or selected track.", "Найти и сохранить текст играющей или выбранной песни."),
+            Self::ArtworkSearch => language.text("Open artwork search for the selected or checked tracks. Search starts when you press Find.", "Открыть поиск обложек для выбранной или отмеченных композиций. Поиск начинается по кнопке Найти."),
+            Self::ToggleLyricsPanel => language.text("Show or hide the lyrics panel beside the playlist.", "Показать или скрыть панель текста песни рядом с плейлистом."),
+            Self::TogglePlayerSpecialButtons => language.text("Show or hide the equalizer, playback effects and background animation buttons in the player.", "Показать или скрыть кнопки эквалайзера, эффектов воспроизведения и анимации фона в проигрывателе."),
+            Self::OpenArtwork => language.text("Open the artwork shown in the player at its original size.", "Открыть обложку из проигрывателя в исходном размере."),
+            Self::RevealPlayingTrack => language.text("Select the playing track in its playlist.", "Перейти к играющей композиции в ее плейлисте."),
+            Self::CopyPlayingTrack => language.text("Copy the playing track's artist and title to the clipboard.", "Скопировать исполнителя и название играющей композиции в буфер обмена."),
+            Self::RevealFile => language.text("Show the selected audio file in the file manager. When the player panel is focused, show the playing file.", "Показать выбранный аудиофайл в проводнике. Если выделена панель проигрывателя, показать играющий файл."),
+            Self::ManagePanels => language.text("Choose which application blocks and buttons are visible.", "Выбрать видимые блоки и кнопки приложения."),
+            Self::QuickAccess => language.text("Choose which commands appear on the quick access toolbar.", "Выбрать команды для панели быстрого доступа."),
             Self::Quit => language.text("Close the player and save settings and playback position.", "Закрыть плеер, сохранив настройки и место прослушивания."),
             Self::Help => language.text("Open Help and keyboard shortcuts.", "Открыть справку и список горячих клавиш."),
             Self::Settings => language.text("Open Settings.", "Открыть настройки."),
@@ -311,11 +343,22 @@ impl Action {
             Self::OpenPlaylistMenu => language.text("Playlist menu", "Меню плейлиста"),
             Self::OpenTracksMenu => language.text("Tracks menu", "Меню композиций"),
             Self::OpenApplicationMenu => language.text("Settings on toolbar", "Настройки на панели"),
+            Self::OpenPlayerMenu => language.text("Player menu", "Меню проигрывателя"),
+            Self::OpenVisualizerMenu => language.text("Background animation menu", "Меню анимации фона"),
             Self::ToggleToolbar => language.text("More menu", "Меню Больше"),
             Self::Mods => language.text("Mods", "Моды"),
             Self::Services => language.text("Music services", "Музыкальные сервисы"),
             Self::Downloads => language.text("Downloads", "Загрузки"),
             Self::Lyrics => language.text("Song lyrics", "Текст песни"),
+            Self::ArtworkSearch => language.text("Artwork search", "Поиск обложек"),
+            Self::ToggleLyricsPanel => language.text("Show/hide lyrics panel", "Показать/скрыть панель текста песни"),
+            Self::TogglePlayerSpecialButtons => language.text("Show/hide player special buttons", "Показать/скрыть спецкнопки проигрывателя"),
+            Self::OpenArtwork => language.text("Open artwork", "Открыть обложку"),
+            Self::RevealPlayingTrack => language.text("Go to playing track", "Перейти к играющей композиции"),
+            Self::CopyPlayingTrack => language.text("Copy artist and title", "Скопировать исполнителя и название"),
+            Self::RevealFile => language.text("Show in file manager", "Открыть в проводнике"),
+            Self::ManagePanels => language.text("Show blocks/buttons", "Отображение блоков/кнопок"),
+            Self::QuickAccess => language.text("Quick access", "Быстрый доступ"),
             Self::Quit => language.text("Quit", "Выход"),
             Self::Help => language.text("Help", "Помощь"),
             Self::Settings => language.text("Settings", "Настройки"),
@@ -432,6 +475,17 @@ pub fn default_bindings() -> Vec<Binding> {
         (OpenTracksMenu, Key::Char('3'), false, true),
         (OpenApplicationMenu, Key::Char('4'), false, true),
         (ToggleToolbar, Key::Char('5'), false, true),
+        (OpenPlayerMenu, Key::Char('6'), false, true),
+        (OpenVisualizerMenu, Key::Char('7'), false, true),
+        (ArtworkSearch, Key::Char('k'), true, false),
+        (ToggleLyricsPanel, Key::Char('l'), false, true),
+        (TogglePlayerSpecialButtons, Key::Char('b'), false, true),
+        (OpenArtwork, Key::Char('i'), false, true),
+        (RevealPlayingTrack, Key::Char('p'), false, true),
+        (CopyPlayingTrack, Key::Char('c'), false, true),
+        (RevealFile, Key::Char('e'), false, true),
+        (ManagePanels, Key::Char('v'), false, true),
+        (QuickAccess, Key::Char('q'), false, true),
         (Downloads, Key::Char('j'), true, false),
         (Services, Key::Char('o'), true, false),
         (Mods, Key::Char('m'), true, false),

@@ -7,6 +7,15 @@ use std::{
 };
 
 impl App {
+    pub(super) fn reveal_file_path(&self) -> Option<PathBuf> {
+        let track = if self.view.workspace.focus == crate::workspace::Panel::Player {
+            self.playback.current.as_ref()
+        } else {
+            self.entry().map(|entry| &entry.track).or(self.playback.current.as_ref())
+        };
+        track.filter(|track| track.path.is_absolute()).map(|track| track.path.clone())
+    }
+
     pub fn file_drag_failed(&mut self, error: impl std::fmt::Display) {
         self.view.notice = format!(
             "{}: {error}",
