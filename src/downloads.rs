@@ -451,6 +451,24 @@ fn is_youtube_url(value: &str) -> bool {
         .is_some_and(|host| host == "youtu.be" || host == "youtube.com" || host.ends_with(".youtube.com"))
 }
 
+fn youtube_url_id(value: &str) -> Option<String> {
+    let url = network::public_url(value).ok()?;
+    if !is_youtube_url(value) {
+        return None;
+    }
+    if url.host_str() == Some("youtu.be") {
+        return url.path_segments()?.next().map(str::to_owned);
+    }
+    if let Some((_, id)) = url.query_pairs().find(|(key, _)| key == "v") {
+        return Some(id.into_owned());
+    }
+    let mut segments = url.path_segments()?;
+    match segments.next()? {
+        "shorts" | "embed" | "live" | "v" => segments.next().map(str::to_owned),
+        _ => None,
+    }
+}
+
 fn youtube_cover(path: &Path, video_id: &str, cancel: &AtomicBool) -> Result<()> {
     ensure!(video_id.len() == 11 && video_id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-')),
         "Неизвестный идентификатор видео.");
@@ -480,6 +498,22 @@ fn youtube_cover(path: &Path, video_id: &str, cancel: &AtomicBool) -> Result<()>
     block.covers.push(crate::tags::Cover { picture, remove: false });
     document.prepare()?.replace()?.accept()?;
     Ok(())
+}
+
+fn add_youtube_cover(job: &mut Download, path: &Path, extracted_id: Option<&str>, cancel: &AtomicBool) {
+    if !is_youtube_url(&job.url) {
+        return;
+    }
+    let id = extracted_id.map(str::to_owned).or_else(|| youtube_url_id(&job.url));
+    let added = id.as_deref().context("Видео не вернуло идентификатор.")
+        .and_then(|id| youtube_cover(path, id, cancel));
+    if added.is_err() && !cancel.load(Ordering::Relaxed) {
+        let note = "Не удалось добавить обложку видео. Аудиофайл сохранен.";
+        job.notice = Some(match job.notice.take() {
+            Some(previous) => format!("{previous}\n{note}"),
+            None => note.into(),
+        });
+    }
 }
 
 fn cobalt(
@@ -539,6 +573,7 @@ pub fn download(
         };
         job.folder = folder;
         save(data, &job)?;
+        let mut youtube_id = None;
         let file = match job.engine {
             Engine::Cobalt => cobalt(data, config, &job.url, cancel, progress, staging.path())?,
             Engine::YtDlp => {
@@ -566,23 +601,13 @@ pub fn download(
                     path.starts_with(staging.path().canonicalize()?) && path.is_file(),
                     "Компонент вернул неверный путь файла."
                 );
-                if is_youtube_url(&job.url) {
-                    let id = stdout.lines()
-                        .find_map(|line| line.strip_prefix("almavorn-video-id:")
-                            .and_then(|value| serde_json::from_str::<String>(value).ok()));
-                    let added = id.as_deref().context("Видео не вернуло идентификатор.")
-                        .and_then(|id| youtube_cover(&path, id, cancel));
-                    if added.is_err() && !cancel.load(Ordering::Relaxed) {
-                        let note = "Не удалось добавить обложку видео. Аудиофайл сохранен.";
-                        job.notice = Some(match job.notice.take() {
-                            Some(previous) => format!("{previous}\n{note}"),
-                            None => note.into(),
-                        });
-                    }
-                }
+                youtube_id = stdout.lines()
+                    .find_map(|line| line.strip_prefix("almavorn-video-id:")
+                        .and_then(|value| serde_json::from_str::<String>(value).ok()));
                 path
             }
         };
+        add_youtube_cover(&mut job, &file, youtube_id.as_deref(), cancel);
         ensure!(!cancel.load(Ordering::Relaxed), "Загрузка отменена.");
         crate::media::read_track(&file)
             .context("Скачанная запись не является поддерживаемым аудиофайлом.")?;

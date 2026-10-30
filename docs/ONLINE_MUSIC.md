@@ -58,7 +58,7 @@ Genius works without a key. Musixmatch requires an API key. Lyrics settings incl
 
 Open "Downloads" and find a song or add a link. The player installs missing components before the first search or download. You can close the window or cancel while it prepares. Downloaded music appears on the sorting desk.
 
-When downloading from YouTube with yt-dlp, the player adds the video thumbnail as cover art if the audio format supports it. If the image is unavailable, the audio still saves.
+When downloading from YouTube, the player adds the video thumbnail as cover art if the audio format supports it. If the image is unavailable, the audio still saves.
 
 Choose a folder and, optionally, a file name. The player creates missing folders. If the chosen folder is unavailable, it tries "Downloads/Almavorn", then "Downloads" itself. The actual folder appears above the selected history entry. Leave the folder field empty to download directly into "Downloads".
 
