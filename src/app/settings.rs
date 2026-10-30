@@ -23,6 +23,7 @@ pub enum SettingsPage {
     #[default]
     General,
     Lyrics,
+    ApplicationServices,
     Profiles,
     Themes,
     Palettes,
@@ -38,9 +39,10 @@ pub enum SettingsPage {
     ServiceGuide,
 }
 impl SettingsPage {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::General,
         Self::Lyrics,
+        Self::ApplicationServices,
         Self::Profiles,
         Self::Themes,
         Self::Palettes,
@@ -55,7 +57,7 @@ impl SettingsPage {
         Self::ServiceDevices,
         Self::ServiceGuide,
     ];
-    pub const SECTIONS: [Self; 7] = [Self::General, Self::Lyrics, Self::Profiles, Self::Themes, Self::Shortcuts, Self::Mods, Self::Services];
+    pub const SECTIONS: [Self; 8] = [Self::General, Self::Lyrics, Self::ApplicationServices, Self::Profiles, Self::Themes, Self::Shortcuts, Self::Mods, Self::Services];
     pub const THEME_TABS: [Self; 4] = [Self::Themes, Self::Palettes, Self::Typography, Self::Animation];
     pub const MOD_TABS: [Self; 2] = [Self::Mods, Self::ModGuide];
     pub const SERVICE_TABS: [Self; 5] = [Self::Services, Self::ServiceTracks, Self::ServicePlaylists, Self::ServiceDevices, Self::ServiceGuide];
@@ -92,6 +94,7 @@ impl SettingsPage {
         match self {
             Self::General => language.text("General", "Общие"),
             Self::Lyrics => language.text("Song lyrics", "Тексты песен"),
+            Self::ApplicationServices => language.text("Services (Application)", "Сервисы (Приложения)"),
             Self::Profiles => language.text("Profiles", "Профили"),
             Self::Themes => language.text("Themes", "Темы"),
             Self::Palettes => language.text("Palettes", "Палитры"),
@@ -356,6 +359,7 @@ impl App {
         let mut items = vec![
             Target::SettingsPage(SettingsPage::General),
             Target::SettingsPage(SettingsPage::Lyrics),
+            Target::SettingsPage(SettingsPage::ApplicationServices),
             Target::SettingsPage(SettingsPage::Profiles),
             Target::SettingsThemes,
         ];
@@ -745,6 +749,12 @@ impl App {
         }
         self.select_setting(row);
         match item.control {
+            SettingControl::ArtworkSearch => {
+                self.settings.preferences.artwork.search_online = !self.settings.preferences.artwork.search_online;
+                if !self.settings.preferences.artwork.search_online {
+                    self.cancel_artwork_search();
+                }
+            }
             SettingControl::LyricsEnabled => {
                 self.settings.preferences.lyrics.enabled = !self.settings.preferences.lyrics.enabled;
             }

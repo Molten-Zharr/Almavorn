@@ -54,6 +54,12 @@ Genius works without a key. Musixmatch requires an API key. Lyrics settings incl
 
 "Sources" in the full window shows search results and errors. When sources cannot be reached, automatic search pauses until "Search again" or re-enabling search. Saved lyrics and file tags remain available offline.
 
+## Track artwork
+
+Turn artwork search on or off under "Settings > Services (Application)". It is enabled by default and searches for missing artwork in your library in the background.
+
+The player sends the artist and track title to MusicBrainz and gets the image from Cover Art Archive. The album is checked locally. Artwork is embedded only when the match is unambiguous and the file has no artwork already. Artist, title and album tags are needed. Your music remains available offline.
+
 ## Downloads
 
 Open "Downloads" and find a song or add a link. The player installs missing components before the first search or download. You can close the window or cancel while it prepares. Downloaded music appears on the sorting desk.
