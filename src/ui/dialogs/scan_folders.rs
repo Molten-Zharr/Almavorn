@@ -67,12 +67,6 @@ pub(super) fn render(
         .wrap(Wrap { trim: false })
         .line_count(inner.width.max(1)) as u16)
         .min(inner.height.saturating_sub(used));
-    frame.render_widget(
-        Paragraph::new(hint)
-            .style(palette.text().fg(palette.muted))
-            .wrap(Wrap { trim: false }),
-        Rect::new(inner.x, inner.y + used, inner.width, hint_height),
-    );
     let count = view.rows.iter().filter(|r| r.checked).count();
     let footer = vec![
         (
@@ -88,13 +82,20 @@ pub(super) fn render(
     ];
     let footer_height = buttons_height(app, inner.width, &footer)
         .min(inner.height.saturating_sub(used + hint_height));
+    let gap = u16::from(inner.height >= used + hint_height + footer_height + 3);
+    frame.render_widget(
+        Paragraph::new(hint)
+            .style(palette.text().fg(palette.muted))
+            .wrap(Wrap { trim: false }),
+        Rect::new(inner.x, inner.y + used + gap, inner.width, hint_height),
+    );
     let list = Rect::new(
         inner.x,
-        inner.y + used + hint_height,
+        inner.y + used + hint_height + gap * 2,
         inner.width,
         inner
             .height
-            .saturating_sub(used + hint_height + footer_height),
+            .saturating_sub(used + hint_height + footer_height + gap * 2),
     );
     view.capacity = list.height as usize;
     view.offset = visible_offset(view.offset, view.selected, view.capacity, view.rows.len());
