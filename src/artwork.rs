@@ -175,6 +175,10 @@ fn decode(bytes: &[u8]) -> Result<ArtworkImage> {
     })
 }
 
+pub(crate) fn validate_bytes(bytes: &[u8]) -> Result<()> {
+    decode(bytes).map(|_| ())
+}
+
 fn image_error(error: image::ImageError) -> anyhow::Error {
     if matches!(error, image::ImageError::Limits(_)) {
         anyhow::Error::new(AppError::ArtworkTooLarge)

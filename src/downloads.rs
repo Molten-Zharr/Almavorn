@@ -446,6 +446,42 @@ fn receive(url: &str, path: &Path, cancel: &AtomicBool, progress: &AtomicU64) ->
     })
 }
 
+fn is_youtube_url(value: &str) -> bool {
+    network::public_url(value).ok().and_then(|url| url.host_str().map(str::to_owned))
+        .is_some_and(|host| host == "youtu.be" || host == "youtube.com" || host.ends_with(".youtube.com"))
+}
+
+fn youtube_cover(path: &Path, video_id: &str, cancel: &AtomicBool) -> Result<()> {
+    ensure!(video_id.len() == 11 && video_id.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-')),
+        "Неизвестный идентификатор видео.");
+    let mut document = crate::tags::Document::read(path)?;
+    if document.blocks.iter().any(|block| !block.covers.is_empty()) {
+        return Ok(());
+    }
+    let block = document.blocks.iter_mut().find(|block| block.writable)
+        .context("Формат не поддерживает запись обложки.")?;
+    ensure!(!cancel.load(Ordering::Relaxed), "Загрузка отменена.");
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(4))
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?;
+    let response = client.get(format!("https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"))
+        .send()?.error_for_status()?;
+    const MAX_COVER: u64 = 8 * 1024 * 1024;
+    ensure!(response.content_length().is_none_or(|size| size <= MAX_COVER), "Обложка слишком большая.");
+    let mut bytes = Vec::new();
+    response.take(MAX_COVER + 1).read_to_end(&mut bytes)?;
+    ensure!(bytes.len() as u64 <= MAX_COVER, "Обложка слишком большая.");
+    ensure!(!cancel.load(Ordering::Relaxed), "Загрузка отменена.");
+    crate::artwork::validate_bytes(&bytes)?;
+    let mut picture = lofty::picture::Picture::from_reader(&mut std::io::Cursor::new(bytes))?;
+    picture.set_pic_type(lofty::picture::PictureType::CoverFront);
+    block.covers.push(crate::tags::Cover { picture, remove: false });
+    document.prepare()?.replace()?.accept()?;
+    Ok(())
+}
+
 fn cobalt(
     data: &Path,
     config: &Config,
@@ -507,7 +543,7 @@ pub fn download(
             Engine::Cobalt => cobalt(data, config, &job.url, cancel, progress, staging.path())?,
             Engine::YtDlp => {
                 let mut command = command(data)?;
-                command.args(["--no-progress","--no-simulate","--max-filesize","1G","--format","bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio[ext=flac]/bestaudio[ext=wav]/bestaudio[acodec=vorbis]/bestaudio","--print","after_move:%(filepath)j","--output"])
+                command.args(["--no-progress","--no-simulate","--max-filesize","1G","--format","bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio[ext=flac]/bestaudio[ext=wav]/bestaudio[acodec=vorbis]/bestaudio","--print","after_move:%(filepath)j","--print","after_move:almavorn-video-id:%(id)j","--output"])
                     .arg(staging.path().join("%(title).100B [%(id)s].%(ext)s")).arg("--").arg(&job.url);
                 let output = process::run(
                     command,
@@ -519,7 +555,8 @@ pub fn download(
                 if !output.success {
                     return Err(failed(&output.stderr));
                 }
-                let path = String::from_utf8(output.stdout)?
+                let stdout = String::from_utf8(output.stdout)?;
+                let path = stdout
                     .lines()
                     .rev()
                     .find_map(|line| serde_json::from_str::<String>(line).ok())
@@ -529,6 +566,20 @@ pub fn download(
                     path.starts_with(staging.path().canonicalize()?) && path.is_file(),
                     "Компонент вернул неверный путь файла."
                 );
+                if is_youtube_url(&job.url) {
+                    let id = stdout.lines()
+                        .find_map(|line| line.strip_prefix("almavorn-video-id:")
+                            .and_then(|value| serde_json::from_str::<String>(value).ok()));
+                    let added = id.as_deref().context("Видео не вернуло идентификатор.")
+                        .and_then(|id| youtube_cover(&path, id, cancel));
+                    if added.is_err() && !cancel.load(Ordering::Relaxed) {
+                        let note = "Не удалось добавить обложку видео. Аудиофайл сохранен.";
+                        job.notice = Some(match job.notice.take() {
+                            Some(previous) => format!("{previous}\n{note}"),
+                            None => note.into(),
+                        });
+                    }
+                }
                 path
             }
         };
