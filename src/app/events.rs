@@ -666,6 +666,13 @@ impl App {
             Target::ToggleLyricsPanel => {
                 self.show_panel(crate::workspace::Panel::Lyrics)?;
             }
+            Target::ToggleArtworkSearch => {
+                self.settings.preferences.artwork.search_online = !self.settings.preferences.artwork.search_online;
+                if !self.settings.preferences.artwork.search_online {
+                    self.cancel_artwork_search();
+                }
+                self.save_settings()?;
+            }
             Target::Tags(action) => {
                 self.tag_action(action)?;
                 if double && let super::TagAction::Row(index) = action {

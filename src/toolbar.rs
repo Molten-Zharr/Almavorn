@@ -5,15 +5,15 @@ use serde::{Deserialize, Serialize};
 pub enum QuickButton {
     Add, Playlist, Tracks, Settings, Mode, Edit, Desk, Shuffle, Repeat, Marked,
     Lyrics, SpecialButtons, Layout, Equalizer, Effects, Animation, Compose, Undo, Redo, Search, Filter,
-    Services, Downloads, Mods, Statistics, Help, Quit, Visibility, Customize,
+    Services, ArtworkSearch, Downloads, Mods, Statistics, Help, Quit, Visibility, Customize,
 }
 
 impl QuickButton {
-    pub const ALL: [Self; 29] = [
+    pub const ALL: [Self; 30] = [
         Self::Add, Self::Playlist, Self::Tracks, Self::Settings, Self::Mode,
         Self::Edit, Self::Desk, Self::Shuffle, Self::Repeat, Self::Marked,
         Self::Lyrics, Self::SpecialButtons, Self::Layout, Self::Equalizer, Self::Effects, Self::Animation, Self::Compose, Self::Undo, Self::Redo,
-        Self::Search, Self::Filter, Self::Services, Self::Downloads, Self::Mods,
+        Self::Search, Self::Filter, Self::Services, Self::ArtworkSearch, Self::Downloads, Self::Mods,
         Self::Statistics, Self::Help, Self::Quit, Self::Visibility, Self::Customize,
     ];
 
@@ -41,6 +41,7 @@ impl QuickButton {
             Self::Search => ("Search", "Поиск"),
             Self::Filter => ("Filter", "Фильтр"),
             Self::Services => ("Music services", "Музыкальные сервисы"),
+            Self::ArtworkSearch => ("Artwork search", "Поиск обложек"),
             Self::Downloads => ("Downloads", "Загрузки"),
             Self::Mods => ("Mods", "Моды"),
             Self::Statistics => ("Listening statistics", "Статистика прослушивания"),
@@ -58,7 +59,7 @@ impl QuickButton {
             Add | Playlist | Tracks | Settings => language.text("Main buttons", "Основные кнопки"),
             Mode | Edit | Desk | Shuffle | Repeat | Marked | Lyrics | SpecialButtons | Layout | Equalizer | Effects | Animation => language.text("Modes and state", "Режимы и состояния"),
             Compose | Undo | Redo | Search | Filter => language.text("Library", "Библиотека"),
-            Services | Downloads | Mods => language.text("Music services", "Музыкальные сервисы"),
+            Services | ArtworkSearch | Downloads | Mods => language.text("Services (Application)", "Сервисы (Приложение)"),
             Statistics | Help | Quit => language.text("Information", "Информация"),
             Visibility | Customize => language.text("Appearance", "Оформление"),
         }

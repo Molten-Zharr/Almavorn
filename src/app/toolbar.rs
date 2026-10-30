@@ -14,6 +14,7 @@ impl App {
             Repeat => self.settings.preferences.repeat != RepeatMode::Off,
             Marked => self.marked_playback_playlist().is_some(),
             Lyrics => self.settings.preferences.lyrics.show_panel,
+            ArtworkSearch => self.settings.preferences.artwork.search_online,
             SpecialButtons => self.settings.preferences.appearance.show_player_special_buttons,
             Layout => self.view.layout_editing,
             Equalizer => self.settings.preferences.equalizer.enabled,
@@ -52,6 +53,7 @@ impl App {
             Search => Target::Action(Action::Search),
             Filter => Target::Action(Action::Filter),
             Services => Target::Action(Action::Services),
+            ArtworkSearch => Target::ToggleArtworkSearch,
             Downloads => Target::Action(Action::Downloads),
             Mods => Target::Action(Action::Mods),
             Statistics => Target::Action(Action::Statistics),
@@ -73,8 +75,8 @@ impl App {
             Layout => self.text("Edit layout", "Редактирование блоков").into(),
             _ => button.name(language).into(),
         };
-        let label = if button == Layout {
-            format!("[{}] {name}", if self.view.layout_editing { 'x' } else { ' ' })
+        let label = if matches!(button, Layout | ArtworkSearch) {
+            format!("[{}] {name}", if self.quick_active(button) { 'x' } else { ' ' })
         } else if self.quick_active(button) { format!("[x] {name}") } else { name };
         let enabled = match target {
             Target::Action(action) => self.allowed(action),
@@ -134,7 +136,7 @@ impl App {
             ("Editing (Playlist)", "Редактирование (Плейлист)", &[B::Playlist, B::Edit, B::Compose, B::Undo, B::Redo][..]),
             ("Management (Tracks)", "Управление (Композиции)", &[B::Add, B::Tracks, B::Desk, B::Search, B::Filter, B::Marked, B::Lyrics][..]),
             ("Playback (Player)", "Воспроизведение (Проигрыватель)", &[B::Shuffle, B::Repeat, B::Equalizer, B::Effects, B::Animation, B::SpecialButtons][..]),
-            ("Services (Application)", "Сервисы (Приложение)", &[B::Services, B::Downloads, B::Mods][..]),
+            ("Services (Application)", "Сервисы (Приложение)", &[B::Services, B::ArtworkSearch, B::Downloads, B::Mods][..]),
         ] {
             let mut group = Vec::new();
             for &button in buttons {

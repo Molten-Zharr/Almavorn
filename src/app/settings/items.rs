@@ -7,7 +7,6 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub(crate) enum SettingControl {
-    ArtworkSearch,
     WallpaperSource,
     WallpaperFile,
     WallpaperScheme,
@@ -148,12 +147,6 @@ impl App {
             SettingsPage::Mods | SettingsPage::ModGuide | SettingsPage::Services
             | SettingsPage::ServiceTracks | SettingsPage::ServicePlaylists
             | SettingsPage::ServiceDevices | SettingsPage::ServiceGuide => Vec::new(),
-            SettingsPage::ApplicationServices => vec![make(
-                lang.text("Find missing artwork", "Искать недостающие обложки"),
-                if self.settings.preferences.artwork.search_online { "[x]" } else { "[ ]" }.into(),
-                lang.text("Search MusicBrainz and Cover Art Archive in the background. The artist and track title are sent to MusicBrainz. The album is checked locally. A cover is saved only for an unambiguous match and never replaces an existing one.", "Искать обложки в MusicBrainz и Cover Art Archive в фоновом режиме. В MusicBrainz передаются исполнитель и название композиции. Альбом сверяется на компьютере. Обложка сохраняется только при однозначном совпадении и не заменяет существующую."),
-                SettingControl::ArtworkSearch, true,
-            )],
             SettingsPage::WallpaperPalette => {
                 let options = &self.settings.preferences.appearance.wallpaper_palette;
                 let mut rows = vec![

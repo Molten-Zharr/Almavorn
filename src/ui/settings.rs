@@ -67,7 +67,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
     let body_height = inner.height.saturating_sub(footer_height);
     let compact_online = app.settings_page().is_online() && inner.width < 64;
     let menu_visible = !compact_online || app.settings_focus() != SettingsFocus::Parameters;
-    let min_menu_width = if inner.width >= 64 { 24 } else if inner.width < 45 { 10 } else { 12 };
+    let min_menu_width = if inner.width < 45 { 10 } else { 12 };
     let menu_width = if !menu_visible {
         0
     } else if compact_online {
@@ -79,7 +79,7 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
         {
             (inner.width / 3).clamp(min_menu_width, 24)
         } else {
-            (inner.width / 5).clamp(min_menu_width, 24)
+            (inner.width / 5).clamp(min_menu_width, 20)
         }
         .min(inner.width / 2)
     };
