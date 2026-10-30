@@ -3,7 +3,7 @@ use crate::{
     tags::{Cover, Document},
 };
 use anyhow::{Context, Result, ensure};
-use reqwest::{blocking::Client, redirect::Policy};
+use reqwest::{blocking::Client, header::RETRY_AFTER, redirect::Policy};
 use serde_json::Value;
 use std::{
     collections::BTreeSet,
@@ -20,17 +20,30 @@ const MAX_COVER: u64 = 8 * 1024 * 1024;
 
 static LAST_MUSICBRAINZ_REQUEST: Mutex<Option<Instant>> = Mutex::new(None);
 
-fn wait_for_musicbrainz() {
+fn wait_for_musicbrainz(cancel: &AtomicBool) -> Result<()> {
     let mut previous = LAST_MUSICBRAINZ_REQUEST
         .lock()
         .unwrap_or_else(|error| error.into_inner());
     if let Some(last) = *previous {
         let delay = Duration::from_millis(1200).saturating_sub(last.elapsed());
         if !delay.is_zero() {
-            std::thread::sleep(delay);
+            wait(cancel, delay)?;
         }
     }
     *previous = Some(Instant::now());
+    Ok(())
+}
+
+fn wait(cancel: &AtomicBool, duration: Duration) -> Result<()> {
+    let deadline = Instant::now() + duration;
+    loop {
+        ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Ok(());
+        }
+        std::thread::sleep(remaining.min(Duration::from_millis(100)));
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +59,71 @@ pub(crate) struct SearchProgress {
     pub checked: u64,
     pub total: u64,
     pub editions: usize,
+    pub retry: Option<RetryProgress>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct RetryProgress {
+    pub status: u16,
+    pub attempt: u8,
+    pub wait_seconds: u64,
+}
+
+pub(crate) struct SearchResult {
+    pub candidates: Vec<Candidate>,
+    pub truncated: bool,
+    pub warning: Option<String>,
+}
+
+fn musicbrainz_page(
+    client: &Client,
+    query: &str,
+    offset: u64,
+    cancel: &AtomicBool,
+    progress: &mpsc::Sender<SearchProgress>,
+    mut state: SearchProgress,
+) -> Result<Value> {
+    for attempt in 1..=3_u8 {
+        wait_for_musicbrainz(cancel)?;
+        ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
+        state.retry = None;
+        let _ = progress.send(state);
+        let response = client
+            .get("https://musicbrainz.org/ws/2/recording/")
+            .query(&[("query", query), ("fmt", "json"), ("limit", "100"), ("offset", &offset.to_string())])
+            .send()
+            .context("Не удалось соединиться с MusicBrainz. Проверьте подключение и нажмите Найти еще раз")?;
+        let status = response.status().as_u16();
+        if matches!(status, 429 | 500 | 502 | 503 | 504) {
+            ensure!(
+                attempt < 3,
+                "MusicBrainz временно недоступен (HTTP {status}). Выполнены 3 попытки. Повторите поиск позже."
+            );
+            let delay = match response.headers().get(RETRY_AFTER) {
+                Some(value) => value
+                    .to_str()
+                    .ok()
+                    .and_then(|value| value.trim().parse::<u64>().ok()),
+                None => Some(2_u64.pow(u32::from(attempt))),
+            };
+            let Some(delay) = delay.filter(|delay| *delay <= 30) else {
+                anyhow::bail!(
+                    "MusicBrainz просит повторить запрос позже (HTTP {status}). Нажмите Найти через некоторое время."
+                );
+            };
+            drop(response);
+            state.retry = Some(RetryProgress {
+                status,
+                attempt: attempt + 1,
+                wait_seconds: delay,
+            });
+            let _ = progress.send(state);
+            wait(cancel, Duration::from_secs(delay))?;
+            continue;
+        }
+        return crate::network::json(response).context("MusicBrainz не смог завершить поиск");
+    }
+    unreachable!("retry loop returns on its last attempt")
 }
 
 #[derive(Clone)]
@@ -86,7 +164,7 @@ pub(crate) fn manual_search(
     track: &Track,
     cancel: &AtomicBool,
     progress: &mpsc::Sender<SearchProgress>,
-) -> Result<(Vec<Candidate>, bool)> {
+) -> Result<SearchResult> {
     let query = crate::lyrics::Query {
         track: track.clone(),
         artist: if usable(&track.artist) {
@@ -116,6 +194,7 @@ pub(crate) fn manual_search(
     let mut seen = BTreeSet::new();
     let mut results = Vec::new();
     let mut truncated = false;
+    let mut warning = None;
     'guesses: for (guess_artist, guess_title) in guesses {
         let query = format!(
             "recording:{} AND artist:{}",
@@ -124,20 +203,27 @@ pub(crate) fn manual_search(
         );
         let mut offset = 0_u64;
         loop {
-            ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
-            wait_for_musicbrainz();
-            ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
-            let response = client
-                .get("https://musicbrainz.org/ws/2/recording/")
-                .query(&[
-                    ("query", query.as_str()),
-                    ("fmt", "json"),
-                    ("limit", "100"),
-                    ("offset", &offset.to_string()),
-                ])
-                .send()
-                .context("MusicBrainz недоступен")?;
-            let body: Value = crate::network::json(response)?;
+            let body = match musicbrainz_page(
+                &client,
+                &query,
+                offset,
+                cancel,
+                progress,
+                SearchProgress {
+                    checked: offset,
+                    total: 0,
+                    editions: results.len(),
+                    retry: None,
+                },
+            ) {
+                Ok(body) => body,
+                Err(error) if !results.is_empty() && !cancel.load(Ordering::Relaxed) => {
+                    truncated = true;
+                    warning = Some(format!("Показаны найденные издания. {error:#}"));
+                    break 'guesses;
+                }
+                Err(error) => return Err(error),
+            };
             let count = body["count"]
                 .as_u64()
                 .context("MusicBrainz не вернул число записей.")?;
@@ -187,6 +273,7 @@ pub(crate) fn manual_search(
                 checked: offset,
                 total: count,
                 editions: results.len(),
+                retry: None,
             });
             if offset >= count {
                 break;
@@ -196,13 +283,20 @@ pub(crate) fn manual_search(
                 break;
             }
         }
+        if !results.is_empty() {
+            break;
+        }
     }
     results.sort_by_key(|candidate| normalized(&candidate.album) != normalized(&track.album));
     if results.len() > 100 {
         results.truncate(100);
         truncated = true;
     }
-    Ok((results, truncated))
+    Ok(SearchResult {
+        candidates: results,
+        truncated,
+        warning,
+    })
 }
 
 fn normalized(value: &str) -> String {

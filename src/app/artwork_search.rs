@@ -5,7 +5,7 @@ use super::{
 use crate::{
     artwork::{
         ArtworkImage,
-        search::{self, Candidate, FileSnapshot, SearchProgress},
+        search::{self, Candidate, FileSnapshot, SearchProgress, SearchResult},
     },
     input::{Key, KeyPress},
     model::Track,
@@ -54,13 +54,14 @@ pub(crate) struct ArtworkManualState {
     pub preview: Option<Preview>,
     pub error: Option<String>,
     pub message: Option<String>,
+    pub warning: Option<String>,
     pub confirm_save: bool,
     pub confirmation_visible: bool,
     pub details: bool,
     pub details_offset: usize,
     pub progress: Option<SearchProgress>,
     snapshot: Option<FileSnapshot>,
-    search: LatestJob<SearchRequest, (Vec<Candidate>, bool)>,
+    search: LatestJob<SearchRequest, SearchResult>,
     preview_job: LatestJob<(usize, Candidate), (Vec<u8>, ArtworkImage)>,
     save_job: LatestJob<
         (Track, Arc<Vec<u8>>, Arc<Mutex<bool>>, FileSnapshot),
@@ -213,6 +214,7 @@ impl App {
                 self.artwork_manual.truncated = false;
                 self.artwork_manual.error = None;
                 self.artwork_manual.message = None;
+                self.artwork_manual.warning = None;
                 self.artwork_manual.progress = None;
                 self.artwork_manual.snapshot = None;
             }
@@ -257,6 +259,7 @@ impl App {
                 self.artwork_manual.truncated = false;
                 self.artwork_manual.error = None;
                 self.artwork_manual.message = None;
+                self.artwork_manual.warning = None;
                 if let Some(cancel) = self.artwork_manual.search_cancel.take() {
                     cancel.store(true, Ordering::Relaxed);
                 }
@@ -376,12 +379,13 @@ impl App {
             self.artwork_manual.search_cancel = None;
             self.artwork_manual.progress_receiver = None;
             match done.result {
-                Ok((results, truncated)) => {
-                    self.artwork_manual.results = results;
-                    self.artwork_manual.truncated = truncated;
+                Ok(result) => {
+                    self.artwork_manual.results = result.candidates;
+                    self.artwork_manual.truncated = result.truncated;
+                    self.artwork_manual.warning = result.warning;
                     if self.artwork_manual.results.is_empty() {
                         self.artwork_manual.message = Some(
-                            if truncated {
+                            if result.truncated {
                                 self.text(
                                     "No matching releases in the checked results",
                                     "В проверенных результатах подходящих изданий нет",

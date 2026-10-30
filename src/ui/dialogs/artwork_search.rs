@@ -138,7 +138,12 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         Rect::new(inner.x, inner.y + 8, inner.width, 2),
         vec![
             (
-                app.text("Find", "Найти").into(),
+                if app.artwork_manual.error.is_some() {
+                    app.text("Retry search", "Повторить поиск")
+                } else {
+                    app.text("Find", "Найти")
+                }
+                .into(),
                 Target::ArtworkSearch(A::Search),
                 app.artwork_manual.track.is_some() && !app.artwork_manual_searching() && !saving,
             ),
@@ -159,12 +164,20 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         ],
         palette,
     );
-    let footer_height =
-        if app.artwork_manual.error.is_some() || app.artwork_manual.message.is_some() {
-            4
-        } else {
-            1
-        };
+    let retry = app
+        .artwork_manual
+        .progress
+        .and_then(|progress| progress.retry)
+        .filter(|_| app.artwork_manual_searching());
+    let footer_height = if app.artwork_manual.error.is_some()
+        || app.artwork_manual.message.is_some()
+        || app.artwork_manual.warning.is_some()
+        || retry.is_some()
+    {
+        4
+    } else {
+        1
+    };
     let footer_y = inner.bottom().saturating_sub(footer_height);
     let message = if saving {
         app.text("Saving artwork…", "Сохранение обложки…")
@@ -173,6 +186,18 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         format!("{}: {}", app.text("Error", "Ошибка"), clean(error))
     } else if let Some(message) = &app.artwork_manual.message {
         message.clone()
+    } else if let Some(warning) = &app.artwork_manual.warning {
+        clean(warning)
+    } else if let Some(retry) = retry {
+        format!(
+            "MusicBrainz: HTTP {}. {} {}/3, {} {} {}.",
+            retry.status,
+            app.text("Attempt", "Попытка"),
+            retry.attempt,
+            app.text("pause", "пауза"),
+            retry.wait_seconds,
+            app.text("s", "с")
+        )
     } else if app.artwork_manual.truncated {
         app.text(
             "Showing the first results. Select an edition to load its cover.",
@@ -205,9 +230,9 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             },
         ),
     );
-    if app.artwork_manual.error.is_some() {
+    if app.artwork_manual.error.is_some() || app.artwork_manual.warning.is_some() {
         frame.render_widget(
-            Paragraph::new(app.text("Full error: Details", "Полная ошибка: Подробнее"))
+            Paragraph::new(app.text("Full message: Details", "Полное сообщение: Подробнее"))
                 .style(palette.text().fg(palette.muted)),
             Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
         );
@@ -265,7 +290,11 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         )
     };
     if app.artwork_manual_searching() {
-        let message = if let Some(progress) = app.artwork_manual.progress {
+        let message = if let Some(progress) = app
+            .artwork_manual
+            .progress
+            .filter(|progress| progress.total > 0)
+        {
             format!(
                 "{}: {}/{} · {}: {}",
                 app.text("MusicBrainz checked", "MusicBrainz проверено"),
@@ -389,6 +418,9 @@ fn details(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
     }
     if let Some(message) = &app.artwork_manual.message {
         text.push_str(&format!("\n\n{}", clean(message)));
+    }
+    if let Some(warning) = &app.artwork_manual.warning {
+        text.push_str(&format!("\n\n{}", clean(warning)));
     }
     let body = Rect::new(
         inner.x,
