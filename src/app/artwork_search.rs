@@ -5,10 +5,10 @@ use super::{
 use crate::{
     artwork::{
         ArtworkImage,
-        search::{self, Candidate, FileSnapshot, SearchProgress, SearchResult},
+        search::{self, Candidate, CoverProgress, FileSnapshot, SearchProgress, SearchResult},
     },
     input::{Key, KeyPress},
-    model::Track,
+    model::{Language, Track},
 };
 use anyhow::Result;
 use std::sync::{
@@ -22,6 +22,15 @@ struct SearchRequest {
     track: Track,
     cancel: Arc<AtomicBool>,
     progress: mpsc::Sender<SearchProgress>,
+}
+
+#[derive(Clone)]
+struct PreviewRequest {
+    index: usize,
+    candidate: Candidate,
+    cancel: Arc<AtomicBool>,
+    progress: mpsc::Sender<CoverProgress>,
+    language: Language,
 }
 
 #[derive(Clone, Copy)]
@@ -58,6 +67,7 @@ pub(crate) struct ArtworkManualState {
     pub truncated: bool,
     pub preview: Option<Preview>,
     pub error: Option<String>,
+    pub diagnostic: Option<String>,
     pub message: Option<String>,
     pub warning: Option<String>,
     pub confirm_save: bool,
@@ -65,16 +75,19 @@ pub(crate) struct ArtworkManualState {
     pub details: bool,
     pub details_offset: usize,
     pub progress: Option<SearchProgress>,
+    pub cover_progress: Option<CoverProgress>,
     snapshot: Option<FileSnapshot>,
     search: LatestJob<SearchRequest, SearchResult>,
-    preview_job: LatestJob<(usize, Candidate), (Vec<u8>, ArtworkImage)>,
+    preview_job: LatestJob<PreviewRequest, (Vec<u8>, ArtworkImage)>,
     save_job: LatestJob<
         (Track, Arc<Vec<u8>>, Arc<Mutex<bool>>, FileSnapshot),
         Option<std::path::PathBuf>,
     >,
     allowed: Option<Arc<Mutex<bool>>>,
     search_cancel: Option<Arc<AtomicBool>>,
+    preview_cancel: Option<Arc<AtomicBool>>,
     progress_receiver: Option<mpsc::Receiver<SearchProgress>>,
+    cover_receiver: Option<mpsc::Receiver<CoverProgress>>,
 }
 
 impl App {
@@ -161,8 +174,17 @@ impl App {
             *allowed.lock().unwrap_or_else(|error| error.into_inner()) = false;
         }
         self.artwork_manual.search.cancel();
-        self.artwork_manual.preview_job.cancel();
+        self.cancel_artwork_preview();
         self.artwork_manual.save_job.cancel();
+    }
+
+    fn cancel_artwork_preview(&mut self) {
+        if let Some(cancel) = self.artwork_manual.preview_cancel.take() {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        self.artwork_manual.cover_receiver = None;
+        self.artwork_manual.cover_progress = None;
+        self.artwork_manual.preview_job.cancel();
     }
 
     pub(super) fn artwork_search_key(&mut self, key: KeyPress) -> Result<()> {
@@ -300,6 +322,7 @@ impl App {
                 self.artwork_manual.selected = 0;
                 self.artwork_manual.truncated = false;
                 self.artwork_manual.error = None;
+                self.artwork_manual.diagnostic = None;
                 self.artwork_manual.message = None;
                 self.artwork_manual.warning = None;
                 self.artwork_manual.progress = None;
@@ -321,6 +344,7 @@ impl App {
                 if self.artwork_manual_saving() || self.artwork_manual_searching() {
                     return Ok(());
                 }
+                self.artwork_manual.diagnostic = None;
                 let Some(track) = self.artwork_manual.track.clone() else {
                     self.artwork_manual.error = Some(
                         self.text(
@@ -339,7 +363,7 @@ impl App {
                     }
                 };
                 self.artwork_manual.snapshot = Some(snapshot);
-                self.artwork_manual.preview_job.cancel();
+                self.cancel_artwork_preview();
                 self.artwork_manual.results.clear();
                 self.artwork_manual.preview = None;
                 self.artwork_manual.selected = 0;
@@ -372,7 +396,19 @@ impl App {
                 self.artwork_manual.preview = None;
                 self.artwork_manual.error = None;
                 self.artwork_manual.message = None;
-                self.artwork_manual.preview_job.request((index, candidate));
+                self.artwork_manual.diagnostic = None;
+                self.cancel_artwork_preview();
+                let cancel = Arc::new(AtomicBool::new(false));
+                let (progress, receiver) = mpsc::channel();
+                self.artwork_manual.cover_receiver = Some(receiver);
+                self.artwork_manual.preview_cancel = Some(cancel.clone());
+                self.artwork_manual.preview_job.request(PreviewRequest {
+                    index,
+                    candidate,
+                    cancel,
+                    progress,
+                    language: self.settings.preferences.language,
+                });
             }
             ArtworkSearchAction::Save => {
                 if !self.artwork_manual_saving()
@@ -436,9 +472,18 @@ impl App {
                 search::manual_search(&request.track, &request.cancel, &request.progress)
             })
         });
-        self.artwork_manual.preview_job.start(|(_, candidate)| {
-            let candidate = candidate.clone();
-            background(runtime, move || search::preview(&candidate))
+        self.artwork_manual.preview_job.start(|request| {
+            let request = request.clone();
+            background(runtime, move || {
+                search::preview(
+                    &request.candidate,
+                    &request.cancel,
+                    request.language,
+                    |progress| {
+                        let _ = request.progress.send(progress);
+                    },
+                )
+            })
         });
         self.artwork_manual
             .save_job
@@ -454,6 +499,11 @@ impl App {
     }
 
     pub(super) fn tick_artwork_manual(&mut self) {
+        if let Some(receiver) = &self.artwork_manual.cover_receiver {
+            for progress in receiver.try_iter() {
+                self.artwork_manual.cover_progress = Some(progress);
+            }
+        }
         if let Some(receiver) = &self.artwork_manual.progress_receiver {
             for progress in receiver.try_iter() {
                 self.artwork_manual.progress = Some(progress);
@@ -497,22 +547,20 @@ impl App {
         if let Some(done) = self.artwork_manual.preview_job.poll()
             && done.current
         {
+            self.artwork_manual.preview_cancel = None;
+            self.artwork_manual.cover_receiver = None;
+            self.artwork_manual.cover_progress = None;
             match done.result {
                 Ok((bytes, image)) => {
                     self.artwork_manual.preview = Some(Preview {
-                        index: done.request.0,
+                        index: done.request.index,
                         image: Arc::new(image),
                         bytes: Arc::new(bytes),
                     })
                 }
                 Err(error) => {
-                    self.artwork_manual.error = Some(format!(
-                        "{}: {error:#}",
-                        self.text(
-                            "Could not load artwork from Cover Art Archive",
-                            "Не удалось загрузить обложку из Cover Art Archive"
-                        )
-                    ));
+                    self.artwork_manual.error = Some(error.to_string());
+                    self.artwork_manual.diagnostic = Some(format!("{error:#}"));
                 }
             }
         }

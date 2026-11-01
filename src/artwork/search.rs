@@ -1,5 +1,5 @@
 use crate::{
-    model::Track,
+    model::{Language, Track},
     tags::{Cover, Document},
 };
 use anyhow::{Context, Result, ensure};
@@ -7,7 +7,7 @@ use reqwest::{blocking::Client, header::RETRY_AFTER, redirect::Policy};
 use serde_json::Value;
 use std::{
     collections::BTreeSet,
-    io::{Cursor, Read},
+    io::Cursor,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -17,6 +17,8 @@ use std::{
 };
 
 pub(crate) mod batch;
+mod cover;
+pub(crate) use cover::Progress as CoverProgress;
 
 const MAX_COVER: u64 = 8 * 1024 * 1024;
 
@@ -338,14 +340,18 @@ fn valid_id(value: &str) -> bool {
 }
 
 fn client() -> Result<Client> {
+    client_with_timeouts(Duration::from_secs(5), Duration::from_secs(15))
+}
+
+fn client_with_timeouts(connect: Duration, total: Duration) -> Result<Client> {
     Ok(Client::builder()
         .user_agent(concat!(
             "Almavorn/",
             env!("CARGO_PKG_VERSION"),
             " (https://github.com/Molten-Zharr/Almavorn)"
         ))
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(15))
+        .connect_timeout(connect)
+        .timeout(total)
         .redirect(Policy::custom(|attempt| {
             let url = attempt.url();
             let allowed = url.scheme() == "https"
@@ -395,45 +401,36 @@ impl std::fmt::Display for NoCover {
 
 impl std::error::Error for NoCover {}
 
-pub(crate) fn preview(candidate: &Candidate) -> Result<(Vec<u8>, crate::artwork::ArtworkImage)> {
+pub(crate) fn preview(
+    candidate: &Candidate,
+    cancel: &AtomicBool,
+    language: Language,
+    mut progress: impl FnMut(CoverProgress),
+) -> Result<(Vec<u8>, crate::artwork::ArtworkImage)> {
     ensure!(
         valid_id(&candidate.id),
         "Некорректный идентификатор обложки."
     );
-    let client = client()?;
-    let response = client
-        .get(format!(
+    let client = client_with_timeouts(Duration::from_secs(10), Duration::from_secs(25))?;
+    let bytes = match cover::download(
+        &client,
+        &format!(
             "https://coverartarchive.org/release/{}/front-500",
             candidate.id
-        ))
-        .send()?;
-    let response = if response.status() == reqwest::StatusCode::NOT_FOUND {
-        client
-            .get(format!(
-                "https://coverartarchive.org/release/{}/front",
-                candidate.id
-            ))
-            .send()?
-    } else {
-        response
+        ),
+        cancel,
+        language,
+        &mut progress,
+    ) {
+        Err(error) if error.is::<NoCover>() => cover::download(
+            &client,
+            &format!("https://coverartarchive.org/release/{}/front", candidate.id),
+            cancel,
+            language,
+            &mut progress,
+        )?,
+        result => result?,
     };
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(NoCover.into());
-    }
-    let response = response.error_for_status()?;
-    ensure!(
-        response.status().is_success(),
-        "Cover Art Archive перенаправил запрос на недоступный адрес."
-    );
-    ensure!(
-        response
-            .content_length()
-            .is_none_or(|size| size <= MAX_COVER),
-        "Обложка больше 8 МБ."
-    );
-    let mut bytes = Vec::new();
-    response.take(MAX_COVER + 1).read_to_end(&mut bytes)?;
-    ensure!(bytes.len() as u64 <= MAX_COVER, "Обложка больше 8 МБ.");
     let image = crate::artwork::decode(&bytes)?;
     Ok((bytes, image))
 }

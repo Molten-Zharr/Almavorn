@@ -53,11 +53,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
             frame,
             app,
             Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
-            vec![(
-                app.text("Back", "Назад").into(),
-                Target::CloseDialog,
-                true,
-            )],
+            vec![(app.text("Back", "Назад").into(), Target::CloseDialog, true)],
             palette,
         );
         return;
@@ -376,13 +372,31 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, area: Rect, palette: Pale
         }
     }
     if app.artwork_manual_loading() {
-        frame.render_widget(
-            Paragraph::new(app.text(
+        let mut message = app
+            .text(
                 "Loading from Cover Art Archive…",
                 "Загрузка из Cover Art Archive…",
-            ))
-            .style(palette.text().fg(palette.muted))
-            .wrap(Wrap { trim: true }),
+            )
+            .to_owned();
+        if let Some(progress) = app.artwork_manual.cover_progress {
+            message.push_str(&format!(
+                "\n{} {}/3",
+                app.text("Attempt", "Попытка"),
+                progress.attempt
+            ));
+            if progress.wait_seconds > 0 {
+                message.push_str(&format!(
+                    "\n{} {} {}",
+                    app.text("Retry in", "Повтор через"),
+                    progress.wait_seconds,
+                    app.text("s", "с")
+                ));
+            }
+        }
+        frame.render_widget(
+            Paragraph::new(message)
+                .style(palette.text().fg(palette.muted))
+                .wrap(Wrap { trim: true }),
             preview,
         );
     } else if let Some(image) = app
@@ -410,10 +424,11 @@ fn details(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
         25,
         palette,
     );
-    let mut text = app.text(
+    let guide = app.text(
         "Mark tracks in the playlist and choose Find and save all. Only this list is processed, one file at a time. Existing covers are kept. Closing this window keeps the search running, while closing the player stops it. Stop cancels the remaining files and keeps completed saves.\n\nChoose Current selection to load the playlist marks again. If no tracks are marked, the highlighted track is used. Duplicate file paths are processed once.\n\nMusicBrainz receives the artist and title from the tags or filename. Cover Art Archive provides the image. Ambiguous or incomplete matches are left for manual review. Errors do not stop the remaining files.\n\nChoose a row and Choose manually to review editions and preview a cover. Replacing existing front artwork requires confirmation.",
         "Отметьте композиции в плейлисте и нажмите Найти и сохранить все. Обрабатывается только этот список, по одному файлу. Имеющиеся обложки остаются. Окно можно закрыть, поиск продолжится. Закрытие плеера останавливает обработку. Остановить отменяет оставшиеся файлы, сохраняя готовые обложки.\n\nТекущие отметки заново загружает список из плейлиста. Если отметок нет, используется выделенная композиция. Одинаковые пути файлов обрабатываются один раз.\n\nMusicBrainz получает исполнителя и название из тегов или имени файла. Cover Art Archive предоставляет изображение. Неоднозначные или неполные совпадения остаются для ручного выбора. Ошибка не останавливает остальные файлы.\n\nВыберите строку и нажмите Выбрать вручную, чтобы посмотреть издания и обложку. Замена существующей лицевой обложки требует подтверждения.",
     ).to_owned();
+    let mut text = String::new();
     if let Some(track) = &app.artwork_manual.track {
         text.push_str(&format!(
             "\n\n{}: {} - {}\n{}: {}",
@@ -444,19 +459,27 @@ fn details(frame: &mut Frame, app: &mut App, area: Rect, palette: Palette) {
             clean(error)
         ));
     }
+    if let Some(diagnostic) = &app.artwork_manual.diagnostic {
+        text.push_str(&format!(
+            "\n\n{}:\n{}",
+            app.text("Technical details", "Техническая причина"),
+            clean(diagnostic)
+        ));
+    }
     if let Some(message) = &app.artwork_manual.message {
         text.push_str(&format!("\n\n{}", clean(message)));
     }
     if let Some(warning) = &app.artwork_manual.warning {
         text.push_str(&format!("\n\n{}", clean(warning)));
     }
+    text.push_str(&format!("\n\n{guide}"));
     let body = Rect::new(
         inner.x,
         inner.y,
         inner.width,
         inner.height.saturating_sub(2),
     );
-    let paragraph = Paragraph::new(text)
+    let paragraph = Paragraph::new(text.trim_start().to_owned())
         .style(palette.text())
         .wrap(Wrap { trim: false });
     app.view.dialog_scroll_max = paragraph

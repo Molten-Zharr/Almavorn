@@ -24,6 +24,8 @@ pub(crate) enum Stage {
     Loading {
         edition: usize,
         total: usize,
+        attempt: u8,
+        wait_seconds: u64,
     },
     Saving,
 }
@@ -35,7 +37,24 @@ impl Stage {
             Self::Searching => language
                 .text("Searching MusicBrainz", "Поиск в MusicBrainz")
                 .into(),
-            Self::Loading { edition, total } => format!("Cover Art Archive: {edition}/{total}"),
+            Self::Loading {
+                edition,
+                total,
+                attempt,
+                wait_seconds,
+            } => format!(
+                "Cover Art Archive: {edition}/{total} · {} {attempt}/3{}",
+                language.text("attempt", "попытка"),
+                if wait_seconds > 0 {
+                    format!(
+                        " · {} {wait_seconds} {}",
+                        language.text("pause", "пауза"),
+                        language.text("s", "с")
+                    )
+                } else {
+                    String::new()
+                }
+            ),
             Self::Saving => language.text("Saving artwork", "Сохранение обложки").into(),
         }
     }
@@ -149,8 +168,17 @@ pub(crate) fn process(
         let _ = stage.send(Stage::Loading {
             edition: index + 1,
             total,
+            attempt: 1,
+            wait_seconds: 0,
         });
-        match preview(candidate) {
+        match preview(candidate, cancel, language, |progress| {
+            let _ = stage.send(Stage::Loading {
+                edition: index + 1,
+                total,
+                attempt: progress.attempt,
+                wait_seconds: progress.wait_seconds,
+            });
+        }) {
             Ok((bytes, _)) => {
                 ensure!(!cancel.load(Ordering::Relaxed), "Поиск отменен.");
                 let _ = stage.send(Stage::Saving);
@@ -158,7 +186,7 @@ pub(crate) fn process(
             }
             Err(error) if error.is::<NoCover>() => {}
             Err(error) => {
-                return Err(error.context("Не удалось получить обложку из Cover Art Archive"));
+                return Err(error);
             }
         }
     }

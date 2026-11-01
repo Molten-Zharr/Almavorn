@@ -82,6 +82,8 @@ impl App {
             return;
         }
         self.cancel_artwork_manual();
+        self.artwork_manual.error = None;
+        self.artwork_manual.diagnostic = None;
         self.artwork_manual.manual_mode = false;
         self.artwork_batch = ArtworkBatchState {
             reports: std::iter::repeat_with(|| None)
