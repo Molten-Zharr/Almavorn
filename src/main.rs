@@ -263,13 +263,6 @@ fn run() -> Result<()> {
                         Some(Target::Playlist(id)) if app.playlist_movable(*id) => {
                             egui::CursorIcon::Grab
                         }
-                        Some(Target::Track(_)) if app.view.dialog.is_none() && !app.view.layout_editing => {
-                            egui::CursorIcon::Grab
-                        }
-                        Some(Target::PlayingTrack) if app.view.dialog.is_none() && !app.view.layout_editing
-                            && app.playback.current.as_ref().is_some_and(|track| track.path.is_absolute()) => {
-                            egui::CursorIcon::Grab
-                        }
                         Some(
                             Target::PlaybackVolume(_)
                             | Target::Seek(_)
