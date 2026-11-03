@@ -74,6 +74,7 @@ impl App {
             PlaybackTuner if self.services_playing()=>false,
             Equalizer if self.services_remote_active()=>false,
             Lyrics => self.playback.current.is_some() || self.entry().is_some(),
+            LyricsSave | LyricsRemove | LyricsRetry | LyricsOther | LyricsVariants | LyricsSources | LyricsSettings => self.lyrics_command_enabled(action),
             OpenArtwork => self.artwork_image().is_some(),
             RevealPlayingTrack | CopyPlayingTrack => self.playback.current.is_some(),
             RevealFile => self.reveal_file_path().is_some(),
@@ -273,6 +274,8 @@ impl App {
                     && matches!(action, Action::MoveUp | Action::MoveDown))
             {
                 self.playlist_move_unavailable(action)
+            } else if matches!(action, Action::LyricsSave | Action::LyricsRemove | Action::LyricsRetry | Action::LyricsOther | Action::LyricsVariants | Action::LyricsSources) {
+                self.text("This lyrics command is unavailable. Open the lyrics panel and wait for the current operation.", "Команда текста песни недоступна. Откройте панель текста и дождитесь текущей операции.").into()
             } else {
                 self.text(
                     "Action unavailable. Check selection and Order editing.",
@@ -317,6 +320,7 @@ impl App {
             PlayMarked => self.play_marked()?,
             PlayWholePlaylist => self.play_whole_playlist()?,
             Lyrics => self.open_lyrics()?,
+            LyricsSave | LyricsRemove | LyricsRetry | LyricsOther | LyricsVariants | LyricsSources | LyricsSettings => self.lyrics_command(action)?,
             ArtworkSearch => self.open_artwork_search(),
             ToggleLyricsPanel => self.show_panel(crate::workspace::Panel::Lyrics)?,
             TogglePlayerSpecialButtons => {

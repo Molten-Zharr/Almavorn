@@ -172,10 +172,18 @@ impl App {
                     make(lang.text("Enable lyrics search", "Включить поиск текстов песен"), checked(preferences.enabled), lang.text("Allow online searches. When disabled, only saved lyrics and file tags are read.", "Разрешить поиск в интернете. При отключении читаются только сохраненные тексты и теги файлов."), SettingControl::LyricsEnabled, true),
                     make(lang.text("Show lyrics", "Показывать текст"), checked(preferences.show_panel), lang.text("Show a separate lyrics block and search when tracks change. Move and resize it in Layout mode.", "Показывать отдельный блок текста и искать его при смене композиции. Положение и размер меняются в режиме Блоки."), SettingControl::LyricsPanel, true),
                 ];
-                rows.extend(crate::lyrics::Provider::ALL.into_iter().map(|provider| make(provider.name(), checked(!preferences.disabled.contains(&provider)), lang.text("Include this source in searches. Genius has priority among confident matches.", "Искать в этом источнике. При уверенном совпадении первым выбирается Genius."), SettingControl::LyricsProvider(provider), true)));
+                rows.extend(crate::lyrics::Provider::ALL.into_iter().map(|provider| {
+                    let description = match provider {
+                        crate::lyrics::Provider::Musixmatch => lang.text("Include Musixmatch in searches. Add an API key below. Enabling this source does not provide API access.", "Искать в Musixmatch. Добавьте ключ API ниже. Включение источника не дает доступ к API."),
+                        crate::lyrics::Provider::Yandex => lang.text("Include Yandex Music in searches. Connect an account under Music services first.", "Искать в Яндекс Музыке. Сначала подключите аккаунт в музыкальных сервисах."),
+                        crate::lyrics::Provider::Genius => lang.text("Prefer Genius among confident matches. Without a key, public search is used. The site may restrict access.", "При уверенном совпадении предпочитать Genius. Без ключа используется публичный поиск, доступ к которому сайт может ограничить."),
+                        _ => lang.text("Include this source in searches. The lyrics panel shows its result or access error.", "Искать в этом источнике. Панель текста показывает результат или ошибку доступа."),
+                    };
+                    make(provider.name(), checked(!preferences.disabled.contains(&provider)), description, SettingControl::LyricsProvider(provider), true)
+                }));
                 for provider in [crate::lyrics::Provider::Genius, crate::lyrics::Provider::Musixmatch] {
                     let description = if provider == crate::lyrics::Provider::Genius {
-                        lang.text("An optional Client Access Token. Public search also works without a key.", "Необязательный Client Access Token. Без ключа работает публичный поиск.")
+                        lang.text("An optional Client Access Token. Without a key, public search is used. The site may restrict access.", "Необязательный Client Access Token. Без ключа используется публичный поиск, доступ к которому сайт может ограничить.")
                     } else {
                         lang.text("An API key is required. Lyrics availability depends on your Musixmatch access.", "Нужен ключ API. Доступность текстов зависит от вашего доступа к Musixmatch.")
                     };

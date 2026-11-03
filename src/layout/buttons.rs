@@ -7,6 +7,10 @@ use std::borrow::Cow;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::LyricsPanel(action) => {
+            if app.lyrics.panel.focused && let Some(key) = action.local_key() { return Some(key.into()); }
+            action.binding().and_then(|action| app.settings.preferences.bindings.iter().find(|binding| binding.action == action).map(|binding| binding.key.label()))
+        }
         Target::ArtworkSearch(action) => match action {
             crate::app::ArtworkSearchAction::StartAll | crate::app::ArtworkSearchAction::Search => Some("R".into()),
             crate::app::ArtworkSearchAction::StopAll => Some("C".into()),

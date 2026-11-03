@@ -124,6 +124,7 @@ impl App {
         self.view.toolbar_selected = None;
         self.view.workspace.focus = panel;
         self.lyrics.panel.focused = panel == Panel::Lyrics;
+        if panel != Panel::Lyrics { self.lyrics.panel.button = None; }
         match panel {
             Panel::Playlists => self.view.focus = Focus::Playlists,
             Panel::Tracks => self.view.focus = Focus::Tracks,

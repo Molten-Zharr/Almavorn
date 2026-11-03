@@ -44,7 +44,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Pal
         )]
     } else if inner.height < 7 {
         vec![(
-            app.text("Open · F9", "Открыть · F9").into(),
+            app.text("Open", "Открыть").into(),
             Target::LyricsPanel(Action::Open),
             query.is_some() && !loading,
         )]
@@ -65,9 +65,14 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Pal
                 query.is_some() && !loading && app.settings.preferences.lyrics.enabled && other,
             ),
             (
-                app.text("Open · F9", "Открыть · F9").into(),
+                app.text("Open", "Открыть").into(),
                 Target::LyricsPanel(Action::Open),
                 query.is_some() && !loading,
+            ),
+            (
+                app.text("Sources", "Источники").into(),
+                Target::LyricsPanel(Action::Sources),
+                query.is_some(),
             ),
             (
                 app.text("Settings", "Настройки").into(),
@@ -112,14 +117,18 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Pal
             );
         }
     }
+    for (_, target, enabled) in &mut controls {
+        if let Target::LyricsPanel(action) = target { *enabled = app.lyrics_panel_action_enabled(*action); }
+    }
     let footer_height = buttons_height(app, inner.width, &controls).min(inner.height);
+    let hint_height = u16::from(app.lyrics.panel.focused && inner.height >= 8 && footer_height < inner.height);
     let footer = Rect::new(
         inner.x,
         inner.bottom().saturating_sub(footer_height),
         inner.width,
         footer_height,
     );
-    let available = inner.height.saturating_sub(footer_height);
+    let available = inner.height.saturating_sub(footer_height + hint_height);
     let source = selected.as_ref().map_or(
         if choosing {
             app.text("Found songs", "Найденные варианты")
@@ -212,7 +221,7 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Pal
                 );
             }
         } else {
-            let message = if query.is_none() {
+            let message: String = if query.is_none() {
                 app.text(
                     "Start playing a song.",
                     "Начните воспроизведение композиции.",
@@ -243,15 +252,34 @@ pub(super) fn render(frame: &mut Frame, app: &mut App, inner: Rect, palette: Pal
                     .into()
                 })
             };
-            frame.render_widget(
-                Paragraph::new(message)
-                    .style(palette.text().fg(palette.muted))
-                    .wrap(Wrap { trim: false }),
-                body,
-            );
+            let mut lines = vec![Line::styled(message, palette.text().fg(palette.muted))];
+            if !app.lyrics.panel.reports.is_empty() || loading {
+                let checked = enabled.iter().filter(|provider| app.lyrics.panel.reports.iter().any(|report| report.provider == **provider)).count();
+                lines.push(Line::raw(""));
+                lines.push(Line::styled(format!("{}: {checked}/{}", app.text("Sources checked", "Проверено источников"), enabled.len()), palette.text().fg(palette.accent)));
+                for provider in &enabled {
+                    let report = app.lyrics.panel.reports.iter().find(|report| report.provider == *provider);
+                    let status = if let Some(report) = report {
+                        if let Some(error) = &report.error { clean(error) }
+                        else if report.count > 0 { format!("{}: {}", app.text("Found", "Найдено"), report.count) }
+                        else { app.text("No lyrics found", "Текст не найден").into() }
+                    } else { app.text(if loading { "Searching…" } else { "Not checked" }, if loading { "Поиск…" } else { "Не проверен" }).into() };
+                    lines.push(Line::styled(format!("{}: {status}", provider.name()), palette.text().fg(if report.is_some_and(|report| report.error.is_some()) { palette.error } else { palette.muted })));
+                }
+            }
+            let paragraph = Paragraph::new(lines).wrap(Wrap { trim: false });
+            app.lyrics.panel.scroll_max = paragraph.line_count(body.width.max(1)).saturating_sub(usize::from(body.height));
+            app.lyrics.panel.offset = app.lyrics.panel.offset.min(app.lyrics.panel.scroll_max);
+            frame.render_widget(paragraph.scroll((app.lyrics.panel.offset.min(u16::MAX as usize) as u16, 0)), body);
         }
     }
+    if hint_height > 0 {
+        frame.render_widget(Paragraph::new(app.text("←→: buttons · Enter: press · ↑: lyrics · Tab: panels", "←→: кнопки · Enter: нажать · ↑: текст · Tab: панели")).style(palette.text().fg(palette.muted)), Rect::new(inner.x, footer.y - hint_height, inner.width, hint_height));
+    }
+    let first_button = app.view.hits.len();
     buttons(frame, app, footer, controls, palette);
+    app.lyrics.panel.buttons = app.view.hits[first_button..].iter().filter_map(|hit| match hit.target { Target::LyricsPanel(action) if hit.enabled => Some(action), _ => None }).collect();
+    if app.lyrics.panel.button.is_some_and(|button| !app.lyrics.panel.buttons.contains(&button)) { app.lyrics.panel.button = None; }
 }
 
 fn song_title(artist: &str, title: &str) -> String {

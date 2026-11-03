@@ -50,9 +50,11 @@ The full window also offers editing and TXT/LRC export. Timed lyrics follow the 
 
 Sources include Genius, LRCLIB, Musixmatch, Yandex Music, lyrics.ovh, AZLyrics, SongLyrics, eLyrics and Letras. All are enabled by default; Genius takes priority among confident matches. Disable individual sources in lyrics settings.
 
-Genius works without a key. Musixmatch requires an API key. Lyrics settings include buttons to enter, replace, obtain and delete keys. Yandex Music uses the account connected under "Music services". Lyrics availability depends on the source, region and account access.
+A Genius key is optional. Without one, the player uses public search, which the site may restrict. Musixmatch requires an API key. Lyrics settings include buttons to enter, replace, obtain and delete keys. Yandex Music uses the account connected under "Music services". Lyrics availability depends on the source, region and account access.
 
-"Sources" in the full window shows search results and errors. When sources cannot be reached, automatic search pauses until "Search again" or re-enabling search. Saved lyrics and file tags remain available offline.
+All enabled sources are checked in parallel. If no lyrics are found, the panel shows each source's result: no match, a missing key or account, restricted access, or a connection failure. "Sources" in the panel and full window opens details without repeating the search. When sources cannot be reached, automatic search pauses until "Search again" or re-enabling search. Saved lyrics and file tags remain available offline.
+
+Click the lyrics panel or select it with Tab. Left and Right select available buttons, and Enter or Space presses the selected button. Up returns to the content. S saves lyrics, Delete opens deletion confirmation, R repeats the search, N searches elsewhere, V shows variants, I opens source results, and K opens lyrics settings. Change the shortcuts for these commands under "Settings > Shortcuts > Player shortcuts".
 
 ## Track artwork
 

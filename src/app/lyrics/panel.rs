@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     app::background::{Background, LatestJob, poll},
-    input::{Key, KeyPress},
+    input::{Action, Key, KeyPress},
     model::Track,
 };
 use anyhow::{Context, Result};
@@ -65,6 +65,8 @@ pub struct LyricsPanel {
     pub choosing: bool,
     pub cursor: usize,
     pub focused: bool,
+    pub buttons: Vec<PanelAction>,
+    pub button: Option<PanelAction>,
     key: Option<TrackKey>,
     due: Option<Instant>,
     cache: VecDeque<Cached>,
@@ -73,7 +75,7 @@ pub struct LyricsPanel {
     cancel: Option<Arc<AtomicBool>>,
     progress: Option<mpsc::Receiver<ProviderReport>>,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PanelAction {
     Choose(usize),
     Variants,
@@ -83,9 +85,41 @@ pub enum PanelAction {
     Other,
     Retry,
     Settings,
+    Sources,
     Save,
     Remove,
     Close,
+}
+
+impl PanelAction {
+    pub(crate) fn binding(self) -> Option<Action> {
+        Some(match self {
+            Self::Open => Action::Lyrics,
+            Self::Save => Action::LyricsSave,
+            Self::Remove => Action::LyricsRemove,
+            Self::Retry => Action::LyricsRetry,
+            Self::Other => Action::LyricsOther,
+            Self::Variants | Self::Content => Action::LyricsVariants,
+            Self::Sources => Action::LyricsSources,
+            Self::Settings => Action::LyricsSettings,
+            Self::Close => Action::ToggleLyricsPanel,
+            Self::Choose(_) | Self::Focus => return None,
+        })
+    }
+
+    pub(crate) fn local_key(self) -> Option<&'static str> {
+        match self {
+            Self::Save => Some("S"),
+            Self::Remove => Some("Del"),
+            Self::Retry => Some("R"),
+            Self::Other => Some("N"),
+            Self::Variants | Self::Content => Some("V"),
+            Self::Sources => Some("I"),
+            Self::Settings => Some("K"),
+            Self::Choose(_) => Some("Enter"),
+            _ => None,
+        }
+    }
 }
 
 impl LyricsPanel {
@@ -227,7 +261,7 @@ impl App {
                     self.lyrics.panel.error = if self.lyrics.panel.results.is_empty()
                         && !result.warnings.is_empty()
                     {
-                        Some(self.text("No lyrics found. Source details are available in the full view.", "Текст не найден. Подробности по источникам доступны в полном окне.").into())
+                        Some(self.text("Some sources could not complete the search. See the source results below.", "Часть источников не завершила поиск. Результаты по источникам показаны ниже.").into())
                     } else {
                         None
                     };
@@ -253,6 +287,7 @@ impl App {
             panel.selected = None;
             panel.choosing = false;
             panel.cursor = 0;
+            panel.button = None;
             panel.reports.clear();
             panel.excluded.clear();
             panel.error = None;
@@ -428,7 +463,9 @@ impl App {
     }
 
     pub(in crate::app) fn lyrics_panel_action(&mut self, action: PanelAction) -> Result<()> {
+        if !self.lyrics_panel_action_enabled(action) { return Ok(()); }
         self.focus_panel(crate::workspace::Panel::Lyrics);
+        self.lyrics.panel.button = None;
         match action {
             PanelAction::Focus => {}
             PanelAction::Choose(index) => {
@@ -453,6 +490,10 @@ impl App {
             }
             PanelAction::Open => self.open_panel_lyrics()?,
             PanelAction::Settings => self.open_settings_page(crate::app::SettingsPage::Lyrics),
+            PanelAction::Sources => {
+                self.open_panel_lyrics()?;
+                self.lyrics_action(super::LyricsAction::Sources)?;
+            }
             PanelAction::Save => {
                 let track = self.lyrics.panel.query.as_ref().context("Начните воспроизведение композиции.")?.track.id;
                 let lyric = self.lyrics.panel.lyric().context("Выберите найденный текст.")?.clone();
@@ -483,6 +524,61 @@ impl App {
         }
         Ok(())
     }
+
+    pub(crate) fn lyrics_panel_action_enabled(&self, action: PanelAction) -> bool {
+        let panel = &self.lyrics.panel;
+        let loading = self.lyrics.panel_loading();
+        match action {
+            PanelAction::Save => panel.lyric().is_some() && !loading && !self.lyrics_storage_busy(),
+            PanelAction::Remove => panel.saved && !loading && !self.lyrics_storage_busy(),
+            PanelAction::Open => panel.query.is_some() && !loading,
+            PanelAction::Sources => panel.query.is_some(),
+            PanelAction::Choose(index) => index < panel.results.len() && !loading,
+            PanelAction::Variants => panel.results.len() > 1 && !loading,
+            PanelAction::Content => panel.selected.is_some() && !loading,
+            PanelAction::Retry | PanelAction::Other => panel.query.is_some() && !loading
+                && Provider::ALL.into_iter().any(|provider| self.settings.preferences.lyrics.allows(provider)
+                    && (matches!(action, PanelAction::Retry) || !panel.excluded.contains(&provider))
+                    && (!matches!(action, PanelAction::Other) || panel.lyric().is_none_or(|lyric| lyric.provider != provider.name()))),
+            PanelAction::Focus | PanelAction::Settings | PanelAction::Close => true,
+        }
+    }
+
+    pub(crate) fn lyrics_panel_button_focused(&self, action: PanelAction) -> bool {
+        self.view.dialog.is_none() && self.view.toolbar_selected.is_none() && self.lyrics.panel.focused
+            && !self.view.layout_editing && self.lyrics.panel.button == Some(action)
+    }
+
+    pub(in crate::app) fn lyrics_command(&mut self, action: Action) -> Result<()> {
+        let command = match action {
+            Action::LyricsSave => PanelAction::Save,
+            Action::LyricsRemove => PanelAction::Remove,
+            Action::LyricsRetry => PanelAction::Retry,
+            Action::LyricsOther => PanelAction::Other,
+            Action::LyricsVariants if self.lyrics.panel.choosing && self.lyrics.panel.selected.is_some() => PanelAction::Content,
+            Action::LyricsVariants => PanelAction::Variants,
+            Action::LyricsSources => PanelAction::Sources,
+            Action::LyricsSettings => PanelAction::Settings,
+            _ => return Ok(()),
+        };
+        self.lyrics_panel_action(command)
+    }
+
+    pub(in crate::app) fn lyrics_command_enabled(&self, action: Action) -> bool {
+        if action == Action::LyricsSettings { return true; }
+        if !self.settings.preferences.lyrics.show_panel || !self.lyrics.panel.query.as_ref().zip(self.playback.current.as_ref()).is_some_and(|(query, track)| query.track.id == track.id) { return false; }
+        let command = match action {
+            Action::LyricsSave => PanelAction::Save,
+            Action::LyricsRemove => PanelAction::Remove,
+            Action::LyricsRetry => PanelAction::Retry,
+            Action::LyricsOther => PanelAction::Other,
+            Action::LyricsVariants if self.lyrics.panel.choosing && self.lyrics.panel.selected.is_some() => PanelAction::Content,
+            Action::LyricsVariants => PanelAction::Variants,
+            Action::LyricsSources => PanelAction::Sources,
+            _ => return false,
+        };
+        self.lyrics_panel_action_enabled(command)
+    }
     pub(in crate::app) fn scroll_lyrics_panel(&mut self, delta: i64) {
         let panel = &mut self.lyrics.panel;
         if panel.choosing && !panel.results.is_empty() {
@@ -502,6 +598,42 @@ impl App {
             || self.lyrics.panel.area.is_empty()
         {
             return Ok(false);
+        }
+        if key.ctrl || key.alt { return Ok(false); }
+        let key = key.normalized();
+        let command = match key.key {
+            Key::Char('s') => Some(PanelAction::Save),
+            Key::Delete => Some(PanelAction::Remove),
+            Key::Char('r') => Some(PanelAction::Retry),
+            Key::Char('n') => Some(PanelAction::Other),
+            Key::Char('i') => Some(PanelAction::Sources),
+            Key::Char('k') => Some(PanelAction::Settings),
+            Key::Char('v') if self.lyrics.panel.choosing && self.lyrics.panel.selected.is_some() => Some(PanelAction::Content),
+            Key::Char('v') => Some(PanelAction::Variants),
+            _ => None,
+        };
+        if let Some(command) = command { self.lyrics_panel_action(command)?; return Ok(true); }
+        if matches!(key.key, Key::Left | Key::Right) {
+            let buttons = &self.lyrics.panel.buttons;
+            if !buttons.is_empty() {
+                let current = self.lyrics.panel.button.and_then(|action| buttons.iter().position(|value| *value == action));
+                let index = match (current, key.key) {
+                    (Some(index), Key::Left) => (index + buttons.len() - 1) % buttons.len(),
+                    (Some(index), _) => (index + 1) % buttons.len(),
+                    (None, Key::Left) => buttons.len() - 1,
+                    (None, _) => 0,
+                };
+                self.lyrics.panel.button = Some(buttons[index]);
+                self.view.pointer = ratatui::layout::Position::new(u16::MAX, u16::MAX);
+            }
+            return Ok(true);
+        }
+        if let Some(button) = self.lyrics.panel.button {
+            match key.key {
+                Key::Enter | Key::Char(' ') => { self.lyrics_panel_action(button)?; return Ok(true); }
+                Key::Escape | Key::Up => { self.lyrics.panel.button = None; return Ok(true); }
+                _ => {}
+            }
         }
         let delta = match key.key {
             Key::Up => -1,
@@ -528,6 +660,7 @@ impl App {
             }
             Key::Tab => {
                 self.lyrics.panel.focused = false;
+                self.lyrics.panel.button = None;
                 return Ok(false);
             }
             _ => return Ok(false),

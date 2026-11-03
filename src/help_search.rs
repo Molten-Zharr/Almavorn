@@ -498,6 +498,13 @@ pub(crate) fn aliases(action: Action) -> &'static str {
         Lyrics => {
             "слова песни; о чем поют; караоке; субтитры; текст не найден; нет интернета; читать офлайн; другая версия текста; lyrics words singing karaoke subtitles offline"
         }
+        LyricsSave => "сохранить слова песни; текст в базе; офлайн текст; save lyrics offline database",
+        LyricsRemove => "удалить сохраненный текст; убрать локальные слова; delete remove saved lyrics",
+        LyricsRetry => "повторить поиск текста; все источники; search lyrics again retry all sources",
+        LyricsOther => "найти другие слова; другой источник текста; lyrics other source elsewhere",
+        LyricsVariants => "варианты текста; выбрать версию слов; lyrics variants versions choose",
+        LyricsSources => "ошибки источников; статус поиска; почему текст не найден; lyrics sources status errors unavailable",
+        LyricsSettings => "настройки текста; ключи api genius musixmatch; lyrics settings providers keys",
         Downloads => {
             "скачать музыку; вставить ссылку; куда сохранилось; где скачанная музыка; папка загрузок; ютуб; youtube yt dlp cobalt download link destination saved folder"
         }

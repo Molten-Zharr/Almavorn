@@ -151,6 +151,7 @@ fn categories(action: Action) -> &'static [Category] {
         OpenPlayerMenu | OpenVisualizerMenu => &[C::Navigation, C::Playback],
         ArtworkSearch => &[C::Tracks, C::Tags],
         ToggleLyricsPanel => &[C::Layout, C::Lyrics],
+        LyricsSave | LyricsRemove | LyricsRetry | LyricsOther | LyricsVariants | LyricsSources | LyricsSettings => &[C::Lyrics],
         TogglePlayerSpecialButtons => &[C::Playback, C::Layout],
         OpenArtwork => &[C::Playback, C::Tags],
         RevealPlayingTrack | CopyPlayingTrack => &[C::Playback, C::Tracks],
@@ -863,6 +864,12 @@ pub(super) fn sections(app: &App, guide: Vec<String>) -> Vec<Section> {
         "Панель сама открывает уверенное совпадение. Иначе выберите вариант прямо в ней. Кнопка \"Варианты\" позволяет сменить выбор.");
     q.note("Click or scroll inside the panel to use its keyboard controls. ↑↓ selects a result; Page Up/Down moves by a page; Home/End goes to the start/end.",
         "Нажмите в панели или прокрутите ее колесом для управления с клавиатуры. Стрелки выбирают вариант, Page Up/Down листают страницы, Home/End переходят в начало и конец.");
+    q.keys(&[p(Left), p(Right)], "In the lyrics panel, select an available button. Enter or Space presses it. Up returns to the text, Tab switches panels.",
+        "В панели текста выбрать доступную кнопку. Enter или пробел нажимает ее. Стрелка вверх возвращает к тексту, Tab переключает панели.");
+    q.note("In the focused lyrics panel: S saves, Delete opens deletion confirmation, R repeats the search, N searches elsewhere, V opens variants, I shows source results, K opens lyrics settings. Configurable Ctrl+Shift shortcuts are under Settings > Shortcuts > Player shortcuts.",
+        "В активной панели текста: S сохраняет, Delete открывает подтверждение удаления, R повторяет поиск, N ищет в другом источнике, V открывает варианты, I показывает результаты источников, K открывает настройки текстов. Сочетания Ctrl+Shift меняются в Настройки > Клавиши > Клавиши проигрывателя.");
+    q.note("All enabled sources are checked in parallel. Musixmatch needs an API key and Yandex Music needs a connected account. When no lyrics are found, the panel shows each source's result. Saved lyrics open before any online search.",
+        "Все включенные источники проверяются параллельно. Для Musixmatch нужен ключ API, для Яндекс Музыки - подключенный аккаунт. Если текст не найден, панель показывает результат каждого источника. Сохраненный текст открывается до обращения к интернету.");
     q.keys(&[p(Enter)], "In the panel: open the selected result; while reading, show variants.",
         "В панели: открыть выбранный вариант; при чтении текста — показать варианты.");
     q.keys(&[p(Escape)], "In the panel: return from variants to the lyrics, then return keyboard control to the playlist.",

@@ -139,6 +139,13 @@ pub enum Action {
     Services,
     Downloads,
     Lyrics,
+    LyricsSave,
+    LyricsRemove,
+    LyricsRetry,
+    LyricsOther,
+    LyricsVariants,
+    LyricsSources,
+    LyricsSettings,
     ArtworkSearch,
     ToggleLyricsPanel,
     TogglePlayerSpecialButtons,
@@ -222,6 +229,13 @@ impl Action {
         match self {
             Self::TogglePlay
             | Self::Lyrics
+            | Self::LyricsSave
+            | Self::LyricsRemove
+            | Self::LyricsRetry
+            | Self::LyricsOther
+            | Self::LyricsVariants
+            | Self::LyricsSources
+            | Self::LyricsSettings
             | Self::Stop
             | Self::Next
             | Self::Previous
@@ -278,6 +292,13 @@ impl Action {
             Self::Services => language.text("Open Music services in Settings to connect an account and listen online.", "Открыть музыкальные сервисы в настройках: подключить аккаунт и слушать онлайн."),
             Self::Downloads => language.text("Open Downloads to find music or download a link.", "Открыть Загрузки: найти музыку или скачать по ссылке."),
             Self::Lyrics => language.text("Find and save lyrics for the playing or selected track.", "Найти и сохранить текст играющей или выбранной песни."),
+            Self::LyricsSave => language.text("Save the lyrics shown in the lyrics panel in the local library.", "Сохранить показанный в панели текст песни в локальной библиотеке."),
+            Self::LyricsRemove => language.text("Open confirmation to delete the saved lyrics for the track shown in the panel.", "Открыть подтверждение удаления сохраненного текста композиции из панели."),
+            Self::LyricsRetry => language.text("Search all enabled lyrics sources again for the track shown in the panel.", "Повторить поиск во всех включенных источниках для композиции из панели."),
+            Self::LyricsOther => language.text("Search other enabled sources for the track shown in the lyrics panel.", "Найти текст композиции из панели в других включенных источниках."),
+            Self::LyricsVariants => language.text("Switch between the lyrics and found variants in the lyrics panel.", "Переключиться между текстом и найденными вариантами в панели текста песни."),
+            Self::LyricsSources => language.text("Show the result and errors for each lyrics source without starting another search.", "Показать результат и ошибки каждого источника текстов без нового поиска."),
+            Self::LyricsSettings => language.text("Open lyrics search settings, sources and API keys.", "Открыть настройки поиска текстов песен, источников и ключей API."),
             Self::ArtworkSearch => language.text("Open artwork search for the selected or checked tracks. Find and save all processes the list in the background.", "Открыть поиск обложек для выбранной или отмеченных композиций. Найти и сохранить все обрабатывает список в фоне."),
             Self::ToggleLyricsPanel => language.text("Show or hide the lyrics panel beside the playlist.", "Показать или скрыть панель текста песни рядом с плейлистом."),
             Self::TogglePlayerSpecialButtons => language.text("Show or hide the equalizer, playback effects and background animation buttons in the player.", "Показать или скрыть кнопки эквалайзера, эффектов воспроизведения и анимации фона в проигрывателе."),
@@ -350,6 +371,13 @@ impl Action {
             Self::Services => language.text("Music services", "Музыкальные сервисы"),
             Self::Downloads => language.text("Downloads", "Загрузки"),
             Self::Lyrics => language.text("Song lyrics", "Текст песни"),
+            Self::LyricsSave => language.text("Save lyrics", "Сохранить текст песни"),
+            Self::LyricsRemove => language.text("Delete saved lyrics", "Удалить сохраненный текст песни"),
+            Self::LyricsRetry => language.text("Search lyrics again", "Повторить поиск текста песни"),
+            Self::LyricsOther => language.text("Find lyrics elsewhere", "Найти текст в другом источнике"),
+            Self::LyricsVariants => language.text("Lyrics variants", "Варианты текста песни"),
+            Self::LyricsSources => language.text("Lyrics source results", "Результаты источников текста песни"),
+            Self::LyricsSettings => language.text("Lyrics settings", "Настройки текстов песен"),
             Self::ArtworkSearch => language.text("Artwork search", "Поиск обложек"),
             Self::ToggleLyricsPanel => language.text("Show/hide lyrics panel", "Показать/скрыть панель текста песни"),
             Self::TogglePlayerSpecialButtons => language.text("Show/hide player special buttons", "Показать/скрыть спецкнопки проигрывателя"),
@@ -514,6 +542,17 @@ pub fn default_bindings() -> Vec<Binding> {
                 shift: false,
             },
         });
+    }
+    for (action, key) in [
+        (LyricsSave, Key::Char('s')),
+        (LyricsRemove, Key::Delete),
+        (LyricsRetry, Key::Char('r')),
+        (LyricsOther, Key::Char('n')),
+        (LyricsVariants, Key::Char('v')),
+        (LyricsSources, Key::Char('i')),
+        (LyricsSettings, Key::Char('l')),
+    ] {
+        bindings.push(Binding { action, key: KeyPress { key, ctrl: true, alt: false, shift: true } });
     }
     bindings.push(Binding {
         action: AddFolderPlaylists,

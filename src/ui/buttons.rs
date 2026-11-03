@@ -121,6 +121,10 @@ fn standard(
     if enabled && app.hovered(area) {
         style = style.bg(palette.selection);
     }
+    let focused = matches!(target, Target::LyricsPanel(action) if app.lyrics_panel_button_focused(action));
+    if enabled && focused {
+        style = style.bg(palette.selection).fg(palette.selection_text).add_modifier(Modifier::UNDERLINED);
+    }
     if enabled && matches!(target, Target::Submit) {
         style = style.bg(palette.confirm_background);
     }
@@ -142,7 +146,7 @@ fn standard(
     content.push(Span::styled(label, style));
     let border_style = style.bg(palette.background).fg(if !enabled {
         palette.muted
-    } else if app.hovered(area) || matches!(target, Target::Action(crate::input::Action::Panels)) {
+    } else if focused || app.hovered(area) || matches!(target, Target::Action(crate::input::Action::Panels)) {
         palette.accent
     } else {
         palette.inactive_panel_border
