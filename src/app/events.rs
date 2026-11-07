@@ -1197,6 +1197,7 @@ impl App {
             | Target::EqualizerGain { .. }
             | Target::EqualizerReset) => self.equalizer_target(target)?,
             target @ (Target::TunerSelect(_)
+            | Target::TunerAdjust(_, _)
             | Target::TunerSlider(_, _)
             | Target::TunerReverse
             | Target::TunerReset

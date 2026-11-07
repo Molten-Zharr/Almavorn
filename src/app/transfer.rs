@@ -25,6 +25,7 @@ pub struct MoveFiles {
     pub folders: Vec<PathBuf>,
     pub selected: usize,
     pub confirm: bool,
+    pub offset: usize,
 }
 
 impl App {
@@ -94,6 +95,7 @@ impl App {
             folders,
             selected: 0,
             confirm: false,
+            offset: 0,
         }));
         Ok(())
     }
@@ -128,6 +130,7 @@ impl App {
         }
         if view.confirm {
             view.confirm = false;
+            view.offset = 0;
         } else {
             let (ids, playlist, source) = (view.ids.clone(), view.playlist, view.desk);
             let selected = self
@@ -285,6 +288,7 @@ impl App {
             .clone();
         if !view.confirm {
             view.confirm = true;
+            view.offset = 0;
             return Ok(());
         }
         let mut recovery = view.clone();

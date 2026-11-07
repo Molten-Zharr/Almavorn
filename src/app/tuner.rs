@@ -184,6 +184,14 @@ impl App {
                 self.save_settings()?;
             }
             Target::TunerPin => self.toggle_tuner_pin()?,
+            Target::TunerAdjust(index, step) if index < SLIDERS => {
+                if step == 0 {
+                    self.select_tuner(index);
+                    self.set_tuner_value(index, TunerSettings::normal(index))?;
+                } else {
+                    self.adjust_tuner(index, step)?;
+                }
+            }
             Target::TunerSelect(index) => self.select_tuner(index),
             Target::TunerSlider(index, area) if index < SLIDERS && area.width > 0 => {
                 let point = self.view.pointer.x.clamp(area.x, area.right() - 1) - area.x;

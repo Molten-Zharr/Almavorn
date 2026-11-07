@@ -48,6 +48,7 @@ pub enum TagAction {
     ChooseKey(usize),
     Input(usize),
     ValueKind,
+    Details,
     Apply,
     Back,
     Save,
@@ -92,11 +93,12 @@ pub struct TagEdit {
     pub cursor: usize,
     pub selected_all: bool,
     pub value_kind: usize,
+    pub details: bool,
 }
 
 impl TagEdit {
     fn select(&mut self, input: usize) {
-        self.input = input.min(if self.file_input.is_some() {
+        self.input = input.min(if self.file_input.is_some() || (!self.cover && !self.extra && !self.details) {
             0
         } else if self.extra {
             1
@@ -321,7 +323,7 @@ impl App {
             editor.confirm = false;
             editor.move_confirm = false;
             editor.move_picker = None;
-            editor.tab = TagsTab::File;
+            // Preserve the task tab after saving.
             editor.block = 0;
             editor.selected = 0;
             editor.offset = 0;
@@ -399,7 +401,11 @@ impl App {
         let Some(Dialog::Tags(editor)) = &mut self.view.dialog else {
             return;
         };
-        if editor.edit.is_some() && !editor.key_picker || editor.confirm || editor.discard {
+        if editor.confirm {
+            editor.offset = super::bounded(editor.offset, direction, self.view.dialog_scroll_max + 1);
+            return;
+        }
+        if editor.edit.is_some() && !editor.key_picker || editor.discard {
             return;
         }
         editor.selected = super::bounded(editor.selected, direction, editor.length());
@@ -426,8 +432,15 @@ impl App {
             return Ok(());
         }
         if editor.confirm {
-            if key.key == Key::Enter {
-                self.tag_action(TagAction::Confirm)?;
+            match key.key {
+                Key::Enter => self.tag_action(TagAction::Confirm)?,
+                Key::Up => self.tags_scroll(-1),
+                Key::Down => self.tags_scroll(1),
+                Key::PageUp => self.tags_scroll(-(self.view.dialog_page_size.max(1) as i64)),
+                Key::PageDown => self.tags_scroll(self.view.dialog_page_size.max(1) as i64),
+                Key::Home => self.tags_scroll(i64::MIN),
+                Key::End => self.tags_scroll(i64::MAX),
+                _ => {}
             }
             return Ok(());
         }
@@ -468,7 +481,7 @@ impl App {
             }
             match key.key {
                 Key::Tab => {
-                    let count = if edit.file_input.is_some() {
+                    let count = if edit.file_input.is_some() || (!edit.cover && !edit.extra && !edit.details) {
                         1
                     } else if edit.extra {
                         2
@@ -477,6 +490,7 @@ impl App {
                     };
                     edit.select((edit.input + if key.shift { count - 1 } else { 1 }) % count);
                 }
+                Key::F(2) => self.tag_action(TagAction::Details)?,
                 Key::Enter => self.tag_action(TagAction::Apply)?,
                 Key::Left => {
                     edit.cursor = edit.cursor.saturating_sub(1);
@@ -553,11 +567,12 @@ impl App {
             Key::Right => self.tag_action(TagAction::Format(1))?,
             Key::Tab => {
                 let tab = match editor.tab {
-                    TagsTab::File => TagsTab::Fields,
-                    TagsTab::Fields => TagsTab::Extras,
-                    TagsTab::Extras => TagsTab::Covers,
-                    TagsTab::Covers => TagsTab::Cleanup,
-                    TagsTab::Cleanup => TagsTab::File,
+                    TagsTab::Fields => TagsTab::Covers,
+                    TagsTab::Covers if editor.is_batch() => TagsTab::Extras,
+                    TagsTab::Covers => TagsTab::File,
+                    TagsTab::File => TagsTab::Extras,
+                    TagsTab::Extras => TagsTab::Cleanup,
+                    TagsTab::Cleanup => TagsTab::Fields,
                 };
                 self.tag_action(TagAction::Tab(tab))?;
             }
@@ -661,6 +676,7 @@ impl App {
                     input: 0,
                     selected_all: true,
                     value_kind: 0,
+                    details: false,
                 });
             }
             TagAction::FormatName => {
@@ -684,15 +700,11 @@ impl App {
                     editor.offset = 0;
                 }
                 Some(MovePicker::Folders) => {
-                    if let Some(folder) = editor
-                        .destination()
-                        .and_then(|p| p.folders.get(editor.selected))
-                    {
-                        editor.move_folder = folder.display().to_string();
-                    }
+                    // Row selection updates move_folder; preserve a manually entered destination.
                     editor.move_confirm = true;
                     editor.target_path()?;
                     editor.confirm = true;
+                    editor.offset = 0;
                 }
                 None => {}
             },
@@ -701,6 +713,7 @@ impl App {
                 editor.move_confirm = true;
                 editor.target_path()?;
                 editor.confirm = true;
+                editor.offset = 0;
             }
             TagAction::Format(direction) => {
                 editor.block = super::bounded(editor.block, direction, document.blocks.len());
@@ -764,6 +777,7 @@ impl App {
                         cursor: 0,
                         selected_all: false,
                         value_kind: 0,
+                        details: false,
                     });
                 } else if editor.tab == TagsTab::Extras {
                     editor.edit = Some(TagEdit {
@@ -777,6 +791,7 @@ impl App {
                         cursor: 0,
                         selected_all: false,
                         value_kind: 0,
+                        details: false,
                     });
                 } else {
                     editor.key_picker = true;
@@ -815,6 +830,7 @@ impl App {
                             cursor: 0,
                             selected_all: false,
                             value_kind,
+                            details: !item.description().is_empty() || item.lang().iter().any(|c| *c != 0),
                         };
                         edit.select(0);
                         editor.edit = Some(edit);
@@ -832,6 +848,7 @@ impl App {
                             cursor: 0,
                             selected_all: false,
                             value_kind: field.value_kind,
+                            details: false,
                         };
                         edit.select(0);
                         editor.edit = Some(edit);
@@ -854,6 +871,7 @@ impl App {
                         cursor: 0,
                         selected_all: false,
                         value_kind: 0,
+                        details: false,
                     });
                 }
             }
@@ -871,6 +889,7 @@ impl App {
                         cursor: 0,
                         selected_all: false,
                         value_kind: 0,
+                        details: false,
                     });
                     editor.key_picker = false;
                     editor.selected = 0;
@@ -885,6 +904,14 @@ impl App {
             TagAction::Input(index) => {
                 if let Some(edit) = &mut editor.edit {
                     edit.select(index);
+                }
+            }
+            TagAction::Details => {
+                if let Some(edit) = &mut editor.edit
+                    && edit.file_input.is_none() && !edit.cover && !edit.extra
+                {
+                    edit.details = !edit.details;
+                    edit.select(0);
                 }
             }
             TagAction::ValueKind => {
@@ -1046,6 +1073,7 @@ impl App {
                 editor.move_confirm = false;
                 editor.target_path()?;
                 editor.confirm = true;
+                editor.offset = 0;
             }
             TagAction::Back | TagAction::Confirm | TagAction::Discard | TagAction::Move => {}
         }

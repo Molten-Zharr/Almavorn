@@ -4,12 +4,12 @@ use crate::{
     tags::{field_keys, type_name},
     ui::{
         theme::Palette,
-        widgets::{block, button, buttons, clean, file_modal, visible_offset},
+        widgets::{block, button, buttons, buttons_height, clean, file_modal, visible_offset},
     },
 };
 use ratatui::{
     Frame,
-    layout::{Position, Rect},
+    layout::{Margin, Position, Rect},
     widgets::{Paragraph, Wrap},
 };
 
@@ -44,19 +44,21 @@ pub(super) fn render(
         if editor.is_batch() {
             format!("{} ({})", app.text("Tags of checked tracks", "Теги отмеченных композиций"), editor.batch.len())
         } else { app.text("Tags and file name", "Теги и имя файла").into() },
-        42,
+        area.height,
         palette,
-    );
-    if inner.width < 24 || inner.height < 16 {
+    ).inner(Margin::new(1, 1));
+    if inner.width < 24 || inner.height < if inner.width < 48 { 30 } else { 24 } {
         text(
             frame,
-            inner,
+            Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(2)),
             app.text(
                 "Enlarge the window. Esc: back",
                 "Увеличьте окно. Esc: назад",
             ),
             palette,
         );
+        buttons(frame, app, Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, inner.height.min(1)),
+            vec![action(app.text("Back", "Назад"), TagAction::Back, true)], palette);
         return;
     }
     let bottom = inner.bottom();
@@ -142,12 +144,13 @@ pub(super) fn render(
                 "Путь и сведения обновятся во всех плейлистах. Отмена Хаоса не отменяет изменения файлов."),
             if editor.destructive() { app.text("The checked tags will be removed from the audio file.", "Отмеченные теги будут удалены из аудиофайла.") } else { "" }
         ) };
-        text(
-            frame,
-            Rect::new(inner.x, inner.y, inner.width, inner.height - 7),
-            explanation,
-            palette,
-        );
+        let body = Rect::new(inner.x, inner.y, inner.width, inner.height - 7);
+        let paragraph = Paragraph::new(explanation).style(palette.text()).wrap(Wrap { trim: false });
+        app.view.dialog_scroll_max = paragraph.line_count(body.width.max(1))
+            .saturating_sub(usize::from(body.height)).min(u16::MAX as usize);
+        app.view.dialog_page_size = usize::from(body.height);
+        editor.offset = editor.offset.min(app.view.dialog_scroll_max);
+        frame.render_widget(paragraph.scroll((editor.offset as u16, 0)), body);
         if let Some(error) = &editor.error {
             text(
                 frame,
@@ -176,6 +179,8 @@ pub(super) fn render(
                     true,
                 ),
                 action(app.text("Cancel", "Отмена"), TagAction::Back, true),
+                ("↑".into(), Target::DialogScroll(-5), editor.offset > 0),
+                ("↓".into(), Target::DialogScroll(5), editor.offset < app.view.dialog_scroll_max),
             ],
             palette,
         );
@@ -216,63 +221,28 @@ pub(super) fn render(
         Rect::new(inner.x, inner.y, inner.width, 1),
         if editor.is_batch() { format!("{}: {} · {}: {}", app.text("Checked", "Отмечено"), editor.batch.len(),
             app.text("Sample", "Образец"), clean(&editor.filename())) } else { format!(
-            "{}  ·  {}: {}",
+            "{} · {}",
             clean(&editor.filename()),
-            app.text("Playlists", "Плейлистов"),
-            editor.shared
+            if editor.changed() { app.text("Unsaved changes", "Есть изменения") }
+                else { app.text("No changes", "Без изменений") }
         ) },
         palette,
     );
-    let header_height = buttons(
-        frame,
-        app,
-        Rect::new(inner.x, inner.y + 1, inner.width, 3),
-        vec![
-            action(
-                app.text("File", "Файл"),
-                TagAction::Tab(TagsTab::File),
-                true,
-            ),
-            action("◀", TagAction::Format(-1), editor.block > 0),
-            (
-                format!(
-                    "{}{}",
-                    type_name(current.kind),
-                    if current.existed { "" } else { " +" }
-                ),
-                Target::Tags(TagAction::Format(1)),
-                editor.block + 1 < document.blocks.len(),
-            ),
-            action(
-                "▶",
-                TagAction::Format(1),
-                editor.block + 1 < document.blocks.len(),
-            ),
-            action(
-                app.text("Fields", "Поля"),
-                TagAction::Tab(TagsTab::Fields),
-                true,
-            ),
-            action(
-                app.text("Extra", "Дополнительно"),
-                TagAction::Tab(TagsTab::Extras),
-                true,
-            ),
-            action(
-                app.text("Covers", "Обложки"),
-                TagAction::Tab(TagsTab::Covers),
-                true,
-            ),
-            action(
-                app.text("Clear", "Очистка"),
-                TagAction::Tab(TagsTab::Cleanup),
-                true,
-            ),
-        ].into_iter().filter(|(_, target, _)| !editor.is_batch() || !matches!(target, Target::Tags(TagAction::Tab(TagsTab::File)))).collect(),
-        palette,
-    )
-    .min(3);
-    let y = inner.y + 1 + header_height;
+    let mut tabs = vec![
+        (TagsTab::Fields, app.text("Tags", "Теги")),
+        (TagsTab::Covers, app.text("Covers", "Обложки")),
+        (TagsTab::File, app.text("File name", "Имя файла")),
+        (TagsTab::Extras, app.text("Extra", "Дополнительно")),
+        (TagsTab::Cleanup, app.text("Cleanup", "Очистка")),
+    ];
+    tabs.retain(|(tab, _)| !editor.is_batch() || *tab != TagsTab::File);
+    let tabs = tabs.into_iter().map(|(tab, label)| {
+        (format!("{}{}", if editor.tab == tab { "● " } else { "" }, label),
+            Target::Tags(TagAction::Tab(tab)), !editor.key_picker)
+    }).collect::<Vec<_>>();
+    let tab_height = buttons_height(app, inner.width, &tabs);
+    buttons(frame, app, Rect::new(inner.x, inner.y + 2, inner.width, tab_height), tabs, palette);
+    let mut y = inner.y + tab_height + 3;
     if editor.tab == TagsTab::File {
         render_file(
             frame,
@@ -282,6 +252,18 @@ pub(super) fn render(
             palette,
         );
         return;
+    }
+    let formats = vec![
+        action("◀", TagAction::Format(-1), editor.block > 0 && !editor.key_picker),
+        (format!("{}: {}{}", app.text("Tag format", "Формат тегов"), type_name(current.kind),
+            if current.existed { "" } else { app.text(" (new)", " (новый)") }),
+            Target::Tags(TagAction::Format(1)), !editor.key_picker && editor.block + 1 < document.blocks.len()),
+        action("▶", TagAction::Format(1), !editor.key_picker && editor.block + 1 < document.blocks.len()),
+    ];
+    {
+        let height = buttons_height(app, inner.width, &formats);
+        buttons(frame, app, Rect::new(inner.x, y, inner.width, height), formats, palette);
+        y += height + 1;
     }
     let hint = if editor.is_batch() && !editor.key_picker {
         app.text("Values shown belong to the sample. Only edited fields and checked removals apply to all files.",
@@ -295,12 +277,12 @@ pub(super) fn render(
         match editor.tab {
             TagsTab::File => "",
             TagsTab::Fields | TagsTab::Extras => app.text(
-                "Checkbox: clear field. Enter or double-click: edit.",
-                "Галочка: очистить поле. Enter или двойной клик: изменить.",
+                "Enter: edit. Clear selected marks a field for removal when saved.",
+                "Enter: изменить. Очистка выбранного поля применяется при сохранении.",
             ),
             TagsTab::Covers => app.text(
-                "Checkbox: remove cover. Enter or double-click: edit.",
-                "Галочка: удалить обложку. Enter или двойной клик: изменить.",
+                "Enter: edit. Clear selected marks a cover for removal when saved.",
+                "Enter: изменить. Удаление выбранной обложки применяется при сохранении.",
             ),
             TagsTab::Cleanup => app.text(
                 "Checked blocks will be removed from the file on Save.",
@@ -308,18 +290,26 @@ pub(super) fn render(
             ),
         }
     };
-    text(frame, Rect::new(inner.x, y, inner.width, 2), hint, palette);
+    let hint_height = (Paragraph::new(hint).wrap(Wrap { trim: false }).line_count(inner.width) as u16).min(3);
+    text(frame, Rect::new(inner.x, y, inner.width, hint_height), hint, Palette { text: palette.muted, ..palette });
     let error_height = if editor.error.is_some() { 3 } else { 0 };
-    let list = Rect::new(
-        inner.x,
-        y + 2,
-        inner.width,
-        (bottom - 8 - error_height).saturating_sub(y + 2),
-    );
+    let footer_actions = vec![
+        action(if editor.is_batch() { app.text("Save files", "Сохранить файлы") }
+            else { app.text("Save file", "Сохранить файл") }, TagAction::Save, editor.changed() && !editor.key_picker),
+        action(app.text("Close", "Закрыть"), TagAction::Back, true),
+    ];
+    let footer_height = buttons_height(app, inner.width, &footer_actions);
+    let footer = Rect::new(inner.x, bottom - footer_height, inner.width, footer_height);
+    let controls_height = if inner.width < 48 { 3 } else { 2 };
+    let controls_y = footer.y.saturating_sub(controls_height + error_height + 2);
+    let list = Rect::new(inner.x, y + hint_height + 1, inner.width,
+        controls_y.saturating_sub(y + hint_height + 2));
     let keys = field_keys(current.kind);
     let length = editor.length();
     editor.selected = editor.selected.min(length.saturating_sub(1));
-    editor.offset = visible_offset(editor.offset, editor.selected, list.height as usize, length);
+    let row_height = if list.width >= 48 && list.height >= 8 && !editor.key_picker { 2 } else { 1 };
+    let capacity = usize::from(list.height / row_height);
+    editor.offset = visible_offset(editor.offset, editor.selected, capacity, length);
     if length == 0 {
         text(
             frame,
@@ -332,10 +322,10 @@ pub(super) fn render(
         );
     }
     for (line, index) in (editor.offset..length)
-        .take(list.height as usize)
+        .take(capacity)
         .enumerate()
     {
-        let row = Rect::new(list.x, list.y + line as u16, list.width, 1);
+        let row = Rect::new(list.x, list.y + line as u16 * row_height, list.width, row_height);
         let (removed, value) = if editor.key_picker {
             let key = keys[index];
             (
@@ -427,33 +417,28 @@ pub(super) fn render(
         } else {
             palette.text()
         };
-        frame.render_widget(
-            Paragraph::new(if editor.key_picker {
-                value
-            } else {
-                checkbox(removed, &value)
-            })
-            .style(style),
-            row,
-        );
-        app.view.hits.push(Hit {
-            area: row,
-            target: Target::Tags(TagAction::Row(index)),
-            enabled: true,
-        });
-        if !editor.key_picker {
-            app.view.hits.push(Hit {
-                area: Rect::new(row.x, row.y, row.width.min(3), 1),
-                target: Target::Tags(if editor.tab == TagsTab::Cleanup {
-                    TagAction::ClearBlock(index)
-                } else {
-                    TagAction::Remove(index)
-                }),
-                enabled: true,
-            });
+        let value = if editor.tab == TagsTab::Cleanup && !editor.key_picker {
+            checkbox(removed, &value)
+        } else if removed {
+            format!("{}: {value}", app.text("Will remove", "Удалится"))
+        } else { value };
+        if matches!(editor.tab, TagsTab::Fields | TagsTab::Extras) && row.width >= 48 && !editor.key_picker {
+            let (label, value) = value.split_once(": ").unwrap_or((&value, ""));
+            let label_width = (row.width / 3).min(26);
+            frame.render_widget(Paragraph::new(label).style(style).wrap(Wrap { trim: false }),
+                Rect::new(row.x, row.y, label_width, row.height));
+            frame.render_widget(Paragraph::new(value).style(style).wrap(Wrap { trim: false }),
+                Rect::new(row.x + label_width + 2, row.y, row.width - label_width - 2, row.height));
+        } else {
+            frame.render_widget(Paragraph::new(value).style(style).wrap(Wrap { trim: false }), row);
+        }
+        app.view.hits.push(Hit { area: row, target: Target::Tags(TagAction::Row(index)), enabled: true });
+        if editor.tab == TagsTab::Cleanup && !editor.key_picker {
+            app.view.hits.push(Hit { area: Rect::new(row.x, row.y, row.width.min(3), row.height),
+                target: Target::Tags(TagAction::ClearBlock(index)), enabled: true });
         }
     }
-    let controls = Rect::new(inner.x, bottom - 8 - error_height, inner.width, 5);
+    let controls = Rect::new(inner.x, controls_y, inner.width, controls_height);
     if editor.key_picker {
         buttons(
             frame,
@@ -524,27 +509,13 @@ pub(super) fn render(
             ],
             palette,
         );
-        if current.has_special_fields() {
-            text(
-                frame,
-                Rect::new(controls.x, controls.y + 2, controls.width, 3),
-                app.text(
-                    "Additional data is on the Extra tab.",
-                    "Дополнительные данные доступны на вкладке Дополнительно.",
-                ),
-                Palette {
-                    text: palette.muted,
-                    ..palette
-                },
-            );
-        }
     }
     if let Some(error) = &editor.error {
         text(
             frame,
             Rect::new(
                 inner.x,
-                bottom - 3 - error_height,
+                footer.y - error_height - 1,
                 inner.width,
                 error_height,
             ),
@@ -555,26 +526,7 @@ pub(super) fn render(
             },
         );
     }
-    buttons(
-        frame,
-        app,
-        footer,
-        vec![
-            action(
-                if editor.is_batch() { app.text("Save files", "Сохранить файлы") }
-                    else { app.text("Save file", "Сохранить файл") },
-                TagAction::Save,
-                editor.changed() && !editor.key_picker,
-            ),
-            action(
-                app.text("Move… [M]", "Перенести… [M]"),
-                TagAction::Move,
-                !editor.key_picker,
-            ),
-            action(app.text("Close", "Закрыть"), TagAction::Back, true),
-        ].into_iter().filter(|(_, target, _)| !editor.is_batch() || !matches!(target, Target::Tags(TagAction::Move))).collect(),
-        palette,
-    );
+    buttons(frame, app, footer, footer_actions, palette);
 }
 
 fn render_edit(
@@ -631,8 +583,8 @@ fn render_edit(
         )
     } else {
         app.text(
-            "Tab: next input. Ctrl+A: select all. F10: newline. Enter: apply to draft.",
-            "Tab: следующее поле. Ctrl+A: выделить все. F10: новая строка. Enter: в черновик.",
+            "Enter: apply to draft. Ctrl+A: select all. F2: details. F10: newline.",
+            "Enter: в черновик. Ctrl+A: выделить все. F2: подробнее. F10: новая строка.",
         )
     };
     text(
@@ -660,21 +612,14 @@ fn render_edit(
             app.text("Language (rus, eng)", "Язык (rus, eng)"),
         ]
     };
-    let value_height = if edit.file_input.is_some() {
-        4
-    } else {
-        inner.height.saturating_sub(16).max(3)
-    };
+    let simple = edit.file_input.is_none() && !edit.cover && !edit.extra;
+    let inputs = if edit.file_input.is_some() || (simple && !edit.details) { 1 }
+        else if edit.extra { 2 } else { 3 };
+    let value_height = inner.height.saturating_sub(10 + (inputs - 1) * 3).max(3);
     let mut y = inner.y + 4;
     for (index, title) in titles
         .iter()
-        .take(if edit.file_input.is_some() {
-            1
-        } else if edit.extra {
-            2
-        } else {
-            3
-        })
+        .take(usize::from(inputs))
         .enumerate()
     {
         let height = if index == 0 { value_height } else { 3 };
@@ -749,7 +694,7 @@ fn render_edit(
                 ..palette
             },
         );
-    } else if edit.file_input.is_none() && !edit.cover && !edit.extra && y < inner.bottom() - 3 {
+    } else if simple && edit.details && y < inner.bottom() - 3 {
         button(
             frame,
             app,
@@ -765,9 +710,11 @@ fn render_edit(
         app,
         Rect::new(inner.x, inner.bottom() - 3, inner.width, 3),
         vec![
-            action(app.text("Apply", "Применить"), TagAction::Apply, true),
+            action(app.text("Apply to draft", "Внести в черновик"), TagAction::Apply, true),
+            action(if edit.details { app.text("Hide details [F2]", "Скрыть детали [F2]") }
+                else { app.text("Details [F2]", "Подробнее [F2]") }, TagAction::Details, true),
             action(app.text("Back", "Назад"), TagAction::Back, true),
-        ],
+        ].into_iter().filter(|(_, target, _)| simple || !matches!(target, Target::Tags(TagAction::Details))).collect(),
         palette,
     );
 }
@@ -779,14 +726,23 @@ fn render_file(
     inner: Rect,
     palette: Palette,
 ) {
+    if inner.height < 18 {
+        text(frame, inner, app.text("Enlarge the window to edit the file name. Other tabs remain available.",
+            "Увеличьте окно для изменения имени файла. Остальные вкладки доступны."), palette);
+        return;
+    }
     let footer = Rect::new(inner.x, inner.bottom().saturating_sub(3), inner.width, 3);
     let mut y = inner.y;
+    let original = format!("{}: {}", app.text("Current name", "Текущее имя"), clean(&editor.filename()));
+    let height = (Paragraph::new(original.as_str()).wrap(Wrap { trim: false }).line_count(inner.width) as u16).min(3);
+    text(frame, Rect::new(inner.x, y, inner.width, height), original, Palette { text: palette.muted, ..palette });
+    y += height + 1;
     text(
         frame,
         Rect::new(inner.x, y, inner.width, 2),
         format!(
             "{}: {}",
-            app.text("File name", "Имя файла"),
+            app.text("Name after saving", "Имя после сохранения"),
             clean(
                 &editor
                     .new_filename()

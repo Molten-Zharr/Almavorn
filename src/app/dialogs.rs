@@ -402,8 +402,12 @@ impl App {
                     view.offset = bounded(view.offset, direction as i64, self.view.dialog_scroll_max + 1);
                 } else { view.selected = bounded(view.selected, direction as i64, transfer_length); }
             }
-            Some(Dialog::MoveFiles(view)) if !view.confirm => {
-                view.selected = bounded(view.selected, direction as i64, view.folders.len());
+            Some(Dialog::MoveFiles(view)) => {
+                if view.confirm {
+                    view.offset = bounded(view.offset, direction as i64, self.view.dialog_scroll_max + 1);
+                } else {
+                    view.selected = bounded(view.selected, direction as i64, view.folders.len());
+                }
             }
             Some(Dialog::Help { offset })
             | Some(Dialog::Metadata { offset, .. })

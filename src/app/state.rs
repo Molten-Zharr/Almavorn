@@ -180,6 +180,7 @@ pub enum Target {
     },
     EqualizerReset,
     TunerSelect(usize),
+    TunerAdjust(usize, i16),
     TunerSlider(usize, Rect),
     TunerReverse,
     TunerReset,
