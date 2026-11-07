@@ -167,3 +167,10 @@ pub(super) fn clean(text: &str) -> String {
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect()
 }
+
+pub(super) fn text_history_controls(app: &App, history: &crate::app::TextHistory) -> Vec<(String, Target, bool)> {
+    vec![
+        (app.text("Undo", "Отменить ввод").into(), Target::TextUndo, history.can_undo()),
+        (app.text("Redo", "Повторить ввод").into(), Target::TextRedo, history.can_redo()),
+    ]
+}

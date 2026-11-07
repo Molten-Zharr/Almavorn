@@ -42,14 +42,7 @@ impl App {
                 return Ok(());
             }
             if key.key == Key::Backspace {
-                if dialog.selected_all {
-                    dialog.text.clear();
-                    dialog.selected_all = false;
-                } else {
-                    dialog.text.pop();
-                }
-                dialog.sync_color_text();
-                return Ok(());
+                return self.target(Target::Backspace, false);
             }
         }
         self.dialog_navigation_key(key)

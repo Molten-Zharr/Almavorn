@@ -45,6 +45,8 @@ impl Sort {
 
 #[derive(Clone)]
 pub enum Target {
+    TextUndo,
+    TextRedo,
     Artwork,
     PlayingTrack,
     RevealFile(std::path::PathBuf),

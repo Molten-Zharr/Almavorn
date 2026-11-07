@@ -790,10 +790,14 @@ impl App {
             && let Some(mut form) = browser.download_form.clone()
         {
             let index = if matches!(form.purpose, super::FormPurpose::DownloadSettings) { 0 } else { 1 };
-            form.fields[index].value = folder.display().to_string();
+            let field = &mut form.fields[index];
+            let before = field.value.clone();
+            let cursor = before.chars().count();
+            field.value = folder.display().to_string();
+            field.history.record(before, cursor, &field.value);
             form.selected = index;
             form.cursor = form.fields[index].value.chars().count();
-            form.selected_all = true;
+            form.selected_all = false;
             form.error = None;
             self.cancel_browser();
             self.view.dialog = Some(Dialog::Form(form));
@@ -878,13 +882,16 @@ impl App {
             } else {
                 name.trim().to_owned()
             };
+            let before = dialog.text.clone();
+            let cursor = before.chars().count();
             dialog.text = self.fresh_playlist_name(&name);
+            dialog.history.record(before, cursor, &dialog.text);
             let group_subfolders = browser.folder_playlists.unwrap_or(false);
             dialog.purpose = TextPurpose::CreateFromFolder {
                 folder,
                 group_subfolders,
             };
-            dialog.selected_all = true;
+            dialog.selected_all = false;
             self.cancel_browser();
             self.view.dialog = Some(Dialog::Text(dialog));
             return Ok(());

@@ -30,7 +30,15 @@ pub(super) fn render(
     if inner.width < 20 || inner.height < 12 {
         return;
     }
-    let footer = Rect::new(inner.x, inner.bottom() - 3, inner.width, 3);
+    let mut footer_actions = vec![
+        (app.text("Apply", "Применить").into(), Target::Form(FormAction::Save), true),
+        (app.text("Back", "Назад").into(), Target::Form(FormAction::Back), true),
+    ];
+    if let Some(field) = form.fields.get(form.selected) && !field.checkbox && !form.discard {
+        footer_actions.extend(super::super::widgets::text_history_controls(app, &field.history));
+    }
+    let footer_height = super::super::widgets::buttons_height(app, inner.width, &footer_actions).max(3);
+    let footer = Rect::new(inner.x, inner.bottom() - footer_height, inner.width, footer_height);
     if form.discard {
         frame.render_widget(
             Paragraph::new(app.text(
@@ -180,18 +188,7 @@ pub(super) fn render(
         frame,
         app,
         footer,
-        vec![
-            (
-                app.text("Apply", "Применить").into(),
-                Target::Form(FormAction::Save),
-                true,
-            ),
-            (
-                app.text("Back", "Назад").into(),
-                Target::Form(FormAction::Back),
-                true,
-            ),
-        ],
+        footer_actions,
         palette,
     );
 }

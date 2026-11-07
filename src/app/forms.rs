@@ -36,6 +36,7 @@ pub struct FormField {
     pub secret: bool,
     pub multiline: bool,
     pub checkbox: bool,
+    pub history: super::TextHistory,
 }
 impl FormField {
     pub fn new(label: impl Into<String>, value: impl Into<String>) -> Self {
@@ -45,6 +46,7 @@ impl FormField {
             secret: false,
             multiline: false,
             checkbox: false,
+            history: Default::default(),
         }
     }
 }
@@ -90,7 +92,10 @@ impl App {
         if !field.secret && !field.checkbox && form.selected_all {
             self.view.clipboard_text = Some(field.value.clone());
             if cut {
+                let before = field.value.clone();
+                let cursor = form.cursor;
                 field.value.clear();
+                field.history.record(before, cursor, &field.value);
                 form.cursor = 0;
                 form.selected_all = false;
             }
@@ -114,7 +119,7 @@ impl App {
             fields,
             selected: 0,
             cursor,
-            selected_all: true,
+            selected_all: false,
             error: None,
             discard: false,
             purpose,
@@ -169,6 +174,8 @@ impl App {
             );
             return;
         }
+        let before = field.value.clone();
+        let cursor = form.cursor;
         if form.selected_all {
             field.value.clear();
             form.cursor = 0;
@@ -185,6 +192,7 @@ impl App {
             .map_or(field.value.len(), |(i, _)| i);
         field.value.insert_str(offset, &text);
         form.cursor += text.chars().count();
+        field.history.record(before, cursor, &field.value);
         form.error = None;
     }
 
@@ -316,6 +324,8 @@ impl App {
                 form.selected_all = false;
             }
             Key::Backspace | Key::Delete if !field.checkbox => {
+                let before = field.value.clone();
+                let cursor = form.cursor;
                 if form.selected_all {
                     field.value.clear();
                     form.cursor = 0;
@@ -333,6 +343,7 @@ impl App {
                         form.cursor = index;
                     }
                 }
+                field.history.record(before, cursor, &field.value);
             }
             _ => {}
         }
@@ -364,10 +375,14 @@ impl App {
                 };
                 match crate::downloads::destination_folder(std::path::Path::new("")) {
                     Ok(folder) => {
-                        form.fields[index].value = folder.display().to_string();
+                        let before = form.fields[index].value.clone();
+                        let cursor = before.chars().count();
+                        let field = &mut form.fields[index];
+                        field.value = folder.display().to_string();
+                        field.history.record(before, cursor, &field.value);
                         form.selected = index;
                         form.cursor = form.fields[index].value.chars().count();
-                        form.selected_all = true;
+                        form.selected_all = false;
                         form.error = None;
                     }
                     Err(error) => form.error = Some(error.to_string()),
@@ -413,7 +428,7 @@ impl App {
             FormAction::Field(index) if index < form.fields.len() => {
                 form.selected = index;
                 form.cursor = form.fields[index].value.chars().count();
-                form.selected_all = true;
+                form.selected_all = false;
             }
             FormAction::Discard => {
                 let back = form.back.take();

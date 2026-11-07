@@ -148,7 +148,7 @@ pub(super) fn render(
     let settings_hint_height = Paragraph::new(settings_hint)
         .wrap(Wrap { trim: false })
         .line_count(width.max(1)) as u16;
-    let footer_controls = vec![
+    let mut footer_controls = vec![
         control(
             if new {
                 app.text("Download · Enter", "Скачать · Enter")
@@ -162,6 +162,9 @@ pub(super) fn render(
         ),
         control(app.text("Cancel · Esc", "Отмена · Esc"), A::Back, true),
     ];
+    if let Some(field) = form.fields.get(form.selected) && !field.checkbox {
+        footer_controls.extend(super::super::widgets::text_history_controls(app, &field.history));
+    }
     let folder_height = buttons_height(app, width, &folder_controls);
     let engine_height = buttons_height(app, width, &engine_controls);
     let required_height = description_height

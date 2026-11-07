@@ -67,6 +67,9 @@ pub(super) fn render(
         Target::Form(FormAction::Back),
         true,
     ));
+    if step == 2 && let Some(field) = form.fields.get(form.selected) && !field.checkbox {
+        controls.extend(super::super::widgets::text_history_controls(app, &field.history));
+    }
     let footer_height = buttons_height(app, inner.width, &controls).min(inner.height);
     if inner.width < 30 || inner.height < 10 + footer_height {
         frame.render_widget(

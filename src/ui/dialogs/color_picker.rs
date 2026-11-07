@@ -42,7 +42,9 @@ pub(super) fn render(
     let preview_height = if inner.height >= 18 { 2 } else { 1 };
     let hex_height = if inner.height >= 12 { 3 } else { 1 };
     let keypad_height = if inner.height >= 24 { 2 } else { 0 };
-    let footer_height = if inner.height >= 12 { 2 } else { 1 };
+    let history_controls = super::super::widgets::text_history_controls(app, &dialog.history);
+    let history_height = super::super::widgets::buttons_height(app, inner.width, &history_controls).min(inner.height.saturating_sub(1));
+    let footer_height = (if inner.height >= 12 { 2 } else { 1 }) + history_height;
     let body_height = inner.height.saturating_sub(
         header_height + preview_height + hex_height + keypad_height + footer_height,
     );
@@ -287,6 +289,7 @@ pub(super) fn render(
         }
     }
     let footer_y = inner.bottom() - 1;
+    super::super::widgets::buttons(frame, app, Rect::new(inner.x, footer_y - history_height, inner.width, history_height), history_controls, palette);
     quiet_button(
         frame,
         app,

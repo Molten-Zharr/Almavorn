@@ -7,6 +7,8 @@ use std::borrow::Cow;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::TextUndo => Some("Ctrl+Z".into()),
+        Target::TextRedo => Some("Ctrl+Y".into()),
         Target::LyricsPanel(action) => {
             if app.lyrics.panel.focused && let Some(key) = action.local_key() { return Some(key.into()); }
             action.binding().and_then(|action| app.settings.preferences.bindings.iter().find(|binding| binding.action == action).map(|binding| binding.key.label()))

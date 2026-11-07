@@ -428,6 +428,8 @@ impl App {
                     if dialog.insert_color_hex(&text) {
                         return Ok(());
                     }
+                    let before = dialog.text.clone();
+                    let cursor = before.chars().count();
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
@@ -436,6 +438,7 @@ impl App {
                     dialog
                         .text
                         .extend(text.chars().filter(|c| !c.is_control()).take(remaining));
+                    dialog.history.record(before, cursor, &dialog.text);
                     dialog.sync_color_text();
                 }
             }
@@ -947,6 +950,8 @@ impl App {
                 *recursive = !*recursive;
                 self.save_settings()?;
             }
+            Target::TextUndo => self.edit_text_history(false),
+            Target::TextRedo => self.edit_text_history(true),
             Target::Text(c) => {
                 if let Some(Dialog::Search(search)) = &mut self.view.dialog {
                     search.focus = super::SearchFocus::Input;
@@ -958,6 +963,8 @@ impl App {
                     if dialog.insert_color_hex(&c.to_string()) {
                         return Ok(());
                     }
+                    let before = dialog.text.clone();
+                    let cursor = before.chars().count();
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
@@ -965,6 +972,7 @@ impl App {
                     if dialog.text.chars().count() < 512 {
                         dialog.text.push(c);
                     }
+                    dialog.history.record(before, cursor, &dialog.text);
                     dialog.sync_color_text();
                 }
             }
@@ -985,12 +993,15 @@ impl App {
                     return self.filter_key(KeyPress::plain(Key::Backspace));
                 }
                 if let Some(Dialog::Text(dialog)) = &mut self.view.dialog {
+                    let before = dialog.text.clone();
+                    let cursor = before.chars().count();
                     if dialog.selected_all {
                         dialog.text.clear();
                         dialog.selected_all = false;
                     } else {
                         dialog.text.pop();
                     }
+                    dialog.history.record(before, cursor, &dialog.text);
                     dialog.sync_color_text();
                 }
             }

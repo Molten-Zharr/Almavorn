@@ -615,7 +615,24 @@ fn render_edit(
     let simple = edit.file_input.is_none() && !edit.cover && !edit.extra;
     let inputs = if edit.file_input.is_some() || (simple && !edit.details) { 1 }
         else if edit.extra { 2 } else { 3 };
-    let value_height = inner.height.saturating_sub(hint_height + 7 + (inputs - 1) * 3).max(3);
+    let mut footer_actions: Vec<_> = vec![
+            action(app.text("Apply to draft", "Внести в черновик"), TagAction::Apply, true),
+            action(if edit.details { app.text("Hide details [F2]", "Скрыть детали [F2]") }
+                else { app.text("Details [F2]", "Подробнее [F2]") }, TagAction::Details, true),
+            action(app.text("Back", "Назад"), TagAction::Back, true),
+        ].into_iter().filter(|(_, target, _)| simple || !matches!(target, Target::Tags(TagAction::Details))).collect();
+    footer_actions.extend(super::super::widgets::text_history_controls(app, &edit.history[edit.input]));
+    let (_, footer_height) = file_button_layout(app, inner.width, &footer_actions);
+    let footer_y = inner.bottom().saturating_sub(footer_height);
+    if inner.height < 1 + hint_height + inputs * 3 + footer_height + 2 {
+        text(frame, Rect::new(inner.x, inner.y, inner.width, footer_y.saturating_sub(inner.y)),
+            app.text("Enlarge the window to edit this field. Esc: back.", "Увеличьте окно для редактирования поля. Esc: назад."), palette);
+        file_buttons(frame, app, Rect::new(inner.x, footer_y, inner.width, footer_height.min(inner.height)), footer_actions, palette);
+        return;
+    }
+    let value_height = if edit.file_input.is_some() { 3 } else {
+        inner.height.saturating_sub(hint_height + footer_height + 4 + (inputs - 1) * 3).max(3)
+    };
     let mut y = inner.y + 1 + hint_height;
     for (index, title) in titles
         .iter()
@@ -679,7 +696,7 @@ fn render_edit(
         y += height;
     }
     if let Some(error) = error {
-        let remaining = inner.bottom().saturating_sub(y + 3);
+        let remaining = footer_y.saturating_sub(y);
         let error_area = if remaining > 1 {
             Rect::new(inner.x, y, inner.width, remaining)
         } else {
@@ -694,7 +711,7 @@ fn render_edit(
                 ..palette
             },
         );
-    } else if simple && edit.details && y < inner.bottom() - 3 {
+    } else if simple && edit.details && y < footer_y {
         button(
             frame,
             app,
@@ -705,18 +722,7 @@ fn render_edit(
             palette,
         );
     }
-    buttons(
-        frame,
-        app,
-        Rect::new(inner.x, inner.bottom() - 3, inner.width, 3),
-        vec![
-            action(app.text("Apply to draft", "Внести в черновик"), TagAction::Apply, true),
-            action(if edit.details { app.text("Hide details [F2]", "Скрыть детали [F2]") }
-                else { app.text("Details [F2]", "Подробнее [F2]") }, TagAction::Details, true),
-            action(app.text("Back", "Назад"), TagAction::Back, true),
-        ].into_iter().filter(|(_, target, _)| simple || !matches!(target, Target::Tags(TagAction::Details))).collect(),
-        palette,
-    );
+    file_buttons(frame, app, Rect::new(inner.x, footer_y, inner.width, footer_height), footer_actions, palette);
 }
 
 // This tab uses full-height buttons so actions cannot be mistaken for body text.

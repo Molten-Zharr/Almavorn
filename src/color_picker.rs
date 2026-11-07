@@ -66,7 +66,7 @@ impl ColorPicker {
             original: rgb,
             selected: None,
             hex_cursor: 7,
-            hex_anchor: 0,
+            hex_anchor: 7,
         }
     }
 

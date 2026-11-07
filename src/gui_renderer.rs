@@ -537,6 +537,8 @@ pub fn paint_keycaps(
                     | Target::Submit
                     | Target::SearchPlay
                     | Target::CloseDialog
+                    | Target::TextUndo
+                    | Target::TextRedo
                     | Target::Text(_)
                     | Target::Backspace
                     | Target::KeyboardLanguage

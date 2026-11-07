@@ -37,6 +37,7 @@ pub struct TextDialog {
     pub keyboard: Language,
     pub upper: bool,
     pub selected_all: bool,
+    pub history: super::TextHistory,
     pub color_picker: Option<crate::color_picker::ColorPicker>,
 }
 
@@ -288,7 +289,7 @@ impl App {
     }
 
     pub(super) fn text_dialog(&mut self, purpose: TextPurpose, text: String) {
-        let selected_all = !text.is_empty();
+        let selected_all = false;
         let color_picker = if matches!(
             purpose,
             TextPurpose::Settings(SettingsEdit::PaletteColor { .. })
@@ -305,6 +306,7 @@ impl App {
             keyboard: self.settings.preferences.language,
             upper: false,
             selected_all,
+            history: Default::default(),
             color_picker,
         }));
     }

@@ -40,6 +40,8 @@ impl TextDialog {
         if self.color_picker.is_none() {
             return false;
         }
+        let before = self.text.clone();
+        let previous_cursor = self.color_picker.as_ref().unwrap().hex_cursor;
         let mut characters: Vec<_> = self.text.chars().collect();
         let selection = self.color_hex_selection();
         let remaining = 512usize.saturating_sub(characters.len() - selection.len());
@@ -51,6 +53,7 @@ impl TextDialog {
         let cursor = selection.start + inserted.len();
         characters.splice(selection, inserted);
         self.text = characters.into_iter().collect();
+        self.history.record(before, previous_cursor, &self.text);
         let color = self.color_picker.as_mut().expect("color picker");
         color.hex_cursor = cursor;
         color.hex_anchor = cursor;
@@ -82,10 +85,14 @@ impl App {
         let Some(color) = &mut dialog.color_picker else {
             return false;
         };
+        let before = dialog.text.clone();
+        let cursor = color.hex_cursor;
         change(color);
         dialog.text = color_hex(color.hsv.rgb());
-        dialog.selected_all = true;
-        dialog.select_color_hex();
+        dialog.history.record(before, cursor, &dialog.text);
+        dialog.selected_all = false;
+        color.hex_cursor = dialog.text.chars().count();
+        color.hex_anchor = color.hex_cursor;
         self.view.notice_error = false;
         true
     }
@@ -316,8 +323,9 @@ impl App {
                     .rem_euclid(ColorPicker::CHANNELS as i32 + 1)
                     as usize;
                 color.selected = (next < ColorPicker::CHANNELS).then_some(next);
-                dialog.selected_all = true;
-                dialog.select_color_hex();
+                dialog.selected_all = false;
+                color.hex_cursor = dialog.text.chars().count();
+                color.hex_anchor = color.hex_cursor;
             }
             Key::Left | Key::Right | Key::PageUp | Key::PageDown if color.selected.is_some() => {
                 let index = color.selected.unwrap();

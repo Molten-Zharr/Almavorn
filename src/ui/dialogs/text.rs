@@ -191,7 +191,10 @@ pub(super) fn text_dialog(
             ),
         field,
     );
-    let mut keyboard_top = field.bottom() + 1;
+    let history_controls = super::super::widgets::text_history_controls(app, &dialog.history);
+    let history_height = super::super::widgets::buttons_height(app, inner.width, &history_controls);
+    buttons(frame, app, Rect::new(inner.x, field.bottom() + 1, inner.width, history_height), history_controls, palette);
+    let mut keyboard_top = field.bottom() + history_height + 2;
     if creating {
         let with_folder = matches!(dialog.purpose, TextPurpose::CreateWithFolder { .. });
         let mut controls = vec![(

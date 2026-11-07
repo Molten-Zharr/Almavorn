@@ -94,6 +94,7 @@ pub struct TagEdit {
     pub selected_all: bool,
     pub value_kind: usize,
     pub details: bool,
+    pub history: [super::TextHistory; 3],
 }
 
 impl TagEdit {
@@ -379,6 +380,8 @@ impl App {
         }
         if let Some(edit) = &mut editor.edit {
             let value = &mut edit.values[edit.input];
+            let before = value.clone();
+            let cursor = edit.cursor;
             if edit.selected_all {
                 value.clear();
                 edit.cursor = 0;
@@ -394,6 +397,7 @@ impl App {
                 .collect();
             value.insert_str(offset, &text);
             edit.cursor += text.chars().count();
+            edit.history[edit.input].record(before, cursor, value);
         }
     }
 
@@ -510,6 +514,8 @@ impl App {
                 }
                 Key::Backspace | Key::Delete => {
                     let value = &mut edit.values[edit.input];
+                    let before = value.clone();
+                    let cursor = edit.cursor;
                     if edit.selected_all {
                         value.clear();
                         edit.cursor = 0;
@@ -527,6 +533,7 @@ impl App {
                             edit.cursor = index;
                         }
                     }
+                    edit.history[edit.input].record(before, cursor, value);
                 }
                 _ => {}
             }
@@ -674,9 +681,10 @@ impl App {
                     cursor: value.chars().count(),
                     values: [value, String::new(), String::new()],
                     input: 0,
-                    selected_all: true,
+                    selected_all: false,
                     value_kind: 0,
                     details: false,
+                    history: Default::default(),
                 });
             }
             TagAction::FormatName => {
@@ -778,6 +786,7 @@ impl App {
                         selected_all: false,
                         value_kind: 0,
                         details: false,
+                        history: Default::default(),
                     });
                 } else if editor.tab == TagsTab::Extras {
                     editor.edit = Some(TagEdit {
@@ -792,6 +801,7 @@ impl App {
                         selected_all: false,
                         value_kind: 0,
                         details: false,
+                        history: Default::default(),
                     });
                 } else {
                     editor.key_picker = true;
@@ -831,6 +841,7 @@ impl App {
                             selected_all: false,
                             value_kind,
                             details: !item.description().is_empty() || item.lang().iter().any(|c| *c != 0),
+                            history: Default::default(),
                         };
                         edit.select(0);
                         editor.edit = Some(edit);
@@ -849,6 +860,7 @@ impl App {
                             selected_all: false,
                             value_kind: field.value_kind,
                             details: false,
+                            history: Default::default(),
                         };
                         edit.select(0);
                         editor.edit = Some(edit);
@@ -872,6 +884,7 @@ impl App {
                         selected_all: false,
                         value_kind: 0,
                         details: false,
+                        history: Default::default(),
                     });
                 }
             }
@@ -890,6 +903,7 @@ impl App {
                         selected_all: false,
                         value_kind: 0,
                         details: false,
+                        history: Default::default(),
                     });
                     editor.key_picker = false;
                     editor.selected = 0;

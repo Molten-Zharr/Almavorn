@@ -38,6 +38,8 @@ mod statistics;
 mod services;
 mod mods;
 mod tags;
+mod text_history;
+pub use text_history::TextHistory;
 mod transfer;
 mod tuner;
 mod toolbar;
