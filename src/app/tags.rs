@@ -191,6 +191,11 @@ impl TagEditor {
         );
         Ok(folder.canonicalize()?.join(self.new_filename()?))
     }
+    fn checked_target_path(&self) -> Result<PathBuf> {
+        let destination = self.target_path()?;
+        self.document.as_ref().context("Теги еще не прочитаны.")?.check_destination(&destination)?;
+        Ok(destination)
+    }
     pub fn accepts_text(&self) -> bool {
         !self.key_picker && !self.confirm && !self.discard && self.edit.is_some()
     }
@@ -361,6 +366,7 @@ impl App {
             editor.offset = 0;
         } else if editor.changed() {
             editor.discard = true;
+            editor.offset = 0;
         } else {
             self.tags.load = None;
             self.view.dialog = None;
@@ -405,11 +411,11 @@ impl App {
         let Some(Dialog::Tags(editor)) = &mut self.view.dialog else {
             return;
         };
-        if editor.confirm {
+        if editor.confirm || editor.discard {
             editor.offset = super::bounded(editor.offset, direction, self.view.dialog_scroll_max + 1);
             return;
         }
-        if editor.edit.is_some() && !editor.key_picker || editor.discard {
+        if editor.edit.is_some() && !editor.key_picker {
             return;
         }
         editor.selected = super::bounded(editor.selected, direction, editor.length());
@@ -429,15 +435,10 @@ impl App {
         let Some(Dialog::Tags(editor)) = &mut self.view.dialog else {
             return Ok(());
         };
-        if editor.discard {
-            if key.key == Key::Enter {
-                self.tag_action(TagAction::Discard)?;
-            }
-            return Ok(());
-        }
-        if editor.confirm {
+        if editor.discard || editor.confirm {
+            let submit = if editor.discard { TagAction::Discard } else { TagAction::Confirm };
             match key.key {
-                Key::Enter => self.tag_action(TagAction::Confirm)?,
+                Key::Enter => self.tag_action(submit)?,
                 Key::Up => self.tags_scroll(-1),
                 Key::Down => self.tags_scroll(1),
                 Key::PageUp => self.tags_scroll(-(self.view.dialog_page_size.max(1) as i64)),
@@ -710,7 +711,7 @@ impl App {
                 Some(MovePicker::Folders) => {
                     // Row selection updates move_folder; preserve a manually entered destination.
                     editor.move_confirm = true;
-                    editor.target_path()?;
+                    editor.checked_target_path()?;
                     editor.confirm = true;
                     editor.offset = 0;
                 }
@@ -719,7 +720,7 @@ impl App {
             TagAction::MoveConfirm => {
                 ensure!(editor.destination().is_some(), "Выберите плейлист.");
                 editor.move_confirm = true;
-                editor.target_path()?;
+                editor.checked_target_path()?;
                 editor.confirm = true;
                 editor.offset = 0;
             }
@@ -1085,7 +1086,7 @@ impl App {
             TagAction::Save => {
                 ensure!(editor.changed(), "Нет изменений для записи.");
                 editor.move_confirm = false;
-                editor.target_path()?;
+                editor.checked_target_path()?;
                 editor.confirm = true;
                 editor.offset = 0;
             }
@@ -1111,7 +1112,7 @@ impl App {
             .context("Теги еще не прочитаны.")?
             .clone();
         let (desk, track) = (editor.desk, editor.track.id);
-        let destination = editor.target_path()?;
+        let destination = editor.checked_target_path()?;
         let playlist = if editor.move_confirm {
             Some(editor.destination().context("Выберите плейлист.")?.id)
         } else {

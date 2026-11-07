@@ -10,6 +10,7 @@ use crate::{
 use ratatui::{
     Frame,
     layout::{Margin, Position, Rect},
+    text::{Line, Span},
     widgets::{Paragraph, Wrap},
 };
 
@@ -37,6 +38,10 @@ pub(super) fn render(
     area: Rect,
     palette: Palette,
 ) {
+    if (editor.confirm || editor.discard) && !app.writing_tags() {
+        render_confirmation(frame, app, editor, area, palette);
+        return;
+    }
     let inner = file_modal(
         frame,
         app,
@@ -82,108 +87,6 @@ pub(super) fn render(
         frame.render_widget(paragraph.scroll((editor.selected.min(u16::MAX as usize) as u16, 0)),
             Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)));
         buttons(frame, app, footer, vec![action(app.text("Close", "Закрыть"), TagAction::Back, true)], palette);
-        return;
-    }
-    if editor.discard {
-        text(
-            frame,
-            inner,
-            format!(
-                "{}\n\n{}",
-                editor.filename(),
-                app.text(
-                    "Discard unsaved changes? The audio file has not been changed.",
-                    "Отменить несохраненные изменения? Аудиофайл еще не изменен."
-                )
-            ),
-            palette,
-        );
-        buttons(
-            frame,
-            app,
-            footer,
-            vec![
-                action(
-                    app.text("Discard", "Отменить изменения"),
-                    TagAction::Discard,
-                    true,
-                ),
-                action(app.text("Back", "Вернуться"), TagAction::Back, true),
-            ],
-            palette,
-        );
-        return;
-    }
-    if editor.confirm {
-        let destination = editor
-            .target_path()
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
-        let operation = if editor.move_confirm {
-            format!("{}: {}\n{}", app.text("Move to playlist", "Перенести в плейлист"),
-                editor.destination().map(|p| p.name.as_str()).unwrap_or_default(),
-                app.text("The file will move to the chosen folder. The track will leave the desk and become the first item in the playlist.",
-                    "Файл будет перенесен в выбранную папку. Трек исчезнет со стола и станет первым в плейлисте."))
-        } else {
-            app.text(
-                "Save the file name and selected tag changes?",
-                "Сохранить имя файла и выбранные изменения тегов?",
-            )
-            .into()
-        };
-        let explanation = if editor.is_batch() {
-            format!("{}: {}\n\n{}\n\n{}\n\n{}", app.text("Files", "Файлов"), editor.batch.len(),
-                app.text("Apply the edited fields and cleanup choices to every checked file? Other tags keep their own values.",
-                    "Записать измененные поля и применить выбранную очистку ко всем отмеченным файлам? Остальные теги сохранят свои значения."),
-                app.text("Changes are written to the audio files and shown in every playlist. Undo cannot restore file tags.",
-                    "Изменения записываются в аудиофайлы и отображаются во всех плейлистах. Отмена не восстанавливает теги файлов."),
-                editor.batch.iter().map(|track| clean(&track.path.display().to_string())).collect::<Vec<_>>().join("\n"))
-        } else { format!("{}\n{}\n\n{}\n{}\n\n{}", clean(&editor.track.path.display().to_string()),
-            clean(&format!("→ {destination}")), operation,
-            app.text("All playlists using this file will show the new metadata. Chaos undo cannot undo file writes.",
-                "Путь и сведения обновятся во всех плейлистах. Отмена Хаоса не отменяет изменения файлов."),
-            if editor.destructive() { app.text("The checked tags will be removed from the audio file.", "Отмеченные теги будут удалены из аудиофайла.") } else { "" }
-        ) };
-        let body = Rect::new(inner.x, inner.y, inner.width, inner.height - 7);
-        let paragraph = Paragraph::new(explanation).style(palette.text()).wrap(Wrap { trim: false });
-        app.view.dialog_scroll_max = paragraph.line_count(body.width.max(1))
-            .saturating_sub(usize::from(body.height)).min(u16::MAX as usize);
-        app.view.dialog_page_size = usize::from(body.height);
-        editor.offset = editor.offset.min(app.view.dialog_scroll_max);
-        frame.render_widget(paragraph.scroll((editor.offset as u16, 0)), body);
-        if let Some(error) = &editor.error {
-            text(
-                frame,
-                Rect::new(inner.x, bottom - 7, inner.width, 4),
-                error.clone(),
-                Palette {
-                    text: palette.error,
-                    ..palette
-                },
-            );
-        }
-        buttons(
-            frame,
-            app,
-            footer,
-            vec![
-                action(
-                    if editor.is_batch() {
-                        app.text("Save files", "Сохранить файлы")
-                    } else if editor.move_confirm {
-                        app.text("Move file", "Перенести файл")
-                    } else {
-                        app.text("Save file", "Сохранить файл")
-                    },
-                    TagAction::Confirm,
-                    true,
-                ),
-                action(app.text("Cancel", "Отмена"), TagAction::Back, true),
-                ("↑".into(), Target::DialogScroll(-5), editor.offset > 0),
-                ("↓".into(), Target::DialogScroll(5), editor.offset < app.view.dialog_scroll_max),
-            ],
-            palette,
-        );
         return;
     }
     let Some(document) = &editor.document else {
@@ -529,6 +432,101 @@ pub(super) fn render(
     buttons(frame, app, footer, footer_actions, palette);
 }
 
+fn render_confirmation(frame: &mut Frame, app: &mut App, editor: &mut TagEditor, area: Rect, palette: Palette) {
+    let mut lines = Vec::<Line<'static>>::new();
+    let heading = |value: &str| Line::from(Span::styled(value.to_owned(), palette.text().fg(palette.accent)));
+    let title;
+    let mut controls;
+    if editor.discard {
+        title = app.text("Discard changes?", "Отменить изменения?");
+        lines.push(Line::from(clean(&editor.filename())));
+        lines.push(Line::default());
+        lines.push(Line::from(app.text("The unsaved draft will be discarded. The audio file stays unchanged.",
+            "Несохраненный черновик будет отменен. Аудиофайл останется без изменений.")));
+        controls = vec![
+            action(app.text("Discard changes", "Отменить изменения"), TagAction::Discard, true),
+            action(app.text("Keep editing", "Продолжить правку"), TagAction::Back, true),
+        ];
+    } else {
+        title = if editor.move_confirm { app.text("Move file?", "Перенести файл?") }
+            else { app.text("Save changes?", "Сохранить изменения?") };
+        if editor.is_batch() {
+            lines.push(heading(&format!("{}: {}", app.text("Files", "Файлов"), editor.batch.len())));
+            lines.push(Line::from(app.text("Edited fields and selected removals apply to every checked file. Other tags keep their values.",
+                "Измененные поля и выбранная очистка применятся ко всем отмеченным файлам. Остальные теги сохранят свои значения.")));
+        } else {
+            lines.push(heading(app.text("Before", "Было")));
+            lines.push(Line::from(clean(&editor.track.path.display().to_string())));
+            lines.push(Line::default());
+            lines.push(heading(app.text("After saving", "Будет")));
+            lines.push(Line::from(editor.target_path().map(|p| clean(&p.display().to_string()))
+                .unwrap_or_else(|error| error.to_string())));
+            if editor.move_confirm {
+                lines.push(Line::default());
+                lines.push(heading(&format!("{}: {}", app.text("Playlist", "Плейлист"),
+                    editor.destination().map(|p| clean(&p.name)).unwrap_or_default())));
+                lines.push(Line::from(app.text("The file moves to the chosen folder. The track leaves the desk and appears first in the playlist.",
+                    "Файл переместится в выбранную папку. Композиция уйдет со стола и станет первой в плейлисте.")));
+            }
+        }
+        lines.push(Line::default());
+        lines.push(Line::from(app.text("Changes affect the file on disk and every playlist using it. Playlist undo cannot restore the file.",
+            "Изменения затронут файл на диске и все плейлисты, где он используется. Отмена действий с плейлистом не восстановит файл.")));
+        if editor.destructive() {
+            lines.push(Line::from(Span::styled(app.text("Marked tags and covers will be removed from the file.",
+                "Отмеченные теги и обложки будут удалены из файла."), palette.text().fg(palette.error))));
+        }
+        if editor.is_batch() {
+            lines.push(Line::default());
+            lines.extend(editor.batch.iter().map(|track| Line::from(clean(&track.path.display().to_string()))));
+        }
+        controls = vec![
+            action(if editor.move_confirm { app.text("Move file", "Перенести файл") }
+                else if editor.is_batch() { app.text("Save files", "Сохранить файлы") }
+                else { app.text("Save file", "Сохранить файл") }, TagAction::Confirm, !app.busy()),
+            action(app.text("Edit again", "К правке"), TagAction::Back, true),
+        ];
+    }
+    if let Some(error) = &editor.error {
+        lines.push(Line::default());
+        lines.push(Line::from(Span::styled(error.clone(), palette.text().fg(palette.error))));
+    }
+    let width = area.width.saturating_sub(4).min(88);
+    let measured = block(String::new(), palette, true).inner(Rect::new(0, 0, width, 46)).inner(Margin::new(1, 1));
+    let paragraph = Paragraph::new(lines).style(palette.text()).wrap(Wrap { trim: false });
+    let line_count = paragraph.line_count(measured.width.max(1));
+    let (_, mut footer_height) = file_button_layout(app, measured.width, &controls);
+    let available_height = area.height.min(46);
+    let mut height = (line_count.min(u16::MAX as usize) as u16).saturating_add(footer_height + 5);
+    let scrolling = height > available_height;
+    if scrolling {
+        controls.push(("↑".into(), Target::DialogScroll(-5), true));
+        controls.push(("↓".into(), Target::DialogScroll(5), true));
+        footer_height = file_button_layout(app, measured.width, &controls).1;
+        height = available_height;
+    }
+    let inner = file_modal(frame, app, area, title.into(), height, palette).inner(Margin::new(1, 1));
+    if inner.height < footer_height + 2 || inner.width < 20 {
+        text(frame, Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(1)),
+            app.text("Enlarge the window to review changes. Esc: back.", "Увеличьте окно для просмотра изменений. Esc: назад."), palette);
+        buttons(frame, app, Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, inner.height.min(1)),
+            vec![action(app.text("Back", "Назад"), TagAction::Back, true)], palette);
+        return;
+    }
+    let footer_y = inner.bottom() - footer_height;
+    let body = Rect::new(inner.x, inner.y, inner.width, footer_y.saturating_sub(inner.y + 1));
+    app.view.dialog_page_size = usize::from(body.height);
+    app.view.dialog_scroll_max = line_count.saturating_sub(usize::from(body.height)).min(u16::MAX as usize);
+    editor.offset = editor.offset.min(app.view.dialog_scroll_max);
+    if scrolling {
+        let count = controls.len();
+        controls[count - 2].2 = editor.offset > 0;
+        controls[count - 1].2 = editor.offset < app.view.dialog_scroll_max;
+    }
+    frame.render_widget(paragraph.scroll((editor.offset as u16, 0)), body);
+    file_buttons(frame, app, Rect::new(inner.x, footer_y, inner.width, footer_height), controls, palette);
+}
+
 fn render_edit(
     frame: &mut Frame,
     app: &mut App,
@@ -746,7 +744,7 @@ fn file_buttons(frame: &mut Frame, app: &mut App, area: Rect, entries: Vec<(Stri
     for ((label, target, enabled), relative) in entries.into_iter().zip(rects) {
         if relative.bottom() > area.height { break; }
         let rect = Rect::new(area.x + relative.x, area.y + relative.y, relative.width, 3);
-        let colors = if enabled && matches!(target, Target::Tags(TagAction::Save)) {
+        let colors = if enabled && matches!(target, Target::Tags(TagAction::Save | TagAction::Confirm)) {
             Palette { panel: palette.confirm_background, ..palette }
         } else { palette };
         button(frame, app, rect, &label, target, enabled, colors);
@@ -781,7 +779,11 @@ fn render_file(
     let field_width = if side_by_side { inner.width.saturating_sub(actions_width + 2) } else { inner.width };
     let (_, name_buttons_height) = file_button_layout(app, actions_width, &name_actions);
     let (_, template_buttons_height) = file_button_layout(app, actions_width, &template_actions);
-    let name_height = if side_by_side { 3.max(name_buttons_height) } else { 4 + name_buttons_height };
+    let proposed_name = editor.new_filename().unwrap_or_else(|_| editor.file_stem.clone());
+    let name_field_height = (Paragraph::new(clean(&proposed_name)).wrap(Wrap { trim: false })
+        .line_count(field_width.saturating_sub(2).max(1)).min(255) as u16).saturating_add(2).max(3);
+    let name_height = if side_by_side { name_field_height.max(name_buttons_height) }
+        else { name_field_height + 1 + name_buttons_height };
     let template_height = if side_by_side { 3.max(template_buttons_height) } else { 4 + template_buttons_height };
     let hint_height = if narrow { 1 } else { 2 };
     let needed = name_height + template_height + 1 + hint_height + 1 + footer_height;
@@ -803,13 +805,12 @@ fn render_file(
     }
     let sections = [
         (app.text("Name after saving", "Имя после сохранения"),
-            editor.new_filename().unwrap_or_else(|_| editor.file_stem.clone()),
-            FileInput::Name, name_actions, name_height),
+            proposed_name, FileInput::Name, name_actions, name_height, name_field_height),
         (app.text("File name template", "Шаблон имени"),
-            editor.name_template.clone(), FileInput::Template, template_actions, template_height),
+            editor.name_template.clone(), FileInput::Template, template_actions, template_height, 3),
     ];
-    for (title, value, input, actions, height) in sections {
-        let field = Rect::new(inner.x, y, field_width, 3);
+    for (title, value, input, actions, height, field_height) in sections {
+        let field = Rect::new(inner.x, y, field_width, field_height);
         let outer = block(title.into(), palette, app.hovered(field));
         let content = outer.inner(field);
         frame.render_widget(outer, field);
@@ -817,7 +818,7 @@ fn render_file(
         app.view.hits.push(Hit { area: field, target: Target::Tags(TagAction::FileInput(input)), enabled: true });
         let controls = if side_by_side {
             Rect::new(field.right() + 2, y, actions_width, height)
-        } else { Rect::new(inner.x, y + 4, inner.width, height - 4) };
+        } else { Rect::new(inner.x, y + field_height + 1, inner.width, height - field_height - 1) };
         file_buttons(frame, app, controls, actions, palette);
         y += height + 1;
     }

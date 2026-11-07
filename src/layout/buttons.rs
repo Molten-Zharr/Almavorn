@@ -1,5 +1,5 @@
 use crate::{
-    app::{App, Target},
+    app::{App, FileInput, TagAction, TagsTab, Target},
     input::Action,
 };
 use ratatui::text::Span;
@@ -7,6 +7,22 @@ use std::borrow::Cow;
 
 pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
     match target {
+        Target::Tags(action) => match action {
+            TagAction::FileInput(FileInput::Name) | TagAction::Edit | TagAction::Apply
+            | TagAction::Confirm | TagAction::Discard | TagAction::ChooseKey(_)
+            | TagAction::ChooseDestination | TagAction::MoveConfirm => Some("Enter".into()),
+            TagAction::FileInput(FileInput::Template) => Some("T".into()),
+            TagAction::FileInput(FileInput::Folder) => Some("F".into()),
+            TagAction::FormatName => Some("G".into()),
+            TagAction::Move => Some("M".into()),
+            TagAction::Save => Some("Ctrl+S".into()),
+            TagAction::Back => Some("Esc".into()),
+            TagAction::Details => Some("F2".into()),
+            TagAction::Add => Some("Insert".into()),
+            TagAction::Remove(_) => Some("Delete".into()),
+            TagAction::Tab(TagsTab::File) => Some("F".into()),
+            _ => None,
+        },
         Target::TextUndo => Some("Ctrl+Z".into()),
         Target::TextRedo => Some("Ctrl+Y".into()),
         Target::LyricsPanel(action) => {
@@ -201,7 +217,9 @@ fn help_button(target: &Target) -> bool {
 
 pub(crate) fn button_caption<'a>(app: &App, label: &'a str, target: &Target) -> Cow<'a, str> {
     if help_button(target) { return Cow::Borrowed(""); }
-    if app.settings.preferences.appearance.show_button_shortcuts { return Cow::Borrowed(label); }
+    if app.settings.preferences.appearance.show_button_shortcuts && !matches!(target, Target::Tags(_)) {
+        return Cow::Borrowed(label);
+    }
     let shortcut = |key: &str| {
         matches!(key, "Enter" | "Esc" | "Space" | "Tab" | "Insert" | "Delete" | "Home" | "End")
             || key.starts_with("Ctrl+") || key.starts_with("Alt+") || key.starts_with("Shift+")

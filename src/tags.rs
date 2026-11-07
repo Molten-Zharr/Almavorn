@@ -309,6 +309,20 @@ impl Document {
         Ok(())
     }
 
+    pub(crate) fn check_destination(&self, destination: &Path) -> Result<()> {
+        if destination == self.path { return Ok(()); }
+        match std::fs::symlink_metadata(destination) {
+            Ok(_) => anyhow::bail!(
+                "Имя занято: {}. Существующий файл не изменен. Выберите другое имя или папку.",
+                destination.display()
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error).with_context(|| format!(
+                "Не удалось проверить путь {}. Проверьте доступ к папке", destination.display()
+            )),
+        }
+    }
+
     pub(crate) fn prepare_at(&self, destination: &Path) -> Result<PreparedWrite> {
         let destination = destination
             .parent()
@@ -324,12 +338,7 @@ impl Document {
             "Старый блок ID3v1 с пустым годом сохраняется без изменений. Для правки используйте ID3v2."
         );
         ensure!(editing_tags || relocating, "Нет изменений для записи.");
-        ensure!(
-            !relocating
-                || std::fs::symlink_metadata(&destination)
-                    .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),
-            "Файл с таким именем уже существует или недоступен. Выберите другое имя."
-        );
+        self.check_destination(&destination)?;
         self.verify_source()?;
         let metadata = std::fs::metadata(&self.path)?;
         ensure!(
