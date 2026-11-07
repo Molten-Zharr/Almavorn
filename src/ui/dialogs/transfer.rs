@@ -38,7 +38,7 @@ pub(super) fn render(
             },
         )
         .into(),
-        area.height,
+        35,
         palette,
     ).inner(Margin::new(1, 1));
     if compact(frame, app, inner, palette) { return; }
@@ -253,7 +253,7 @@ pub(super) fn move_files(
         app,
         area,
         app.text("Move files", "Перенести файлы").into(),
-        area.height,
+        35,
         palette,
     ).inner(Margin::new(1, 1));
     if compact(frame, app, inner, palette) { return; }

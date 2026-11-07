@@ -33,7 +33,7 @@ pub(super) fn folders(
         .map(|path| path.to_string_lossy().into_owned())
         .collect();
     let scan = !app.busy() && !paths.is_empty() && app.allowed(crate::input::Action::AddNew);
-    let inner = file_modal(frame, app, area, clean(&title), area.height, palette)
+    let inner = file_modal(frame, app, area, clean(&title), 35, palette)
         .inner(Margin::new(1, 1));
     if inner.width < 28 || inner.height < if inner.width < 48 { 30 } else { 24 } {
         frame.render_widget(Paragraph::new(app.text("Enlarge the window to manage folders.",

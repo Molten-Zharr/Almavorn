@@ -17,7 +17,7 @@ pub(super) fn render(
 ) {
     let inner = modal(frame, app, area,
         app.text("Playback tuner", "Настройщик проигрывания").into(),
-        area.height, palette).inner(Margin::new(1, 1));
+        35, palette).inner(Margin::new(1, 1));
     if inner.is_empty() { return; }
     if inner.width < 24 || inner.height < 16 {
         frame.render_widget(Paragraph::new(app.text(

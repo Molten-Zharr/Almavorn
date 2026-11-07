@@ -44,7 +44,7 @@ pub(super) fn render(
         if editor.is_batch() {
             format!("{} ({})", app.text("Tags of checked tracks", "Теги отмеченных композиций"), editor.batch.len())
         } else { app.text("Tags and file name", "Теги и имя файла").into() },
-        area.height,
+        46,
         palette,
     ).inner(Margin::new(1, 1));
     if inner.width < 24 || inner.height < if inner.width < 48 { 30 } else { 24 } {
