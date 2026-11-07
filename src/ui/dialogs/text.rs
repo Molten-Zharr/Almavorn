@@ -38,14 +38,9 @@ pub(super) fn text_dialog(
             }
         }
         TextPurpose::RenamePlaylist(_) => app.text("Rename playlist", "Переименовать плейлист"),
-        TextPurpose::PlaylistFolder(_, _) => app.text(
-            "Playlist folder · full path",
-            "Папка плейлиста · полный путь",
-        ),
-        TextPurpose::RemovePlaylistFolder(_, _) => app.text(
-            "Unlink folder · tracks are kept",
-            "Отключить папку · композиции сохраняются",
-        ),
+        TextPurpose::PlaylistFolder(_, previous) => if previous.is_some() {
+            app.text("Change linked folder", "Заменить связанную папку")
+        } else { app.text("Link a music folder", "Привязать папку с музыкой") },
         TextPurpose::RenameTrack(_, _) => app.text(
             "Local track name · source tags untouched",
             "Имя в базе · исходные теги сохраняются",
@@ -92,11 +87,13 @@ pub(super) fn text_dialog(
         )
     } else if let TextPurpose::ComposeSelection { entries, .. } = &dialog.purpose {
         format!("{}: {}. {}", app.text("Tracks", "Композиций"), entries.len(), app.text("Enter: save a new mix. Esc: back to tracks. Source playlists are kept.", "Enter: сохранить новую подборку. Esc: к композициям. Исходные плейлисты сохранятся."))
-    } else if let TextPurpose::RemovePlaylistFolder(_, name) = &dialog.purpose {
-        format!(
-            "{}: {name}",
-            app.text("Enter exact name or path", "Введите точное имя или путь")
-        )
+    } else if let TextPurpose::PlaylistFolder(_, previous) = &dialog.purpose {
+        if let Some(previous) = previous {
+            format!("{}: {}\n{}", app.text("Current link", "Текущая связь"), previous, app.text(
+                "Enter the full path to the new folder. Existing tracks stay in the playlist; files are not moved.",
+                "Введите полный путь к новой папке. Композиции останутся в плейлисте, файлы не переместятся."))
+        } else { app.text("Enter the full path to an existing music folder. Linking does not import files: run Search all afterwards.",
+            "Введите полный путь к существующей папке с музыкой. Привязка не добавляет файлы: после нее запустите поиск.").into() }
     } else if let TextPurpose::CreateWithFolder { parent } = &dialog.purpose {
         match crate::store::new_playlist_folder_path(parent, &dialog.text) {
             Ok(path) => format!(
@@ -166,6 +163,8 @@ pub(super) fn text_dialog(
         Block::default()
             .borders(Borders::ALL)
             .title(app.text("Playlist name", "Название плейлиста"))
+    } else if matches!(dialog.purpose, TextPurpose::PlaylistFolder(_, _)) {
+        Block::default().borders(Borders::ALL).title(app.text("Full folder path", "Полный путь к папке"))
     } else {
         Block::default().borders(Borders::ALL)
     };
@@ -296,7 +295,7 @@ pub(super) fn text_dialog(
         TextPurpose::CreateWithFolder { parent } => {
             crate::store::new_playlist_folder_path(parent, &dialog.text).is_ok()
         }
-        TextPurpose::RemovePlaylistFolder(_, name) => &dialog.text == name,
+        TextPurpose::PlaylistFolder(_, _) => !dialog.text.trim().is_empty() && !app.busy(),
         _ => true,
     };
     buttons(
@@ -307,6 +306,9 @@ pub(super) fn text_dialog(
             (
                 if creating {
                     app.text("Create playlist", "Создать плейлист")
+                } else if let TextPurpose::PlaylistFolder(_, previous) = &dialog.purpose {
+                    if previous.is_some() { app.text("Replace folder", "Заменить папку") }
+                    else { app.text("Link folder", "Привязать папку") }
                 } else if matches!(dialog.purpose, TextPurpose::ComposeSelection { .. }) {
                     app.text("Save mix", "Сохранить подборку")
                 } else {

@@ -1,11 +1,11 @@
 use super::super::{
     theme::Palette,
-    widgets::{button, button_width, buttons, clean, modal, visible_offset},
+    widgets::{button_width, buttons, buttons_height, clean, file_modal, modal, visible_offset},
 };
 use crate::app::{App, Hit, Target};
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Margin, Rect},
     widgets::{Paragraph, Wrap},
 };
 
@@ -32,137 +32,125 @@ pub(super) fn folders(
         .iter()
         .map(|path| path.to_string_lossy().into_owned())
         .collect();
-    let scan = !app.busy() && app.allowed(crate::input::Action::AddNew);
-    let inner = modal(frame, app, area, clean(&title), 24, palette);
-    let mut actions = vec![
-        (
-            app.text("Link folder", "Добавить папку").into(),
-            Target::FolderAdd,
-            editable,
-        ),
-        (
-            app.text("Change path", "Изменить путь").into(),
-            Target::FolderEdit,
-            editable && !paths.is_empty(),
-        ),
-        (
-            app.text("Unlink", "Отключить").into(),
-            Target::FolderRemove,
-            editable && !paths.is_empty(),
-        ),
-        (
-            app.text("Find new", "Найти новые").into(),
-            Target::FolderScan,
-            scan,
-        ),
-        (
-            app.text("Close", "Закрыть").into(),
-            Target::CloseDialog,
-            true,
-        ),
-    ];
-    if desk {
-        actions.retain(|(_, target, _)| matches!(target, Target::FolderScan | Target::CloseDialog));
+    let scan = !app.busy() && !paths.is_empty() && app.allowed(crate::input::Action::AddNew);
+    let inner = file_modal(frame, app, area, clean(&title), area.height, palette)
+        .inner(Margin::new(1, 1));
+    if inner.width < 28 || inner.height < if inner.width < 48 { 30 } else { 24 } {
+        frame.render_widget(Paragraph::new(app.text("Enlarge the window to manage folders.",
+            "Увеличьте окно для управления папками.")).style(palette.text()).wrap(Wrap { trim: false }),
+            Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(2)));
+        buttons(frame, app, Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, inner.height.min(1)),
+            vec![(app.text("Close", "Закрыть").into(), Target::CloseDialog, true)], palette);
+        return;
     }
-    let footer_rows = action_rows(app, inner.width, &actions).min(inner.height);
-    let hint = if desk {
-        app.text("These are the current desk group folders. Find new checks files directly in these folders. To remove a group, right-click its heading and choose Remove group from playlist.",
-            "Это папки текущих групп стола. Поиск проверяет файлы непосредственно в этих папках. Чтобы убрать группу, нажмите ПКМ по ее заголовку и выберите Убрать группу из плейлиста.")
-    } else { app.text("Find new music in linked folders. The checkbox includes subfolders; otherwise only files directly in each folder are checked. Unlinking keeps tracks.", "Поиск новых треков идет в связанных папках. Галочка включает подпапки; без нее проверяются только файлы в каждой папке. Отключение сохраняет композиции.") };
-    let hints = super::help::wrapped_height(hint, inner.width)
-        .min(inner.height.saturating_sub(footer_rows + 6));
-    frame.render_widget(
-        Paragraph::new(hint)
-            .style(palette.text().fg(palette.muted))
-            .wrap(Wrap { trim: false }),
-        Rect::new(inner.x, inner.y, inner.width, hints),
-    );
-    let checkbox_y = inner.y + hints + u16::from(hints > 0);
-    let checkbox = format!(
-        "[{}] {}",
-        if app.settings.preferences.scan_new_subfolders {
-            'x'
-        } else {
-            ' '
-        },
-        app.text("Search subfolders", "Искать в подпапках")
-    );
-    if !desk { button(
-        frame,
-        app,
-        Rect::new(
-            inner.x,
-            checkbox_y,
-            button_width(app, &checkbox, &Target::ScanSubfolders).min(inner.width),
-            1,
-        ),
-        &checkbox,
-        Target::ScanSubfolders,
-        !app.busy(),
-        palette,
-    ); }
-    let list = Rect::new(
-        inner.x,
-        checkbox_y + 2,
-        inner.width,
-        inner
-            .bottom()
-            .saturating_sub(footer_rows + 1)
-            .saturating_sub(checkbox_y + 2),
-    );
-    let capacity = usize::from(list.height / 2);
     *selected = (*selected).min(paths.len().saturating_sub(1));
+    let intro = if desk {
+        app.text("These folders belong to desk groups. Search adds new tracks to their groups.",
+            "Это папки групп сортировочного стола. Поиск добавляет новые композиции в их группы.")
+    } else {
+        app.text("Link folders where you keep music. Search adds new tracks to this playlist and skips tracks already in it.",
+            "Привяжите папки с музыкой. Поиск добавит новые композиции в этот плейлист, а уже добавленные пропустит.")
+    };
+    let paragraph = Paragraph::new(intro).style(palette.text()).wrap(Wrap { trim: false });
+    let intro_height = (paragraph.line_count(inner.width) as u16).min(4);
+    frame.render_widget(paragraph, Rect::new(inner.x, inner.y, inner.width, intro_height));
+    let mut y = inner.y + intro_height + 1;
+    if !desk {
+        let attach = vec![(app.text("Link folder…", "Привязать папку…").into(), Target::FolderAdd, editable)];
+        y += buttons(frame, app, Rect::new(inner.x, y, inner.width, 1), attach, palette) + 1;
+    }
+    frame.render_widget(Paragraph::new(format!("{}: {}", app.text("Folders", "Папок"), paths.len()))
+        .style(palette.text().fg(palette.accent)), Rect::new(inner.x, y, inner.width, 1));
+    y += 1;
+
+    let footer_actions = vec![
+        (app.text("Search all", "Искать во всех").into(), Target::FolderScan, scan),
+        (app.text("Search selected", "В выбранной").into(), Target::FolderScanSelected, scan),
+        (app.text("Close", "Закрыть").into(), Target::CloseDialog, true),
+    ];
+    let footer_height = buttons_height(app, inner.width, &footer_actions);
+    let footer_y = inner.bottom() - footer_height;
+    let search_hint = if desk {
+        app.text("Only files directly in these folders are checked.", "На столе проверяются файлы непосредственно в папках групп.")
+    } else if app.settings.preferences.scan_new_subfolders {
+        app.text("Search includes nested folders. This setting also applies to other playlists.",
+            "Поиск включает вложенные папки. Эта настройка действует и в остальных плейлистах.")
+    } else {
+        app.text("Search checks files directly in the linked folders.", "Поиск проверяет файлы непосредственно в связанных папках.")
+    };
+    let hint = Paragraph::new(search_hint).style(palette.text().fg(palette.muted)).wrap(Wrap { trim: false });
+    let hint_height = (hint.line_count(inner.width) as u16).min(3);
+    let search_y = footer_y - hint_height - 2;
+    if !desk {
+        buttons(frame, app, Rect::new(inner.x, search_y, inner.width, 1), vec![(
+            format!("[{}] {}", if app.settings.preferences.scan_new_subfolders { 'x' } else { ' ' },
+                app.text("Include subfolders", "С подпапками")), Target::ScanSubfolders, !app.busy())], palette);
+    }
+    frame.render_widget(hint, Rect::new(inner.x, search_y + 1, inner.width, hint_height));
+
+    let context_actions = if desk { Vec::new() } else { vec![
+        (app.text("Change folder…", "Другая папка…").into(), Target::FolderEdit, editable && !paths.is_empty()),
+        (app.text("Unlink…", "Отвязать…").into(), Target::FolderRemove, editable && !paths.is_empty()),
+    ] };
+    let context_height = if desk { 0 } else { buttons_height(app, inner.width, &context_actions) };
+    let context_y = search_y.saturating_sub(context_height + 1);
+    let note = if desk {
+        app.text("To remove a group, use its context menu on the desk.", "Убрать группу можно через ее меню на сортировочном столе.")
+    } else if !editable && !app.busy() {
+        app.text("Playlist protected: enable editing in the main window to change folder links.",
+            "Плейлист защищен. Для изменения связей включите редактирование в основном окне.")
+    } else {
+        app.text("Replacing or unlinking a folder keeps music files and existing playlist tracks.",
+            "Замена и отключение связи сохраняют файлы и уже добавленные композиции.")
+    };
+    let note = Paragraph::new(note).style(palette.text().fg(palette.muted)).wrap(Wrap { trim: false });
+    let note_height = (note.line_count(inner.width) as u16).min(3);
+    let note_y = context_y.saturating_sub(note_height + 1);
+    frame.render_widget(note, Rect::new(inner.x, note_y, inner.width, note_height));
+    let list = Rect::new(inner.x, y, inner.width, note_y.saturating_sub(y + 1));
+    let row_height = if list.height >= 6 { 3 } else { 2 };
+    let capacity = usize::from(list.height / row_height);
+    app.view.dialog_page_size = capacity;
     let offset = visible_offset(0, *selected, capacity, paths.len());
     if paths.is_empty() {
-        frame.render_widget(
-            Paragraph::new(if desk { app.text("No groups on the desk. Add music first.", "На столе нет групп. Сначала добавьте музыку.") } else { app.text(
-                "Link a folder here, or create a playlist using Folders to playlists.",
-                "Добавьте связанную папку здесь или создайте плейлист через Папки в плейлисты.",
-            ) })
-            .style(palette.text())
-            .wrap(Wrap { trim: false }),
-            list,
-        );
-    }
-    for (row, (index, path)) in paths
-        .iter()
-        .enumerate()
-        .skip(offset)
-        .take(capacity)
-        .enumerate()
-    {
-        let rect = Rect::new(list.x, list.y + row as u16 * 2, list.width, 2);
-        let style = if index == *selected {
-            palette.text().bg(palette.selection)
-        } else if app.hovered(rect) {
-            palette.text().fg(palette.accent)
+        frame.render_widget(Paragraph::new(if desk {
+            app.text("Add music to the desk to see its folders here.", "Добавьте музыку на стол, чтобы увидеть здесь папки групп.")
         } else {
-            palette.text()
-        };
-        frame.render_widget(
-            Paragraph::new(clean(path))
-                .style(style)
-                .wrap(Wrap { trim: false }),
-            rect,
-        );
-        app.view.hits.push(Hit {
-            area: rect,
-            target: Target::FolderRow(index),
-            enabled: true,
-        });
+            app.text("No linked folders yet. Choose Link folder, then Search all to add music.",
+                "Связанных папок пока нет. Нажмите Привязать папку, затем Искать во всех, чтобы добавить музыку.")
+        }).style(palette.text()).wrap(Wrap { trim: false }), list);
     }
-    buttons(
-        frame,
-        app,
-        Rect::new(
-            inner.x,
-            inner.bottom().saturating_sub(footer_rows),
-            inner.width,
-            footer_rows,
-        ),
-        actions,
-        palette,
-    );
+    for (index, path) in paths.iter().enumerate().skip(offset).take(capacity) {
+        let row = Rect::new(list.x, list.y + (index - offset) as u16 * row_height, list.width, row_height);
+        let style = if index == *selected || app.hovered(row) {
+            palette.text().bg(palette.selection).fg(palette.selection_text)
+        } else { palette.text() };
+        let name = std::path::Path::new(path).file_name().map(|name| name.to_string_lossy()).unwrap_or_else(|| path.into());
+        frame.render_widget(Paragraph::new(format!("{}. {}", index + 1, clean(&name))).style(style),
+            Rect::new(row.x, row.y, row.width, 1));
+        frame.render_widget(Paragraph::new(clean(path)).style(style).wrap(Wrap { trim: false }),
+            Rect::new(row.x, row.y + 1, row.width, row.height - 1));
+        app.view.hits.push(Hit { area: row, target: Target::FolderRow(index), enabled: true });
+    }
+    buttons(frame, app, Rect::new(inner.x, context_y, inner.width, context_height), context_actions, palette);
+    buttons(frame, app, Rect::new(inner.x, footer_y, inner.width, footer_height), footer_actions, palette);
+}
+
+pub(super) fn unlink_folder(frame: &mut Frame, app: &mut App, path: &str, offset: &mut usize, area: Rect, palette: Palette) {
+    let inner = file_modal(frame, app, area, app.text("Unlink folder?", "Отвязать папку?").into(),
+        22, palette).inner(Margin::new(1, 1));
+    let actions = vec![
+        (app.text("Unlink", "Отвязать").into(), Target::Submit, !app.busy()),
+        (app.text("Cancel", "Отмена").into(), Target::CloseDialog, true),
+        ("↑".into(), Target::DialogScroll(-5), true),
+        ("↓".into(), Target::DialogScroll(5), true),
+    ];
+    let height = buttons_height(app, inner.width, &actions).min(inner.height);
+    let body = Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(height + 1));
+    super::help::scroll_text(frame, app, offset, body, format!("{}\n\n{}", clean(path), app.text(
+        "This folder will no longer be searched for new music. Audio files stay on disk and existing tracks stay in the playlist.",
+        "Эта папка больше не будет участвовать в поиске новых композиций. Аудиофайлы останутся на диске, а добавленные композиции останутся в плейлисте.")), palette);
+    buttons(frame, app, Rect::new(inner.x, inner.bottom() - height, inner.width, height), actions, palette);
 }
 
 fn action_rows(app: &App, width: u16, actions: &[(String, Target, bool)]) -> u16 {

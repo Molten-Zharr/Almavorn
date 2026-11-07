@@ -44,12 +44,16 @@ impl App {
         {
             return Ok(());
         }
+        if key.ctrl && !key.alt && key.key == Key::Char(' ') {
+            return self.target(Target::ScanSubfolders, false);
+        }
         if !key.ctrl && !key.alt {
             let target = match key.key {
                 Key::Insert => Some(Target::FolderAdd),
                 Key::F(3) | Key::Enter => Some(Target::FolderEdit),
                 Key::Delete => Some(Target::FolderRemove),
                 Key::Char('r') => Some(Target::FolderScan),
+                Key::Char('s') => Some(Target::FolderScanSelected),
                 Key::Char(' ') => Some(Target::ScanSubfolders),
                 _ => None,
             };
@@ -243,10 +247,9 @@ impl App {
     pub(super) fn request_folder_removal(&mut self) -> Result<()> {
         let (id, folder) = self.folder_selection()?;
         self.folder_editable(id)?;
-        self.text_dialog(
-            TextPurpose::RemovePlaylistFolder(id, folder.context(AppError::FolderMissing)?),
-            String::new(),
-        );
+        self.view.dialog = Some(Dialog::UnlinkFolder {
+            playlist: id, path: folder.context(AppError::FolderMissing)?, offset: 0,
+        });
         Ok(())
     }
 }

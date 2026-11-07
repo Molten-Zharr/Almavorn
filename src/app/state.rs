@@ -146,6 +146,7 @@ pub enum Target {
     FolderEdit,
     FolderRemove,
     FolderScan,
+    FolderScanSelected,
     ScanSubfolders,
     ComposeRow(usize),
     ComposeMove(i64),

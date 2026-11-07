@@ -458,6 +458,11 @@ impl App {
             return true;
         }
         match self.view.dialog.take() {
+            Some(Dialog::UnlinkFolder { playlist, .. })
+            | Some(Dialog::Text(super::TextDialog { purpose: TextPurpose::PlaylistFolder(playlist, _), .. })) => {
+                self.view.dialog = Some(Dialog::Folders { playlist, selected: 0 });
+                true
+            }
             Some(Dialog::Text(super::TextDialog {
                 purpose:
                     TextPurpose::ComposeSelection {

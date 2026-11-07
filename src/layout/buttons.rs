@@ -145,6 +145,7 @@ pub(crate) fn button_shortcut(app: &App, target: &Target) -> Option<String> {
         Target::FolderEdit => Some("F3".into()),
         Target::FolderRemove => Some("Delete".into()),
         Target::FolderScan => Some("R".into()),
+        Target::FolderScanSelected => Some("S".into()),
         Target::ScanSubfolders => Some("Ctrl+Space".into()),
         Target::ComposeMove(direction) => Some(
             if *direction < 0 {

@@ -114,6 +114,7 @@ pub(super) fn render_dialog(
         Dialog::Text(dialog) => text_dialog(frame, app, dialog, area, palette),
         Dialog::Search(search) => self::search::render(frame, app, search, area, palette),
         Dialog::Browser(browser) => browser_dialog(frame, app, browser, area, palette),
+        Dialog::UnlinkFolder { path, offset, .. } => playlists::unlink_folder(frame, app, path, offset, area, palette),
         Dialog::Folders { playlist, selected } => {
             playlists::folders(frame, app, *playlist, selected, area, palette)
         }

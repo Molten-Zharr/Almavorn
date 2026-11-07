@@ -4,7 +4,7 @@ use crate::{
     input::{Action, Input, Key, KeyPress},
     model::{Language, RepeatMode},
 };
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use ratatui::layout::{Position, Rect};
 
 impl App {
@@ -918,6 +918,13 @@ impl App {
             Target::FolderAdd => self.edit_playlist_folder(false)?,
             Target::FolderEdit => self.edit_playlist_folder(true)?,
             Target::FolderRemove => self.request_folder_removal()?,
+            Target::FolderScanSelected => {
+                ensure!(self.allowed(crate::input::Action::AddNew), AppError::LibraryBusy);
+                let (id, folder) = self.folder_selection()?;
+                let folder = folder.context(AppError::FolderMissing)?;
+                self.start_playlist_scan(vec![(id, vec![folder.into()])],
+                    Some(Dialog::Folders { playlist: id, selected: 0 }))?;
+            }
             Target::FolderScan => {
                 let (id, _) = self.folder_selection()?;
                 self.scan_playlist_folders(id)?;

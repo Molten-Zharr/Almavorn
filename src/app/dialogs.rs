@@ -24,7 +24,6 @@ pub enum TextPurpose {
     },
     RenamePlaylist(i64),
     PlaylistFolder(i64, Option<String>),
-    RemovePlaylistFolder(i64, String),
     RenameTrack(i64, i64),
     Search,
     Accent,
@@ -91,6 +90,7 @@ pub enum Dialog {
         playlist: i64,
         selected: usize,
     },
+    UnlinkFolder { playlist: i64, path: String, offset: usize },
     ComposePlaylists {
         selected: usize,
         ids: Vec<i64>,
@@ -203,7 +203,7 @@ impl Dialog {
                 Action::AddFiles
             }),
             Self::Metadata { .. } => Some(Action::Metadata),
-            Self::Folders { .. } => Some(Action::PlaylistFolders),
+            Self::Folders { .. } | Self::UnlinkFolder { .. } => Some(Action::PlaylistFolders),
             Self::ComposePlaylists { .. } | Self::ComposeTracks { .. } => {
                 Some(Action::ComposePlaylists)
             }
@@ -409,7 +409,8 @@ impl App {
                     view.selected = bounded(view.selected, direction as i64, view.folders.len());
                 }
             }
-            Some(Dialog::Help { offset })
+            Some(Dialog::UnlinkFolder { offset, .. })
+            | Some(Dialog::Help { offset })
             | Some(Dialog::Metadata { offset, .. })
             | Some(Dialog::CopyableHelp { offset, .. })
             | Some(Dialog::FileMoveReport { offset, .. })
@@ -588,23 +589,6 @@ impl App {
                         }
                         result
                     }
-                    TextPurpose::RemovePlaylistFolder(id, folder) => {
-                        let id = *id;
-                        let unlocked = self.playlist_unlocked(id);
-                        let folder = folder.clone();
-                        let result = self.start_database(recovery, move |store| {
-                            Ok(DatabaseOutcome::Changed(
-                                store.remove_playlist_folder(id, &folder, &text, unlocked)?,
-                            ))
-                        });
-                        if result.is_ok() {
-                            self.view.dialog = Some(Dialog::Folders {
-                                playlist: id,
-                                selected: 0,
-                            });
-                        }
-                        result
-                    }
                     TextPurpose::RenameTrack(track, playlist) => {
                         let (track, playlist) = (*track, *playlist);
                         let unlocked = self.playlist_unlocked(playlist);
@@ -638,6 +622,17 @@ impl App {
                     self.view.dialog = Some(Dialog::Text(dialog));
                     return Err(error);
                 }
+            }
+            Some(Dialog::UnlinkFolder { playlist, path, offset }) => {
+                let recovery = Dialog::UnlinkFolder { playlist, path: path.clone(), offset };
+                let unlocked = self.playlist_unlocked(playlist);
+                if let Err(error) = self.start_database(Some(recovery.clone()), move |store| {
+                    Ok(DatabaseOutcome::Changed(store.remove_playlist_folder(playlist, &path, &path, unlocked)?))
+                }) {
+                    self.view.dialog = Some(recovery);
+                    return Err(error);
+                }
+                self.view.dialog = Some(Dialog::Folders { playlist, selected: 0 });
             }
             Some(Dialog::RemovePlaylist {
                 playlist,
