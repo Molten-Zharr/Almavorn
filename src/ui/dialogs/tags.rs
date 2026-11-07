@@ -4,7 +4,7 @@ use crate::{
     tags::{field_keys, type_name},
     ui::{
         theme::Palette,
-        widgets::{block, button, buttons, buttons_height, clean, file_modal, visible_offset},
+        widgets::{block, button, button_width, buttons, buttons_height, clean, file_modal, visible_offset},
     },
 };
 use ratatui::{
@@ -566,8 +566,8 @@ fn render_edit(
         _ => "HEX",
     };
     let hint = if edit.file_input == Some(FileInput::Template) {
-        app.text("{filename} original name · {title} title · {artist} artist · {album} album · {track} number",
-                "{filename} прежнее имя · {title} название · {artist} исполнитель · {album} альбом · {track} номер")
+        app.text("{filename}: original name\n{title}: title; {artist}: artist\n{album}: album; {track}: track number\nThe template uses current tag values, including fields marked for removal.",
+                "{filename}: прежнее имя\n{title}: название; {artist}: исполнитель\n{album}: альбом; {track}: номер композиции\nБерутся текущие значения тегов, включая поля, отмеченные для очистки.")
     } else if edit.file_input == Some(FileInput::Name) {
         app.text("Enter the name only. The audio extension stays unchanged. Enter: apply, Ctrl+A: select all.",
                 "Введите только имя. Расширение аудиофайла сохранится. Enter: применить, Ctrl+A: выделить все.")
@@ -587,12 +587,12 @@ fn render_edit(
             "Enter: в черновик. Ctrl+A: выделить все. F2: подробнее. F10: новая строка.",
         )
     };
-    text(
-        frame,
-        Rect::new(inner.x, inner.y + 1, inner.width, 3),
-        hint,
-        palette,
-    );
+    let hint_height = if edit.file_input == Some(FileInput::Template) {
+        (Paragraph::new(hint).wrap(Wrap { trim: false }).line_count(inner.width.max(1)) as u16)
+            .min(inner.height.saturating_sub(12))
+    } else { 3 };
+    text(frame, Rect::new(inner.x, inner.y + 1, inner.width, hint_height), hint,
+        Palette { text: palette.muted, ..palette });
     let titles = if edit.cover {
         [
             app.text("Image path", "Путь к изображению"),
@@ -615,8 +615,8 @@ fn render_edit(
     let simple = edit.file_input.is_none() && !edit.cover && !edit.extra;
     let inputs = if edit.file_input.is_some() || (simple && !edit.details) { 1 }
         else if edit.extra { 2 } else { 3 };
-    let value_height = inner.height.saturating_sub(10 + (inputs - 1) * 3).max(3);
-    let mut y = inner.y + 4;
+    let value_height = inner.height.saturating_sub(hint_height + 7 + (inputs - 1) * 3).max(3);
+    let mut y = inner.y + 1 + hint_height;
     for (index, title) in titles
         .iter()
         .take(usize::from(inputs))
@@ -719,6 +719,34 @@ fn render_edit(
     );
 }
 
+// This tab uses full-height buttons so actions cannot be mistaken for body text.
+fn file_button_layout(app: &App, width: u16, entries: &[(String, Target, bool)]) -> (Vec<Rect>, u16) {
+    let gap = if width < 48 { 1 } else { 2 };
+    let padding = if width < 48 { 0 } else { 4 };
+    let mut x = 0;
+    let mut y = 0;
+    let mut rects = Vec::new();
+    for (label, target, _) in entries {
+        let size = button_width(app, label, target).saturating_add(padding).min(width);
+        if x > 0 && x + size > width { x = 0; y += 4; }
+        rects.push(Rect::new(x, y, size, 3));
+        x += size + gap;
+    }
+    (rects, y + 3)
+}
+
+fn file_buttons(frame: &mut Frame, app: &mut App, area: Rect, entries: Vec<(String, Target, bool)>, palette: Palette) {
+    let (rects, _) = file_button_layout(app, area.width, &entries);
+    for ((label, target, enabled), relative) in entries.into_iter().zip(rects) {
+        if relative.bottom() > area.height { break; }
+        let rect = Rect::new(area.x + relative.x, area.y + relative.y, relative.width, 3);
+        let colors = if enabled && matches!(target, Target::Tags(TagAction::Save)) {
+            Palette { panel: palette.confirm_background, ..palette }
+        } else { palette };
+        button(frame, app, rect, &label, target, enabled, colors);
+    }
+}
+
 fn render_file(
     frame: &mut Frame,
     app: &mut App,
@@ -726,108 +754,76 @@ fn render_file(
     inner: Rect,
     palette: Palette,
 ) {
-    if inner.height < 18 {
-        text(frame, inner, app.text("Enlarge the window to edit the file name. Other tabs remain available.",
-            "Увеличьте окно для изменения имени файла. Остальные вкладки доступны."), palette);
+    let narrow = inner.width < 48;
+    let footer_actions = vec![
+        action(app.text("Save", "Сохранить"), TagAction::Save, editor.changed()),
+        action(app.text("Move… [M]", "Перенести… [M]"), TagAction::Move, true),
+        action(app.text("Close", "Закрыть"), TagAction::Back, true),
+    ];
+    let (_, footer_height) = file_button_layout(app, inner.width, &footer_actions);
+    let name_actions = vec![action(app.text("Edit [Enter]", "Изменить [Enter]"), TagAction::FileInput(FileInput::Name), true)];
+    let template_actions = vec![
+        action(app.text("Edit [T]", "Изменить [T]"), TagAction::FileInput(FileInput::Template), true),
+        action(if narrow { app.text("Build [G]", "Собрать [G]") }
+            else { app.text("Build name [G]", "Собрать имя [G]") }, TagAction::FormatName, true),
+    ];
+    let side_by_side = inner.width >= 72;
+    let actions_width = if side_by_side {
+        let (rects, _) = file_button_layout(app, inner.width, &template_actions);
+        rects.last().map_or(0, |rect| rect.right()).max(button_width(app, &name_actions[0].0, &name_actions[0].1) + 4)
+    } else { inner.width };
+    let field_width = if side_by_side { inner.width.saturating_sub(actions_width + 2) } else { inner.width };
+    let (_, name_buttons_height) = file_button_layout(app, actions_width, &name_actions);
+    let (_, template_buttons_height) = file_button_layout(app, actions_width, &template_actions);
+    let name_height = if side_by_side { 3.max(name_buttons_height) } else { 4 + name_buttons_height };
+    let template_height = if side_by_side { 3.max(template_buttons_height) } else { 4 + template_buttons_height };
+    let hint_height = if narrow { 1 } else { 2 };
+    let needed = name_height + template_height + 1 + hint_height + 1 + footer_height;
+    if inner.height < needed {
+        text(frame, Rect::new(inner.x, inner.y, inner.width, inner.height.saturating_sub(3)),
+            app.text("Enlarge the window to show file names and action buttons. Enter: name; T: template; G: build name.",
+                "Увеличьте окно, чтобы видеть имена и кнопки. Enter: имя; T: шаблон; G: собрать имя."), palette);
+        file_buttons(frame, app, Rect::new(inner.x, inner.bottom().saturating_sub(3), inner.width, inner.height.min(3)),
+            vec![action(app.text("Close", "Закрыть"), TagAction::Back, true)], palette);
         return;
     }
-    let footer = Rect::new(inner.x, inner.bottom().saturating_sub(3), inner.width, 3);
+    let footer_y = inner.bottom() - footer_height;
     let mut y = inner.y;
-    let original = format!("{}: {}", app.text("Current name", "Текущее имя"), clean(&editor.filename()));
-    let height = (Paragraph::new(original.as_str()).wrap(Wrap { trim: false }).line_count(inner.width) as u16).min(3);
-    text(frame, Rect::new(inner.x, y, inner.width, height), original, Palette { text: palette.muted, ..palette });
-    y += height + 1;
-    text(
-        frame,
-        Rect::new(inner.x, y, inner.width, 2),
-        format!(
-            "{}: {}",
-            app.text("Name after saving", "Имя после сохранения"),
-            clean(
-                &editor
-                    .new_filename()
-                    .unwrap_or_else(|_| editor.file_stem.clone())
-            )
-        ),
-        palette,
-    );
-    y += 2;
-    y += buttons(
-        frame,
-        app,
-        Rect::new(inner.x, y, inner.width, 2),
-        vec![action(
-            app.text("Edit name [Enter]", "Изменить имя [Enter]"),
-            TagAction::FileInput(FileInput::Name),
-            true,
-        )],
-        palette,
-    )
-    .min(2);
-    text(
-        frame,
-        Rect::new(inner.x, y, inner.width, 2),
-        format!(
-            "{}: {}",
-            app.text("Template", "Шаблон"),
-            clean(&editor.name_template)
-        ),
-        palette,
-    );
-    y += 2;
-    y += buttons(
-        frame,
-        app,
-        Rect::new(inner.x, y, inner.width, 3),
-        vec![
-            action(
-                app.text("Edit template [T]", "Изменить шаблон [T]"),
-                TagAction::FileInput(FileInput::Template),
-                true,
-            ),
-            action(
-                app.text("Use template [G]", "Применить шаблон [G]"),
-                TagAction::FormatName,
-                true,
-            ),
-        ],
-        palette,
-    )
-    .min(3);
-    let remaining = footer.y.saturating_sub(y + 3);
-    text(frame, Rect::new(inner.x, y, inner.width, remaining), app.text(
-        "{filename} uses the original file name. {title}, {artist}, {album}, {track} use the open tag fields, including those marked for removal.\n\nThe new name and tag changes are saved together. Move also takes the file off the sorting desk.",
-        "{filename} берет прежнее имя файла. {title}, {artist}, {album}, {track} берут открытые поля тегов, в том числе отмеченные для очистки.\n\nИмя и изменения тегов сохраняются вместе. Перенос также убирает трек со стола."), palette);
-    if let Some(error) = &editor.error {
-        text(
-            frame,
-            Rect::new(inner.x, footer.y.saturating_sub(3), inner.width, 3),
-            error.clone(),
-            Palette {
-                text: palette.error,
-                ..palette
-            },
-        );
+    if inner.height >= needed + 2 {
+        text(frame, Rect::new(inner.x, y, inner.width, 1),
+            format!("{}: {}", app.text("Current file", "Сейчас"), clean(&editor.filename())),
+            Palette { text: palette.muted, ..palette });
+        y += 2;
     }
-    buttons(
-        frame,
-        app,
-        footer,
-        vec![
-            action(
-                app.text("Save file", "Сохранить файл"),
-                TagAction::Save,
-                editor.changed(),
-            ),
-            action(
-                app.text("Move… [M]", "Перенести… [M]"),
-                TagAction::Move,
-                true,
-            ),
-            action(app.text("Close", "Закрыть"), TagAction::Back, true),
-        ],
-        palette,
-    );
+    let sections = [
+        (app.text("Name after saving", "Имя после сохранения"),
+            editor.new_filename().unwrap_or_else(|_| editor.file_stem.clone()),
+            FileInput::Name, name_actions, name_height),
+        (app.text("File name template", "Шаблон имени"),
+            editor.name_template.clone(), FileInput::Template, template_actions, template_height),
+    ];
+    for (title, value, input, actions, height) in sections {
+        let field = Rect::new(inner.x, y, field_width, 3);
+        let outer = block(title.into(), palette, app.hovered(field));
+        let content = outer.inner(field);
+        frame.render_widget(outer, field);
+        text(frame, content, clean(&value), palette);
+        app.view.hits.push(Hit { area: field, target: Target::Tags(TagAction::FileInput(input)), enabled: true });
+        let controls = if side_by_side {
+            Rect::new(field.right() + 2, y, actions_width, height)
+        } else { Rect::new(inner.x, y + 4, inner.width, height - 4) };
+        file_buttons(frame, app, controls, actions, palette);
+        y += height + 1;
+    }
+    let hint = editor.error.as_deref().unwrap_or_else(|| if narrow {
+        app.text("Changes are saved with Save.", "Запись изменений: Сохранить.")
+    } else {
+        app.text("Build name fills the name from the template. Save writes the name and tags to the file. Move also removes the track from the desk.",
+            "Собрать имя подставляет теги в шаблон. Сохранить записывает имя и теги в файл. Перенос также убирает композицию со стола.")
+    });
+    text(frame, Rect::new(inner.x, y.min(footer_y), inner.width, footer_y.saturating_sub(y)), hint,
+        Palette { text: if editor.error.is_some() { palette.error } else { palette.muted }, ..palette });
+    file_buttons(frame, app, Rect::new(inner.x, footer_y, inner.width, footer_height), footer_actions, palette);
 }
 
 fn render_move(
