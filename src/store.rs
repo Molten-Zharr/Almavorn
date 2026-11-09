@@ -567,6 +567,20 @@ impl Store {
         })
     }
 
+    pub(crate) fn update_track_duration(
+        &mut self, id: i64, path: &Path, previous: u64, duration: u64,
+    ) -> Result<()> {
+        if previous == duration || duration == 0 { return Ok(()); }
+        let changed = self.write(|connection| {
+            Ok(connection.execute(
+                "UPDATE tracks SET duration_ms=?1,revision=revision+1 WHERE id=?2 AND path=?3 AND duration_ms=?4",
+                params![duration.min(i64::MAX as u64) as i64, id, path.to_str(), previous.min(i64::MAX as u64) as i64],
+            )?)
+        })?;
+        if changed > 0 { self.revision.fetch_add(1, Ordering::Release); }
+        Ok(())
+    }
+
     pub fn rename_track(
         &mut self,
         id: i64,

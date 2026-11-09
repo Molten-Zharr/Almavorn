@@ -450,12 +450,15 @@ impl App {
         let data=self.data_directory();
         let runtime = self.runtime.as_ref().expect("runtime is alive");
         let cached = self.playback.reverse_cache.clone();
+        let store = self.store.try_clone();
         self.playback.preparation.start(|request| {
             let reverse = request.reverse;
             let position = request.position_ms
                 .filter(|position| *position > 0 || reverse)
                 .map(Duration::from_millis);
             let path = request.entry().track.path.clone();
+            let track_id = request.entry().track.id;
+            let previous_duration = request.entry().track.duration_ms;
             let cache = cached
                 .filter(|(cached_path, _)| *cached_path == path)
                 .map(|(_, cache)| cache);
@@ -463,7 +466,14 @@ impl App {
             self.playback.preparation_cancel = Some(cancel.clone());
             background(runtime, move || {
                 if let Some((connection,device))=remote{crate::services::remote(&data,&connection,device.as_deref(),"pause",None,0,&cancel)?;}
-                Audio::prepare_tuned(&path, position, reverse, cache, &cancel)
+                let source = Audio::prepare_tuned(&path, position, reverse, cache, &cancel)?;
+                if !cancel.load(Ordering::Relaxed)
+                    && let Some(duration) = source.counted_duration()
+                {
+                    store?.update_track_duration(track_id, &path, previous_duration,
+                        duration.as_millis().min(u128::from(u64::MAX)) as u64)?;
+                }
+                Ok(source)
             })
         });
     }
@@ -554,6 +564,7 @@ impl App {
         }
         self.playback.playing_playlist = Some(request.playlist_id);
         self.playback.queue = request.queue;
+        self.update_playback_metadata(&track);
         self.playback.current = Some(track.clone());
         self.playback.waveform = None;
         if self.settings.preferences.appearance.playback_timeline == PlaybackTimeline::Waveform {

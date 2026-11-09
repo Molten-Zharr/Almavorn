@@ -14,6 +14,9 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+mod mp3;
+pub(crate) use mp3::mp3_duration;
+
 pub fn is_audio(path: &Path) -> bool {
     path.extension()
         .and_then(|value| value.to_str())
@@ -92,6 +95,11 @@ pub fn read_track(path: &Path) -> Result<ImportedTrack> {
             "MetadataNote",
             vec!["Tag reader could not extract metadata; the source file is unchanged."],
         )]))?;
+    }
+    // Metadata readers can estimate VBR MP3 length from the first frame's bitrate.
+    // The library, tag editor and playback must instead use the complete stream.
+    if let Some(duration) = mp3_duration(&path, None)? {
+        result.duration_ms = duration.as_millis().min(u128::from(u64::MAX)) as u64;
     }
     Ok(result)
 }

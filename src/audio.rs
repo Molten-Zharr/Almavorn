@@ -27,12 +27,17 @@ use std::{
 
 pub struct PreparedAudio {
     source: Box<dyn Source + Send>,
+    duration: Option<Duration>,
     pub(crate) cache: Option<Arc<PcmCache>>,
     position: Duration,
     reverse: bool,
 }
 
 impl PreparedAudio {
+    pub(crate) fn counted_duration(&self) -> Option<Duration> {
+        self.duration
+    }
+
     pub(crate) fn reversed(&self) -> bool {
         self.reverse
     }
@@ -56,9 +61,12 @@ impl Source for PreparedAudio {
         self.source.sample_rate()
     }
     fn total_duration(&self) -> Option<Duration> {
-        self.source.total_duration()
+        self.duration.or_else(|| self.source.total_duration())
     }
     fn try_seek(&mut self, position: Duration) -> std::result::Result<(), SeekError> {
+        let position = self.total_duration().map_or(position, |duration| {
+            position.min(duration.saturating_sub(Duration::from_millis(1)))
+        });
         self.source.try_seek(position)?;
         self.position = position;
         Ok(())
@@ -106,12 +114,23 @@ impl Audio {
     }
 
     pub fn prepare(path: &Path) -> Result<PreparedAudio> {
-        let source = Decoder::try_from(
-            File::open(path).with_context(|| format!("Cannot open {}", path.display()))?,
-        )
-        .context(AppError::InvalidAudio)?;
+        Self::prepare_cancellable(path, None)
+    }
+
+    fn prepare_cancellable(path: &Path, cancel: Option<&AtomicBool>) -> Result<PreparedAudio> {
+        let duration = crate::media::mp3_duration(path, cancel)?;
+        let file = File::open(path).with_context(|| format!("Cannot open {}", path.display()))?;
+        let source = if duration.is_some() {
+            // Keep real random access, but omit byte_len: otherwise Symphonia
+            // estimates n_frames from a few VBR frames and may trim/seek using it.
+            Decoder::builder().with_data(std::io::BufReader::new(file)).with_hint("mp3")
+                .with_seekable(true).with_coarse_seek(false).build()
+        } else {
+            Decoder::try_from(file)
+        }.context(AppError::InvalidAudio)?;
         Ok(PreparedAudio {
             source: Box::new(source),
+            duration,
             cache: None,
             position: Duration::ZERO,
             reverse: false,
@@ -128,25 +147,29 @@ impl Audio {
         if reverse {
             let cache = match cache {
                 Some(cache) => cache,
-                None => PcmCache::decode(Self::prepare(path)?, cancel)?,
+                None => PcmCache::decode(Self::prepare_cancellable(path, Some(cancel))?, cancel)?,
             };
             let source = cache.source(position);
             let position = source.position();
+            let duration = source.total_duration();
             Ok(PreparedAudio {
                 source: Box::new(source),
+                duration,
                 cache: Some(cache),
                 position,
                 reverse: true,
             })
-        } else if let Some(position) = position {
-            Self::prepare_at(path, position)
         } else {
-            Self::prepare(path)
+            let mut source = Self::prepare_cancellable(path, Some(cancel))?;
+            if let Some(position) = position {
+                source.try_seek(position).context("Cannot seek audio")?;
+            }
+            Ok(source)
         }
     }
 
     pub fn waveform(path: &Path, cancel: &AtomicBool) -> Result<Vec<f32>> {
-        let source = Self::prepare(path)?;
+        let source = Self::prepare_cancellable(path, Some(cancel))?;
         // Keep an energy envelope of the whole file in bounded memory. When the
         // buffer fills, merge neighboring windows instead of retaining samples.
         let mut windows: Vec<(f64, u64)> = Vec::with_capacity(8192);
@@ -212,7 +235,9 @@ impl Audio {
         let start = if self.reverse {
             source.position
         } else {
-            position
+            source.counted_duration().map_or(position, |duration| {
+                position.min(duration.saturating_sub(Duration::from_millis(1)))
+            })
         };
         self.position = Arc::new(AtomicU64::new(
             start.as_millis().min(u128::from(u64::MAX)) as u64
