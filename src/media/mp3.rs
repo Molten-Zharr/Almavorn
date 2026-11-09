@@ -13,6 +13,13 @@ use symphonia::core::{
 };
 
 pub(crate) fn mp3_duration(path: &Path, cancel: Option<&AtomicBool>) -> Result<Option<Duration>> {
+    // An MP3 codec inside MP4/WAV is not an elementary MPEG stream: its packet
+    // timestamps and seek requirements belong to the enclosing container.
+    if lofty::probe::Probe::open(path)?.guess_file_type()?.file_type()
+        != Some(lofty::file::FileType::Mpeg)
+    {
+        return Ok(None);
+    }
     let input = MediaSourceStream::new(Box::new(File::open(path)?), Default::default());
     // Count untrimmed packets, then apply the real encoder delay/padding once.
     // Gapless trimming based on an estimated n_frames could truncate the count.
