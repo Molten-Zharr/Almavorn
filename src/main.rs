@@ -9,14 +9,16 @@ use egui_ratatui::RataguiBackend;
 use ratatui::Terminal;
 use ratatui::backend::Backend;
 mod gui_color_picker;
-mod gui_fonts;
-mod gui_renderer;
-#[cfg(target_os = "linux")]
-mod gui_file_drop;
 #[cfg(target_os = "linux")]
 mod gui_file_drag;
 #[cfg(target_os = "linux")]
 mod gui_file_drag_x11;
+#[cfg(target_os = "linux")]
+mod gui_file_drop;
+mod gui_fonts;
+mod gui_renderer;
+#[cfg(target_os = "linux")]
+mod gui_window;
 use std::time::{Duration, Instant};
 
 struct PlayerUi<F>(Option<F>);
@@ -70,12 +72,17 @@ fn run() -> Result<()> {
         ))?),
     ];
     let mut light_icon = light_palette(&app);
+    #[cfg(target_os = "linux")]
+    let mut window_frame = gui_window::WindowFrame::new();
+    let viewport = egui::ViewportBuilder::default()
+        .with_app_id(std::env::var("FLATPAK_ID").unwrap_or_else(|_| "almavorn".into()))
+        .with_icon(icons[usize::from(light_icon)].clone())
+        .with_inner_size([1100.0, 760.0])
+        .with_min_inner_size([382.0, 420.0]);
+    #[cfg(target_os = "linux")]
+    let viewport = viewport.with_decorations(!window_frame.enabled());
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_app_id(std::env::var("FLATPAK_ID").unwrap_or_else(|_| "almavorn".into()))
-            .with_icon(icons[usize::from(light_icon)].clone())
-            .with_inner_size([1100.0, 760.0])
-            .with_min_inner_size([382.0, 420.0]),
+        viewport,
         ..Default::default()
     };
     let mut previous_click: Option<(egui::Pos2, Instant)> = None;
@@ -110,6 +117,24 @@ fn run() -> Result<()> {
         if app.writing_tags() && ctx.input(|input| input.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
+        #[cfg(target_os = "linux")]
+        let (content_rect, frame_keyboard_focus) = window_frame.show(
+            root,
+            !app.writing_tags(),
+            app.settings.preferences.language == almavorn::model::Language::Russian,
+        );
+        #[cfg(target_os = "linux")]
+        let mut content_root = root.new_child(
+            egui::UiBuilder::new()
+                .id_salt("player-content")
+                .max_rect(content_rect),
+        );
+        #[cfg(target_os = "linux")]
+        content_root.set_clip_rect(content_rect);
+        #[cfg(target_os = "linux")]
+        let root = &mut content_root;
+        #[cfg(not(target_os = "linux"))]
+        let frame_keyboard_focus = false;
         let text_active = app.accepts_text();
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
@@ -158,7 +183,13 @@ fn run() -> Result<()> {
                     ) / pixels_per_point,
                 );
                 if let Some(movement) = pointer_movement(&ctx, image_rect, columns, rows) {
-                    app.view.pointer_fraction_y = ctx.input(|input| input.pointer.hover_pos()).map_or(0.0, |point| ((point.y - image_rect.top()) / image_rect.height() * f32::from(rows)).fract().max(0.0));
+                    app.view.pointer_fraction_y = ctx
+                        .input(|input| input.pointer.hover_pos())
+                        .map_or(0.0, |point| {
+                            ((point.y - image_rect.top()) / image_rect.height() * f32::from(rows))
+                                .fract()
+                                .max(0.0)
+                        });
                     app.handle(movement);
                 }
                 if let Err(error) = terminal.draw(|frame| ui::render(&mut app, frame)) {
@@ -193,7 +224,9 @@ fn run() -> Result<()> {
                     egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
                     egui::Color32::WHITE,
                 );
-                response.request_focus();
+                if !frame_keyboard_focus || response.clicked() {
+                    response.request_focus();
+                }
                 let dimensions = terminal.backend().soft_backend.size().ok();
                 let Some(dimensions) = dimensions else {
                     return;
@@ -237,7 +270,9 @@ fn run() -> Result<()> {
                     dimensions,
                     gui_renderer::KeycapLayer::Foreground,
                 );
-                if let Some(point) = ctx.input(|input| input.pointer.hover_pos()) {
+                if let Some(point) = ctx.input(|input| input.pointer.hover_pos())
+                    && image_rect.contains(point)
+                {
                     let x = ((point.x - image_rect.min.x) / image_rect.width()
                         * f32::from(dimensions.width))
                     .floor() as u16;
@@ -359,6 +394,18 @@ fn run() -> Result<()> {
                     )
                 });
                 for event in events {
+                    if frame_keyboard_focus
+                        && matches!(
+                            event,
+                            egui::Event::Key { .. }
+                                | egui::Event::Text(_)
+                                | egui::Event::Paste(_)
+                                | egui::Event::Copy
+                                | egui::Event::Cut
+                        )
+                    {
+                        continue;
+                    }
                     #[cfg(target_os = "linux")]
                     if file_drag.event(&event, &mut app, &mut wayland_drop, to_cell, down, &mut previous_click) {
                         continue;
