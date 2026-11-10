@@ -600,7 +600,7 @@ pub enum Gesture {
     Seek(Rect),
     PlaybackVolume(Rect),
     Volume(usize, Rect),
-    GifOpacity(usize, Rect),
+    GifSlider(usize, Rect),
     EqualizerGain {
         index: usize,
         area: Rect,

@@ -362,14 +362,19 @@ fn render_gif(frame: &mut Frame, app: &App, palette: Palette) {
     let image = &animation.frames[index];
     let width = f32::from(area.width);
     let height = f32::from(area.height) * 2.0;
-    let zoom = (width / image.width as f32).max(height / image.height as f32);
+    let zoom = app.settings.preferences.appearance.gif_background.image_scale(
+        [width, height], [image.width, image.height]);
     let left = (image.width as f32 * zoom - width) * 0.5;
     let top = (image.height as f32 * zoom - height) * 0.5;
     let background = rgb(palette.background);
     let opacity = f32::from(app.settings.preferences.appearance.gif_background.opacity.min(30)) / 100.0;
     let sample = |x: u16, y: u16| {
-        let px = (((f32::from(x) + left) / zoom) as u32).min(image.width - 1);
-        let py = (((f32::from(y) + top) / zoom) as u32).min(image.height - 1);
+        let px = (f32::from(x) + 0.5 + left) / zoom;
+        let py = (f32::from(y) + 0.5 + top) / zoom;
+        if px < 0.0 || py < 0.0 || px >= image.width as f32 || py >= image.height as f32 {
+            return palette.background;
+        }
+        let (px, py) = (px as u32, py as u32);
         let start = ((py * image.width + px) * 4) as usize;
         let alpha = f32::from(image.rgba[start + 3]) / 255.0 * opacity;
         let [r, g, b] = mix(background, [image.rgba[start], image.rgba[start + 1], image.rgba[start + 2]], alpha);

@@ -255,6 +255,11 @@ fn waveform(frame: &mut Frame, app: &App, area: Rect, ratio: f64, palette: Palet
         );
         return;
     };
+    // The GUI paints its own waveform mesh. Leaving the terminal sparkline here
+    // would expose a second waveform once the mesh's opaque backdrop is removed.
+    if app.view.graphical_keycaps {
+        return;
+    }
     let peak = values
         .iter()
         .copied()

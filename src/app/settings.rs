@@ -434,7 +434,7 @@ impl App {
                 | Target::Setting(index)
                 | Target::SettingAdjust(index, _)
                 | Target::SettingsVolume(index, _)
-                | Target::GifOpacity(index, _)
+                | Target::GifSlider(index, _)
                 | Target::SettingsTimeline(index, _)
             ) = target
             && (self.view.settings.selected != index || self.view.settings.focus != SettingsFocus::Parameters)
@@ -803,6 +803,10 @@ impl App {
             SettingControl::GifOpacity => {
                 self.settings.preferences.appearance.gif_background.opacity =
                     (i128::from(self.settings.preferences.appearance.gif_background.opacity.min(30)) + i128::from(direction)).clamp(0, 30) as u8;
+            }
+            SettingControl::GifZoomOut => {
+                self.settings.preferences.appearance.gif_background.zoom_out =
+                    (i128::from(self.settings.preferences.appearance.gif_background.zoom_out.min(100)) + i128::from(direction)).clamp(0, 100) as u8;
             }
             SettingControl::ButtonShortcuts => {
                 self.settings.preferences.appearance.show_button_shortcuts =

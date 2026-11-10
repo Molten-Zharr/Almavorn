@@ -398,8 +398,9 @@ pub(super) fn render_settings(frame: &mut Frame, app: &mut App, palette: Palette
             volume(frame, app, value, index, style, palette);
             continue;
         }
-        if matches!(item.control, SettingControl::GifOpacity) {
-            gif_opacity(frame, app, value, index, style, palette);
+        if matches!(item.control, SettingControl::GifOpacity | SettingControl::GifZoomOut) {
+            gif_slider(frame, app, value, index, style, palette,
+                matches!(item.control, SettingControl::GifZoomOut));
             continue;
         }
         let mut middle = value;
@@ -743,14 +744,21 @@ fn volume(
     );
 }
 
-fn gif_opacity(
+fn gif_slider(
     frame: &mut Frame,
     app: &mut App,
     area: Rect,
     index: usize,
     style: Style,
     palette: Palette,
+    zoom_out: bool,
 ) {
+    let settings = &app.settings.preferences.appearance.gif_background;
+    let (value, maximum): (u8, u8) = if zoom_out {
+        (settings.zoom_out.min(100), 100)
+    } else {
+        (settings.opacity.min(30), 30)
+    };
     if area.width < 12 {
         setting_value(
             frame,
@@ -762,7 +770,7 @@ fn gif_opacity(
             },
             &format!(
                 "{}%",
-                app.settings.preferences.appearance.gif_background.opacity.min(30)
+                value
             ),
             style,
             palette,
@@ -789,7 +797,7 @@ fn gif_opacity(
     );
     let scale = Rect::new(area.x + 3, area.y, area.width.saturating_sub(12).min(24), 1);
     if scale.width > 0 {
-        let point = ((f32::from(app.settings.preferences.appearance.gif_background.opacity.min(30)) / 30.0)
+        let point = ((f32::from(value) / f32::from(maximum))
             * f32::from(scale.width.saturating_sub(1)))
         .round() as u16;
         let spans: Vec<_> = (0..scale.width)
@@ -807,7 +815,7 @@ fn gif_opacity(
         frame.render_widget(Paragraph::new(Line::from(spans)), scale);
         app.view.hits.push(Hit {
             area: scale,
-            target: Target::GifOpacity(index, scale),
+            target: Target::GifSlider(index, scale),
             enabled: true,
         });
     }
@@ -821,7 +829,7 @@ fn gif_opacity(
         },
         &format!(
             "{}%",
-            app.settings.preferences.appearance.gif_background.opacity.min(30)
+            value
         ),
         style,
         palette,

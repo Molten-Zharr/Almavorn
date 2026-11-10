@@ -15,7 +15,7 @@ pub(super) struct GifBackgroundState {
 }
 
 impl App {
-    pub fn drag_gif_opacity(
+    pub fn drag_gif_slider(
         &mut self,
         index: usize,
         area: ratatui::layout::Rect,
@@ -28,22 +28,25 @@ impl App {
         {
             return;
         }
-        if !self
-            .settings_rows()
-            .get(index)
-            .is_some_and(|row| matches!(row.control, super::SettingControl::GifOpacity))
-        {
-            return;
-        }
+        let zoom_out = match self.settings_rows().get(index).map(|row| &row.control) {
+            Some(super::SettingControl::GifOpacity) => false,
+            Some(super::SettingControl::GifZoomOut) => true,
+            _ => return,
+        };
         self.select_setting(index);
         self.view.workspace.gesture = if release {
             None
         } else {
-            Some(crate::workspace::Gesture::GifOpacity(index, area))
+            Some(crate::workspace::Gesture::GifSlider(index, area))
         };
-        let opacity = (ratio.clamp(0.0, 1.0) * 30.0).round() as u8;
-        if opacity != self.settings.preferences.appearance.gif_background.opacity {
-            self.settings.preferences.appearance.gif_background.opacity = opacity;
+        let value = (ratio.clamp(0.0, 1.0) * if zoom_out { 100.0 } else { 30.0 }).round() as u8;
+        let setting = if zoom_out {
+            &mut self.settings.preferences.appearance.gif_background.zoom_out
+        } else {
+            &mut self.settings.preferences.appearance.gif_background.opacity
+        };
+        if value != *setting {
+            *setting = value;
             if let Err(error) = self.save_settings() {
                 self.failure(error);
             }

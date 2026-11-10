@@ -163,7 +163,7 @@ pub enum Target {
     SettingsPane,
     SettingsTab(SettingsPage),
     SettingsVolume(usize, Rect),
-    GifOpacity(usize, Rect),
+    GifSlider(usize, Rect),
     SettingsTimeline(usize, crate::preferences::PlaybackTimeline),
     SettingSelect(usize),
     SettingAdjust(usize, i64),

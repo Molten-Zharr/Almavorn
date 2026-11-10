@@ -511,6 +511,7 @@ impl Default for ProfilePreferences {
 impl ProfilePreferences {
     pub(crate) fn normalize(&mut self) {
         self.appearance.gif_background.opacity = self.appearance.gif_background.opacity.min(30);
+        self.appearance.gif_background.zoom_out = self.appearance.gif_background.zoom_out.min(100);
         self.volume = self.volume.clamp(0.0, 1.0);
         self.workspace.normalize();
         self.ensure_bindings();
@@ -656,6 +657,7 @@ impl Settings {
             self.preferences.appearance.animation_brightness = animation.brightness.clamp(10, 70);
             self.preferences.appearance.gif_background = animation.gif_background;
             self.preferences.appearance.gif_background.opacity = self.preferences.appearance.gif_background.opacity.min(30);
+            self.preferences.appearance.gif_background.zoom_out = self.preferences.appearance.gif_background.zoom_out.min(100);
         }
     }
     pub fn current_preset(&self) -> Option<&ThemePreset> {

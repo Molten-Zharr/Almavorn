@@ -302,7 +302,7 @@ fn run() -> Result<()> {
                             Target::PlaybackVolume(_)
                             | Target::Seek(_)
                             | Target::SettingsVolume(_, _)
-                            | Target::GifOpacity(_, _)
+                            | Target::GifSlider(_, _)
                             | Target::ColorSlider(_, _),
                         ) => egui::CursorIcon::ResizeHorizontal,
                         Some(Target::ColorWheel(_)) => egui::CursorIcon::Crosshair,
@@ -720,7 +720,7 @@ fn slider_pointer(
         Some(Gesture::TunerSlider(index, area)) => Target::TunerSlider(index, area),
         Some(Gesture::PlaybackVolume(area)) => Target::PlaybackVolume(area),
         Some(Gesture::Volume(index, area)) => Target::SettingsVolume(index, area),
-        Some(Gesture::GifOpacity(index, area)) => Target::GifOpacity(index, area),
+        Some(Gesture::GifSlider(index, area)) => Target::GifSlider(index, area),
         None if begin && image.contains(point) => {
             let position = Position::new(
                 ((point.x - image.left()) / cell_width).floor() as u16,
@@ -730,7 +730,7 @@ fn slider_pointer(
                 target @ (Target::TunerSlider(_, _)
                 | Target::PlaybackVolume(_)
                 | Target::SettingsVolume(_, _)
-                | Target::GifOpacity(_, _)),
+                | Target::GifSlider(_, _)),
             ) = app.target_at(position)
             else {
                 return false;
@@ -743,7 +743,7 @@ fn slider_pointer(
         Target::TunerSlider(_, area)
         | Target::PlaybackVolume(area)
         | Target::SettingsVolume(_, area) => area,
-        Target::GifOpacity(_, area) => area,
+        Target::GifSlider(_, area) => area,
         _ => return false,
     };
     // Retain the fractional position between the centers of the endpoint cells.
@@ -752,8 +752,8 @@ fn slider_pointer(
     let ratio = f64::from((point.x - left) / width);
     if let Target::TunerSlider(index, _) = target {
         app.drag_tuner(index, area, ratio, release);
-    } else if let Target::GifOpacity(index, _) = target {
-        app.drag_gif_opacity(index, area, ratio, release);
+    } else if let Target::GifSlider(index, _) = target {
+        app.drag_gif_slider(index, area, ratio, release);
     } else {
         app.drag_volume(target, ratio, release);
     }

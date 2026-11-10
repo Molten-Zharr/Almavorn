@@ -1174,9 +1174,9 @@ impl App {
                     )?;
                 }
             }
-            Target::GifOpacity(index, area) => {
+            Target::GifSlider(index, area) => {
                 let point = self.last_pointer_x(area);
-                self.drag_gif_opacity(index, area, f64::from(point) / f64::from(area.width.saturating_sub(1).max(1)), false);
+                self.drag_gif_slider(index, area, f64::from(point) / f64::from(area.width.saturating_sub(1).max(1)), false);
             }
             Target::SettingHelp(index) => self.settings_help(index),
             Target::SettingsTimeline(index, choice) => {
@@ -1234,7 +1234,7 @@ impl App {
             Target::Setting(index)
             | Target::SettingSelect(index)
             | Target::SettingsVolume(index, _)
-            | Target::GifOpacity(index, _) => self.adjust_setting(index, -1)?,
+            | Target::GifSlider(index, _) => self.adjust_setting(index, -1)?,
             Target::SettingAdjust(index, direction) => self.adjust_setting(index, -direction)?,
             Target::SettingsPage(_) => {
                 self.view.pointer = Position::new(u16::MAX, u16::MAX);

@@ -62,7 +62,8 @@ impl GifPainter {
         let rect = egui::Rect::from_min_size(image.min + egui::vec2(f32::from(area.x), f32::from(area.y)) * scale,
             egui::vec2(f32::from(area.width), f32::from(area.height)) * scale);
         let dimensions = egui::vec2(frame.width as f32, frame.height as f32);
-        let zoom = (rect.width() / dimensions.x).max(rect.height() / dimensions.y);
+        let zoom = app.settings.preferences.appearance.gif_background.image_scale(
+            [rect.width(), rect.height()], [frame.width, frame.height]);
         let destination = egui::Rect::from_center_size(rect.center(), dimensions * zoom);
         let alpha = (u16::from(app.settings.preferences.appearance.gif_background.opacity.min(30)) * 255 / 100) as u8;
         ui.painter().with_clip_rect(rect.intersect(ui.clip_rect())).image(
@@ -141,7 +142,9 @@ impl PlaybackPainter {
             .as_deref()
             .filter(|values| waveform && !values.is_empty())
         {
-            painter.rect_filled(wave, 0, background);
+            if app.background_gif_frame().is_none() {
+                painter.rect_filled(wave, 0, background);
+            }
             let key = (values.as_ptr() as usize, values.len(), wave, active, future);
             if self.waveform_key != Some(key) {
                 let columns = (wave.width() * ui.painter().pixels_per_point())
@@ -337,7 +340,9 @@ impl ImageCache {
                 for x in area.x..area.right() { cells[usize::from(y) * usize::from(size.width) + usize::from(x)] = true; }
             }
             let buttons = app.view.hits.iter().filter(|hit| matches!(hit.target,
-                Target::Action(_) | Target::CommandMenu(_) | Target::LyricsPanel(_) | Target::Submit));
+                Target::Action(_) | Target::LyricsPanel(_) | Target::Submit)
+                && !matches!(hit.target, Target::LyricsPanel(
+                    almavorn::app::LyricsPanelAction::Focus | almavorn::app::LyricsPanelAction::Choose(_))));
             for area in std::iter::once(app.view.overlay_area)
                 .chain(app.view.player_buttons.iter().map(|button| button.area))
                 .chain(buttons.map(|hit| hit.area))

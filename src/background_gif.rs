@@ -13,6 +13,7 @@ use std::{
 pub struct GifBackgroundSettings {
     pub path: Option<PathBuf>,
     pub opacity: u8,
+    pub zoom_out: u8,
 }
 
 impl Default for GifBackgroundSettings {
@@ -20,7 +21,19 @@ impl Default for GifBackgroundSettings {
         Self {
             path: None,
             opacity: 15,
+            zoom_out: 0,
         }
+    }
+}
+
+impl GifBackgroundSettings {
+    /// Zero fills the viewport; 100 fits the whole image into its central fifth.
+    pub fn image_scale(&self, viewport: [f32; 2], image: [u32; 2]) -> f32 {
+        let x = viewport[0] / image[0].max(1) as f32;
+        let y = viewport[1] / image[1].max(1) as f32;
+        let cover = x.max(y);
+        let small = x.min(y) * 0.2;
+        cover + (small - cover) * f32::from(self.zoom_out.min(100)) / 100.0
     }
 }
 
