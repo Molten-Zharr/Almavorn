@@ -23,6 +23,7 @@ pub struct WindowFrame {
     colors: Option<Colors>,
     next_refresh: Instant,
     minimize_supported: bool,
+    icon_textures: Option<[egui::TextureHandle; 2]>,
 }
 
 impl WindowFrame {
@@ -36,6 +37,7 @@ impl WindowFrame {
             colors: desktop_colors(),
             next_refresh: Instant::now() + Duration::from_secs(2),
             minimize_supported: !niri,
+            icon_textures: None,
         }
     }
 
@@ -43,7 +45,8 @@ impl WindowFrame {
         self.colors.is_some()
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, close_allowed: bool, russian: bool) -> (Rect, bool) {
+    pub fn show(&mut self, ui: &mut egui::Ui, close_allowed: bool, russian: bool,
+        icons: &[std::sync::Arc<egui::IconData>; 2]) -> (Rect, bool) {
         if Instant::now() >= self.next_refresh {
             self.next_refresh = Instant::now() + Duration::from_secs(2);
             if let Some(colors) = desktop_colors() {
@@ -230,13 +233,18 @@ impl WindowFrame {
             Id::new("window-title-drag"),
             Sense::click_and_drag(),
         );
-        ui.painter().with_clip_rect(drag_rect.shrink(8.0)).text(
-            egui::pos2(drag_rect.left() + 10.0, drag_rect.center().y),
-            egui::Align2::LEFT_CENTER,
-            "Almavorn",
-            egui::FontId::proportional(15.0),
-            foreground,
-        );
+        let textures = self.icon_textures.get_or_insert_with(|| std::array::from_fn(|index| {
+            let icon = &icons[index];
+            ui.ctx().load_texture(format!("window-icon-{index}"),
+                egui::ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba),
+                egui::TextureOptions::LINEAR)
+        }));
+        let light = 299 * u32::from(background.r()) + 587 * u32::from(background.g())
+            + 114 * u32::from(background.b()) >= 128_000;
+        let icon_rect = Rect::from_center_size(
+            egui::pos2(drag_rect.left() + 18.0, drag_rect.center().y), egui::vec2(24.0, 24.0));
+        ui.painter().with_clip_rect(drag_rect).image(textures[usize::from(light)].id(), icon_rect,
+            Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), Color32::WHITE);
         if response.double_clicked_by(PointerButton::Primary) {
             ui.ctx()
                 .send_viewport_cmd(ViewportCommand::Maximized(!maximized));

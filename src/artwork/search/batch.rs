@@ -63,7 +63,7 @@ impl Stage {
 pub(crate) enum Outcome {
     Saved(Option<PathBuf>),
     HasCover,
-    NotFound,
+    NotFound(String),
     Review(String),
     Failed(String),
     Cancelled,
@@ -74,7 +74,7 @@ impl Outcome {
         match self {
             Self::Saved(_) => language.text("Saved", "Сохранено"),
             Self::HasCover => language.text("Already has artwork", "Обложка уже есть"),
-            Self::NotFound => language.text("Not found", "Не найдено"),
+            Self::NotFound(_) => language.text("Not found", "Не найдено"),
             Self::Review(_) => language.text("Choose manually", "Выбрать вручную"),
             Self::Failed(_) => language.text("Error", "Ошибка"),
             Self::Cancelled => language.text("Cancelled", "Отменено"),
@@ -88,7 +88,7 @@ impl Outcome {
                 language.text("Original copy kept", "Исходная копия сохранена"),
                 path.display()
             ),
-            Self::Review(message) | Self::Failed(message) => message.clone(),
+            Self::NotFound(message) | Self::Review(message) | Self::Failed(message) => message.clone(),
             _ => self.label(language).into(),
         }
     }
@@ -129,7 +129,10 @@ pub(crate) fn process(
         })));
     }
     if result.candidates.is_empty() {
-        return Ok(Outcome::NotFound);
+        return Ok(Outcome::NotFound(language.text(
+            "MusicBrainz has no exact artist/title match with a release. Check the tags or filename. This does not mean that artwork is unavailable elsewhere.",
+            "В MusicBrainz не найдено точного совпадения исполнителя и названия с изданием. Проверьте теги или имя файла. Это не означает, что обложки нет в других источниках."
+        ).into()));
     }
     let candidates: Vec<_> = result
         .candidates
@@ -190,5 +193,8 @@ pub(crate) fn process(
             }
         }
     }
-    Ok(Outcome::NotFound)
+    Ok(Outcome::NotFound(language.text(
+        "Matching releases were found, but none has front artwork in Cover Art Archive. You can add an image through the tag editor.",
+        "Подходящие издания найдены, но ни у одного нет лицевой обложки в Cover Art Archive. Изображение можно добавить через редактор тегов."
+    ).into()))
 }

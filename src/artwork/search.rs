@@ -182,9 +182,12 @@ pub(crate) fn manual_search(
             String::new()
         },
     };
+    let mut identities = BTreeSet::new();
     let guesses: Vec<_> = crate::lyrics::candidates(&query)
         .into_iter()
-        .filter(|(artist, title)| usable(artist) && usable(title))
+        .map(|(artist, title)| (without_site_marker(&artist), without_site_marker(&title)))
+        .filter(|(artist, title)| usable(artist) && usable(title)
+            && identities.insert((normalized(artist), normalized(title))))
         .collect();
     ensure!(
         !guesses.is_empty(),
@@ -301,6 +304,26 @@ pub(crate) fn manual_search(
         truncated,
         warning,
     })
+}
+
+// Download-site labels are not part of a recording title. Keep musical edition
+// qualifiers such as (Live), (Remix), etc. and never change the file or its tags.
+fn without_site_marker(value: &str) -> String {
+    let mut text = value.to_owned();
+    for (left, right) in [('(', ')'), ('[', ']')] {
+        let mut offset = 0;
+        while let Some(start) = text[offset..].find(left).map(|start| offset + start) {
+            let Some(end) = text[start..].find(right).map(|end| start + end) else { break };
+            let label = text[start + 1..end].trim().to_ascii_lowercase();
+            if label.starts_with("www.") || label.starts_with("https://") || label.starts_with("http://") {
+                text.replace_range(start..end + 1, "");
+                offset = start;
+            } else {
+                offset = end + 1;
+            }
+        }
+    }
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn normalized(value: &str) -> String {

@@ -122,6 +122,7 @@ fn run() -> Result<()> {
             root,
             !app.writing_tags(),
             app.settings.preferences.language == almavorn::model::Language::Russian,
+            &icons,
         );
         #[cfg(target_os = "linux")]
         let mut content_root = root.new_child(

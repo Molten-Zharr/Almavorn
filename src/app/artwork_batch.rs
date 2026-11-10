@@ -55,7 +55,7 @@ impl ArtworkBatchState {
             match report {
                 Outcome::Saved(_) => saved += 1,
                 Outcome::HasCover => existing += 1,
-                Outcome::NotFound => missing += 1,
+                Outcome::NotFound(_) => missing += 1,
                 Outcome::Review(_) => review += 1,
                 Outcome::Failed(_) => failed += 1,
                 Outcome::Cancelled => cancelled += 1,
