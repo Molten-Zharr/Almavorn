@@ -278,6 +278,7 @@ pub(super) fn prepare(
     Ok((
         super::PreparedAudio {
             source: Box::new(source),
+            prefetched: Default::default(),
             duration: None,
             cache: None,
             position,

@@ -27,6 +27,7 @@ use std::{
 
 pub struct PreparedAudio {
     source: Box<dyn Source + Send>,
+    prefetched: std::vec::IntoIter<f32>,
     duration: Option<Duration>,
     pub(crate) cache: Option<Arc<PcmCache>>,
     position: Duration,
@@ -46,7 +47,7 @@ impl PreparedAudio {
 impl Iterator for PreparedAudio {
     type Item = f32;
     fn next(&mut self) -> Option<f32> {
-        self.source.next()
+        self.prefetched.next().or_else(|| self.source.next())
     }
 }
 
@@ -68,9 +69,25 @@ impl Source for PreparedAudio {
             position.min(duration.saturating_sub(Duration::from_millis(1)))
         });
         self.source.try_seek(position)?;
+        // Seeking to the beginning can leave the decoder on a header-only block.
+        // Advance to PCM before another UniformSourceIterator reads the span size.
+        self.prefetched = prefetch_frame(&mut self.source).unwrap_or_default();
         self.position = position;
         Ok(())
     }
+}
+
+fn prefetch_frame(source: &mut impl Source) -> Option<std::vec::IntoIter<f32>> {
+    let first = source.next()?;
+    let channels = usize::from(source.channels().get());
+    let mut frame = Vec::with_capacity(channels);
+    frame.push(first);
+    // Keep the decoder on a channel-frame boundary: seeking preserves its current
+    // channel, so prefetching only one stereo sample would swap the channels.
+    for _ in 1..channels {
+        frame.push(source.next()?);
+    }
+    Some(frame.into_iter())
 }
 
 pub struct Audio {
@@ -120,7 +137,7 @@ impl Audio {
     fn prepare_cancellable(path: &Path, cancel: Option<&AtomicBool>) -> Result<PreparedAudio> {
         let duration = crate::media::mp3_duration(path, cancel)?;
         let file = File::open(path).with_context(|| format!("Cannot open {}", path.display()))?;
-        let source = if duration.is_some() {
+        let mut source = if duration.is_some() {
             // Keep real random access, but omit byte_len: otherwise Symphonia
             // estimates n_frames from a few VBR frames and may trim/seek using it.
             Decoder::builder().with_data(std::io::BufReader::new(file)).with_hint("mp3")
@@ -128,8 +145,13 @@ impl Audio {
         } else {
             Decoder::try_from(file)
         }.context(AppError::InvalidAudio)?;
+        // Vorbis needs its next packet before producing PCM. A zero initial span
+        // makes UniformSourceIterator report EOF without ever asking for a sample.
+        // Decode ahead in this worker and retain the first complete frame.
+        let prefetched = prefetch_frame(&mut source).context("В файле нет декодируемых аудиоданных.")?;
         Ok(PreparedAudio {
             source: Box::new(source),
+            prefetched,
             duration,
             cache: None,
             position: Duration::ZERO,
@@ -154,6 +176,7 @@ impl Audio {
             let duration = source.total_duration();
             Ok(PreparedAudio {
                 source: Box::new(source),
+                prefetched: Default::default(),
                 duration,
                 cache: Some(cache),
                 position,
