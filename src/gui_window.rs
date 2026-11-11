@@ -4,6 +4,7 @@ use eframe::egui::{
     self, Color32, CursorIcon, Id, PointerButton, Rect, ResizeDirection, Sense, Stroke,
     ViewportCommand,
 };
+use egui::emath::GuiRounding;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -23,7 +24,7 @@ pub struct WindowFrame {
     colors: Option<Colors>,
     next_refresh: Instant,
     minimize_supported: bool,
-    icon_textures: Option<[egui::TextureHandle; 2]>,
+    icon_textures: Option<(u32, [egui::TextureHandle; 2])>,
 }
 
 impl WindowFrame {
@@ -233,16 +234,20 @@ impl WindowFrame {
             Id::new("window-title-drag"),
             Sense::click_and_drag(),
         );
-        let textures = self.icon_textures.get_or_insert_with(|| std::array::from_fn(|index| {
-            let icon = &icons[index];
-            ui.ctx().load_texture(format!("window-icon-{index}"),
-                egui::ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba),
-                egui::TextureOptions::LINEAR)
-        }));
+        let pixels_per_point = ui.ctx().pixels_per_point();
+        let icon_pixels = (24.0 * pixels_per_point).round().clamp(1.0, 256.0) as u32;
+        if self.icon_textures.as_ref().is_none_or(|(size, _)| *size != icon_pixels) {
+            self.icon_textures = Some((icon_pixels, std::array::from_fn(|index| {
+                ui.ctx().load_texture(format!("window-icon-{index}"),
+                    scaled_icon(&icons[index], icon_pixels), egui::TextureOptions::LINEAR)
+            })));
+        }
+        let textures = &self.icon_textures.as_ref().expect("titlebar icons loaded").1;
         let light = 299 * u32::from(background.r()) + 587 * u32::from(background.g())
             + 114 * u32::from(background.b()) >= 128_000;
         let icon_rect = Rect::from_center_size(
-            egui::pos2(drag_rect.left() + 18.0, drag_rect.center().y), egui::vec2(24.0, 24.0));
+            egui::pos2(drag_rect.left() + 18.0, drag_rect.center().y), egui::vec2(24.0, 24.0))
+            .round_to_pixels(pixels_per_point);
         ui.painter().with_clip_rect(drag_rect).image(textures[usize::from(light)].id(), icon_rect,
             Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)), Color32::WHITE);
         if response.double_clicked_by(PointerButton::Primary) {
@@ -256,6 +261,24 @@ impl WindowFrame {
         }
         (content, keyboard_focus)
     }
+}
+
+fn scaled_icon(icon: &egui::IconData, pixels: u32) -> egui::ColorImage {
+    // Prefilter at the actual display resolution instead of undersampling a
+    // 256px texture. Premultiplied alpha prevents dark fringes around the mark.
+    let source = image::Rgba32FImage::from_fn(icon.width, icon.height, |x, y| {
+        let offset = ((y * icon.width + x) * 4) as usize;
+        let rgba = &icon.rgba[offset..offset + 4];
+        image::Rgba(Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3])
+            .to_array().map(|channel| f32::from(channel) / 255.0))
+    });
+    let resized = image::imageops::resize(&source, pixels, pixels, image::imageops::FilterType::Lanczos3);
+    let colors = resized.pixels().map(|pixel| {
+        let alpha = pixel[3].clamp(0.0, 1.0);
+        let channel = |index| (pixel[index].clamp(0.0, alpha) * 255.0).round() as u8;
+        Color32::from_rgba_premultiplied(channel(0), channel(1), channel(2), (alpha * 255.0).round() as u8)
+    }).collect();
+    egui::ColorImage::new([pixels as usize; 2], colors)
 }
 
 fn resize_edges(ui: &mut egui::Ui, outer: Rect, edge: f32) {
