@@ -56,6 +56,15 @@ jobs:
         run: |
           python3 - <<'PY'
           import hashlib, json, pathlib, re, subprocess
+          def fail(message):
+              escaped = str(message).replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::error::' + escaped, flush=True)
+              raise SystemExit(1)
+          def command(args):
+              result = subprocess.run(args, capture_output=True, text=True)
+              if result.returncode:
+                  fail(result.stderr or result.stdout or f'Command failed: {args}')
+              return result.stdout
           tag, version = 'v0.3.2', '0.3.2'
           directory = pathlib.Path('target/release-assets')
           expected = {f'almavorn-{version}-{variant}-linux-x86_64.{extension}'
@@ -64,24 +73,24 @@ jobs:
           def artifact(name):
               matches = list(directory.rglob(name))
               if len(matches) != 1 or not matches[0].is_file():
-                  raise SystemExit(f'Release requires exactly one {name}')
+                  fail(f'Release requires exactly one {name}')
               return matches[0]
           hashes = {}
           for variant in ('guitui', 'tui'):
               for line in artifact(f'SHA256SUMS-{variant}').read_text().splitlines():
                   checksum, name = line.split(maxsplit=1)
                   if name not in expected or name in hashes or not re.fullmatch(r'[0-9a-f]{64}', checksum):
-                      raise SystemExit('Invalid package checksum manifest')
+                      fail('Invalid package checksum manifest')
                   hashes[name] = checksum
           if set(hashes) != expected:
-              raise SystemExit('The release needs all six packages')
+              fail('The release needs all six packages')
           for name, expected_hash in hashes.items():
               digest = hashlib.sha256()
               with artifact(name).open('rb') as stream:
                   for chunk in iter(lambda: stream.read(1024 * 1024), b''):
                       digest.update(chunk)
               if digest.hexdigest() != expected_hash:
-                  raise SystemExit(f'Checksum mismatch: {name}')
+                  fail(f'Checksum mismatch: {name}')
           checksums = directory / 'SHA256SUMS'
           checksums.write_text(''.join(f'{hashes[name]}  {name}\n' for name in sorted(hashes)))
           hashes['SHA256SUMS'] = hashlib.sha256(checksums.read_bytes()).hexdigest()
@@ -89,22 +98,22 @@ jobs:
           response = subprocess.run(['gh', 'api', endpoint], capture_output=True, text=True)
           if response.returncode:
               if 'HTTP 404' not in response.stderr:
-                  raise SystemExit(response.stderr)
-              subprocess.run(['gh', 'release', 'create', tag, '--verify-tag', '--draft',
-                              '--title', f'Almavorn {version}', '--notes-file', f'releases/{tag}.md'], check=True)
+                  fail(response.stderr)
+              command(['gh', 'release', 'create', tag, '--verify-tag', '--draft',
+                              '--title', f'Almavorn {version}', '--notes-file', f'releases/{tag}.md'])
               response = subprocess.run(['gh', 'api', endpoint], capture_output=True, text=True, check=True)
           release = json.loads(response.stdout)
           remote = {item['name']: item for item in release['assets']}
           if set(remote) - set(hashes):
-              raise SystemExit('The release contains unexpected assets; preserving them')
+              fail('The release contains unexpected assets; preserving them')
           for name, checksum in hashes.items():
               if name in remote:
                   if remote[name].get('digest') != 'sha256:' + checksum:
-                      raise SystemExit(f'Existing asset differs: {name}; preserving it')
+                      fail(f'Existing asset differs: {name}; preserving it')
               elif release['draft']:
-                  subprocess.run(['gh', 'release', 'upload', tag, str(artifact(name))], check=True)
+                  command(['gh', 'release', 'upload', tag, str(artifact(name))])
               else:
-                  raise SystemExit(f'Published release is missing {name}; preserving it')
+                  fail(f'Published release is missing {name}; preserving it')
           if release['draft']:
-              subprocess.run(['gh', 'release', 'edit', tag, '--draft=false'], check=True)
+              command(['gh', 'release', 'edit', tag, '--draft=false'])
           PY
