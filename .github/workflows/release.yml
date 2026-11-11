@@ -33,9 +33,9 @@ jobs:
         run: |
           mkdir -p target/packaging-tools
           curl -fL --retry 3 https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage -o target/packaging-tools/linuxdeploy.AppImage
-          curl -fL --retry 3 https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -o target/packaging-tools/appimagetool.AppImage
+          curl -fL --retry 3 https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage -o target/packaging-tools/appimagetool.AppImage
           echo 'c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  target/packaging-tools/linuxdeploy.AppImage' | sha256sum -c
-          echo '95cbe7cce9717fce90c484e34052ee7c7f1d7635b33c12525b4776826a7d29b6  target/packaging-tools/appimagetool.AppImage' | sha256sum -c
+          echo 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  target/packaging-tools/appimagetool.AppImage' | sha256sum -c
           chmod +x target/packaging-tools/*.AppImage
       - name: Build tar.gz, AppImage and Flatpak
         run: >-
